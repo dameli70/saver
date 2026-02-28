@@ -164,6 +164,83 @@ async function post(url,body){
   return r.json();
 }
 
+function b64uToBuf(b64url){
+  const b64 = String(b64url||'').replace(/-/g,'+').replace(/_/g,'/');
+  const pad = b64.length % 4 ? '='.repeat(4 - (b64.length % 4)) : '';
+  const bin = atob(b64 + pad);
+  const bytes = new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
+  return bytes.buffer;
+}
+function bufToB64u(buf){
+  const bytes = new Uint8Array(buf);
+  let s='';
+  for(let i=0;i<bytes.length;i++) s+=String.fromCharCode(bytes[i]);
+  return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+
+async function ensureReauth(methods){
+  if(methods && methods.passkey && window.PublicKeyCredential){
+    try{
+      const begin = await post('api/webauthn.php', {action:'reauth_begin'});
+      if(begin.success){
+        const pk = begin.publicKey || {};
+        const allow = (pk.allowCredentials||[]).map(c => ({type:c.type, id: b64uToBuf(c.id)}));
+        const cred = await navigator.credentials.get({publicKey:{
+          challenge: b64uToBuf(pk.challenge),
+          rpId: pk.rpId,
+          timeout: pk.timeout||60000,
+          userVerification: pk.userVerification||'required',
+          allowCredentials: allow,
+        }});
+
+        const a = cred.response;
+        const fin = await post('api/webauthn.php', {
+          action:'reauth_finish',
+          rawId: bufToB64u(cred.rawId),
+          response:{
+            clientDataJSON: bufToB64u(a.clientDataJSON),
+            authenticatorData: bufToB64u(a.authenticatorData),
+            signature: bufToB64u(a.signature),
+            userHandle: a.userHandle ? bufToB64u(a.userHandle) : null,
+          }
+        });
+        if(fin.success) return true;
+      }
+    }catch{}
+  }
+
+  if(methods && methods.totp){
+    const code = prompt('Enter your 6-digit authenticator code');
+    if(!code) return false;
+    const r = await post('api/totp.php', {action:'reauth', code});
+    return !!r.success;
+  }
+
+  show(localErr, 'Enable TOTP or add a passkey in Account to use backups.');
+  return false;
+}
+
+async function getStrong(url){
+  let j = await get(url);
+  if(!j.success && (j.error_code==='reauth_required' || j.error_code==='security_setup_required')){
+    const ok = await ensureReauth(j.methods||{});
+    if(!ok) return j;
+    j = await get(url);
+  }
+  return j;
+}
+
+async function postStrong(url, body){
+  let j = await post(url, body);
+  if(!j.success && (j.error_code==='reauth_required' || j.error_code==='security_setup_required')){
+    const ok = await ensureReauth(j.methods||{});
+    if(!ok) return j;
+    j = await post(url, body);
+  }
+  return j;
+}
+
 function downloadJson(filename, objOrJsonString){
   const data = (typeof objOrJsonString === 'string') ? objOrJsonString : JSON.stringify(objOrJsonString, null, 2);
   const blob = new Blob([data], {type:'application/json'});
@@ -186,7 +263,7 @@ document.getElementById('btn-export').addEventListener('click', async ()=>{
   const txt=document.getElementById('btn-export-txt');
   btn.disabled=true; txt.innerHTML='<span class="spin"></span>';
   try{
-    const j=await get('api/backup.php?action=export');
+    const j=await getStrong('api/backup.php?action=export');
     if(!j.success){show(localErr,j.error||'Export failed');return;}
     const ts = new Date().toISOString().slice(0,10).replace(/-/g,'');
     downloadJson('locksmith_export_' + ts + '.json', j.export);
@@ -209,7 +286,7 @@ document.getElementById('btn-import').addEventListener('click', async ()=>{
   try{
     const txt=await fileInput.files[0].text();
     const exportObj=JSON.parse(txt);
-    const r=await post('api/backup.php',{action:'import',export:exportObj});
+    const r=await postStrong('api/backup.php',{action:'import',export:exportObj});
     if(!r.success){show(localErr,r.error||'Import failed');return;}
     show(localOk,'Imported ' + (r.imported||0) + ' codes.');
   }catch(e){
@@ -221,7 +298,7 @@ document.getElementById('btn-import').addEventListener('click', async ()=>{
 
 async function refreshCloud(){
   cloudList.innerHTML='';
-  const j=await get('api/backup.php?action=cloud_list');
+  const j=await getStrong('api/backup.php?action=cloud_list');
   if(!j.success){show(cloudErr,j.error||'Could not load cloud backups');return;}
 
   const items=j.backups||[];
@@ -268,7 +345,7 @@ cloudList.addEventListener('click', async (e)=>{
   if(act==='dl'){
     btn.disabled=true; btn.innerHTML='<span class="spin"></span>';
     try{
-      const j=await get('api/backup.php?action=cloud_get&id='+encodeURIComponent(id));
+      const j=await getStrong('api/backup.php?action=cloud_get&id='+encodeURIComponent(id));
       if(!j.success){show(cloudErr,j.error||'Download failed');return;}
       const backup=j.backup;
       const label=(backup.label && backup.label.trim()) ? backup.label : ('backup_'+id);
@@ -286,7 +363,7 @@ cloudList.addEventListener('click', async (e)=>{
     if(!confirm('Restore this backup into your account? This will import codes and may create duplicates.')) return;
     btn.disabled=true; btn.innerHTML='<span class="spin"></span>';
     try{
-      const r=await post('api/backup.php',{action:'cloud_restore',id});
+      const r=await postStrong('api/backup.php',{action:'cloud_restore',id});
       if(!r.success){show(cloudErr,r.error||'Restore failed');return;}
       show(cloudOk,'Restored. Imported ' + (r.imported||0) + ' codes.');
     }catch{
@@ -300,12 +377,14 @@ cloudList.addEventListener('click', async (e)=>{
     if(!confirm('Delete this cloud backup?')) return;
     btn.disabled=true; btn.innerHTML='<span class="spin"></span>';
     try{
-      const r=await post('api/backup.php',{action:'cloud_delete',id});
+      const r=await postStrong('api/backup.php',{action:'cloud_delete',id});
       if(!r.success){show(cloudErr,r.error||'Delete failed');return;}
       show(cloudOk,'Cloud backup deleted.');
       await refreshCloud();
     }catch{
       show(cloudErr,'Network error');
+    }finally{
+      btn.disabled=false; btn.textContent='Delete';
     }
   }
 });
@@ -317,7 +396,7 @@ document.getElementById('btn-cloud-save').addEventListener('click', async ()=>{
   btn.disabled=true; txt.innerHTML='<span class="spin"></span>';
   try{
     const label=document.getElementById('cloud-label').value.trim();
-    const r=await post('api/backup.php',{action:'cloud_save',label});
+    const r=await postStrong('api/backup.php',{action:'cloud_save',label});
     if(!r.success){show(cloudErr,r.error||'Cloud backup failed');return;}
     document.getElementById('cloud-label').value='';
     show(cloudOk,'Cloud backup saved.');

@@ -145,11 +145,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     $action = $_GET['action'] ?? '';
 
     if ($action === 'export') {
+        requireStrongAuth();
         auditLog('backup_export');
         jsonResponse(['success' => true, 'export' => exportPayload((int)$userId)]);
     }
 
     if ($action === 'cloud_list') {
+        requireStrongAuth();
         try {
             $db = getDB();
             $stmt = $db->prepare('SELECT id, label, created_at, LENGTH(backup_blob) AS bytes FROM backups WHERE user_id = ? ORDER BY created_at DESC');
@@ -162,6 +164,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     }
 
     if ($action === 'cloud_get') {
+        requireStrongAuth();
         $id = (int)($_GET['id'] ?? 0);
         if ($id <= 0) jsonResponse(['error' => 'id required'], 400);
 
@@ -183,6 +186,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     requireCsrf();
+    requireStrongAuth();
 
     $body = json_decode(file_get_contents('php://input'), true);
     $action = $body['action'] ?? '';

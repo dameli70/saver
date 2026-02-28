@@ -204,14 +204,11 @@ if ($method === 'POST') {
     if ($action === 'create_user') {
         $email        = strtolower(trim($body['email'] ?? ''));
         $loginPwd     = $body['login_password'] ?? '';
-        $vaultPhrase  = $body['vault_passphrase'] ?? '';
         $makeAdmin    = !empty($body['is_admin']);
         $markVerified = !empty($body['mark_verified']);
 
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) jsonResponse(['error' => 'Invalid email'], 400);
         if (strlen($loginPwd) < 8) jsonResponse(['error' => 'Login password must be at least 8 characters'], 400);
-        if (strlen($vaultPhrase) < 10) jsonResponse(['error' => 'Vault passphrase must be at least 10 characters'], 400);
-        if ($loginPwd === $vaultPhrase) jsonResponse(['error' => 'Vault passphrase must differ from login password'], 400);
 
         $db = getDB();
         $check = $db->prepare("SELECT id FROM users WHERE email = ?");
@@ -219,8 +216,11 @@ if ($method === 'POST') {
         if ($check->fetch()) jsonResponse(['error' => 'Email already registered'], 409);
 
         $loginHash = hashLoginPassword($loginPwd);
+
+        // Vault passphrase is never sent to the server.
+        // Legacy schema still requires verifier fields, so we store non-usable placeholders.
         $vaultVerifierSalt = bin2hex(random_bytes(32));
-        $vaultVerifier     = hashVaultVerifier($vaultPhrase . $vaultVerifierSalt);
+        $vaultVerifier     = hashVaultVerifier(bin2hex(random_bytes(32)) . $vaultVerifierSalt);
 
         $emailVerifiedAt = $markVerified ? (new DateTime())->format('Y-m-d H:i:s') : null;
 

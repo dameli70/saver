@@ -22,8 +22,8 @@ $type       = (string)($body['type'] ?? 'alphanumeric');
 $length     = (int)($body['length'] ?? 16);
 $revealDate = (string)($body['reveal_date'] ?? '');
 $hint       = trim((string)($body['hint'] ?? ''));
-$slot       = (int)($body['vault_verifier_slot'] ?? 1);
-if (!in_array($slot, [1, 2], true)) $slot = 1;
+$slot = isset($body['vault_verifier_slot']) ? (int)$body['vault_verifier_slot'] : 0;
+if (!in_array($slot, [1, 2], true)) $slot = 0;
 
 // ── Validate zero-knowledge crypto fields (opaque blobs from browser) ──
 $cipherBlob = trim((string)($body['cipher_blob'] ?? ''));
@@ -72,16 +72,17 @@ try {
     $lockId = generateUUID();
     $db     = getDB();
 
-    if ($slot === 2) {
-        if (!hasVaultAltVerifierColumns()) {
-            jsonResponse(['error' => 'Vault rotation is not available (missing vault rotation columns). Apply migrations in config/migrations/.'], 500);
-        }
-        $stmt = $db->prepare('SELECT vault_verifier_alt FROM users WHERE id = ?');
+    if ($slot === 0 && hasVaultActiveSlotColumn()) {
+        $stmt = $db->prepare('SELECT vault_active_slot FROM users WHERE id = ?');
         $stmt->execute([(int)$userId]);
         $u = $stmt->fetch();
-        if (!$u || empty($u['vault_verifier_alt'])) {
-            jsonResponse(['error' => 'Vault rotation not initialized'], 400);
-        }
+        $slot = (int)($u['vault_active_slot'] ?? 1);
+        if (!in_array($slot, [1,2], true)) $slot = 1;
+    }
+    if ($slot === 0) $slot = 1;
+
+    if ($slot === 2 && !hasLockVaultVerifierSlotColumn()) {
+        jsonResponse(['error' => 'Vault rotation is not available (missing vault rotation columns). Apply migrations in config/migrations/.'], 500);
     }
 
     $hasSlot = hasLockVaultVerifierSlotColumn();

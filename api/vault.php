@@ -3,7 +3,7 @@
 //  API: POST /api/vault.php
 //  Vault-level actions (zero-knowledge):
 //   - rotate_prepare: list eligible codes (reveal_date <= now) with crypto blobs
-//   - rotate_commit: commit client-side re-encryption + store new passphrase as alt verifier (slot 2)
+//   - rotate_commit: commit client-side re-encryption (slot 1 -> slot 2)
 //
 //  Important: Rotation is restricted to already-unlocked codes (server time gate
 //  passed) so it cannot be used to bypass time locks.
@@ -30,57 +30,60 @@ if (!$userId) jsonResponse(['error' => 'Unauthorized'], 401);
 
 if ($action === 'rotate_prepare') {
     $db = getDB();
-    $slotFilter = hasLockVaultVerifierSlotColumn() ? ' AND vault_verifier_slot = 1' : '';
+
+    $fromSlot = 1;
+    $toSlot   = 2;
+
+    if (hasLockVaultVerifierSlotColumn() && hasVaultActiveSlotColumn()) {
+        $stmt = $db->prepare('SELECT vault_active_slot FROM users WHERE id = ?');
+        $stmt->execute([(int)$userId]);
+        $u = $stmt->fetch();
+        $cur = (int)($u['vault_active_slot'] ?? 1);
+        if (!in_array($cur, [1, 2], true)) $cur = 1;
+        $fromSlot = $cur;
+        $toSlot   = ($cur === 1) ? 2 : 1;
+    }
+
+    $slotFilter = hasLockVaultVerifierSlotColumn() ? ' AND vault_verifier_slot = ' . (int)$fromSlot : '';
 
     $stmt = $db->prepare("SELECT id, cipher_blob, iv, auth_tag, kdf_salt, kdf_iterations FROM locks WHERE user_id = ? AND is_active = 1 AND reveal_date <= NOW(){$slotFilter} ORDER BY created_at ASC");
     $stmt->execute([(int)$userId]);
     $locks = $stmt->fetchAll();
 
     auditLog('vault_rotate_prepare', null, (int)$userId);
-    jsonResponse(['success' => true, 'locks' => $locks]);
+    jsonResponse(['success' => true, 'from_slot' => $fromSlot, 'to_slot' => $toSlot, 'locks' => $locks]);
 }
 
 if ($action === 'rotate_commit') {
     $updates = $body['updates'] ?? null;
     if (!is_array($updates)) jsonResponse(['error' => 'updates array required'], 400);
 
-    $current = (string)($body['current_vault_passphrase'] ?? '');
-    $next    = (string)($body['new_vault_passphrase'] ?? '');
-
-    if (strlen($current) < 10) jsonResponse(['error' => 'Current vault passphrase required'], 400);
-    if (strlen($next) < 10) jsonResponse(['error' => 'New vault passphrase must be at least 10 characters'], 400);
-    if ($current === $next) jsonResponse(['error' => 'New vault passphrase must differ from current'], 400);
-
-    if (!hasVaultAltVerifierColumns() || !hasLockVaultVerifierSlotColumn()) {
+    if (!hasLockVaultVerifierSlotColumn()) {
         jsonResponse(['error' => 'Vault rotation is not available (missing vault rotation columns). Apply migrations in config/migrations/.'], 500);
     }
 
-    // Re-verify CURRENT (slot 1) vault passphrase before committing any rotation.
-    requireVaultPassphrase($current, 1);
+    requireStrongAuth();
 
     $db = getDB();
+
+    $fromSlot = 1;
+    $toSlot   = 2;
+
+    if (hasVaultActiveSlotColumn()) {
+        $stmt = $db->prepare('SELECT vault_active_slot FROM users WHERE id = ?');
+        $stmt->execute([(int)$userId]);
+        $u = $stmt->fetch();
+        $cur = (int)($u['vault_active_slot'] ?? 1);
+        if (!in_array($cur, [1, 2], true)) $cur = 1;
+        $fromSlot = $cur;
+        $toSlot   = ($cur === 1) ? 2 : 1;
+    }
+
     $db->beginTransaction();
 
     try {
-        // Ensure the rotation target (slot 2) is stable.
-        $uStmt = $db->prepare('SELECT vault_verifier_alt, vault_verifier_alt_salt FROM users WHERE id = ? FOR UPDATE');
-        $uStmt->execute([(int)$userId]);
-        $u = $uStmt->fetch();
-        if (!$u) throw new RuntimeException('Unauthorized');
-
-        if (!empty($u['vault_verifier_alt']) && !empty($u['vault_verifier_alt_salt'])) {
-            if (!verifyVaultPassphrase($next . $u['vault_verifier_alt_salt'], $u['vault_verifier_alt'])) {
-                throw new RuntimeException('A vault rotation is already in progress with a different new passphrase');
-            }
-        } else {
-            $altSalt = bin2hex(random_bytes(32));
-            $altHash = hashVaultVerifier($next . $altSalt);
-            $db->prepare('UPDATE users SET vault_verifier_alt = ?, vault_verifier_alt_salt = ?, vault_verifier_alt_set_at = NOW() WHERE id = ?')
-               ->execute([$altHash, $altSalt, (int)$userId]);
-        }
-
-        $check = $db->prepare('SELECT id FROM locks WHERE id = ? AND user_id = ? AND is_active = 1 AND reveal_date <= NOW() AND vault_verifier_slot = 1');
-        $upd   = $db->prepare('UPDATE locks SET cipher_blob = ?, iv = ?, auth_tag = ?, vault_verifier_slot = 2 WHERE id = ? AND user_id = ?');
+        $check = $db->prepare('SELECT id FROM locks WHERE id = ? AND user_id = ? AND is_active = 1 AND reveal_date <= NOW() AND vault_verifier_slot = ?');
+        $upd   = $db->prepare('UPDATE locks SET cipher_blob = ?, iv = ?, auth_tag = ?, vault_verifier_slot = ? WHERE id = ? AND user_id = ?');
 
         $count = 0;
         foreach ($updates as $u) {
@@ -94,23 +97,24 @@ if ($action === 'rotate_commit') {
             if ($id === '' || strlen($id) !== 36) continue;
             if ($cipher === '' || $iv === '' || $tag === '') continue;
 
-            $check->execute([$id, (int)$userId]);
+            $check->execute([$id, (int)$userId, (int)$fromSlot]);
             if (!$check->fetch()) continue;
 
-            $upd->execute([$cipher, $iv, $tag, $id, (int)$userId]);
+            $upd->execute([$cipher, $iv, $tag, (int)$toSlot, $id, (int)$userId]);
             if ($upd->rowCount() > 0) $count++;
+        }
+
+        if (hasVaultActiveSlotColumn()) {
+            $db->prepare('UPDATE users SET vault_active_slot = ? WHERE id = ?')->execute([(int)$toSlot, (int)$userId]);
         }
 
         $db->commit();
 
         auditLog('vault_rotate_commit', null, (int)$userId);
-        jsonResponse(['success' => true, 'updated' => $count]);
+        jsonResponse(['success' => true, 'updated' => $count, 'from_slot' => $fromSlot, 'to_slot' => $toSlot]);
 
     } catch (Throwable $e) {
         $db->rollBack();
-        if ($e instanceof RuntimeException) {
-            jsonResponse(['error' => $e->getMessage()], 400);
-        }
         throw $e;
     }
 }

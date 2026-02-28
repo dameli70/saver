@@ -148,7 +148,7 @@ pre{white-space:pre-wrap;word-break:break-word;background:#000;border:1px solid 
       <div class="card-title">Add user</div>
       <div class="field"><label>Email</label><input id="nu-email" type="email" placeholder="user@example.com" autocomplete="off"></div>
       <div class="field"><label>Login password</label><input id="nu-login" type="password" placeholder="min 8 chars" autocomplete="new-password"></div>
-      <div class="field"><label>Vault passphrase</label><input id="nu-vault" type="password" placeholder="min 10 chars" autocomplete="new-password"></div>
+      
 
       <label class="chk"><input type="checkbox" id="nu-verified"> <span>Mark email as verified (skip email verification)</span></label>
       <label class="chk"><input type="checkbox" id="nu-admin"> <span>Make this user an admin</span></label>
@@ -160,7 +160,7 @@ pre{white-space:pre-wrap;word-break:break-word;background:#000;border:1px solid 
       <hr>
       <div class="p" style="margin:0;">
         For zero-knowledge integrity, the user should choose their own vault passphrase.
-        If you create accounts on their behalf, you will know that passphrase.
+        In strong security mode, vault passphrases are never sent to the server.
       </div>
     </div>
   </div>
@@ -320,7 +320,6 @@ async function loadUsers(){
 async function createUser(){
   const email = document.getElementById('nu-email').value.trim();
   const login = document.getElementById('nu-login').value;
-  const vault = document.getElementById('nu-vault').value;
   const markVerified = document.getElementById('nu-verified').checked;
   const isAdmin = document.getElementById('nu-admin').checked;
 
@@ -332,7 +331,6 @@ async function createUser(){
       action: 'create_user',
       email,
       login_password: login,
-      vault_passphrase: vault,
       mark_verified: markVerified ? 1 : 0,
       is_admin: isAdmin ? 1 : 0,
     });
@@ -341,7 +339,6 @@ async function createUser(){
     setMsg('nu-msg', 'User created.', true);
     document.getElementById('nu-email').value='';
     document.getElementById('nu-login').value='';
-    document.getElementById('nu-vault').value='';
 
     if(r.dev_verify_url){
       const d = document.getElementById('nu-dev');

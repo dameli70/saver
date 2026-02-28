@@ -78,6 +78,12 @@ body{background:var(--bg);color:var(--text);font-family:var(--mono);min-height:1
       <button class="btn btn-primary" id="btn" type="submit"><span id="btn-txt">Login</span></button>
     </form>
 
+    <div style="height:10px"></div>
+
+    <button class="btn btn-primary" id="passkey-btn" type="button" style="background:transparent;border:1px solid var(--b2);color:var(--text);">
+      Use passkey
+    </button>
+
     <div class="links">
       <a href="index.php">Home</a>
       <a href="forgot.php">Forgot password</a>
@@ -90,11 +96,27 @@ const f=document.getElementById('f');
 const err=document.getElementById('err');
 const btn=document.getElementById('btn');
 const btnTxt=document.getElementById('btn-txt');
+const passkeyBtn=document.getElementById('passkey-btn');
 
 function showErr(m){err.textContent=m;err.classList.add('show');}
 function clearErr(){err.textContent='';err.classList.remove('show');}
 
-f.addEventListener('submit', async (e)=>{
+function b64ToBuf(b64url){
+  const b64 = b64url.replace(/-/g,'+').replace(/_/g,'/');
+  const pad = b64.length % 4 ? '='.repeat(4 - (b64.length % 4)) : '';
+  const bin = atob(b64 + pad);
+  const bytes = new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
+  return bytes.buffer;
+}
+function bufToB64(buf){
+  const bytes = new Uint8Array(buf);
+  let s='';
+  for(let i=0;i<bytes.length;i++) s+=String.fromCharCode(bytes[i]);
+  return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+
+async function doPasswordLogin(e){
   e.preventDefault();
   clearErr();
 
@@ -103,13 +125,36 @@ f.addEventListener('submit', async (e)=>{
   if(!email||!pwd){showErr('Email and password required');return;}
 
   btn.disabled=true;
+  passkeyBtn.disabled=true;
   btnTxt.innerHTML='<span class="spin"></span>';
 
   try{
     const r=await fetch('api/auth.php',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({action:'login',email,login_password:pwd})});
     const j=await r.json();
-    if(!j.success){showErr(j.error||'Login failed');return;}
+
+    if(!j.success){
+      if(j.error_code==='passkey_required'){
+        showErr('This account requires a passkey. Use the passkey button below.');
+        return;
+      }
+      showErr(j.error||'Login failed');
+      return;
+    }
+
+    if(j.needs_totp){
+      const code = prompt('Enter your 6-digit authenticator code');
+      if(!code){showErr('Code required');return;}
+
+      const r2=await fetch('api/auth.php',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({action:'login_totp',code})});
+      const j2=await r2.json();
+      if(!j2.success){showErr(j2.error||'Login failed');return;}
+
+      if(j2.verified){window.location='dashboard.php';}
+      else window.location='account.php';
+      return;
+    }
 
     if(j.verified){window.location='dashboard.php';}
     else window.location='account.php';
@@ -118,9 +163,64 @@ f.addEventListener('submit', async (e)=>{
     showErr('Network error');
   }finally{
     btn.disabled=false;
+    passkeyBtn.disabled=false;
     btnTxt.textContent='Login';
   }
-});
+}
+
+async function doPasskeyLogin(){
+  clearErr();
+  if(!window.PublicKeyCredential){showErr('Passkeys not supported in this browser');return;}
+
+  btn.disabled=true;
+  passkeyBtn.disabled=true;
+  passkeyBtn.innerHTML='<span class="spin"></span>';
+
+  try{
+    const r=await fetch('api/webauthn.php',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'login_begin'})});
+    const j=await r.json();
+    if(!j.success){showErr(j.error||'Passkey failed');return;}
+
+    const pk=j.publicKey||{};
+    const cred=await navigator.credentials.get({publicKey:{
+      challenge: b64ToBuf(pk.challenge),
+      rpId: pk.rpId,
+      timeout: pk.timeout||60000,
+      userVerification: pk.userVerification||'required'
+    }});
+
+    const a=cred.response;
+    const finish=await fetch('api/webauthn.php',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        action:'login_finish',
+        id: cred.id,
+        rawId: bufToB64(cred.rawId),
+        type: cred.type,
+        response:{
+          clientDataJSON: bufToB64(a.clientDataJSON),
+          authenticatorData: bufToB64(a.authenticatorData),
+          signature: bufToB64(a.signature),
+          userHandle: a.userHandle ? bufToB64(a.userHandle) : null,
+        }
+      })});
+    const j2=await finish.json();
+    if(!j2.success){showErr(j2.error||'Passkey login failed');return;}
+
+    if(j2.verified){window.location='dashboard.php';}
+    else window.location='account.php';
+
+  }catch(e){
+    showErr((e && e.message) ? e.message : 'Passkey login failed');
+  }finally{
+    btn.disabled=false;
+    passkeyBtn.disabled=false;
+    passkeyBtn.textContent='Use passkey';
+  }
+}
+
+f.addEventListener('submit', doPasswordLogin);
+passkeyBtn.addEventListener('click', doPasskeyLogin);
 </script>
 </body>
 </html>

@@ -73,9 +73,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--mono);min-height:1
     <div class="sub">// Create account</div>
 
     <div class="callout">
-      You will set <strong>two separate credentials</strong>:<br>
-      • <strong>Login password</strong> — authenticates you to this site.<br>
-      • <strong>Vault passphrase</strong> — used in your browser to encrypt/decrypt codes. <strong>Never stored or reusable by the server.</strong>
+      Your <strong>login password</strong> authenticates you to this site.<br>
+      Your <strong>vault passphrase</strong> is used only in your browser to encrypt/decrypt codes and is never stored by the server — you will enter it when you generate or reveal codes.
     </div>
 
     <div id="err" class="msg msg-err"></div>
@@ -121,19 +120,16 @@ f.addEventListener('submit', async (e)=>{
 
   const email=document.getElementById('email').value.trim();
   const pwd=document.getElementById('pwd').value;
-  const vault=document.getElementById('vault').value;
 
-  if(!email||!pwd||!vault){showErr('Fill in all fields');return;}
+  if(!email||!pwd){showErr('Fill in all fields');return;}
   if(pwd.length<8){showErr('Login password must be at least 8 characters');return;}
-  if(vault.length<10){showErr('Vault passphrase must be at least 10 characters');return;}
-  if(pwd===vault){showErr('Vault passphrase must differ from login password');return;}
 
   btn.disabled=true;
   btnTxt.innerHTML='<span class="spin"></span>';
 
   try{
     const r=await fetch('api/auth.php',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({action:'register',email,login_password:pwd,vault_passphrase:vault})});
+      body:JSON.stringify({action:'register',email,login_password:pwd})});
     const j=await r.json();
     if(!j.success){showErr(j.error||'Registration failed');return;}
 

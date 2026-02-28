@@ -17,11 +17,19 @@ CREATE TABLE IF NOT EXISTS users (
     id                           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     email                        VARCHAR(255) NOT NULL UNIQUE,
     login_hash                   VARCHAR(255) NOT NULL,       -- Argon2id of LOGIN password (for auth only)
-    vault_verifier               VARCHAR(255) NOT NULL,       -- Argon2id of VAULT passphrase (only to verify, never to derive keys)
-    vault_verifier_salt          CHAR(64) NOT NULL,           -- hex: random salt for vault_verifier
-    vault_verifier_alt           VARCHAR(255) NULL,           -- optional 2nd verifier (for passphrase rotation)
+    vault_verifier               VARCHAR(255) NOT NULL,       -- legacy verifier (no longer required for reveals)
+    vault_verifier_salt          CHAR(64) NOT NULL,
+    vault_verifier_alt           VARCHAR(255) NULL,
     vault_verifier_alt_salt      CHAR(64) NULL,
     vault_verifier_alt_set_at    DATETIME NULL,
+
+    -- Personal-use security
+    totp_secret_enc              TEXT NULL,
+    totp_enabled_at              DATETIME NULL,
+    require_webauthn             TINYINT(1) NOT NULL DEFAULT 0,
+
+    -- Not secret: which vault slot is used for NEW codes (1=primary, 2=rotated)
+    vault_active_slot            TINYINT(1) NOT NULL DEFAULT 1,
 
     -- Email verification (required before using the dashboard)
     email_verified_at            DATETIME NULL,
@@ -125,4 +133,20 @@ CREATE TABLE IF NOT EXISTS audit_log (
     INDEX idx_user  (user_id),
     INDEX idx_lock  (lock_id),
     INDEX idx_time  (created_at)
+) ENGINE=InnoDB;
+
+-- WebAuthn / Passkeys (public keys only)
+CREATE TABLE IF NOT EXISTS webauthn_credentials (
+    id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id         INT UNSIGNED NOT NULL,
+    credential_id   VARBINARY(255) NOT NULL,
+    public_key_pem  TEXT NOT NULL,
+    sign_count      INT UNSIGNED NOT NULL DEFAULT 0,
+    label           VARCHAR(255) NULL,
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    last_used_at    DATETIME NULL,
+
+    UNIQUE KEY uniq_cred (credential_id),
+    INDEX idx_user (user_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;

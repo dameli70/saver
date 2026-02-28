@@ -6,7 +6,7 @@
 //  1. User is authenticated (session)
 //  2. Lock belongs to user
 //  3. Reveal date has passed (server clock — tamper-proof)
-//  4. Vault passphrase is correct (identity re-verification)
+//  4. Step-up auth completed (TOTP or passkey)
 // ============================================================
 
 require_once __DIR__ . '/../includes/install_guard.php';
@@ -20,12 +20,10 @@ requireVerifiedEmail();
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') jsonResponse(['error' => 'Method not allowed'], 405);
 
-$body        = json_decode(file_get_contents('php://input'), true);
-$lockId      = trim((string)($body['lock_id'] ?? ''));
-$vaultPhrase = (string)($body['vault_passphrase'] ?? '');
+$body   = json_decode(file_get_contents('php://input'), true);
+$lockId = trim((string)($body['lock_id'] ?? ''));
 
-if ($lockId === '')      jsonResponse(['error' => 'lock_id required'], 400);
-if ($vaultPhrase === '') jsonResponse(['error' => 'Vault passphrase required to reveal'], 400);
+if ($lockId === '') jsonResponse(['error' => 'lock_id required'], 400);
 
 $userId = getCurrentUserId();
 $db     = getDB();
@@ -48,8 +46,7 @@ if ($lock['confirmation_status'] !== 'confirmed') {
     jsonResponse(['error' => 'This lock was not confirmed — cannot reveal'], 403);
 }
 
-// Second factor — even a stolen session cannot reveal without passphrase
-requireVaultPassphrase($vaultPhrase, (int)($lock['vault_verifier_slot'] ?? 1));
+requireStrongAuth();
 
 // Server-side time gate (tamper-proof — client clock irrelevant)
 $now        = new DateTime('now', new DateTimeZone('UTC'));
@@ -72,13 +69,13 @@ if ($lock['revealed_at'] === null) {
 auditLog('reveal', $lockId);
 
 jsonResponse([
-    'success'        => true,
-    'label'          => $lock['label'],
-    'hint'           => $lock['hint'],
-    'cipher_blob'    => $lock['cipher_blob'],
-    'iv'             => $lock['iv'],
-    'auth_tag'       => $lock['auth_tag'],
-    'kdf_salt'       => $lock['kdf_salt'],
-    'kdf_iterations'       => (int)$lock['kdf_iterations'],
-    'vault_verifier_slot'  => (int)($lock['vault_verifier_slot'] ?? 1),
+    'success'            => true,
+    'label'              => $lock['label'],
+    'hint'               => $lock['hint'],
+    'cipher_blob'        => $lock['cipher_blob'],
+    'iv'                 => $lock['iv'],
+    'auth_tag'           => $lock['auth_tag'],
+    'kdf_salt'           => $lock['kdf_salt'],
+    'kdf_iterations'     => (int)$lock['kdf_iterations'],
+    'vault_verifier_slot'=> (int)($lock['vault_verifier_slot'] ?? 1),
 ]);
