@@ -18,6 +18,9 @@ $userEmail = getCurrentUserEmail() ?? '';
 $isAdmin   = isAdmin();
 $csrf      = getCsrfToken();
 
+$userId = (int)(getCurrentUserId() ?? 0);
+$showSecurityBanner = !userHasTotp($userId) && !userHasPasskeys($userId);
+
 // Strict security headers
 header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none';");
 header("X-Frame-Options: DENY");
@@ -99,6 +102,13 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9998;o
 
 .app-body{max-width:680px;margin:0 auto;padding:22px 16px;}
 @media(min-width:600px){.app-body{padding:30px 24px;}}
+
+/* ── SECURITY BANNER ── */
+.sec-banner{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
+  background:rgba(255,170,0,.06);border:1px solid rgba(255,170,0,.22);
+  padding:14px 14px;margin:0 0 16px 0;}
+.sec-banner-title{font-family:var(--display);font-weight:800;font-size:12px;letter-spacing:1px;color:var(--orange);}
+.sec-banner-sub{font-size:11px;color:var(--muted);line-height:1.6;max-width:520px;}
 
 .card{background:var(--s1);border:1px solid var(--b1);padding:20px;margin-bottom:16px;position:relative;}
 @media(min-width:600px){.card{padding:24px 28px;}}
@@ -207,6 +217,17 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
 
   <div class="app-body">
 
+    <?php if ($showSecurityBanner): ?>
+    <div class="sec-banner">
+      <div>
+        <div class="sec-banner-title">Security setup required</div>
+        <div class="sec-banner-sub">Enable TOTP or add a passkey to protect sensitive actions (reveal, backups, vault changes).</div>
+      </div>
+      <a class="btn btn-ghost btn-sm" href="account.php#totp-card">Open account</a>
+    </div>
+    <?php endif; ?>
+
+    
     <div class="card">
       <div class="card-title"><div class="dot"></div>Strong security</div>
       <div style="font-size:12px;color:var(--muted);line-height:1.7;">

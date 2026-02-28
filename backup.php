@@ -17,6 +17,9 @@ if (!isEmailVerified()) {
 $isAdmin = isAdmin();
 $csrf    = getCsrfToken();
 
+$userId = (int)(getCurrentUserId() ?? 0);
+$showSecurityBanner = !userHasTotp($userId) && !userHasPasskeys($userId);
+
 header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none';");
 header("X-Frame-Options: DENY");
 header("X-Content-Type-Options: nosniff");
@@ -56,6 +59,14 @@ body{background:var(--bg);color:var(--text);font-family:var(--mono);min-height:1
 .wrap{max-width:860px;margin:0 auto;padding:26px 18px 60px;}
 .h{font-family:var(--display);font-weight:900;font-size:18px;letter-spacing:1px;margin-bottom:8px;}
 .p{color:var(--muted);font-size:12px;line-height:1.7;margin-bottom:16px;}
+
+/* ── SECURITY BANNER ── */
+.sec-banner{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
+  background:rgba(255,170,0,.06);border:1px solid rgba(255,170,0,.22);
+  padding:14px 14px;margin:0 0 14px 0;}
+.sec-banner-title{font-family:var(--display);font-weight:800;font-size:12px;letter-spacing:1px;color:var(--orange);}
+.sec-banner-sub{font-size:11px;color:var(--muted);line-height:1.6;max-width:620px;}
+
 .card{background:rgba(13,15,20,.9);border:1px solid var(--b1);padding:18px;margin-bottom:14px;}
 .card-title{font-family:var(--display);font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--accent);margin-bottom:12px;}
 .row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
@@ -95,6 +106,16 @@ body{background:var(--bg);color:var(--text);font-family:var(--mono);min-height:1
   <div class="wrap">
     <div class="h">Backups</div>
     <div class="p">Backups contain only encrypted ciphertext blobs and metadata (labels, dates, status). Your plaintext codes are never stored by the server.</div>
+
+    <?php if ($showSecurityBanner): ?>
+    <div class="sec-banner">
+      <div>
+        <div class="sec-banner-title">Security setup required</div>
+        <div class="sec-banner-sub">Enable TOTP or add a passkey to protect sensitive actions (cloud backups, restore, export).</div>
+      </div>
+      <a class="btn btn-ghost" href="account.php#totp-card">Open account</a>
+    </div>
+    <?php endif; ?>
 
     <div class="card">
       <div class="card-title">Local backup</div>
