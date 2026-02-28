@@ -23,7 +23,10 @@ function isAppInstalled(): bool {
         return false;
     }
 
-    if (!defined('DB_HOST') || !defined('
+    if (!defined('DB_HOST') || !defined('DB_NAME') || !defined('DB_USER') || !defined('DB_PASS') || !defined('DB_CHARSET')) {
+        return false;
+    }
+
     // If core PHP extensions are missing, route to installer so it can show a clear error.
     if (!extension_loaded('pdo_mysql')) return false;
 
