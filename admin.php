@@ -420,9 +420,8 @@ async function loadCodes(){
         <td>${fmt(c.revealed_at)}</td>
         <td>${c.is_active ? '✓' : '—'}</td>
         <td>
-          <button class="btn btn-blue btn-sm" onclick="openDetail(${JSON.stringify(c.id)})">Deta</
- button>
-         <lbutton class="btn btn-red btn-sm" onclick="deleteCode(${JSON.stringify(c.id)})>
+          <button class="btn btn-blue btn-sm" onclick="openDetail(${JSON.stringify(c.id)})">Detail</button>
+          <button class="btn btn-red btn-sm" onclick="deleteCode(${JSON.stringify(c.id)})">Delete</button>
         </td>
       `;
       tbody.appendChild(tr);
@@ -491,8 +490,12 @@ async function openDetail(lockId){
 
 function closeDetail(e){
   if(e && e.target !== document.getElementById('detail-modal')) return;
-  document.getElementById('detail-modal').classLis</old_code><new_code>loadUsers();
+  document.getElementById('detail-modal').classList.remove('show');
+}
+
+loadUsers();
 loadCodes();
+loadAudit();
 </script>
 </body>
 </html>

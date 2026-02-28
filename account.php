@@ -87,6 +87,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--mono);min-height:1
     <div class="nav-r">
       <?php if ($verified): ?>
         <a class="btn btn-ghost" href="dashboard.php">Dashboard</a>
+        <a class="btn btn-ghost" href="backup.php">Backups</a>
         <?php if ($isAdmin): ?>
           <a class="btn btn-ghost" href="admin.php">Admin</a>
         <?php endif; ?>

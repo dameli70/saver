@@ -44,6 +44,13 @@ Options:
   --mail-from=EMAIL               Default: no-reply@localhost
   --email-verify-ttl-hours=HOURS  Default: 24
 
+  --smtp-host=HOST                Optional; if empty, PHP mail() is used
+  --smtp-port=PORT                Default: 587
+  --smtp-user=USER
+  --smtp-pass=PASS
+  --smtp-secure=none|tls|ssl      Default: tls
+  --smtp-verify-peer=0|1          Default: 1
+
   --init-db=1                     Create tables by running config/schema.sql
   --apply-migrations=1            Apply SQL files in config/migrations (safe to re-run)
 
@@ -139,10 +146,17 @@ function updateConfigFile(string $path, array $vals, bool $force): void {
         'APP_NAME' => $vals['app_name'],
         'MAIL_FROM' => $vals['mail_from'],
         'EMAIL_VERIFY_TTL_HOURS' => (string)$vals['email_verify_ttl_hours'],
+
+        'SMTP_HOST' => $vals['smtp_host'],
+        'SMTP_PORT' => (string)$vals['smtp_port'],
+        'SMTP_USER' => $vals['smtp_user'],
+        'SMTP_PASS' => $vals['smtp_pass'],
+        'SMTP_SECURE' => $vals['smtp_secure'],
+        'SMTP_VERIFY_PEER' => (string)$vals['smtp_verify_peer'],
     ];
 
     foreach ($repls as $const => $val) {
-        if (in_array($const, ['EMAIL_VERIFY_TTL_HOURS'], true)) {
+        if (in_array($const, ['EMAIL_VERIFY_TTL_HOURS', 'SMTP_PORT', 'SMTP_VERIFY_PEER'], true)) {
             $pattern = "/define\\('" . preg_quote($const, '/') . "',\\s*[^)]+\\);/";
             $replace = "define('{$const}', " . (int)$val . ");";
         } else {
@@ -299,6 +313,40 @@ if (!ctype_digit((string)$ttl) || (int)$ttl < 1 || (int)$ttl > 168) {
 }
 $vals['email_verify_ttl_hours'] = (int)$ttl;
 
+$vals['smtp_host'] = $get('smtp-host', '');
+$vals['smtp_port'] = 587;
+$vals['smtp_user'] = '';
+$vals['smtp_pass'] = '';
+$vals['smtp_secure'] = 'tls';
+$vals['smtp_verify_peer'] = 1;
+
+if ($vals['smtp_host'] !== '') {
+    $smtpPort = $get('smtp-port', '587');
+    if (!ctype_digit((string)$smtpPort) || (int)$smtpPort < 1 || (int)$smtpPort > 65535) {
+        fwrite(STDERR, "Invalid --smtp-port (1-65535).\n");
+        exit(1);
+    }
+    $vals['smtp_port'] = (int)$smtpPort;
+
+    $vals['smtp_user'] = $get('smtp-user', '');
+    $vals['smtp_pass'] = $get('smtp-pass', '');
+
+    $smtpSecure = strtolower(trim($get('smtp-secure', 'tls')));
+    if ($smtpSecure === 'none') $smtpSecure = '';
+    if (!in_array($smtpSecure, ['', 'tls', 'ssl'], true)) {
+        fwrite(STDERR, "Invalid --smtp-secure (none|tls|ssl).\n");
+        exit(1);
+    }
+    $vals['smtp_secure'] = $smtpSecure;
+
+    $smtpVerify = $get('smtp-verify-peer', '1');
+    if (!in_array((string)$smtpVerify, ['0', '1'], true)) {
+        fwrite(STDERR, "Invalid --smtp-verify-peer (0|1).\n");
+        exit(1);
+    }
+    $vals['smtp_verify_peer'] = (int)$smtpVerify;
+}
+
 $vals['app_hmac_secret'] = bin2hex(random_bytes(32));
 
 $initDb = (($args['init-db'] ?? '') === '1');
@@ -363,4 +411,4 @@ if (file_put_contents($flagPath, $flagBody) === false) {
 fwrite(STDOUT, "\nDone.\n\nNext steps:\n");
 fwrite(STDOUT, "- Point your web server document root at this project folder.\n");
 fwrite(STDOUT, "- Visit / (index.php) to access the app.\n");
-fwrite(STDOUT, "- Ensure PHP mail() is configured if you want real verification emails.\n");
+fwrite(STDOUT, "- Configure SMTP_* in config/database.php (recommended) or ensure PHP mail() works for verification emails.\n");

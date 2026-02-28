@@ -1,7 +1,7 @@
 <?php
 // ============================================================
 //  LOCKSMITH — Database Configuration
-//  Edit DB_* and APP_HMAC_SECRET only.
+//  Edit DB_*, APP_HMAC_SECRET, and mail settings.
 //  The encryption key NEVER appears here — it lives only
 //  in the user's browser, derived from their vault passphrase.
 // ============================================================
@@ -21,6 +21,14 @@ define('APP_ENV', 'development'); // 'production' in prod
 define('APP_NAME', 'LOCKSMITH');
 define('MAIL_FROM', 'no-reply@localhost');
 define('EMAIL_VERIFY_TTL_HOURS', 24);
+
+// SMTP (optional; if SMTP_HOST is empty, PHP mail() is used)
+define('SMTP_HOST', '');
+define('SMTP_PORT', 587);
+define('SMTP_USER', '');
+define('SMTP_PASS', '');
+define('SMTP_SECURE', 'tls'); // '', 'tls', or 'ssl'
+define('SMTP_VERIFY_PEER', 1);
 
 // PBKDF2 iterations — match what client uses
 define('PBKDF2_ITERATIONS', 310000);

@@ -62,10 +62,17 @@ function updateConfigFile(string $path, array $vals): void {
         'APP_NAME' => $vals['app_name'],
         'MAIL_FROM' => $vals['mail_from'],
         'EMAIL_VERIFY_TTL_HOURS' => (string)$vals['email_verify_ttl_hours'],
+
+        'SMTP_HOST' => $vals['smtp_host'],
+        'SMTP_PORT' => (string)$vals['smtp_port'],
+        'SMTP_USER' => $vals['smtp_user'],
+        'SMTP_PASS' => $vals['smtp_pass'],
+        'SMTP_SECURE' => $vals['smtp_secure'],
+        'SMTP_VERIFY_PEER' => (string)$vals['smtp_verify_peer'],
     ];
 
     foreach ($repls as $const => $val) {
-        if ($const === 'EMAIL_VERIFY_TTL_HOURS') {
+        if (in_array($const, ['EMAIL_VERIFY_TTL_HOURS', 'SMTP_PORT', 'SMTP_VERIFY_PEER'], true)) {
             $pattern = "/define\\('" . preg_quote($const, '/') . "',\\s*[^)]+\\);/";
             $replace = "define('{$const}', " . (int)$val . ");";
         } else {
@@ -178,6 +185,14 @@ $vals = [
     'app_name' => 'LOCKSMITH',
     'mail_from' => 'no-reply@localhost',
     'email_verify_ttl_hours' => 24,
+
+    'smtp_host' => '',
+    'smtp_port' => 587,
+    'smtp_user' => '',
+    'smtp_pass' => '',
+    'smtp_secure' => 'tls',
+    'smtp_verify_peer' => 1,
+
     'init_db' => 1,
     'apply_migrations' => 1,
 ];
@@ -196,6 +211,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $vals['mail_from'] = trim((string)($_POST['mail_from'] ?? 'no-reply@localhost'));
     $vals['email_verify_ttl_hours'] = (int)($_POST['email_verify_ttl_hours'] ?? 24);
 
+    $vals['smtp_host'] = trim((string)($_POST['smtp_host'] ?? ''));
+    $vals['smtp_port'] = (int)($_POST['smtp_port'] ?? 587);
+    $vals['smtp_user'] = trim((string)($_POST['smtp_user'] ?? ''));
+    $vals['smtp_pass'] = (string)($_POST['smtp_pass'] ?? '');
+    $vals['smtp_secure'] = trim((string)($_POST['smtp_secure'] ?? 'tls'));
+    $vals['smtp_verify_peer'] = !empty($_POST['smtp_verify_peer']) ? 1 : 0;
+
     $vals['init_db'] = !empty($_POST['init_db']) ? 1 : 0;
     $vals['apply_migrations'] = !empty($_POST['apply_migrations']) ? 1 : 0;
 
@@ -206,6 +228,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($vals['app_name'] === '') $errors[] = 'APP_NAME is required.';
     if (!filter_var($vals['mail_from'], FILTER_VALIDATE_EMAIL)) $errors[] = 'MAIL_FROM must be a valid email.';
     if ($vals['email_verify_ttl_hours'] < 1 || $vals['email_verify_ttl_hours'] > 168) $errors[] = 'Email verification TTL must be 1–168 hours.';
+
+    if ($vals['smtp_host'] !== '') {
+        if ($vals['smtp_port'] < 1 || $vals['smtp_port'] > 65535) $errors[] = 'SMTP_PORT must be 1–65535.';
+        if (!in_array($vals['smtp_secure'], ['', 'tls', 'ssl'], true)) $errors[] = 'SMTP_SECURE must be empty, tls, or ssl.';
+        if (!in_array((int)$vals['smtp_verify_peer'], [0, 1], true)) $errors[] = 'SMTP_VERIFY_PEER must be 0 or 1.';
+    }
 
     $root = realpath(__DIR__ . '/..');
     $configPath = $root . '/config/database.php';
@@ -375,6 +403,26 @@ hr{border:none;border-top:1px solid var(--b1);margin:16px 0;}
           <div class="field"><label>APP_NAME</label><input name="app_name" value="<?= htmlspecialchars($vals['app_name']) ?>" required></div>
           <div class="field"><label>MAIL_FROM</label><input name="mail_from" value="<?= htmlspecialchars($vals['mail_from']) ?>" required></div>
           <div class="field"><label>Email verification TTL (hours)</label><input name="email_verify_ttl_hours" type="number" min="1" max="168" value="<?= (int)$vals['email_verify_ttl_hours'] ?>" required></div>
+
+          <hr>
+          <h3 style="font-family:var(--display);font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--accent);margin-bottom:12px;">Mail (SMTP optional)</h3>
+
+          <div class="field"><label>SMTP Host (optional)</label><input name="smtp_host" value="<?= htmlspecialchars($vals['smtp_host']) ?>" placeholder="smtp.example.com"></div>
+          <div class="field"><label>SMTP Port</label><input name="smtp_port" type="number" min="1" max="65535" value="<?= (int)$vals['smtp_port'] ?>"></div>
+
+          <div class="field">
+            <label>SMTP Secure</label>
+            <select name="smtp_secure">
+              <option value="" <?= $vals['smtp_secure']===''?'selected':'' ?>>none</option>
+              <option value="tls" <?= $vals['smtp_secure']==='tls'?'selected':'' ?>>tls (STARTTLS)</option>
+              <option value="ssl" <?= $vals['smtp_secure']==='ssl'?'selected':'' ?>>ssl</option>
+            </select>
+          </div>
+
+          <div class="field"><label>SMTP User</label><input name="smtp_user" value="<?= htmlspecialchars($vals['smtp_user']) ?>"></div>
+          <div class="field"><label>SMTP Password</label><input type="password" name="smtp_pass" value=""></div>
+
+          <div class="chk"><input type="checkbox" name="smtp_verify_peer" value="1" <?= $vals['smtp_verify_peer'] ? 'checked' : '' ?>> <span>Verify TLS certificate</span></div>
 
           <div class="note">
             This installer will write <code>config/database.php</code> and generate a fresh <code>APP_HMAC_SECRET</code>.

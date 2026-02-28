@@ -24,11 +24,13 @@ php install/install.php
 php install/install.php --non-interactive --init-db=1 --apply-migrations=1 \
   --db-host=localhost --db-name=locksmith --db-user=root --db-pass='' \
   --app-env=development --app-name=LOCKSMITH --mail-from=no-reply@localhost \
-  --email-verify-ttl-hours=24
+  --email-verify-ttl-hours=24 \
+  --smtp-host=smtp.example.com --smtp-port=587 --smtp-secure=tls \
+  --smtp-user=user --smtp-pass=pass --smtp-verify-peer=1
 ```
 
 ## Notes
 
 - The installer makes a timestamped backup of `config/database.php` before editing.
 - In production you should use HTTPS (secure cookies + clipboard support).
-- Email verification uses PHP `mail()`. In development, verification links may be displayed by the app depending on environment.
+- Email verification uses SMTP if configured (recommended), otherwise it falls back to PHP `mail()`.

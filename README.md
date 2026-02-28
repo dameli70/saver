@@ -44,6 +44,7 @@ Edit `config/database.php`:
 - `APP_HMAC_SECRET` (generate with `php -r "echo bin2hex(random_bytes(32));"`)
 - `APP_ENV` (`development` or `production`)
 - `MAIL_FROM` (used for verification emails)
+- `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_SECURE`, `SMTP_VERIFY_PEER` (recommended)
 
 ## Project Layout
 
@@ -54,6 +55,7 @@ Pages:
 - `account.php` — account + email verification status, resend link
 - `verify.php` — handles verification token
 - `dashboard.php` — authenticated, email-verified app UI
+- `backup.php` — local export/import + cloud backups
 - `admin.php` — super admin dashboard (requires admin)
 - `logout.php` — destroys session
 
@@ -66,6 +68,7 @@ API:
 - `api/copied.php` — mark as copied
 - `api/reveal.php` — time-gated retrieval of ciphertext blobs (browser decrypts)
 - `api/delete.php` — delete a code
+- `api/backup.php` — local export/import + cloud backups
 - `api/admin.php` — super admin data endpoints (users + codes)
 
 ## Security Model (high level)
@@ -76,5 +79,6 @@ API:
 - **Hardened sessions**: HttpOnly, Strict SameSite, strict mode, regen on login.
 
 ## Notes
-- Email verification uses PHP `mail()`; in production you should have a real MTA configured.
+- Email verification uses SMTP if `SMTP_HOST` is set, otherwise it falls back to PHP `mail()`.
+- Cloud backups store ciphertext-only snapshots in the app DB.
 - Clipboard support and secure cookies require HTTPS in production.

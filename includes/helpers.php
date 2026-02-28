@@ -15,6 +15,7 @@
 // ============================================================
 
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/smtp.php';
 
 // ── Session ──────────────────────────────────────────────────
 function startSecureSession(): void {
@@ -123,6 +124,14 @@ function getAppBaseUrl(): string {
 
 function sendEmail(string $to, string $subject, string $body): void {
     $from = defined('MAIL_FROM') ? MAIL_FROM : 'no-reply@localhost';
+
+    if (defined('SMTP_HOST') && SMTP_HOST !== '') {
+        // If SMTP fails for any reason, we still proceed — the UI can show a dev link.
+        if (@smtpSendMessage($to, $subject, $body, $from)) {
+            return;
+        }
+    }
+
     $headers = [
         'From: ' . $from,
         'Reply-To: ' . $from,

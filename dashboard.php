@@ -296,6 +296,7 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;background:var(--acce
       <?php if ($isAdmin): ?>
         <a class="btn btn-ghost btn-sm" href="admin.php">Admin</a>
       <?php endif; ?>
+      <a class="btn btn-ghost btn-sm" href="backup.php">Backups</a>
       <a class="btn btn-ghost btn-sm" href="account.php">Account</a>
       <button class="btn btn-ghost btn-sm" onclick="doLogout()">Logout</button>
     </div>
