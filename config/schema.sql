@@ -14,14 +14,22 @@ CREATE DATABASE IF NOT EXISTS locksmith
 USE locksmith;
 
 CREATE TABLE IF NOT EXISTS users (
-    id                   INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    email                VARCHAR(255) NOT NULL UNIQUE,
-    login_hash           VARCHAR(255) NOT NULL,       -- Argon2id of LOGIN password (for auth only)
-    vault_verifier       VARCHAR(255) NOT NULL,       -- Argon2id of VAULT passphrase (only to verify, never to derive keys)
-    vault_verifier_salt  CHAR(64) NOT NULL,           -- hex: random salt for vault_verifier
-    created_at           DATETIME DEFAULT CURRENT_TIMESTAMP,
-    last_login           DATETIME NULL,
-    INDEX idx_email (email)
+    id                           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    email                        VARCHAR(255) NOT NULL UNIQUE,
+    login_hash                   VARCHAR(255) NOT NULL,       -- Argon2id of LOGIN password (for auth only)
+    vault_verifier               VARCHAR(255) NOT NULL,       -- Argon2id of VAULT passphrase (only to verify, never to derive keys)
+    vault_verifier_salt          CHAR(64) NOT NULL,           -- hex: random salt for vault_verifier
+
+    -- Email verification (required before using the dashboard)
+    email_verified_at            DATETIME NULL,
+    email_verification_hash      CHAR(64) NULL,               -- hex sha256(token)
+    email_verification_expires_at DATETIME NULL,
+    verification_sent_at         DATETIME NULL,
+
+    created_at                   DATETIME DEFAULT CURRENT_TIMESTAMP,
+    last_login                   DATETIME NULL,
+    INDEX idx_email (email),
+    INDEX idx_email_verification_hash (email_verification_hash)
 ) ENGINE=InnoDB;
 
 -- Zero-Knowledge lock table

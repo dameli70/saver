@@ -1,106 +1,60 @@
-# LOCKSMITH — Time-Locked Password Vault
-## PHP Web Application
+# LOCKSMITH — Time-Locked, Zero-Knowledge Code Vault
 
----
+LOCKSMITH is a PHP + MySQL web app that lets users generate a secret code, encrypt it **client-side** (Web Crypto), and store only ciphertext on the server until a chosen reveal date.
 
 ## Requirements
-- PHP 8.1+ (with `openssl`, `pdo_mysql`, `mbstring` extensions)
+- PHP 8.1+ (with `openssl`, `pdo_mysql`, `mbstring`)
 - MySQL 8.0+ or MariaDB 10.6+
-- Apache with `mod_rewrite` and `mod_headers` enabled
-- HTTPS in production (required for Clipboard API + secure cookies)
+- HTTPS in production (required for secure cookies + clipboard API)
 
----
+## Quick setup
 
-## Quick Setup
-
-### 1. Database
+### 1) Database
 ```sql
--- Run the schema file:
 mysql -u root -p < config/schema.sql
 ```
 
-### 2. Configuration
-Edit `config/database.php`:
-```php
-define('DB_HOST', 'localhost');
-define('DB_NAME', 'locksmith');
-define('DB_USER', 'your_db_user');
-define('DB_PASS', 'your_db_password');
-define('APP_SECRET_KEY', 'generate_a_64+_char_random_string_here');
-define('APP_ENV', 'production');
+If you are upgrading an existing install, apply the migration:
+```sql
+mysql -u root -p locksmith < config/migrations/001_email_verification.sql
 ```
 
-**Generate a secret key:**
+### 2) Configuration
+Edit `config/database.php`:
+- `DB_HOST`, `DB_NAME`, `DB_USER`, `DB_PASS`
+- `APP_HMAC_SECRET` (HMAC for CSRF + audit log integrity, **not used for encryption**)
+- `MAIL_FROM` (sender address used for verification emails)
+
+Generate a secret:
 ```bash
 php -r "echo bin2hex(random_bytes(32));"
 ```
 
-### 3. Deploy
-```
-/var/www/html/locksmith/
-├── index.php           ← Main app (single-page UI)
-├── .htaccess           ← Security + URL rules
-├── config/
-│   ├── database.php    ← DB config + connection
-│   └── schema.sql      ← DB setup (run once)
-├── includes/
-│   └── helpers.php     ← Crypto, auth, utilities
-└── api/
-    ├── auth.php        ← Register / login / logout
-    ├── generate.php    ← Generate + store encrypted password
-    ├── copied.php      ← Mark password as copied (fires on clipboard)
-    ├── locks.php       ← List active locks
-    ├── reveal.php      ← Decrypt + return password (if date passed)
-    └── delete.php      ← Remove a lock
-```
+## App pages
+- `index.php` — home/marketing page
+- `signup.php` — create account (email verification required)
+- `login.php` — login
+- `account.php` — account + resend verification email
+- `verify.php` — email verification link target
+- `dashboard.php` — authenticated, verified dashboard (generate/list/reveal)
+- `logout.php` — logout
 
-### 4. Apache VirtualHost (example)
-```apache
-<VirtualHost *:443>
-    ServerName locksmith.yourdomain.com
-    DocumentRoot /var/www/html/locksmith
+## API endpoints
+Located in `api/`:
+- `auth.php` — register/login/logout + resend verification
+- `salt.php` — issues one-time PBKDF2 salt for a new code
+- `generate.php` — stores ciphertext + metadata (never plaintext)
+- `locks.php` — lists code metadata and status
+- `reveal.php` — enforces time gate + vault passphrase verification, then returns ciphertext for client-side decryption
+- `confirm.php`, `copied.php`, `delete.php`
 
-    SSLEngine on
-    SSLCertificateFile    /etc/ssl/certs/your_cert.pem
-    SSLCertificateKeyFile /etc/ssl/private/your_key.pem
-
-    <Directory /var/www/html/locksmith>
-        AllowOverride All
-        Require all granted
-    </Directory>
-</VirtualHost>
-```
-
----
-
-## Security Model
-
-| Layer | What's Protected |
-|---|---|
-| **AES-256-GCM** | Password encrypted on server using derived key |
-| **PBKDF2 (100k rounds)** | Key derived from `APP_SECRET_KEY` + `user_id` |
-| **CSRF tokens** | All state-changing API calls require CSRF header |
-| **Server-side time gate** | Reveal date enforced by server — device clock irrelevant |
-| **Session security** | HttpOnly, strict mode, regenerated on login |
-| **Zero plaintext storage** | Plaintext password returned ONCE at generation, never stored |
-| **Argon2id hashing** | User login passwords hashed with Argon2id |
-
----
-
-## How the Copy Flow Works
-
-1. User clicks **Generate & Lock** → server generates password, encrypts it, stores ciphertext
-2. Server returns plaintext password **once** in the HTTP response
-3. User sees the password and clicks **Copy to Clipboard**
-4. `navigator.clipboard.writeText()` copies to clipboard
-5. **Immediately**, a `POST /api/copied.php` call fires → server records `copied_at` timestamp
-6. After 3 seconds, the displayed password is replaced with `••••••••`
-7. The password cannot be retrieved again until the reveal date is reached
-
----
+## Security model (high level)
+- **Zero-knowledge storage**: server stores only ciphertext (AES-256-GCM), IVs, tags, salts, and metadata.
+- **Key derivation in browser**: PBKDF2 with per-code salt (`PBKDF2_ITERATIONS` in config).
+- **Server-enforced time gate**: reveals are blocked until `reveal_date` passes on the server.
+- **CSRF**: state-changing API calls require the CSRF header.
+- **Email verification**: required before accessing the dashboard or API code operations.
 
 ## Notes
-- **No plaintext is ever stored** — only AES-256-GCM ciphertext
-- **Locks persist** even if the user changes their password (key is derived from APP_SECRET_KEY + user_id, not user password)
-- **Clock manipulation** is prevented — the server checks its own clock on reveal
-- **Offline use** will block reveals until server connectivity is restored (by design)
+- The vault passphrase is used in the browser for encryption/decryption, but is also verified server-side (Argon2id) during reveal to ensure the user is authorized.
+- If a user loses their vault passphrase, stored ciphertext cannot be recovered.

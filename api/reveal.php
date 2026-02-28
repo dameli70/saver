@@ -23,6 +23,7 @@ require_once __DIR__ . '/../includes/helpers.php';
 header('Content-Type: application/json');
 requireLogin();
 requireCsrf();
+requireVerifiedEmail();
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') jsonResponse(['error' => 'Method not allowed'], 405);
 

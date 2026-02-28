@@ -18,6 +18,10 @@ define('APP_HMAC_SECRET', 'REPLACE_WITH_64+_RANDOM_BYTES_hex_php_r_echo_bin2hex_
 
 define('APP_ENV', 'development'); // 'production' in prod
 
+define('APP_NAME', 'LOCKSMITH');
+define('MAIL_FROM', 'no-reply@localhost');
+define('EMAIL_VERIFY_TTL_HOURS', 24);
+
 // PBKDF2 iterations — match what client uses
 define('PBKDF2_ITERATIONS', 310000);
 

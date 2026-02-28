@@ -56,12 +56,43 @@ if ($action === 'register') {
     ")->execute([$email, $loginHash, $vaultVerifier, $vaultVerifierSalt]);
 
     $userId = (int)$db->lastInsertId();
+
+    // Create session, but block vault usage until email is verified
     session_regenerate_id(true);
-    $_SESSION['user_id'] = $userId;
-    $_SESSION['email']   = $email;
+    $_SESSION['user_id']        = $userId;
+    $_SESSION['email']          = $email;
+    $_SESSION['email_verified'] = 0;
+
+    $devVerifyUrl = issueEmailVerification($userId, $email);
 
     auditLog('register', null, $userId);
-    jsonResponse(['success' => true, 'email' => $email]);
+    jsonResponse([
+        'success'            => true,
+        'email'              => $email,
+        'verified'           => false,
+        'needs_verification' => true,
+        'dev_verify_url'     => $devVerifyUrl,
+    ]);
+}
+
+// ── RESEND VERIFICATION ─────────────────────────────────────
+if ($action === 'resend_verification') {
+    requireLogin();
+
+    $userId = getCurrentUserId();
+    $db     = getDB();
+    $stmt   = $db->prepare("SELECT email, email_verified_at FROM users WHERE id = ?");
+    $stmt->execute([$userId]);
+    $u = $stmt->fetch();
+
+    if (!$u) jsonResponse(['error' => 'User not found'], 404);
+    if (!empty($u['email_verified_at'])) {
+        $_SESSION['email_verified'] = 1;
+        jsonResponse(['success' => true, 'verified' => true]);
+    }
+
+    $devVerifyUrl = issueEmailVerification((int)$userId, $u['email']);
+    jsonResponse(['success' => true, 'verified' => false, 'dev_verify_url' => $devVerifyUrl]);
 }
 
 // ── LOGIN ────────────────────────────────────────────────────
@@ -73,7 +104,7 @@ if ($action === 'login') {
         jsonResponse(['error' => 'Email and password required'], 400);
 
     $db   = getDB();
-    $stmt = $db->prepare("SELECT id, email, login_hash FROM users WHERE email = ?");
+    $stmt = $db->prepare("SELECT id, email, login_hash, email_verified_at FROM users WHERE email = ?");
     $stmt->execute([$email]);
     $user = $stmt->fetch();
 
@@ -86,14 +117,17 @@ if ($action === 'login') {
         jsonResponse(['error' => 'Invalid credentials'], 401);
     }
 
+    $verified = !empty($user['email_verified_at']);
+
     session_regenerate_id(true);
-    $_SESSION['user_id'] = (int)$user['id'];
-    $_SESSION['email']   = $user['email'];
+    $_SESSION['user_id']        = (int)$user['id'];
+    $_SESSION['email']          = $user['email'];
+    $_SESSION['email_verified'] = $verified ? 1 : 0;
 
     $db->prepare("UPDATE users SET last_login = NOW() WHERE id = ?")->execute([$user['id']]);
     auditLog('login', null, (int)$user['id']);
 
-    jsonResponse(['success' => true, 'email' => $user['email']]);
+    jsonResponse(['success' => true, 'email' => $user['email'], 'verified' => $verified]);
 }
 
 jsonResponse(['error' => 'Unknown action'], 400);

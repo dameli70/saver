@@ -20,7 +20,7 @@ require_once __DIR__ . '/../config/database.php';
 function startSecureSession(): void {
     if (session_status() === PHP_SESSION_NONE) {
         ini_set('session.cookie_httponly', 1);
-        ini_set('session.cookie_secure', isset($_SERVER['HTTPS']) ? 1 : 0);
+        ini_set('session.cookie_secure', (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 1 : 0);
         ini_set('session.cookie_samesite', 'Strict');
         ini_set('session.use_strict_mode', 1);
         ini_set('session.gc_maxlifetime', 3600);
@@ -38,6 +38,72 @@ function requireLogin(): void {
 }
 
 function getCurrentUserId(): ?int { return $_SESSION['user_id'] ?? null; }
+function getCurrentUserEmail(): ?string { return $_SESSION['email'] ?? null; }
+
+// ── Email verification ──────────────────────────────────────
+function isEmailVerified(?int $userId = null): bool {
+    startSecureSession();
+    if (!empty($_SESSION['email_verified'])) return true;
+
+    $uid = $userId ?? getCurrentUserId();
+    if (!$uid) return false;
+
+    $db   = getDB();
+    $stmt = $db->prepare("SELECT email_verified_at FROM users WHERE id = ?");
+    $stmt->execute([$uid]);
+    $row = $stmt->fetch();
+
+    $ok = !empty($row['email_verified_at']);
+    $_SESSION['email_verified'] = $ok ? 1 : 0;
+    return $ok;
+}
+
+function requireVerifiedEmail(): void {
+    if (!isEmailVerified()) {
+        jsonResponse(['error' => 'Email address not verified'], 403);
+    }
+}
+
+function issueEmailVerification(int $userId, string $email): ?string {
+    $token   = bin2hex(random_bytes(32));
+    $hash    = hash('sha256', $token);
+    $expires = (new DateTime())->modify('+' . (int)EMAIL_VERIFY_TTL_HOURS . ' hours')->format('Y-m-d H:i:s');
+
+    $db = getDB();
+    $db->prepare("UPDATE users SET email_verification_hash = ?, email_verification_expires_at = ?, verification_sent_at = NOW() WHERE id = ?")
+       ->execute([$hash, $expires, $userId]);
+
+    $base = getAppBaseUrl();
+    $url  = $base . '/verify.php?email=' . rawurlencode($email) . '&token=' . rawurlencode($token);
+
+    sendEmail($email, APP_NAME . ' — Verify your email',
+        "Welcome to " . APP_NAME . "\n\nVerify your email to unlock your dashboard:\n\n" . $url . "\n\nThis link expires in " . EMAIL_VERIFY_TTL_HOURS . " hours.\n"
+    );
+
+    return (APP_ENV === 'development') ? $url : null;
+}
+
+function getAppBaseUrl(): string {
+    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+    $host   = $_SERVER['HTTP_HOST'] ?? 'localhost';
+    $dir    = rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? '/'), '/');
+    // If invoked from /api/*, step back to app root.
+    $dir    = preg_replace('#/api$#', '', $dir);
+    return $scheme . '://' . $host . ($dir ? $dir : '');
+}
+
+function sendEmail(string $to, string $subject, string $body): void {
+    $from = defined('MAIL_FROM') ? MAIL_FROM : 'no-reply@localhost';
+    $headers = [
+        'From: ' . $from,
+        'Reply-To: ' . $from,
+        'MIME-Version: 1.0',
+        'Content-Type: text/plain; charset=UTF-8',
+        'X-Mailer: PHP/' . phpversion(),
+    ];
+    // If mail() fails (common in dev), we still proceed — the UI can show a dev link.
+    @mail($to, $subject, $body, implode("\r\n", $headers));
+}
 
 // ── Vault passphrase verification (server-side only) ─────────
 // The server verifies the user KNOWS the passphrase (like a login check)
@@ -141,11 +207,12 @@ function requireVaultPassphrase(string $submitted): void {
     if (!$userId) jsonResponse(['error' => 'Unauthorized'], 401);
 
     $db   = getDB();
-    $stmt = $db->prepare("SELECT vault_verifier FROM users WHERE id = ?");
+    $stmt = $db->prepare("SELECT vault_verifier, vault_verifier_salt FROM users WHERE id = ?");
     $stmt->execute([$userId]);
     $row  = $stmt->fetch();
 
-    if (!$row || !verifyVaultPassphrase($submitted, $row['vault_verifier'])) {
+    $salted = $submitted . ($row ? ($row['vault_verifier_salt'] ?? '') : '');
+    if (!$row || !verifyVaultPassphrase($salted, $row['vault_verifier'])) {
         auditLog('vault_auth_fail');
         jsonResponse(['error' => 'Incorrect vault passphrase'], 403);
     }
