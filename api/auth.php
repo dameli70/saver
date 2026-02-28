@@ -21,6 +21,7 @@ $action = $body['action'] ?? '';
 
 // ── LOGOUT ───────────────────────────────────────────────────
 if ($action === 'logout') {
+    deleteCurrentSessionRecord();
     $_SESSION = [];
     session_destroy();
     jsonResponse(['success' => true]);
@@ -97,6 +98,8 @@ if ($action === 'register') {
     $_SESSION['email']          = $email;
     $_SESSION['email_verified'] = 0;
     $_SESSION['is_admin']       = $isAdmin;
+
+    registerCurrentSession($userId);
 
     $devVerifyUrl = issueEmailVerification($userId, $email);
 
@@ -182,7 +185,9 @@ if ($action === 'login') {
     $_SESSION['email_verified'] = $verified ? 1 : 0;
     $_SESSION['is_admin']       = !empty($user['is_admin']) ? 1 : 0;
 
-    $db->prepare("UPDATE users SET last_login = NOW() WHERE id = ?")->execute([$user['id']]);
+    registerCurrentSession((int)$user['id']);
+
+    $db->prepare("UPDATE users SET last_login = NOW() WHERE id = ?")->execute([(int)$user['id']]);
     auditLog('login', null, (int)$user['id']);
 
     jsonResponse([

@@ -16,13 +16,14 @@ requireVerifiedEmail();
 
 function exportPayload(int $userId): array {
     $db = getDB();
-    $stmt = $db->prepare("SELECT id,label,cipher_blob,iv,auth_tag,kdf_salt,kdf_iterations,password_type,password_length,hint,reveal_date,confirmation_status,copied_at,confirmed_at,rejected_at,auto_saved_at,revealed_at,is_active,created_at FROM locks WHERE user_id = ? ORDER BY created_at ASC");
+    $slotSel = hasLockVaultVerifierSlotColumn() ? 'vault_verifier_slot,' : '1 AS vault_verifier_slot,';
+    $stmt = $db->prepare("SELECT id,label,cipher_blob,iv,auth_tag,kdf_salt,kdf_iterations,{$slotSel}password_type,password_length,hint,reveal_date,confirmation_status,copied_at,confirmed_at,rejected_at,auto_saved_at,revealed_at,is_active,created_at FROM locks WHERE user_id = ? ORDER BY created_at ASC");
     $stmt->execute([$userId]);
     $locks = $stmt->fetchAll();
 
     return [
         'app' => defined('APP_NAME') ? APP_NAME : 'LOCKSMITH',
-        'export_version' => 1,
+        'export_version' => 2,
         'exported_at' => date('c'),
         'locks' => $locks,
     ];
@@ -39,7 +40,8 @@ function normalizeDateTime(?string $v): ?string {
 }
 
 function importPayload(int $userId, array $payload): int {
-    if (($payload['export_version'] ?? null) !== 1) {
+    $v = (int)($payload['export_version'] ?? 0);
+    if (!in_array($v, [1, 2], true)) {
         throw new RuntimeException('Unsupported export format.');
     }
     if (!isset($payload['locks']) || !is_array($payload['locks'])) {
@@ -51,7 +53,13 @@ function importPayload(int $userId, array $payload): int {
 
     try {
         $existsStmt = $db->prepare("SELECT id FROM locks WHERE id = ? AND user_id = ? LIMIT 1");
-        $insStmt = $db->prepare("INSERT INTO locks (id,user_id,label,cipher_blob,iv,auth_tag,kdf_salt,kdf_iterations,password_type,password_length,hint,reveal_date,confirmation_status,copied_at,confirmed_at,rejected_at,auto_saved_at,revealed_at,is_active,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+
+        $hasSlot = hasLockVaultVerifierSlotColumn();
+        if ($hasSlot) {
+            $insStmt = $db->prepare("INSERT INTO locks (id,user_id,label,cipher_blob,iv,auth_tag,kdf_salt,kdf_iterations,vault_verifier_slot,password_type,password_length,hint,reveal_date,confirmation_status,copied_at,confirmed_at,rejected_at,auto_saved_at,revealed_at,is_active,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+        } else {
+            $insStmt = $db->prepare("INSERT INTO locks (id,user_id,label,cipher_blob,iv,auth_tag,kdf_salt,kdf_iterations,password_type,password_length,hint,reveal_date,confirmation_status,copied_at,confirmed_at,rejected_at,auto_saved_at,revealed_at,is_active,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+        }
 
         $count = 0;
         foreach ($payload['locks'] as $lock) {
@@ -71,11 +79,14 @@ function importPayload(int $userId, array $payload): int {
             $cipher = (string)($lock['cipher_blob'] ?? '');
             $iv = (string)($lock['iv'] ?? '');
             $tag = (string)($lock['auth_tag'] ?? '');
-            $salt = (string)($lock['kdf_salt'] ?? '');
+            $salt  = (string)($lock['kdf_salt'] ?? '');
             $iters = (int)($lock['kdf_iterations'] ?? PBKDF2_ITERATIONS);
+            $slot  = (int)($lock['vault_verifier_slot'] ?? 1);
+            if (!in_array($slot, [1, 2], true)) $slot = 1;
+
             $ptype = (string)($lock['password_type'] ?? 'alphanumeric');
-            $plen = (int)($lock['password_length'] ?? 16);
-            $hint = isset($lock['hint']) ? trim((string)$lock['hint']) : null;
+            $plen  = (int)($lock['password_length'] ?? 16);
+            $hint  = isset($lock['hint']) ? trim((string)$lock['hint']) : null;
             $reveal = normalizeDateTime((string)($lock['reveal_date'] ?? ''));
             $status = (string)($lock['confirmation_status'] ?? 'pending');
             $copiedAt = normalizeDateTime($lock['copied_at'] ?? null);
@@ -97,9 +108,13 @@ function importPayload(int $userId, array $payload): int {
 
             $hintVal = ($hint !== null && $hint !== '') ? sanitize($hint) : null;
 
-            $insStmt->execute([
+            $params = [
                 $lockId, $userId, $label,
                 $cipher, $iv, $tag, $salt, $iters,
+            ];
+            if ($hasSlot) $params[] = $slot;
+
+            $params = array_merge($params, [
                 $ptype, $plen,
                 $hintVal,
                 $reveal,
@@ -108,6 +123,8 @@ function importPayload(int $userId, array $payload): int {
                 $isActive,
                 $createdAt,
             ]);
+
+            $insStmt->execute($params);
 
             $count++;
         }

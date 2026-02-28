@@ -29,9 +29,130 @@ function startSecureSession(): void {
     }
 }
 
+function hasUserSessionsTable(): bool {
+    static $cached = null;
+    if ($cached !== null) return $cached;
+
+    try {
+        $db = getDB();
+        $stmt = $db->query("SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'user_sessions' LIMIT 1");
+        $cached = (bool)$stmt->fetchColumn();
+        return $cached;
+    } catch (Throwable) {
+        $cached = false;
+        return false;
+    }
+}
+
+function hasPasswordResetColumns(): bool {
+    static $cached = null;
+    if ($cached !== null) return $cached;
+
+    try {
+        $db = getDB();
+        $stmt = $db->query("SELECT 1 FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'users' AND column_name = 'password_reset_hash' LIMIT 1");
+        $cached = (bool)$stmt->fetchColumn();
+        return $cached;
+    } catch (Throwable) {
+        $cached = false;
+        return false;
+    }
+}
+
+function hasVaultAltVerifierColumns(): bool {
+    static $cached = null;
+    if ($cached !== null) return $cached;
+
+    try {
+        $db = getDB();
+        $stmt = $db->query("SELECT 1 FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'users' AND column_name = 'vault_verifier_alt' LIMIT 1");
+        $cached = (bool)$stmt->fetchColumn();
+        return $cached;
+    } catch (Throwable) {
+        $cached = false;
+        return false;
+    }
+}
+
+function hasLockVaultVerifierSlotColumn(): bool {
+    static $cached = null;
+    if ($cached !== null) return $cached;
+
+    try {
+        $db = getDB();
+        $stmt = $db->query("SELECT 1 FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'locks' AND column_name = 'vault_verifier_slot' LIMIT 1");
+        $cached = (bool)$stmt->fetchColumn();
+        return $cached;
+    } catch (Throwable) {
+        $cached = false;
+        return false;
+    }
+}
+
+function currentSessionIdHash(): string {
+    startSecureSession();
+    return hash_hmac('sha256', session_id(), APP_HMAC_SECRET);
+}
+
+function registerCurrentSession(int $userId): void {
+    if (!hasUserSessionsTable()) return;
+
+    $db = getDB();
+    $db->prepare("INSERT INTO user_sessions (user_id, session_id_hash, ip_address, user_agent) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE last_seen_at = NOW(), ip_address = VALUES(ip_address), user_agent = VALUES(user_agent)")
+       ->execute([
+           $userId,
+           currentSessionIdHash(),
+           $_SERVER['REMOTE_ADDR'] ?? null,
+           substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 500),
+       ]);
+}
+
+function deleteCurrentSessionRecord(?int $userId = null): void {
+    if (!hasUserSessionsTable()) return;
+
+    $uid = $userId ?? getCurrentUserId();
+    if (!$uid) return;
+
+    $db = getDB();
+    $db->prepare('DELETE FROM user_sessions WHERE user_id = ? AND session_id_hash = ?')
+       ->execute([(int)$uid, currentSessionIdHash()]);
+}
+
+function deleteAllSessionRecords(int $userId): void {
+    if (!hasUserSessionsTable()) return;
+    $db = getDB();
+    $db->prepare('DELETE FROM user_sessions WHERE user_id = ?')->execute([(int)$userId]);
+}
+
+function validateCurrentSession(int $userId): bool {
+    if (!hasUserSessionsTable()) return true;
+
+    $db = getDB();
+    $stmt = $db->prepare('SELECT id FROM user_sessions WHERE user_id = ? AND session_id_hash = ? LIMIT 1');
+    $stmt->execute([(int)$userId, currentSessionIdHash()]);
+    $row = $stmt->fetch();
+
+    if (!$row) return false;
+
+    $db->prepare('UPDATE user_sessions SET last_seen_at = NOW() WHERE id = ?')->execute([(int)$row['id']]);
+    return true;
+}
+
 function isLoggedIn(): bool {
     startSecureSession();
-    return !empty($_SESSION['user_id']);
+
+    $uid = $_SESSION['user_id'] ?? null;
+    if (!$uid) return false;
+
+    if (!validateCurrentSession((int)$uid)) {
+        $_SESSION = [];
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_destroy();
+        }
+        return false;
+    }
+
+    return true;
 }
 
 function requireLogin(): void {
@@ -108,6 +229,29 @@ function issueEmailVerification(int $userId, string $email): ?string {
 
     sendEmail($email, APP_NAME . ' — Verify your email',
         "Welcome to " . APP_NAME . "\n\nVerify your email to unlock your dashboard:\n\n" . $url . "\n\nThis link expires in " . EMAIL_VERIFY_TTL_HOURS . " hours.\n"
+    );
+
+    return (APP_ENV === 'development') ? $url : null;
+}
+
+function issuePasswordReset(int $userId, string $email): ?string {
+    $token   = bin2hex(random_bytes(32));
+    $hash    = hash('sha256', $token);
+    $minutes = defined('PASSWORD_RESET_TTL_MINUTES') ? (int)PASSWORD_RESET_TTL_MINUTES : 60;
+    if ($minutes < 10) $minutes = 10;
+    if ($minutes > 720) $minutes = 720;
+
+    $expires = (new DateTime())->modify('+' . $minutes . ' minutes')->format('Y-m-d H:i:s');
+
+    $db = getDB();
+    $db->prepare("UPDATE users SET password_reset_hash = ?, password_reset_expires_at = ?, password_reset_sent_at = NOW() WHERE id = ?")
+       ->execute([$hash, $expires, $userId]);
+
+    $base = getAppBaseUrl();
+    $url  = $base . '/reset.php?email=' . rawurlencode($email) . '&token=' . rawurlencode($token);
+
+    sendEmail($email, APP_NAME . ' — Reset your login password',
+        "A password reset was requested for " . APP_NAME . ".\n\nReset your login password here:\n\n" . $url . "\n\nIf you did not request this, you can ignore this email.\n"
     );
 
     return (APP_ENV === 'development') ? $url : null;
@@ -240,17 +384,37 @@ function auditLog(string $action, ?string $lockId = null, ?int $userId = null): 
 // ── Timing-safe passphrase check gate ────────────────────────
 // Used before any reveal endpoint — ensures user still knows their passphrase
 // even if session is valid. Double-checks identity.
-function requireVaultPassphrase(string $submitted): void {
+function requireVaultPassphrase(string $submitted, int $slot = 1): void {
     $userId = getCurrentUserId();
     if (!$userId) jsonResponse(['error' => 'Unauthorized'], 401);
 
-    $db   = getDB();
-    $stmt = $db->prepare("SELECT vault_verifier, vault_verifier_salt FROM users WHERE id = ?");
-    $stmt->execute([$userId]);
-    $row  = $stmt->fetch();
+    if (!in_array($slot, [1, 2], true)) $slot = 1;
 
-    $salted = $submitted . ($row ? ($row['vault_verifier_salt'] ?? '') : '');
-    if (!$row || !verifyVaultPassphrase($salted, $row['vault_verifier'])) {
+    $db = getDB();
+
+    $select = hasVaultAltVerifierColumns()
+        ? "vault_verifier, vault_verifier_salt, vault_verifier_alt, vault_verifier_alt_salt"
+        : "vault_verifier, vault_verifier_salt, NULL AS vault_verifier_alt, NULL AS vault_verifier_alt_salt";
+
+    $stmt = $db->prepare("SELECT {$select} FROM users WHERE id = ?");
+    $stmt->execute([$userId]);
+    $row = $stmt->fetch();
+
+    if (!$row) jsonResponse(['error' => 'Unauthorized'], 401);
+
+    if ($slot === 2) {
+        if (empty($row['vault_verifier_alt']) || empty($row['vault_verifier_alt_salt'])) {
+            jsonResponse(['error' => 'Vault rotation not initialized'], 403);
+        }
+        $hash = $row['vault_verifier_alt'];
+        $salt = $row['vault_verifier_alt_salt'];
+    } else {
+        $hash = $row['vault_verifier'];
+        $salt = $row['vault_verifier_salt'] ?? '';
+    }
+
+    $salted = $submitted . $salt;
+    if (!verifyVaultPassphrase($salted, $hash)) {
         auditLog('vault_auth_fail');
         jsonResponse(['error' => 'Incorrect vault passphrase'], 403);
     }

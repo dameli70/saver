@@ -308,7 +308,7 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;background:var(--acce
     <div class="card" id="vault-unlock-card" style="display:none">
       <div class="card-title"><div class="dot" style="background:var(--orange)"></div><span style="color:var(--orange)">Enter Vault Passphrase</span></div>
       <p style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.6;">
-        Your vault passphrase is required to generate or reveal codes. It is used only in your browser — never sent to the server.
+        Your vault passphrase is required to generate or reveal codes. It is used to derive encryption keys in your browser.
       </p>
       <div class="field"><label>Vault Passphrase</label>
         <input type="password" id="vp-input" placeholder="Your vault passphrase…" autocomplete="current-password">
@@ -369,6 +369,28 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;background:var(--acce
     </div>
     <div id="locks-wrap">
       <div class="empty"><div class="empty-icon">🔒</div><h3>No codes yet</h3><p>Create your first code above.</p></div>
+    </div>
+
+    <!-- VAULT SETTINGS -->
+    <div class="card" id="vault-settings">
+      <div class="card-title"><div class="dot"></div>Vault Settings</div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.6;">
+        Rotate your vault passphrase by re-encrypting <strong>already-unlocked</strong> codes (reveal date has passed).
+        Locked codes cannot be rotated until they unlock.
+      </p>
+      <div class="field"><label>Current Vault Passphrase</label>
+        <input type="password" id="rot-cur" placeholder="your current passphrase" autocomplete="current-password">
+      </div>
+      <div class="field"><label>New Vault Passphrase</label>
+        <input type="password" id="rot-new" placeholder="min 10 chars" autocomplete="new-password">
+      </div>
+      <div class="field"><label>Confirm New Vault Passphrase</label>
+        <input type="password" id="rot-new2" placeholder="repeat new passphrase" autocomplete="new-password">
+      </div>
+      <div id="rot-err" class="msg msg-err"></div>
+      <button class="btn btn-ghost" id="rot-btn" onclick="rotateVaultPassphrase()" style="margin-top:10px;">
+        <span id="rot-txt">Rotate vault passphrase</span>
+      </button>
     </div>
 
   </div>
@@ -445,6 +467,7 @@ let timerSecs   = 120;
 let autoFired   = false;
 let revealedPwd = null;
 let vaultPhraseSession = null; // Held in memory only (not DOM, not storage)
+let vaultSlotSession   = 1;    // 1=primary, 2=alt (rotation)
 const CIRC = 175.93;
 
 // ─────────────────────────────────────────────────
@@ -556,20 +579,31 @@ async function unlockVault() {
 
   document.getElementById('vp-txt').innerHTML = '<span class="spin light"></span> Verifying…';
 
-  // Test-derive a key to ensure passphrase is non-empty + usable
-  // We do NOT verify against server here — server only verifies on reveal
-  // This is intentional: vault passphrase is purely local
   try {
-    // Quick test: can we import it? (doesn't hit server)
+    // Quick client-side sanity check
     const enc = new TextEncoder();
     await crypto.subtle.importKey('raw', enc.encode(vp), 'PBKDF2', false, ['deriveKey']);
+
+    // Ask server which vault verifier slot this passphrase matches (1=primary, 2=alt)
+    const vr = await postCsrf('/api/vault_verify.php', { vault_passphrase: vp });
+    if (!vr.success) {
+      errEl.textContent = vr.error || 'Incorrect vault passphrase';
+      errEl.classList.add('show');
+      return;
+    }
+
     vaultPhraseSession = vp;
+    vaultSlotSession = parseInt(vr.slot || 1, 10) || 1;
+
     document.getElementById('vault-unlock-card').style.display = 'none';
     document.getElementById('gen-card').style.opacity = '1';
     document.getElementById('gen-card').style.pointerEvents = '';
     toast('Vault unlocked — passphrase held in memory only', 'ok');
+
   } catch(e) {
-    errEl.textContent = 'Invalid passphrase'; errEl.classList.add('show');
+    if(e.name==='OperationError'||e.name==='DataError') errEl.textContent='Invalid passphrase';
+    else errEl.textContent='Network error';
+    errEl.classList.add('show');
   } finally {
     document.getElementById('vp-txt').textContent = 'Unlock Vault';
   }
@@ -578,7 +612,72 @@ async function unlockVault() {
 async function doLogout(){
   await post('/api/auth.php',{action:'logout'});
   vaultPhraseSession=null; // Clear passphrase from memory
+  vaultSlotSession=1;
   window.location='index.php';
+}
+
+async function rotateVaultPassphrase(){
+  const errEl=document.getElementById('rot-err');
+  errEl.classList.remove('show');
+
+  const cur=document.getElementById('rot-cur').value;
+  const p1=document.getElementById('rot-new').value;
+  const p2=document.getElementById('rot-new2').value;
+
+  if(!cur || cur.length<10){errEl.textContent='Current passphrase must be at least 10 characters';errEl.classList.add('show');return;}
+  if(!p1 || p1.length<10){errEl.textContent='New passphrase must be at least 10 characters';errEl.classList.add('show');return;}
+  if(p1!==p2){errEl.textContent='Passphrases do not match';errEl.classList.add('show');return;}
+  if(p1===cur){errEl.textContent='New passphrase must differ from current';errEl.classList.add('show');return;}
+
+  const btn=document.getElementById('rot-btn');
+  const txt=document.getElementById('rot-txt');
+
+  btn.disabled=true;
+  txt.innerHTML='<span class="spin light"></span> Rotating…';
+
+  try{
+    const prep=await postCsrf('/api/vault.php',{action:'rotate_prepare'});
+    if(!prep.success){errEl.textContent=prep.error||'Failed to load eligible codes';errEl.classList.add('show');return;}
+
+    const locks=prep.locks||[];
+    if(!locks.length){toast('No eligible codes to rotate yet','warn');return;}
+
+    const updates=[];
+    for(const l of locks){
+      const keyOld=await deriveKey(cur, l.kdf_salt, l.kdf_iterations);
+      const plain=await aesDecrypt(l.cipher_blob, l.iv, l.auth_tag, keyOld);
+      const keyNew=await deriveKey(p1, l.kdf_salt, l.kdf_iterations);
+      const enc=await aesEncrypt(plain, keyNew);
+      updates.push({id:l.id, cipher_blob:enc.cipher_blob, iv:enc.iv, auth_tag:enc.auth_tag});
+    }
+
+    const apply=await postCsrf('/api/vault.php',{
+      action:'rotate_commit',
+      updates,
+      current_vault_passphrase:cur,
+      new_vault_passphrase:p1
+    });
+    if(!apply.success){errEl.textContent=apply.error||'Rotation failed';errEl.classList.add('show');return;}
+
+    vaultPhraseSession=p1;
+    vaultSlotSession=2;
+    document.getElementById('rot-cur').value='';
+    document.getElementById('rot-new').value='';
+    document.getElementById('rot-new2').value='';
+    toast('Vault passphrase rotated (unlocked codes updated)','ok');
+    loadLocks();
+
+  }catch(e){
+    if(e.name==='OperationError'){
+      errEl.textContent='Rotation failed — incorrect current vault passphrase or tampered data';
+    } else {
+      errEl.textContent=e.message||'Rotation failed';
+    }
+    errEl.classList.add('show');
+  }finally{
+    btn.disabled=false;
+    txt.textContent='Rotate vault passphrase';
+  }
 }
 
 // ─────────────────────────────────────────────────
@@ -635,7 +734,8 @@ async function doGenerate(){
     // plainPwd and key are local variables — they will be GC'd after this scope
     const r = await postCsrf('/api/generate.php', {
       label, type: selType, length: len, reveal_date: date, hint,
-      cipher_blob, iv, auth_tag, kdf_salt
+      cipher_blob, iv, auth_tag, kdf_salt,
+      vault_verifier_slot: vaultSlotSession
     });
     if (!r.success) { errEl.textContent=r.error||'Generation failed'; errEl.classList.add('show'); return; }
 
@@ -859,6 +959,7 @@ async function doReveal(){
 
     // Update session passphrase cache (user just proved they know it)
     vaultPhraseSession=vault;
+    vaultSlotSession=parseInt(r.vault_verifier_slot||1,10)||1;
 
   }catch(e){
     if(e.name==='OperationError'){

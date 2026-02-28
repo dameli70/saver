@@ -26,6 +26,7 @@ if (!$u) {
 $verified = !empty($u['email_verified_at']);
 $_SESSION['email_verified'] = $verified ? 1 : 0;
 $isAdmin = isAdmin();
+$csrf    = getCsrfToken();
 
 header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none';");
 header("X-Frame-Options: DENY");
@@ -77,6 +78,17 @@ body{background:var(--bg);color:var(--text);font-family:var(--mono);min-height:1
 .msg-ok{background:rgba(71,255,176,.08);border:1px solid rgba(71,255,176,.2);color:var(--green);} 
 .dev{margin-top:12px;border:1px dashed rgba(255,170,0,.35);background:rgba(255,170,0,.06);padding:10px 12px;font-size:11px;color:var(--muted);line-height:1.6;display:none;}
 .dev a{color:var(--orange);} 
+.field{margin-top:14px;}
+.field label{display:block;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:6px;}
+.field input{width:100%;background:var(--s2);border:1px solid var(--b1);color:var(--text);font-family:var(--mono);
+  font-size:15px;padding:14px;outline:none;transition:border-color .2s;border-radius:0;-webkit-appearance:none;}
+.field input:focus{border-color:var(--accent);} 
+.hr{border-top:1px solid var(--b1);margin:16px 0;}
+.list{margin-top:10px;display:flex;flex-direction:column;gap:10px;}
+.item{border:1px solid var(--b1);background:rgba(19,22,29,.55);padding:12px 14px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;}
+.small{font-size:11px;color:var(--muted);line-height:1.6;}
+.btn-red{background:rgba(255,71,87,.08);border:1px solid rgba(255,71,87,.2);color:var(--red);} 
+.btn-red:hover{background:rgba(255,71,87,.14);} 
 .spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(0,0,0,.35);border-top-color:#000;border-radius:50%;animation:spin .5s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg);}}
 </style>
@@ -133,6 +145,50 @@ body{background:var(--bg);color:var(--text);font-family:var(--mono);min-height:1
       </div>
       <?php endif; ?>
     </div>
+
+    <div class="card">
+      <div class="row" style="margin-bottom:4px;">
+        <div>
+          <div class="k">Security</div>
+          <div class="v">Login password + session control</div>
+        </div>
+      </div>
+
+      <div class="small">
+        Your <strong>vault passphrase</strong> is used only in your browser and is <strong>never recoverable</strong> by email reset.
+        Store it safely (password manager + offline copy) and keep backups.
+      </div>
+
+      <div class="hr"></div>
+
+      <div class="k">Change login password</div>
+      <form id="pw-form">
+        <div class="field"><label>Current password</label><input id="pw-cur" type="password" autocomplete="current-password" placeholder="••••••••" required></div>
+        <div class="field"><label>New password</label><input id="pw-new" type="password" autocomplete="new-password" placeholder="min 8 chars" required></div>
+        <div class="field"><label>Confirm new password</label><input id="pw-new2" type="password" autocomplete="new-password" placeholder="repeat new password" required></div>
+        <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;">
+          <button class="btn btn-primary" id="pw-btn" type="submit"><span id="pw-btn-txt">Update password</span></button>
+        </div>
+        <div id="pw-ok" class="msg msg-ok"></div>
+        <div id="pw-err" class="msg msg-err"></div>
+      </form>
+
+      <div class="hr"></div>
+
+      <div class="row">
+        <div>
+          <div class="k">Active sessions</div>
+          <div class="small">If you changed devices or suspect a stolen cookie, log out everywhere.</div>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          <button class="btn btn-ghost" id="sess-refresh" type="button">Refresh</button>
+          <button class="btn btn-red" id="logout-all" type="button">Logout all sessions</button>
+        </div>
+      </div>
+
+      <div id="sess" class="list"></div>
+      <div id="sess-err" class="msg msg-err"></div>
+    </div>
   </div>
 
 <?php if (!$verified): ?>
@@ -170,5 +226,117 @@ btn.addEventListener('click', async ()=>{
 });
 </script>
 <?php endif; ?>
+
+<script>
+(() => {
+  const CSRF = <?= json_encode($csrf) ?>;
+
+  function showMsg(el,m){el.textContent=m;el.classList.add('show');}
+  function clearMsg(el){el.textContent='';el.classList.remove('show');}
+
+  async function postCsrf(url, body){
+    const r=await fetch(url,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRF-Token':CSRF},body:JSON.stringify(body)});
+    return r.json();
+  }
+
+  async function loadSessions(){
+    const wrap=document.getElementById('sess');
+    const err=document.getElementById('sess-err');
+    if(!wrap||!err) return;
+    clearMsg(err);
+    wrap.innerHTML='<div class="small">Loading…</div>';
+
+    try{
+      const j=await postCsrf('api/account.php',{action:'sessions'});
+      if(!j.success){showMsg(err,j.error||'Failed to load sessions');wrap.innerHTML='';return;}
+
+      if(!j.sessions||!j.sessions.length){
+        wrap.innerHTML='<div class="small">No tracked sessions yet (apply migrations to enable session tracking).</div>';
+        return;
+      }
+
+      wrap.innerHTML='';
+      j.sessions.forEach(s=>{
+        const el=document.createElement('div');
+        el.className='item';
+        const cur=s.is_current?'<span style="color:var(--green)">CURRENT</span>':'<span style="color:var(--muted)">OTHER</span>';
+        const ua=(s.user_agent||'').slice(0,160);
+        el.innerHTML=`
+          <div>
+            <div class="small">${cur} · Last seen: <span style="color:var(--text)">${s.last_seen_at||''}</span></div>
+            <div class="small">IP: <span style="color:var(--text)">${s.ip_address||''}</span></div>
+            <div class="small">UA: <span style="color:var(--text)">${ua}</span></div>
+          </div>
+          <div class="small">Created: <span style="color:var(--text)">${s.created_at||''}</span></div>
+        `;
+        wrap.appendChild(el);
+      });
+    }catch{
+      showMsg(err,'Network error');
+      wrap.innerHTML='';
+    }
+  }
+
+  const pwForm=document.getElementById('pw-form');
+  if(pwForm){
+    const ok=document.getElementById('pw-ok');
+    const err=document.getElementById('pw-err');
+    const btn=document.getElementById('pw-btn');
+    const btnTxt=document.getElementById('pw-btn-txt');
+
+    pwForm.addEventListener('submit', async (e)=>{
+      e.preventDefault();
+      clearMsg(ok); clearMsg(err);
+
+      const cur=document.getElementById('pw-cur').value;
+      const p1=document.getElementById('pw-new').value;
+      const p2=document.getElementById('pw-new2').value;
+
+      if(!cur||!p1||!p2){showMsg(err,'Fill in all fields');return;}
+      if(p1.length<8){showMsg(err,'New password must be at least 8 characters');return;}
+      if(p1!==p2){showMsg(err,'Passwords do not match');return;}
+
+      btn.disabled=true;
+      btnTxt.innerHTML='<span class="spin"></span>';
+
+      try{
+        const j=await postCsrf('api/account.php',{action:'change_login_password',current_password:cur,new_password:p1});
+        if(!j.success){showMsg(err,j.error||'Update failed');return;}
+        showMsg(ok,'Login password updated.');
+        pwForm.reset();
+      }catch{
+        showMsg(err,'Network error');
+      }finally{
+        btn.disabled=false;
+        btnTxt.textContent='Update password';
+      }
+    });
+  }
+
+  const logoutAll=document.getElementById('logout-all');
+  if(logoutAll){
+    logoutAll.addEventListener('click', async ()=>{
+      if(!confirm('Log out all sessions (including this one)?')) return;
+      logoutAll.disabled=true;
+      try{
+        const j=await postCsrf('api/account.php',{action:'logout_all_sessions'});
+        if(j.success){window.location='login.php';}
+        else alert(j.error||'Failed');
+      }catch{
+        alert('Network error');
+      }finally{
+        logoutAll.disabled=false;
+      }
+    });
+  }
+
+  const sessRefresh=document.getElementById('sess-refresh');
+  if(sessRefresh){
+    sessRefresh.addEventListener('click', loadSessions);
+  }
+
+  loadSessions();
+})();
+</script>
 </body>
 </html>

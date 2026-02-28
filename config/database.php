@@ -4,6 +4,7 @@
 //  Edit DB_*, APP_HMAC_SECRET, and mail settings.
 //  The encryption key NEVER appears here — it lives only
 //  in the user's browser, derived from their vault passphrase.
+//  (The vault passphrase is never stored on the server.)
 // ============================================================
 
 define('DB_HOST',    'localhost');
