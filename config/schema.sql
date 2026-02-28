@@ -1,0 +1,78 @@
+-- ============================================================
+--  LOCKSMITH — Zero-Knowledge Schema v3
+--
+--  SECURITY GUARANTEE:
+--  The server stores ONLY ciphertext. The decryption key is
+--  derived entirely in the user's browser from their vault
+--  passphrase — which is NEVER transmitted or stored.
+--  A full server dump + source code = mathematically useless
+--  without the user's vault passphrase.
+-- ============================================================
+
+CREATE DATABASE IF NOT EXISTS locksmith
+    CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE locksmith;
+
+CREATE TABLE IF NOT EXISTS users (
+    id                   INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    email                VARCHAR(255) NOT NULL UNIQUE,
+    login_hash           VARCHAR(255) NOT NULL,       -- Argon2id of LOGIN password (for auth only)
+    vault_verifier       VARCHAR(255) NOT NULL,       -- Argon2id of VAULT passphrase (only to verify, never to derive keys)
+    vault_verifier_salt  CHAR(64) NOT NULL,           -- hex: random salt for vault_verifier
+    created_at           DATETIME DEFAULT CURRENT_TIMESTAMP,
+    last_login           DATETIME NULL,
+    INDEX idx_email (email)
+) ENGINE=InnoDB;
+
+-- Zero-Knowledge lock table
+-- EVERYTHING needed to decrypt lives in the browser.
+-- Server stores only opaque bytes + metadata.
+CREATE TABLE IF NOT EXISTS locks (
+    id                   CHAR(36) PRIMARY KEY,
+    user_id              INT UNSIGNED NOT NULL,
+    label                VARCHAR(255) NOT NULL,
+
+    -- === ZERO-KNOWLEDGE CRYPTO FIELDS ===
+    -- All crypto done in browser with Web Crypto API.
+    -- Server has NO decryption capability.
+    cipher_blob          TEXT NOT NULL,        -- base64(AES-256-GCM ciphertext)
+    iv                   VARCHAR(64) NOT NULL, -- base64(96-bit GCM IV)
+    auth_tag             VARCHAR(64) NOT NULL, -- base64(128-bit GCM auth tag)
+    kdf_salt             VARCHAR(64) NOT NULL, -- base64(256-bit PBKDF2 salt, per-lock, server-generated)
+    kdf_iterations       INT UNSIGNED NOT NULL DEFAULT 310000, -- PBKDF2 iterations used
+
+    -- === METADATA (no secrets) ===
+    password_type        ENUM('numeric','alphanumeric','alpha','custom') NOT NULL DEFAULT 'alphanumeric',
+    password_length      TINYINT UNSIGNED NOT NULL DEFAULT 16,
+    hint                 VARCHAR(500) NULL,     -- Memory hint, never the password
+    reveal_date          DATETIME NOT NULL,
+
+    -- === CONFIRMATION FLOW ===
+    confirmation_status  ENUM('pending','confirmed','rejected','auto_saved') NOT NULL DEFAULT 'pending',
+    copied_at            DATETIME NULL,
+    confirmed_at         DATETIME NULL,
+    rejected_at          DATETIME NULL,
+    auto_saved_at        DATETIME NULL,
+    revealed_at          DATETIME NULL,
+    is_active            TINYINT(1) NOT NULL DEFAULT 1,
+    created_at           DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_user_active (user_id, is_active),
+    INDEX idx_status (confirmation_status),
+    INDEX idx_reveal (reveal_date)
+) ENGINE=InnoDB;
+
+-- Audit log — no secrets ever logged
+CREATE TABLE IF NOT EXISTS audit_log (
+    id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id     INT UNSIGNED NULL,
+    lock_id     CHAR(36) NULL,
+    action      VARCHAR(64) NOT NULL,
+    ip_address  VARCHAR(45) NULL,
+    user_agent  VARCHAR(500) NULL,
+    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_user  (user_id),
+    INDEX idx_lock  (lock_id),
+    INDEX idx_time  (created_at)
+) ENGINE=InnoDB;
