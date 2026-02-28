@@ -1,106 +1,84 @@
-# LOCKSMITH — Time-Locked Password Vault
+# LOCKSMITH — Time-Locked Codes (Zero-Knowledge Vault)
 ## PHP Web Application
 
----
+LOCKSMITH is a multi-page PHP app that lets users generate and store **time-locked “codes”** in a **zero-knowledge vault**:
+- Encryption/decryption happens in the browser (Web Crypto: PBKDF2 + AES-256-GCM)
+- The server stores only ciphertext + metadata
+- The server enforces the reveal time (server clock, not client clock)
+- Users must verify their email before accessing the dashboard
 
 ## Requirements
 - PHP 8.1+ (with `openssl`, `pdo_mysql`, `mbstring` extensions)
 - MySQL 8.0+ or MariaDB 10.6+
-- Apache with `mod_rewrite` and `mod_headers` enabled
-- HTTPS in production (required for Clipboard API + secure cookies)
+- Apache or Nginx
+- HTTPS in production (secure cookies + Clipboard API)
 
----
+## Install (recommended)
 
-## Quick Setup
+### Web installer (first-run)
 
-### 1. Database
+On first access, the app redirects to `/install/index.php` until installation is complete.
+
+### CLI installer
+
+```bash
+php install/install.php
+```
+
+See `install/INSTALL.md` for non-interactive usage.
+
+## Manual Setup (alternative)
+
+### 1) Database
+Run the schema:
+
 ```sql
--- Run the schema file:
 mysql -u root -p < config/schema.sql
 ```
 
-### 2. Configuration
+If you are upgrading an existing install, apply migrations in `config/migrations/`.
+
+### 2) Configuration
 Edit `config/database.php`:
-```php
-define('DB_HOST', 'localhost');
-define('DB_NAME', 'locksmith');
-define('DB_USER', 'your_db_user');
-define('DB_PASS', 'your_db_password');
-define('APP_SECRET_KEY', 'generate_a_64+_char_random_string_here');
-define('APP_ENV', 'production');
-```
+- `DB_HOST`, `DB_NAME`, `DB_USER`, `DB_PASS`
+- `APP_HMAC_SECRET` (generate with `php -r "echo bin2hex(random_bytes(32));"`)
+- `APP_ENV` (`development` or `production`)
+- `MAIL_FROM` (used for verification emails)
+- `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_SECURE`, `SMTP_VERIFY_PEER` (recommended)
 
-**Generate a secret key:**
-```bash
-php -r "echo bin2hex(random_bytes(32));"
-```
+## Project Layout
 
-### 3. Deploy
-```
-/var/www/html/locksmith/
-├── index.php           ← Main app (single-page UI)
-├── .htaccess           ← Security + URL rules
-├── config/
-│   ├── database.php    ← DB config + connection
-│   └── schema.sql      ← DB setup (run once)
-├── includes/
-│   └── helpers.php     ← Crypto, auth, utilities
-└── api/
-    ├── auth.php        ← Register / login / logout
-    ├── generate.php    ← Generate + store encrypted password
-    ├── copied.php      ← Mark password as copied (fires on clipboard)
-    ├── locks.php       ← List active locks
-    ├── reveal.php      ← Decrypt + return password (if date passed)
-    └── delete.php      ← Remove a lock
-```
+Pages:
+- `index.php` — home/marketing page
+- `signup.php` — create account (sends verification email)
+- `login.php` — login page (redirects based on verification)
+- `account.php` — account + email verification status, resend link
+- `verify.php` — handles verification token
+- `dashboard.php` — authenticated, email-verified app UI
+- `backup.php` — local export/import + cloud backups
+- `admin.php` — super admin dashboard (requires admin)
+- `logout.php` — destroys session
 
-### 4. Apache VirtualHost (example)
-```apache
-<VirtualHost *:443>
-    ServerName locksmith.yourdomain.com
-    DocumentRoot /var/www/html/locksmith
+API:
+- `api/auth.php` — register/login/logout + resend verification
+- `api/salt.php` — issues one-time per-lock KDF salt
+- `api/generate.php` — store a new encrypted code
+- `api/locks.php` — list user codes (metadata)
+- `api/confirm.php` — confirm/reject/auto-save flow
+- `api/copied.php` — mark as copied
+- `api/reveal.php` — time-gated retrieval of ciphertext blobs (browser decrypts)
+- `api/delete.php` — delete a code
+- `api/backup.php` — local export/import + cloud backups
+- `api/admin.php` — super admin data endpoints (users + codes)
 
-    SSLEngine on
-    SSLCertificateFile    /etc/ssl/certs/your_cert.pem
-    SSLCertificateKeyFile /etc/ssl/private/your_key.pem
-
-    <Directory /var/www/html/locksmith>
-        AllowOverride All
-        Require all granted
-    </Directory>
-</VirtualHost>
-```
-
----
-
-## Security Model
-
-| Layer | What's Protected |
-|---|---|
-| **AES-256-GCM** | Password encrypted on server using derived key |
-| **PBKDF2 (100k rounds)** | Key derived from `APP_SECRET_KEY` + `user_id` |
-| **CSRF tokens** | All state-changing API calls require CSRF header |
-| **Server-side time gate** | Reveal date enforced by server — device clock irrelevant |
-| **Session security** | HttpOnly, strict mode, regenerated on login |
-| **Zero plaintext storage** | Plaintext password returned ONCE at generation, never stored |
-| **Argon2id hashing** | User login passwords hashed with Argon2id |
-
----
-
-## How the Copy Flow Works
-
-1. User clicks **Generate & Lock** → server generates password, encrypts it, stores ciphertext
-2. Server returns plaintext password **once** in the HTTP response
-3. User sees the password and clicks **Copy to Clipboard**
-4. `navigator.clipboard.writeText()` copies to clipboard
-5. **Immediately**, a `POST /api/copied.php` call fires → server records `copied_at` timestamp
-6. After 3 seconds, the displayed password is replaced with `••••••••`
-7. The password cannot be retrieved again until the reveal date is reached
-
----
+## Security Model (high level)
+- **Zero plaintext storage**: the server never stores plaintext codes.
+- **Browser-only crypto**: keys are derived from the user’s vault passphrase in the browser.
+- **Server-side time gate**: reveal date enforced by server clock.
+- **CSRF protection** on state-changing API calls.
+- **Hardened sessions**: HttpOnly, Strict SameSite, strict mode, regen on login.
 
 ## Notes
-- **No plaintext is ever stored** — only AES-256-GCM ciphertext
-- **Locks persist** even if the user changes their password (key is derived from APP_SECRET_KEY + user_id, not user password)
-- **Clock manipulation** is prevented — the server checks its own clock on reveal
-- **Offline use** will block reveals until server connectivity is restored (by design)
+- Email verification uses SMTP if `SMTP_HOST` is set, otherwise it falls back to PHP `mail()`.
+- Cloud backups store ciphertext-only snapshots in the app DB.
+- Clipboard support and secure cookies require HTTPS in production.

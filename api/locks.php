@@ -2,9 +2,13 @@
 // ============================================================
 //  API: GET /api/locks.php — returns metadata only, no crypto material
 // ============================================================
+require_once __DIR__ . '/../includes/install_guard.php';
+requireInstalledForApi();
+
 require_once __DIR__ . '/../includes/helpers.php';
 header('Content-Type: application/json');
 requireLogin();
+requireVerifiedEmail();
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') jsonResponse(['error' => 'Method not allowed'], 405);
 
 $userId = getCurrentUserId();

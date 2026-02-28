@@ -1,49 +1,41 @@
 <?php
 // ============================================================
 //  API: POST /api/generate.php — Zero-Knowledge Edition
-//
-//  Client sends:
-//    - label, type, length, reveal_date, hint (metadata)
-//    - cipher_blob, iv, auth_tag (encrypted in browser, AES-256-GCM)
-//    - kdf_salt (returned from /api/salt.php, used by browser for PBKDF2)
-//
-//  Server stores cipher_blob + iv + auth_tag + kdf_salt.
-//  Server has ZERO ability to decrypt. No key. No passphrase. Nothing.
-//
-//  Even if this entire server is cloned by an attacker:
-//    - cipher_blob is AES-256-GCM ciphertext
-//    - kdf_salt is random bytes (useless without vault passphrase)
-//    - auth_tag ensures tampering is detected
-//    - Brute force requires 310,000 PBKDF2 iterations per attempt
 // ============================================================
+
+require_once __DIR__ . '/../includes/install_guard.php';
+requireInstalledForApi();
 
 require_once __DIR__ . '/../includes/helpers.php';
 header('Content-Type: application/json');
 requireLogin();
 requireCsrf();
+requireVerifiedEmail();
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') jsonResponse(['error' => 'Method not allowed'], 405);
 
 $body = json_decode(file_get_contents('php://input'), true);
 
 // ── Validate metadata ─────────────────────────────────────────
-$label      = trim($body['label'] ?? '');
-$type       = $body['type'] ?? 'alphanumeric';
+$label      = trim((string)($body['label'] ?? ''));
+$type       = (string)($body['type'] ?? 'alphanumeric');
 $length     = (int)($body['length'] ?? 16);
-$revealDate = $body['reveal_date'] ?? '';
-$hint       = trim($body['hint'] ?? '');
+$revealDate = (string)($body['reveal_date'] ?? '');
+$hint       = trim((string)($body['hint'] ?? ''));
+$slot = isset($body['vault_verifier_slot']) ? (int)$body['vault_verifier_slot'] : 0;
+if (!in_array($slot, [1, 2], true)) $slot = 0;
 
 // ── Validate zero-knowledge crypto fields (opaque blobs from browser) ──
-$cipherBlob = trim($body['cipher_blob'] ?? '');
-$iv         = trim($body['iv'] ?? '');
-$authTag    = trim($body['auth_tag'] ?? '');
-$kdfSalt    = trim($body['kdf_salt'] ?? '');
+$cipherBlob = trim((string)($body['cipher_blob'] ?? ''));
+$iv         = trim((string)($body['iv'] ?? ''));
+$authTag    = trim((string)($body['auth_tag'] ?? ''));
+$kdfSalt    = trim((string)($body['kdf_salt'] ?? ''));
 
-if (empty($label))      jsonResponse(['error' => 'Label is required'], 400);
-if (empty($cipherBlob)) jsonResponse(['error' => 'cipher_blob missing'], 400);
-if (empty($iv))         jsonResponse(['error' => 'iv missing'], 400);
-if (empty($authTag))    jsonResponse(['error' => 'auth_tag missing'], 400);
-if (empty($kdfSalt))    jsonResponse(['error' => 'kdf_salt missing'], 400);
+if ($label === '')      jsonResponse(['error' => 'Label is required'], 400);
+if ($cipherBlob === '') jsonResponse(['error' => 'cipher_blob missing'], 400);
+if ($iv === '')         jsonResponse(['error' => 'iv missing'], 400);
+if ($authTag === '')    jsonResponse(['error' => 'auth_tag missing'], 400);
+if ($kdfSalt === '')    jsonResponse(['error' => 'kdf_salt missing'], 400);
 
 // Verify salt was legitimately issued by this server for this user/session
 $sessionKey = 'pending_salt_' . getCurrentUserId();
@@ -57,7 +49,7 @@ $validTypes = ['numeric','alpha','alphanumeric','custom'];
 if (!in_array($type, $validTypes, true)) jsonResponse(['error' => 'Invalid type'], 400);
 if ($length < 4 || $length > 128)        jsonResponse(['error' => 'Length must be 4–128'], 400);
 if (strlen($hint) > 500)                 jsonResponse(['error' => 'Hint too long'], 400);
-if (empty($revealDate))                  jsonResponse(['error' => 'Reveal date required'], 400);
+if ($revealDate === '')                  jsonResponse(['error' => 'Reveal date required'], 400);
 
 try {
     $revealDt = new DateTime($revealDate);
@@ -80,18 +72,52 @@ try {
     $lockId = generateUUID();
     $db     = getDB();
 
-    $db->prepare("
-        INSERT INTO locks
-            (id, user_id, label, cipher_blob, iv, auth_tag, kdf_salt, kdf_iterations,
-             password_type, password_length, hint, reveal_date, confirmation_status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
-    ")->execute([
-        $lockId, $userId, sanitize($label),
-        $cipherBlob, $iv, $authTag, $kdfSalt, PBKDF2_ITERATIONS,
-        $type, $length,
-        $hint ? sanitize($hint) : null,
-        $revealDt->format('Y-m-d H:i:s'),
-    ]);
+    if ($slot === 0 && hasVaultActiveSlotColumn()) {
+        $stmt = $db->prepare('SELECT vault_active_slot FROM users WHERE id = ?');
+        $stmt->execute([(int)$userId]);
+        $u = $stmt->fetch();
+        $slot = (int)($u['vault_active_slot'] ?? 1);
+        if (!in_array($slot, [1,2], true)) $slot = 1;
+    }
+    if ($slot === 0) $slot = 1;
+
+    if ($slot === 2 && !hasLockVaultVerifierSlotColumn()) {
+        jsonResponse(['error' => 'Vault rotation is not available (missing vault rotation columns). Apply migrations in config/migrations/.'], 500);
+    }
+
+    $hasSlot = hasLockVaultVerifierSlotColumn();
+
+    if ($hasSlot) {
+        $sql = "
+            INSERT INTO locks
+                (id, user_id, label, cipher_blob, iv, auth_tag, kdf_salt, kdf_iterations, vault_verifier_slot,
+                 password_type, password_length, hint, reveal_date, confirmation_status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+        ";
+        $params = [
+            $lockId, $userId, sanitize($label),
+            $cipherBlob, $iv, $authTag, $kdfSalt, PBKDF2_ITERATIONS, $slot,
+            $type, $length,
+            $hint ? sanitize($hint) : null,
+            $revealDt->format('Y-m-d H:i:s'),
+        ];
+    } else {
+        $sql = "
+            INSERT INTO locks
+                (id, user_id, label, cipher_blob, iv, auth_tag, kdf_salt, kdf_iterations,
+                 password_type, password_length, hint, reveal_date, confirmation_status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+        ";
+        $params = [
+            $lockId, $userId, sanitize($label),
+            $cipherBlob, $iv, $authTag, $kdfSalt, PBKDF2_ITERATIONS,
+            $type, $length,
+            $hint ? sanitize($hint) : null,
+            $revealDt->format('Y-m-d H:i:s'),
+        ];
+    }
+
+    $db->prepare($sql)->execute($params);
 
     auditLog('generate', $lockId);
 
