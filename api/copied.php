@@ -6,6 +6,9 @@
 //  The blind copy happens entirely client-side in zero-knowledge mode.
 // ============================================================
 
+require_once __DIR__ . '/../includes/install_guard.php';
+requireInstalledForApi();
+
 require_once __DIR__ . '/../includes/helpers.php';
 header('Content-Type: application/json');
 requireLogin();

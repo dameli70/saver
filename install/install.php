@@ -146,7 +146,7 @@ function updateConfigFile(string $path, array $vals, bool $force): void {
             $pattern = "/define\\('" . preg_quote($const, '/') . "',\\s*[^)]+\\);/";
             $replace = "define('{$const}', " . (int)$val . ");";
         } else {
-            $pattern = "/define\\('" . preg_quote($const, '/') . "',\\s*'[^']*'\\);/";
+            $pattern = "/define\\('" . preg_quote($const, '/') . "',\\s*'(?:\\\\'|[^'])*'\\);/";
             $replace = "define('{$const}', " . phpSingleQuoted($val) . ");";
         }
         $src = preg_replace($pattern, $replace, $src, 1, $count);
@@ -350,6 +350,14 @@ if ($initDb || $applyMigrations) {
             fwrite(STDOUT, "No migrations directory found; skipping.\n");
         }
     }
+}
+
+$flagPath = $root . '/config/installed.flag';
+$flagBody = "installed_at=" . date('c') . "\n";
+$flagBody .= "installed_by=cli\n";
+if (file_put_contents($flagPath, $flagBody) === false) {
+    fwrite(STDERR, "\nWARNING: Could not write {$flagPath}.\n");
+    fwrite(STDERR, "The web app will redirect to /install/ until this file exists.\n");
 }
 
 fwrite(STDOUT, "\nDone.\n\nNext steps:\n");

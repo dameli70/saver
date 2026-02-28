@@ -11,6 +11,9 @@
 //  - Salt is not secret — it's returned in plaintext — but must be authentic
 // ============================================================
 
+require_once __DIR__ . '/../includes/install_guard.php';
+requireInstalledForApi();
+
 require_once __DIR__ . '/../includes/helpers.php';
 header('Content-Type: application/json');
 requireLogin();

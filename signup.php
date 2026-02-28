@@ -1,4 +1,7 @@
 <?php
+require_once __DIR__ . '/includes/install_guard.php';
+requireInstalledForPage();
+
 require_once __DIR__ . '/includes/helpers.php';
 startSecureSession();
 
