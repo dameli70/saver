@@ -1,60 +1,74 @@
-# LOCKSMITH — Time-Locked, Zero-Knowledge Code Vault
+# LOCKSMITH — Time-Locked Codes (Zero-Knowledge Vault)
+## PHP Web Application
 
-LOCKSMITH is a PHP + MySQL web app that lets users generate a secret code, encrypt it **client-side** (Web Crypto), and store only ciphertext on the server until a chosen reveal date.
+LOCKSMITH is a multi-page PHP app that lets users generate and store **time-locked “codes”** in a **zero-knowledge vault**:
+- Encryption/decryption happens in the browser (Web Crypto: PBKDF2 + AES-256-GCM)
+- The server stores only ciphertext + metadata
+- The server enforces the reveal time (server clock, not client clock)
+- Users must verify their email before accessing the dashboard
 
 ## Requirements
-- PHP 8.1+ (with `openssl`, `pdo_mysql`, `mbstring`)
+- PHP 8.1+ (with `openssl`, `pdo_mysql`, `mbstring` extensions)
 - MySQL 8.0+ or MariaDB 10.6+
-- HTTPS in production (required for secure cookies + clipboard API)
+- Apache or Nginx
+- HTTPS in production (secure cookies + Clipboard API)
 
-## Quick setup
+## Install (recommended)
+
+Use the included CLI installer to generate secrets, write config, and optionally initialize the database:
+
+```bash
+php install/install.php
+```
+
+See `install/INSTALL.md` for non-interactive usage.
+
+## Manual Setup (alternative)
 
 ### 1) Database
+Run the schema:
+
 ```sql
 mysql -u root -p < config/schema.sql
 ```
 
-If you are upgrading an existing install, apply the migration:
-```sql
-mysql -u root -p locksmith < config/migrations/001_email_verification.sql
-```
+If you are upgrading an existing install, apply migrations in `config/migrations/`.
 
 ### 2) Configuration
 Edit `config/database.php`:
 - `DB_HOST`, `DB_NAME`, `DB_USER`, `DB_PASS`
-- `APP_HMAC_SECRET` (HMAC for CSRF + audit log integrity, **not used for encryption**)
-- `MAIL_FROM` (sender address used for verification emails)
+- `APP_HMAC_SECRET` (generate with `php -r "echo bin2hex(random_bytes(32));"`)
+- `APP_ENV` (`development` or `production`)
+- `MAIL_FROM` (used for verification emails)
 
-Generate a secret:
-```bash
-php -r "echo bin2hex(random_bytes(32));"
-```
+## Project Layout
 
-## App pages
+Pages:
 - `index.php` — home/marketing page
-- `signup.php` — create account (email verification required)
-- `login.php` — login
-- `account.php` — account + resend verification email
-- `verify.php` — email verification link target
-- `dashboard.php` — authenticated, verified dashboard (generate/list/reveal)
-- `logout.php` — logout
+- `signup.php` — create account (sends verification email)
+- `login.php` — login page (redirects based on verification)
+- `account.php` — account + email verification status, resend link
+- `verify.php` — handles verification token
+- `dashboard.php` — authenticated, email-verified app UI
+- `logout.php` — destroys session
 
-## API endpoints
-Located in `api/`:
-- `auth.php` — register/login/logout + resend verification
-- `salt.php` — issues one-time PBKDF2 salt for a new code
-- `generate.php` — stores ciphertext + metadata (never plaintext)
-- `locks.php` — lists code metadata and status
-- `reveal.php` — enforces time gate + vault passphrase verification, then returns ciphertext for client-side decryption
-- `confirm.php`, `copied.php`, `delete.php`
+API:
+- `api/auth.php` — register/login/logout + resend verification
+- `api/salt.php` — issues one-time per-lock KDF salt
+- `api/generate.php` — store a new encrypted code
+- `api/locks.php` — list user codes (metadata)
+- `api/confirm.php` — confirm/reject/auto-save flow
+- `api/copied.php` — mark as copied
+- `api/reveal.php` — time-gated retrieval of ciphertext blobs (browser decrypts)
+- `api/delete.php` — delete a code
 
-## Security model (high level)
-- **Zero-knowledge storage**: server stores only ciphertext (AES-256-GCM), IVs, tags, salts, and metadata.
-- **Key derivation in browser**: PBKDF2 with per-code salt (`PBKDF2_ITERATIONS` in config).
-- **Server-enforced time gate**: reveals are blocked until `reveal_date` passes on the server.
-- **CSRF**: state-changing API calls require the CSRF header.
-- **Email verification**: required before accessing the dashboard or API code operations.
+## Security Model (high level)
+- **Zero plaintext storage**: the server never stores plaintext codes.
+- **Browser-only crypto**: keys are derived from the user’s vault passphrase in the browser.
+- **Server-side time gate**: reveal date enforced by server clock.
+- **CSRF protection** on state-changing API calls.
+- **Hardened sessions**: HttpOnly, Strict SameSite, strict mode, regen on login.
 
 ## Notes
-- The vault passphrase is used in the browser for encryption/decryption, but is also verified server-side (Argon2id) during reveal to ensure the user is authorized.
-- If a user loses their vault passphrase, stored ciphertext cannot be recovered.
+- Email verification uses PHP `mail()`; in production you should have a real MTA configured.
+- Clipboard support and secure cookies require HTTPS in production.
