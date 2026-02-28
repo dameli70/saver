@@ -40,6 +40,35 @@ function requireLogin(): void {
 function getCurrentUserId(): ?int { return $_SESSION['user_id'] ?? null; }
 function getCurrentUserEmail(): ?string { return $_SESSION['email'] ?? null; }
 
+// ── Admin ───────────────────────────────────────────────────
+function isAdmin(?int $userId = null): bool {
+    startSecureSession();
+
+    if ($userId === null) {
+        if (!empty($_SESSION['is_admin'])) return true;
+        $userId = getCurrentUserId();
+        if (!$userId) return false;
+    }
+
+    try {
+        $db   = getDB();
+        $stmt = $db->prepare("SELECT is_admin FROM users WHERE id = ?");
+        $stmt->execute([(int)$userId]);
+        $row = $stmt->fetch();
+        $ok = !empty($row['is_admin']);
+        if ($userId === getCurrentUserId()) {
+            $_SESSION['is_admin'] = $ok ? 1 : 0;
+        }
+        return $ok;
+    } catch (Throwable) {
+        return false;
+    }
+}
+
+function requireAdmin(): void {
+    if (!isAdmin()) jsonResponse(['error' => 'Admin access required'], 403);
+}
+
 // ── Email verification ──────────────────────────────────────
 function isEmailVerified(?int $userId = null): bool {
     startSecureSession();

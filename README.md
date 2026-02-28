@@ -15,7 +15,11 @@ LOCKSMITH is a multi-page PHP app that lets users generate and store **time-lock
 
 ## Install (recommended)
 
-Use the included CLI installer to generate secrets, write config, and optionally initialize the database:
+### Web installer (first-run)
+
+On first access, the app redirects to `/install/index.php` until installation is complete.
+
+### CLI installer
 
 ```bash
 php install/install.php
@@ -50,6 +54,7 @@ Pages:
 - `account.php` — account + email verification status, resend link
 - `verify.php` — handles verification token
 - `dashboard.php` — authenticated, email-verified app UI
+- `admin.php` — super admin dashboard (requires admin)
 - `logout.php` — destroys session
 
 API:
@@ -61,6 +66,7 @@ API:
 - `api/copied.php` — mark as copied
 - `api/reveal.php` — time-gated retrieval of ciphertext blobs (browser decrypts)
 - `api/delete.php` — delete a code
+- `api/admin.php` — super admin data endpoints (users + codes)
 
 ## Security Model (high level)
 - **Zero plaintext storage**: the server never stores plaintext codes.

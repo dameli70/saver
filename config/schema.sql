@@ -26,10 +26,14 @@ CREATE TABLE IF NOT EXISTS users (
     email_verification_expires_at DATETIME NULL,
     verification_sent_at         DATETIME NULL,
 
+    -- Admin
+    is_admin                     TINYINT(1) NOT NULL DEFAULT 0,
+
     created_at                   DATETIME DEFAULT CURRENT_TIMESTAMP,
     last_login                   DATETIME NULL,
     INDEX idx_email (email),
-    INDEX idx_email_verification_hash (email_verification_hash)
+    INDEX idx_email_verification_hash (email_verification_hash),
+    INDEX idx_is_admin (is_admin)
 ) ENGINE=InnoDB;
 
 -- Zero-Knowledge lock table

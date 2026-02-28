@@ -7,6 +7,7 @@ startSecureSession();
 
 $loggedIn = isLoggedIn();
 $verified = $loggedIn ? isEmailVerified() : false;
+$isAdmin  = $loggedIn ? isAdmin() : false;
 $userEmail = getCurrentUserEmail() ?? '';
 
 header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none';");
@@ -88,6 +89,9 @@ a{color:inherit;}
         <span class="pill"><?= htmlspecialchars($userEmail) ?></span>
         <?php if ($verified): ?>
           <a class="btn btn-ghost" href="dashboard.php">Dashboard</a>
+          <?php if ($isAdmin): ?>
+            <a class="btn btn-ghost" href="admin.php">Admin</a>
+          <?php endif; ?>
         <?php else: ?>
           <a class="btn btn-ghost" href="account.php">Verify Email</a>
         <?php endif; ?>

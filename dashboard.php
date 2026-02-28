@@ -15,6 +15,7 @@ if (!isEmailVerified()) {
 }
 
 $userEmail = getCurrentUserEmail() ?? '';
+$isAdmin   = isAdmin();
 $csrf      = getCsrfToken();
 
 // Strict security headers
@@ -292,6 +293,9 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;background:var(--acce
     <div class="topbar-r">
       <div class="topbar-zk">ZERO-KNOWLEDGE</div>
       <span class="user-pill" id="u-email"><?= htmlspecialchars($userEmail) ?></span>
+      <?php if ($isAdmin): ?>
+        <a class="btn btn-ghost btn-sm" href="admin.php">Admin</a>
+      <?php endif; ?>
       <a class="btn btn-ghost btn-sm" href="account.php">Account</a>
       <button class="btn btn-ghost btn-sm" onclick="doLogout()">Logout</button>
     </div>

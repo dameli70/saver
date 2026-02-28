@@ -25,6 +25,7 @@ if (!$u) {
 
 $verified = !empty($u['email_verified_at']);
 $_SESSION['email_verified'] = $verified ? 1 : 0;
+$isAdmin = isAdmin();
 
 header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none';");
 header("X-Frame-Options: DENY");
@@ -86,6 +87,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--mono);min-height:1
     <div class="nav-r">
       <?php if ($verified): ?>
         <a class="btn btn-ghost" href="dashboard.php">Dashboard</a>
+        <?php if ($isAdmin): ?>
+          <a class="btn btn-ghost" href="admin.php">Admin</a>
+        <?php endif; ?>
       <?php endif; ?>
       <a class="btn btn-ghost" href="logout.php">Logout</a>
     </div>
