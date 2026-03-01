@@ -195,6 +195,17 @@ f.addEventListener('submit', async (e)=>{
 
     showOk('Account created. Check your email to verify before using the dashboard.');
 
+    // Initialize vault passphrase check so you can unlock on any device.
+    try{
+      const vc = await setupVaultCheck(vault);
+      if(!vc.success && vc.error){
+        // If this fails (e.g., missing migrations), the Account page can still guide setup.
+        console.warn('Vault setup failed:', vc.error);
+      }
+    }catch(e){
+      console.warn('Vault setup failed:', e);
+    }
+
     if(j.dev_verify_url){
       dev.style.display='block';
       dev.innerHTML='DEV: Email sending is often disabled locally. Use this verification link: <br><a href="'+j.dev_verify_url+'">'+j.dev_verify_url+'</a>';

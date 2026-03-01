@@ -219,6 +219,11 @@ if ($action === 'rotate_commit') {
             if ($upd->rowCount() > 0) $count++;
         }
 
+        if ($vaultCheckVals !== null && hasVaultCheckColumns()) {
+            $db->prepare('UPDATE users SET vault_check_cipher = ?, vault_check_iv = ?, vault_check_auth_tag = ?, vault_check_salt = ?, vault_check_iterations = ?, vault_check_set_at = NOW() WHERE id = ?')
+               ->execute([$vaultCheckVals[0], $vaultCheckVals[1], $vaultCheckVals[2], $vaultCheckVals[3], $vaultCheckVals[4], (int)$userId]);
+        }
+
         if (hasVaultActiveSlotColumn()) {
             $db->prepare('UPDATE users SET vault_active_slot = ? WHERE id = ?')->execute([(int)$toSlot, (int)$userId]);
         }
