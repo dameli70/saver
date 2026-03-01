@@ -124,16 +124,28 @@ function clearMsgs(){err.textContent='';ok.textContent='';err.classList.remove('
 function bytesToB64(bytes){return btoa(String.fromCharCode(...bytes));}
 function b64ToBytes(b64){return Uint8Array.from(atob(b64), c => c.charCodeAt(0));}
 
+function requireWebCrypto(){
+  // WebCrypto (crypto.subtle) is only available in secure contexts (HTTPS or localhost).
+  if (!window.crypto || !window.crypto.getRandomValues) {
+    throw new Error('Secure cryptography is unavailable in this browser.');
+  }
+  if (!window.isSecureContext || !window.crypto.subtle) {
+    throw new Error('Web Crypto API is unavailable. Use HTTPS (or localhost) to set a vault passphrase.');
+  }
+  return window.crypto;
+}
+
 async function postCsrf(url, body){
   const r=await fetch(url,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRF-Token':CSRF},body:JSON.stringify(body)});
   return r.json();
 }
 
 async function deriveKey(passphrase, kdfSaltB64, iters){
+  const c = requireWebCrypto();
   const enc = new TextEncoder();
-  const baseKey = await crypto.subtle.importKey('raw', enc.encode(passphrase), 'PBKDF2', false, ['deriveKey']);
+  const baseKey = await c.subtle.importKey('raw', enc.encode(passphrase), 'PBKDF2', false, ['deriveKey']);
   const saltBytes = b64ToBytes(kdfSaltB64);
-  return crypto.subtle.deriveKey(
+  return c.subtle.deriveKey(
     {name:'PBKDF2', salt:saltBytes, iterations: iters, hash:'SHA-256'},
     baseKey,
     {name:'AES-GCM', length:256},
@@ -143,18 +155,20 @@ async function deriveKey(passphrase, kdfSaltB64, iters){
 }
 
 async function aesEncrypt(plain, key){
+  const c = requireWebCrypto();
   const iv = new Uint8Array(12);
-  crypto.getRandomValues(iv);
+  c.getRandomValues(iv);
   const enc = new TextEncoder();
-  const ct = new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM', iv, tagLength:128}, key, enc.encode(plain)));
+  const ct = new Uint8Array(await c.subtle.encrypt({name:'AES-GCM', iv, tagLength:128}, key, enc.encode(plain)));
   const tag = ct.slice(ct.length - 16);
   const cipher = ct.slice(0, ct.length - 16);
   return {cipher_blob: bytesToB64(cipher), iv: bytesToB64(iv), auth_tag: bytesToB64(tag)};
 }
 
 async function setupVaultCheck(passphrase){
+  const c = requireWebCrypto();
   const saltBytes = new Uint8Array(32);
-  crypto.getRandomValues(saltBytes);
+  c.getRandomValues(saltBytes);
   const kdf_salt = bytesToB64(saltBytes);
 
   const key = await deriveKey(passphrase, kdf_salt, PBKDF2_ITERS);

@@ -25,6 +25,12 @@ function intParam(mixed $v, int $default = 0): int {
     return (int)$s;
 }
 
+function hasColumn(PDO $db, string $table, string $column): bool {
+    $stmt = $db->prepare("SELECT 1 FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ? LIMIT 1");
+    $stmt->execute([$table, $column]);
+    return (bool)$stmt->fetchColumn();
+}
+
 if ($method === 'GET') {
     $action = $_GET['action'] ?? '';
 
@@ -241,6 +247,17 @@ if ($method === 'POST') {
 
         $userId = (int)$db->lastInsertId();
 
+        // Ensure key platform defaults are set for the user (for older installs / partial migrations).
+        if (hasColumn($db, 'users', 'vault_active_slot')) {
+            $db->prepare('UPDATE users SET vault_active_slot = 1 WHERE id = ?')->execute([$userId]);
+        }
+        if (hasColumn($db, 'users', 'vault_check_iterations')) {
+            $db->prepare('UPDATE users SET vault_check_iterations = ? WHERE id = ?')->execute([PBKDF2_ITERATIONS, $userId]);
+        }
+        if (hasColumn($db, 'users', 'require_webauthn')) {
+            $db->prepare('UPDATE users SET require_webauthn = 0 WHERE id = ?')->execute([$userId]);
+        }
+
         $devVerifyUrl = null;
         if (!$markVerified) {
             $devVerifyUrl = issueEmailVerification($userId, $email);
@@ -293,6 +310,17 @@ if ($method === 'POST') {
         if ($verified) {
             $db->prepare("UPDATE users SET email_verified_at = NOW(), email_verification_hash = NULL, email_verification_expires_at = NULL WHERE id = ?")
                ->execute([$userId]);
+
+            // Ensure key defaults exist for optimal usage.
+            if (hasColumn($db, 'users', 'vault_active_slot')) {
+                $db->prepare('UPDATE users SET vault_active_slot = 1 WHERE id = ?')->execute([$userId]);
+            }
+            if (hasColumn($db, 'users', 'vault_check_iterations')) {
+                $db->prepare('UPDATE users SET vault_check_iterations = ? WHERE id = ?')->execute([PBKDF2_ITERATIONS, $userId]);
+            }
+            if (hasColumn($db, 'users', 'require_webauthn')) {
+                $db->prepare('UPDATE users SET require_webauthn = 0 WHERE id = ?')->execute([$userId]);
+            }
         } else {
             $db->prepare("UPDATE users SET email_verified_at = NULL WHERE id = ?")
                ->execute([$userId]);
