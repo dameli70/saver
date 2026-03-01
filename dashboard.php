@@ -371,10 +371,15 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
 
 <script>
 const CSRF = <?= json_encode($csrf) ?>;
+const PBKDF2_ITERS = <?= (int)PBKDF2_ITERATIONS ?>;
+const VAULT_CHECK_PLAIN = 'LOCKSMITH_VAULT_CHECK_v1';
 
 // The vault passphrase never leaves this script context.
 let vaultPhraseSession = null;
 let vaultSlotSession   = 1;
+let vaultCheckAvailable = false;
+let vaultCheckInitialized = false;
+let vaultCheck = null;
 
 let pendingLock = null;
 let revealedPwd = null;
@@ -518,9 +523,43 @@ async function ensureReauth(methods){
 }
 
 // ─────────────────────────────────────────────────
+//  VAULT SETUP
+// ─────────────────────────────────────────────────
+async function loadVaultSetup(){
+  try{
+    const r = await postCsrf('/api/vault.php', {action:'setup_status'});
+    if(!r.success) return;
+
+    vaultCheckAvailable = !!r.available;
+    vaultCheckInitialized = !!r.initialized;
+    vaultCheck = r.vault_check || null;
+
+    const slot = parseInt(r.active_slot || '1', 10);
+    if([1,2].includes(slot)){
+      vaultSlotSession = slot;
+      localStorage.setItem('vault_slot', String(vaultSlotSession));
+    }
+
+    const note = document.getElementById('vp-setup-note');
+    const inp  = document.getElementById('vp-input');
+    const btn  = document.getElementById('vp-btn');
+
+    if(vaultCheckAvailable && !vaultCheckInitialized){
+      if(note) note.style.display = 'block';
+      if(inp) inp.disabled = true;
+      if(btn) btn.disabled = true;
+    } else {
+      if(note) note.style.display = 'none';
+      if(inp) inp.disabled = false;
+      if(btn) btn.disabled = false;
+    }
+  }catch{}
+}
+
+// ─────────────────────────────────────────────────
 //  INIT
 // ─────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   const d = new Date(); d.setDate(d.getDate()+1); d.setSeconds(0,0);
   document.getElementById('g-date').value = d.toISOString().slice(0,16);
 
@@ -537,6 +576,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const storedSlot = parseInt(localStorage.getItem('vault_slot') || '1', 10);
   vaultSlotSession = ([1,2].includes(storedSlot) ? storedSlot : 1);
 
+  await loadVaultSetup();
   checkVaultUnlock();
   loadLocks();
 });
@@ -555,11 +595,20 @@ async function unlockVault() {
   errEl.classList.remove('show');
   if (!vp || vp.length < 10) { errEl.textContent='Passphrase must be at least 10 characters'; errEl.classList.add('show'); return; }
 
+  if (vaultCheckAvailable && !vaultCheckInitialized) {
+    errEl.textContent = 'Vault passphrase is not set. Set it in Account first.';
+    errEl.classList.add('show');
+    return;
+  }
+
   document.getElementById('vp-txt').innerHTML = '<span class="spin light"></span> Unlocking…';
 
   try {
-    const enc = new TextEncoder();
-    await crypto.subtle.importKey('raw', enc.encode(vp), 'PBKDF2', false, ['deriveKey']);
+    if (vaultCheckAvailable && vaultCheckInitialized && vaultCheck) {
+      const key = await deriveKey(vp, vaultCheck.kdf_salt, vaultCheck.kdf_iterations);
+      const plain = await aesDecrypt(vaultCheck.cipher_blob, vaultCheck.iv, vaultCheck.auth_tag, key);
+      if (plain !== VAULT_CHECK_PLAIN) throw new Error('Incorrect vault passphrase');
+    }
 
     vaultPhraseSession = vp;
 
@@ -569,7 +618,8 @@ async function unlockVault() {
     toast('Vault unlocked — passphrase held in memory only', 'ok');
 
   } catch (e) {
-    errEl.textContent = 'Invalid passphrase';
+    if (e && e.name === 'OperationError') errEl.textContent = 'Incorrect vault passphrase';
+    else errEl.textContent = e.message || 'Incorrect vault passphrase';
     errEl.classList.add('show');
   } finally {
     document.getElementById('vp-txt').textContent = 'Unlock Vault';
@@ -979,13 +1029,46 @@ async function rotateVaultPassphrase(){
       updates.push({id:l.id, cipher_blob:enc.cipher_blob, iv:enc.iv, auth_tag:enc.auth_tag});
     }
 
-    let apply=await postCsrf('/api/vault.php',{action:'rotate_commit', updates});
+    const body = {action:'rotate_commit', updates};
+
+    // Update the vault-check blob so vault unlock continues to work after rotation.
+    // Still zero-knowledge: this is just ciphertext of a constant.
+    let nextVaultCheck = null;
+    if (vaultCheckAvailable) {
+      const saltBytes = new Uint8Array(32);
+      crypto.getRandomValues(saltBytes);
+      const kdf_salt = bytesToB64(saltBytes);
+      const keyVc = await deriveKey(p1, kdf_salt, PBKDF2_ITERS);
+      const encVc = await aesEncrypt(VAULT_CHECK_PLAIN, keyVc);
+      nextVaultCheck = {
+        cipher_blob: encVc.cipher_blob,
+        iv: encVc.iv,
+        auth_tag: encVc.auth_tag,
+        kdf_salt,
+        kdf_iterations: PBKDF2_ITERS,
+      };
+      body.vault_check = nextVaultCheck;
+    }
+
+    let apply = await postCsrf('/api/vault.php', body);
     if(!apply.success && (apply.error_code==='reauth_required' || apply.error_code==='security_setup_required')){
       const ok = await ensureReauth(apply.methods||{});
       if(!ok){errEl.textContent=apply.error||'Re-authentication required';errEl.classList.add('show');return;}
-      apply=await postCsrf('/api/vault.php',{action:'rotate_commit', updates});
+      apply = await postCsrf('/api/vault.php', body);
     }
+
     if(!apply.success){errEl.textContent=apply.error||'Rotation failed';errEl.classList.add('show');return;}
+
+    if (nextVaultCheck) {
+      vaultCheckInitialized = true;
+      vaultCheck = {
+        cipher_blob: nextVaultCheck.cipher_blob,
+        iv: nextVaultCheck.iv,
+        auth_tag: nextVaultCheck.auth_tag,
+        kdf_salt: nextVaultCheck.kdf_salt,
+        kdf_iterations: nextVaultCheck.kdf_iterations,
+      };
+    }
 
     vaultPhraseSession=p1;
     vaultSlotSession=toSlot;

@@ -91,6 +91,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--mono);min-height:1
         <input type="password" id="vault" autocomplete="new-password" placeholder="Something memorable only you know" required>
         <div class="note">Write this down somewhere physical. If you lose it, your codes cannot be recovered.</div>
       </div>
+      <div class="field"><label>Confirm Vault Passphrase</label>
+        <input type="password" id="vault2" autocomplete="new-password" placeholder="Confirm passphrase" required>
+      </div>
       <button class="btn btn-primary" id="btn" type="submit"><span id="btn-txt">Create account</span></button>
     </form>
 
@@ -110,9 +113,62 @@ const btn=document.getElementById('btn');
 const btnTxt=document.getElementById('btn-txt');
 const dev=document.getElementById('dev');
 
+const CSRF = <?= json_encode(getCsrfToken()) ?>;
+const PBKDF2_ITERS = <?= (int)PBKDF2_ITERATIONS ?>;
+const VAULT_CHECK_PLAIN = 'LOCKSMITH_VAULT_CHECK_v1';
+
 function showErr(m){err.textContent=m;err.classList.add('show');}
 function showOk(m){ok.textContent=m;ok.classList.add('show');}
 function clearMsgs(){err.textContent='';ok.textContent='';err.classList.remove('show');ok.classList.remove('show');}
+
+function bytesToB64(bytes){return btoa(String.fromCharCode(...bytes));}
+function b64ToBytes(b64){return Uint8Array.from(atob(b64), c => c.charCodeAt(0));}
+
+async function postCsrf(url, body){
+  const r=await fetch(url,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRF-Token':CSRF},body:JSON.stringify(body)});
+  return r.json();
+}
+
+async function deriveKey(passphrase, kdfSaltB64, iters){
+  const enc = new TextEncoder();
+  const baseKey = await crypto.subtle.importKey('raw', enc.encode(passphrase), 'PBKDF2', false, ['deriveKey']);
+  const saltBytes = b64ToBytes(kdfSaltB64);
+  return crypto.subtle.deriveKey(
+    {name:'PBKDF2', salt:saltBytes, iterations: iters, hash:'SHA-256'},
+    baseKey,
+    {name:'AES-GCM', length:256},
+    false,
+    ['encrypt','decrypt']
+  );
+}
+
+async function aesEncrypt(plain, key){
+  const iv = new Uint8Array(12);
+  crypto.getRandomValues(iv);
+  const enc = new TextEncoder();
+  const ct = new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM', iv, tagLength:128}, key, enc.encode(plain)));
+  const tag = ct.slice(ct.length - 16);
+  const cipher = ct.slice(0, ct.length - 16);
+  return {cipher_blob: bytesToB64(cipher), iv: bytesToB64(iv), auth_tag: bytesToB64(tag)};
+}
+
+async function setupVaultCheck(passphrase){
+  const saltBytes = new Uint8Array(32);
+  crypto.getRandomValues(saltBytes);
+  const kdf_salt = bytesToB64(saltBytes);
+
+  const key = await deriveKey(passphrase, kdf_salt, PBKDF2_ITERS);
+  const enc = await aesEncrypt(VAULT_CHECK_PLAIN, key);
+
+  return postCsrf('api/vault.php', {
+    action:'setup_save',
+    cipher_blob: enc.cipher_blob,
+    iv: enc.iv,
+    auth_tag: enc.auth_tag,
+    kdf_salt,
+    kdf_iterations: PBKDF2_ITERS,
+  });
+}
 
 f.addEventListener('submit', async (e)=>{
   e.preventDefault();
@@ -120,9 +176,13 @@ f.addEventListener('submit', async (e)=>{
 
   const email=document.getElementById('email').value.trim();
   const pwd=document.getElementById('pwd').value;
+  const vault=document.getElementById('vault').value;
+  const vault2=document.getElementById('vault2').value;
 
-  if(!email||!pwd){showErr('Fill in all fields');return;}
+  if(!email||!pwd||!vault||!vault2){showErr('Fill in all fields');return;}
   if(pwd.length<8){showErr('Login password must be at least 8 characters');return;}
+  if(vault.length<10){showErr('Vault passphrase must be at least 10 characters');return;}
+  if(vault!==vault2){showErr('Vault passphrases do not match');return;}
 
   btn.disabled=true;
   btnTxt.innerHTML='<span class="spin"></span>';
@@ -134,6 +194,17 @@ f.addEventListener('submit', async (e)=>{
     if(!j.success){showErr(j.error||'Registration failed');return;}
 
     showOk('Account created. Check your email to verify before using the dashboard.');
+
+    // Initialize vault passphrase check so you can unlock on any device.
+    try{
+      const vc = await setupVaultCheck(vault);
+      if(!vc.success && vc.error){
+        // If this fails (e.g., missing migrations), the Account page can still guide setup.
+        console.warn('Vault setup failed:', vc.error);
+      }
+    }catch(e){
+      console.warn('Vault setup failed:', e);
+    }
 
     if(j.dev_verify_url){
       dev.style.display='block';

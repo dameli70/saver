@@ -31,6 +31,14 @@ CREATE TABLE IF NOT EXISTS users (
     -- Not secret: which vault slot is used for NEW codes (1=primary, 2=rotated)
     vault_active_slot            TINYINT(1) NOT NULL DEFAULT 1,
 
+    -- Vault passphrase check (zero-knowledge): encrypted constant to validate passphrase client-side
+    vault_check_cipher           TEXT NULL,
+    vault_check_iv               VARCHAR(64) NULL,
+    vault_check_auth_tag         VARCHAR(64) NULL,
+    vault_check_salt             VARCHAR(64) NULL,
+    vault_check_iterations       INT UNSIGNED NOT NULL DEFAULT 310000,
+    vault_check_set_at           DATETIME NULL,
+
     -- Email verification (required before using the dashboard)
     email_verified_at            DATETIME NULL,
     email_verification_hash      CHAR(64) NULL,               -- hex sha256(token)

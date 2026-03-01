@@ -104,6 +104,30 @@ function hasVaultActiveSlotColumn(): bool {
     }
 }
 
+function hasVaultCheckColumns(): bool {
+    static $cached = null;
+    if ($cached !== null) return $cached;
+
+    try {
+        $db = getDB();
+        $stmt = $db->query("SELECT 1 FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'users' AND column_name = 'vault_check_cipher' LIMIT 1");
+        $cached = (bool)$stmt->fetchColumn();
+        return $cached;
+    } catch (Throwable) {
+        $cached = false;
+        return false;
+    }
+}
+
+function userHasVaultPassphraseCheck(int $userId): bool {
+    if (!hasVaultCheckColumns()) return false;
+    $db = getDB();
+    $stmt = $db->prepare('SELECT vault_check_cipher FROM users WHERE id = ?');
+    $stmt->execute([(int)$userId]);
+    $u = $stmt->fetch();
+    return $u && !empty($u['vault_check_cipher']);
+}
+
 function currentSessionIdHash(): string {
     startSecureSession();
     return hash_hmac('sha256', session_id(), APP_HMAC_SECRET);
