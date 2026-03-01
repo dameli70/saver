@@ -163,6 +163,41 @@ code{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);pad
       <?php endif; ?>
     </div>
 
+    <div class="card" id="vault-passphrase-card">
+      <div class="row">
+        <div>
+          <div class="k">Vault passphrase</div>
+          <div class="v">Zero-knowledge encryption key (browser-only)</div>
+        </div>
+        <div class="badge wait" id="vault-passphrase-status">⏳</div>
+      </div>
+
+      <div class="small" style="margin-top:12px;">
+        Required to encrypt/decrypt codes. The passphrase is never stored or recoverable by the server.
+      </div>
+
+      <div id="vault-passphrase-unavailable" class="small" style="margin-top:12px;display:none;">
+        Vault passphrase setup is unavailable (missing migrations). Apply migrations in <code>config/migrations/</code>.
+      </div>
+
+      <div id="vault-passphrase-set" class="small" style="margin-top:12px;display:none;">
+        A vault passphrase is set. Keep it safe — if you lose it, your codes cannot be recovered.
+      </div>
+
+      <div id="vault-passphrase-form" style="display:none;">
+        <div class="hr"></div>
+        <div class="field"><label>New vault passphrase <span style="color:var(--muted)">(min 10 chars)</span></label>
+          <input type="password" id="vp1" autocomplete="new-password" placeholder="Something memorable only you know">
+        </div>
+        <div class="field"><label>Confirm vault passphrase</label>
+          <input type="password" id="vp2" autocomplete="new-password" placeholder="Confirm passphrase">
+        </div>
+        <button class="btn btn-primary" id="vp-save"><span id="vp-save-txt">Set vault passphrase</span></button>
+        <div id="vp-ok" class="msg msg-ok"></div>
+        <div id="vp-err" class="msg msg-err"></div>
+      </div>
+    </div>
+
     <?php if ($verified): ?>
     <div class="card" id="totp-card">
       <div class="row">
@@ -339,6 +374,8 @@ btn.addEventListener('click', async ()=>{
   const TOTP_AVAILABLE = <?= $hasTotp ? 'true' : 'false' ?>;
   const PASSKEYS_AVAILABLE = <?= $hasPasskeys ? 'true' : 'false' ?>;
   const TOTP_ENABLED = <?= (!empty($u['totp_enabled_at'])) ? 'true' : 'false' ?>;
+  const PBKDF2_ITERS = <?= (int)PBKDF2_ITERATIONS ?>;
+  const VAULT_CHECK_PLAIN = 'LOCKSMITH_VAULT_CHECK_v1';
 
   function showMsg(el,m){el.textContent=m;el.classList.add('show');}
   function clearMsg(el){el.textContent='';el.classList.remove('show');}
@@ -346,6 +383,128 @@ btn.addEventListener('click', async ()=>{
   async function postCsrf(url, body){
     const r=await fetch(url,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRF-Token':CSRF},body:JSON.stringify(body)});
     return r.json();
+  }
+
+  function bytesToB64(bytes){return btoa(String.fromCharCode(...bytes));}
+  function b64ToBytes(b64){return Uint8Array.from(atob(b64), c => c.charCodeAt(0));}
+
+  async function deriveKey(passphrase, kdfSaltB64, iters){
+    const enc = new TextEncoder();
+    const baseKey = await crypto.subtle.importKey('raw', enc.encode(passphrase), 'PBKDF2', false, ['deriveKey']);
+    const saltBytes = b64ToBytes(kdfSaltB64);
+    return crypto.subtle.deriveKey(
+      {name:'PBKDF2', salt:saltBytes, iterations: iters, hash:'SHA-256'},
+      baseKey,
+      {name:'AES-GCM', length:256},
+      false,
+      ['encrypt','decrypt']
+    );
+  }
+
+  async function aesEncrypt(plain, key){
+    const iv = new Uint8Array(12);
+    crypto.getRandomValues(iv);
+    const enc = new TextEncoder();
+    const ct = new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM', iv, tagLength:128}, key, enc.encode(plain)));
+    const tag = ct.slice(ct.length - 16);
+    const cipher = ct.slice(0, ct.length - 16);
+    return {cipher_blob: bytesToB64(cipher), iv: bytesToB64(iv), auth_tag: bytesToB64(tag)};
+  }
+
+  // ── VAULT PASSPHRASE SETUP ────────────────────
+  const vaultStatus = document.getElementById('vault-passphrase-status');
+  if (vaultStatus) {
+    const unavailable = document.getElementById('vault-passphrase-unavailable');
+    const setNote = document.getElementById('vault-passphrase-set');
+    const form = document.getElementById('vault-passphrase-form');
+    const ok = document.getElementById('vp-ok');
+    const err = document.getElementById('vp-err');
+    const saveBtn = document.getElementById('vp-save');
+    const saveTxt = document.getElementById('vp-save-txt');
+
+    function setBadge(text, ok){
+      vaultStatus.textContent = text;
+      vaultStatus.className = 'badge ' + (ok ? 'ok' : 'wait');
+    }
+
+    async function loadVaultStatus(){
+      clearMsg(ok); clearMsg(err);
+      setBadge('⏳', false);
+      if(unavailable) unavailable.style.display='none';
+      if(setNote) setNote.style.display='none';
+      if(form) form.style.display='none';
+
+      try{
+        const j = await postCsrf('api/vault.php', {action:'setup_status'});
+        if(!j.success){setBadge('⏳', false);return;}
+
+        if(!j.available){
+          setBadge('⏳ Unavailable', false);
+          if(unavailable) unavailable.style.display='block';
+          return;
+        }
+
+        if(j.initialized){
+          setBadge('✓ Set', true);
+          if(setNote) setNote.style.display='block';
+          return;
+        }
+
+        setBadge('⏳ Not set', false);
+        if(form) form.style.display='block';
+
+      }catch{
+        setBadge('⏳', false);
+      }
+    }
+
+    if(saveBtn){
+      saveBtn.addEventListener('click', async ()=>{
+        clearMsg(ok); clearMsg(err);
+
+        const p1 = (document.getElementById('vp1')||{}).value || '';
+        const p2 = (document.getElementById('vp2')||{}).value || '';
+
+        if(!p1 || p1.length < 10){showMsg(err,'Passphrase must be at least 10 characters');return;}
+        if(p1 !== p2){showMsg(err,'Passphrases do not match');return;}
+
+        saveBtn.disabled=true;
+        if(saveTxt) saveTxt.innerHTML='<span class="spin"></span>';
+
+        try{
+          const saltBytes = new Uint8Array(32);
+          crypto.getRandomValues(saltBytes);
+          const kdf_salt = bytesToB64(saltBytes);
+
+          const key = await deriveKey(p1, kdf_salt, PBKDF2_ITERS);
+          const enc = await aesEncrypt(VAULT_CHECK_PLAIN, key);
+
+          const j = await postCsrf('api/vault.php', {
+            action:'setup_save',
+            cipher_blob: enc.cipher_blob,
+            iv: enc.iv,
+            auth_tag: enc.auth_tag,
+            kdf_salt,
+            kdf_iterations: PBKDF2_ITERS,
+          });
+
+          if(!j.success){showMsg(err,j.error||'Failed to set vault passphrase');return;}
+          showMsg(ok,'Vault passphrase set.');
+          if(document.getElementById('vp1')) document.getElementById('vp1').value='';
+          if(document.getElementById('vp2')) document.getElementById('vp2').value='';
+          localStorage.setItem('vault_slot', '1');
+          loadVaultStatus();
+
+        }catch(e){
+          showMsg(err,(e && e.message) ? e.message : 'Failed to set vault passphrase');
+        }finally{
+          saveBtn.disabled=false;
+          if(saveTxt) saveTxt.textContent='Set vault passphrase';
+        }
+      });
+    }
+
+    loadVaultStatus();
   }
 
   // base64url helpers for WebAuthn
@@ -357,6 +516,7 @@ btn.addEventListener('click', async ()=>{
     for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
     return bytes.buffer;
   }
+
   function bufToB64u(buf){
     const bytes = new Uint8Array(buf);
     let s='';

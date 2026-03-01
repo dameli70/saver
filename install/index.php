@@ -250,12 +250,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (empty($errors)) {
         try {
-            $vals['app_hmac_secret'] = bin2hex(random_bytes(32));
-
-            updateConfigFile($configPath, $vals);
+            // Validate DB credentials before writing config/database.php
+            $serverPdo = connectPdoServer($vals['db_host'], $vals['db_charset'], $vals['db_user'], $vals['db_pass']);
 
             if ($vals['init_db'] || $vals['apply_migrations']) {
-                $serverPdo = connectPdoServer($vals['db_host'], $vals['db_charset'], $vals['db_user'], $vals['db_pass']);
                 $dbName = $vals['db_name'];
                 $quotedDb = '`' . str_replace('`', '``', $dbName) . '`';
                 $serverPdo->exec("CREATE DATABASE IF NOT EXISTS {$quotedDb} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
@@ -276,7 +274,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         markMigrationApplied($dbPdo, $f);
                     }
                 }
+            } else {
+                // No schema work requested, but still verify the DB itself is reachable.
+                connectPdoDb($vals['db_host'], $vals['db_name'], $vals['db_charset'], $vals['db_user'], $vals['db_pass']);
             }
+
+            $vals['app_hmac_secret'] = bin2hex(random_bytes(32));
+            updateConfigFile($configPath, $vals);
 
             $flagBody = "installed_at=" . date('c') . "\n";
             $flagBody .= "app_base_path=" . ($basePath ? $basePath : '/') . "\n";

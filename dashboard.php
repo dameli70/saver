@@ -371,10 +371,15 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
 
 <script>
 const CSRF = <?= json_encode($csrf) ?>;
+const PBKDF2_ITERS = <?= (int)PBKDF2_ITERATIONS ?>;
+const VAULT_CHECK_PLAIN = 'LOCKSMITH_VAULT_CHECK_v1';
 
 // The vault passphrase never leaves this script context.
 let vaultPhraseSession = null;
 let vaultSlotSession   = 1;
+let vaultCheckAvailable = false;
+let vaultCheckInitialized = false;
+let vaultCheck = null;
 
 let pendingLock = null;
 let revealedPwd = null;
@@ -519,8 +524,7 @@ async function ensureReauth(methods){
 
 // ─────────────────────────────────────────────────
 //  INIT
-// ─────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', () => {
+// ─────────────────────────────</old_code><new_code>document.addEventListener('DOMContentLoaded', async () => {
   const d = new Date(); d.setDate(d.getDate()+1); d.setSeconds(0,0);
   document.getElementById('g-date').value = d.toISOString().slice(0,16);
 
@@ -537,6 +541,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const storedSlot = parseInt(localStorage.getItem('vault_slot') || '1', 10);
   vaultSlotSession = ([1,2].includes(storedSlot) ? storedSlot : 1);
 
+  await loadVaultSetup();
   checkVaultUnlock();
   loadLocks();
 });
@@ -979,10 +984,15 @@ async function rotateVaultPassphrase(){
       updates.push({id:l.id, cipher_blob:enc.cipher_blob, iv:enc.iv, auth_tag:enc.auth_tag});
     }
 
-    let apply=await postCsrf('/api/vault.php',{action:'rotate_commit', updates});
-    if(!apply.success && (apply.error_code==='reauth_required' || apply.error_code==='security_setup_required')){
-      const ok = await ensureReauth(apply.methods||{});
-      if(!ok){errEl.textContent=apply.error||'Re-authentication required';errEl.classList.add('show');return;}
+    let vaultCheckPayload = null;
+    if (vaultCheckAvailable) {
+      const saltBytes = new Uint8Array(32);
+      crypto.getRandomValues(saltBytes);
+      const kdf_salt = bytesToB64(saltBytes);
+      const keyVc = await deriveKey(p1, kdf_salt, PBKDF2_ITERS);
+      const encVc = await aesEncrypt(VAULT_CHECK_PLAIN, keyVc);
+      vaultCheckPayload = {
+       ;}
       apply=await postCsrf('/api/vault.php',{action:'rotate_commit', updates});
     }
     if(!apply.success){errEl.textContent=apply.error||'Rotation failed';errEl.classList.add('show');return;}

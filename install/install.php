@@ -357,48 +357,60 @@ if (!$nonInteractive) {
     $applyMigrations = $applyMigrations || promptYesNo('Apply migrations now? (safe to re-run)', true);
 }
 
-// ── Write config/database.php ───────────────────────────────
-updateConfigFile($configPath, $vals, $force);
+// ── Validate DB credentials (do not write config on failure) ─
+fwrite(STDOUT, "Validating MySQL credentials...\n");
 
-// ── Initialize DB ──────────────────────────────────────────
-if ($initDb || $applyMigrations) {
-    fwrite(STDOUT, "Connecting to MySQL...\n");
-
+try {
+    // Always validate credentials against the server first (catches wrong user/pass)
     $serverPdo = connectPdoServer($vals['db_host'], $vals['db_charset'], $vals['db_user'], $vals['db_pass']);
 
-    // Create DB if possible. If privileges are missing, the next step will fail clearly.
-    $dbName = $vals['db_name'];
-    $quotedDb = '`' . str_replace('`', '``', $dbName) . '`';
-    $serverPdo->exec("CREATE DATABASE IF NOT EXISTS {$quotedDb} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+    if ($initDb || $applyMigrations) {
+        // Create DB if possible. If privileges are missing, the next step will fail clearly.
+        $dbName = $vals['db_name'];
+        $quotedDb = '`' . str_replace('`', '``', $dbName) . '`';
+        $serverPdo->exec("CREATE DATABASE IF NOT EXISTS {$quotedDb} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
 
-    $dbPdo = connectPdoDb($vals['db_host'], $vals['db_name'], $vals['db_charset'], $vals['db_user'], $vals['db_pass']);
+        $dbPdo = connectPdoDb($vals['db_host'], $vals['db_name'], $vals['db_charset'], $vals['db_user'], $vals['db_pass']);
 
-    if ($initDb) {
-        fwrite(STDOUT, "Applying schema (config/schema.sql)...\n");
-        applySqlFile($dbPdo, $schemaPath, true);
-        fwrite(STDOUT, "Schema applied.\n");
-    }
-
-    if ($applyMigrations) {
-        if (is_dir($migrationsDir)) {
-            ensureMigrationsTable($dbPdo);
-            $files = array_values(array_filter(scandir($migrationsDir) ?: [], fn($f) => preg_match('/\\.sql$/i', $f)));
-            sort($files, SORT_NATURAL);
-
-            foreach ($files as $f) {
-                if (migrationApplied($dbPdo, $f)) continue;
-                $path = $migrationsDir . '/' . $f;
-                fwrite(STDOUT, "Applying migration {$f}...\n");
-                applySqlFile($dbPdo, $path, true);
-                markMigrationApplied($dbPdo, $f);
-            }
-
-            fwrite(STDOUT, "Migrations applied.\n");
-        } else {
-            fwrite(STDOUT, "No migrations directory found; skipping.\n");
+        if ($initDb) {
+            fwrite(STDOUT, "Applying schema (config/schema.sql)...\n");
+            applySqlFile($dbPdo, $schemaPath, true);
+            fwrite(STDOUT, "Schema applied.\n");
         }
+
+        if ($applyMigrations) {
+            if (is_dir($migrationsDir)) {
+                ensureMigrationsTable($dbPdo);
+                $files = array_values(array_filter(scandir($migrationsDir) ?: [], fn($f) => preg_match('/\\.sql$/i', $f)));
+                sort($files, SORT_NATURAL);
+
+                foreach ($files as $f) {
+                    if (migrationApplied($dbPdo, $f)) continue;
+                    $path = $migrationsDir . '/' . $f;
+                    fwrite(STDOUT, "Applying migration {$f}...\n");
+                    applySqlFile($dbPdo, $path, true);
+                    markMigrationApplied($dbPdo, $f);
+                }
+
+                fwrite(STDOUT, "Migrations applied.\n");
+            } else {
+                fwrite(STDOUT, "No migrations directory found; skipping.\n");
+            }
+        }
+    } else {
+        // No schema work requested, but still verify the database is reachable.
+        connectPdoDb($vals['db_host'], $vals['db_name'], $vals['db_charset'], $vals['db_user'], $vals['db_pass']);
     }
+
+} catch (Throwable $e) {
+    fwrite(STDERR, "\nERROR: " . $e->getMessage() . "\n");
+    fwrite(STDERR, "Config was NOT written. Check DB_HOST/DB_USER/DB_PASS (and DB_NAME if not initializing).\n");
+    exit(1);
 }
+
+// ── Write config/database.php ───────────────────────────────
+fwrite(STDOUT, "Writing config/database.php...\n");
+updateConfigFile($configPath, $vals, $force);
 
 $flagPath = $root . '/config/installed.flag';
 $flagBody = "installed_at=" . date('c') . "\n";
