@@ -586,6 +586,15 @@ fun WalletHomeScreen(
                         },
                     )
                 },
+                onMarkUssdCompleted = { p ->
+                    val p1 = p.copy(
+                        stage = "ussd_sent",
+                        lastUssdMessage = p.lastUssdMessage ?: "Marked as completed by user",
+                        updatedAtMs = System.currentTimeMillis(),
+                    )
+                    prefs.savePendingWalletSetup(p1)
+                    pendingSetup = p1
+                },
             )
         }
 
@@ -662,6 +671,7 @@ private fun WalletSetupTab(
     onResumePending: (PendingWalletSetup, String) -> Unit,
     onDiscardPending: (PendingWalletSetup) -> Unit,
     onRetryConfirm: (PendingWalletSetup) -> Unit,
+    onMarkUssdCompleted: (PendingWalletSetup) -> Unit,
 ) {
     val ctx = LocalContext.current
 
@@ -723,6 +733,28 @@ private fun WalletSetupTab(
 
                         SetupStepper(stage = stage)
 
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                        ) {
+                            Switch(
+                                checked = stage >= 1,
+                                enabled = stage == 0,
+                                onCheckedChange = { checked ->
+                                    if (checked) onMarkUssdCompleted(pending)
+                                },
+                            )
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("USSD completed")
+                                Text(
+                                    "Enable if you changed the wallet PIN outside the app and only need to confirm.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
+                        }
+
                         if (!pending.lastUssdMessage.isNullOrBlank()) {
                             Text("Last USSD response:")
                             Text(pending.lastUssdMessage, style = MaterialTheme.typography.bodySmall)
@@ -735,12 +767,13 @@ private fun WalletSetupTab(
                             visualTransformation = PasswordVisualTransformation(),
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
+                            enabled = stage == 0,
                         )
 
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
                             Button(
                                 onClick = { onResumePending(pending, resumePin) },
-                                enabled = resumePin.isNotBlank(),
+                                enabled = stage == 0 && resumePin.isNotBlank(),
                                 modifier = Modifier.weight(1f),
                             ) {
                                 Text("Send USSD + Confirm")
@@ -1231,6 +1264,7 @@ private fun PreviewWalletSetupTabLight() {
             onResumePending = { _, _ -> },
             onDiscardPending = { _ -> },
             onRetryConfirm = { _ -> },
+            onMarkUssdCompleted = { _ -> },
         )
     }
 }
@@ -1254,6 +1288,7 @@ private fun PreviewWalletSetupTabDark() {
             onResumePending = { _, _ -> },
             onDiscardPending = { _ -> },
             onRetryConfirm = { _ -> },
+            onMarkUssdCompleted = { _ -> },
         )
     }
 }
