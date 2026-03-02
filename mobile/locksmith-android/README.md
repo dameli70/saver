@@ -21,6 +21,16 @@ Do not include a trailing `/api`.
 The app requests:
 - `CALL_PHONE` (required for `TelephonyManager.sendUssdRequest`)
 
+## UI previews / screenshots
+This project includes Jetpack Compose previews that you can export as screenshots from Android Studio:
+- `MainActivity.kt`: Login + TOTP previews
+- `WalletHomeScreen.kt`: Wallet Locks tab + Setup tab previews
+
+In Android Studio:
+1. Open the file.
+2. Open the "Preview" tool window.
+3. Use the preview actions to export/save the rendered preview as an image.
+
 ## Notes
 - USSD automation support varies by carrier/OEM.
 - This project does not include the Gradle wrapper JAR (binary). If your environment requires it, generate it via Android Studio or `gradle wrapper`.

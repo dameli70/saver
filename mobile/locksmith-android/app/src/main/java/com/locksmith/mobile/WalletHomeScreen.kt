@@ -3,6 +3,7 @@ package com.locksmith.mobile
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -12,9 +13,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
-import org.json.JSONObject
 import java.security.SecureRandom
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -642,4 +643,119 @@ private fun TotpReauthDialog(
             OutlinedButton(onClick = onDismiss) { Text("Cancel") }
         }
     )
+}
+
+private fun previewCarriers(): List<Carrier> {
+    return listOf(
+        Carrier(
+            id = 1,
+            name = "MTN MoMo",
+            country = "GH",
+            pinType = "numeric",
+            pinLength = 4,
+            ussdChangePinTemplate = "*170*9*{old_pin}*{new_pin}#",
+            ussdBalanceTemplate = "*170#",
+        ),
+        Carrier(
+            id = 2,
+            name = "Airtel Money",
+            country = "KE",
+            pinType = "numeric",
+            pinLength = 5,
+            ussdChangePinTemplate = "*334*5*{old_pin}*{new_pin}#",
+            ussdBalanceTemplate = "*334#",
+        ),
+    )
+}
+
+private fun previewWalletLocks(): List<WalletLock> {
+    return listOf(
+        WalletLock(
+            id = "wl_001",
+            carrierId = 1,
+            carrierName = "MTN MoMo",
+            label = "Main wallet",
+            unlockAt = "2026-03-12 09:00:00",
+            displayStatus = "locked",
+            timeRemaining = TimeRemaining(days = 2, hours = 3, minutes = 12, totalSeconds = 184320),
+        ),
+        WalletLock(
+            id = "wl_002",
+            carrierId = 2,
+            carrierName = "Airtel Money",
+            label = "Savings",
+            unlockAt = "2026-03-02 18:00:00",
+            displayStatus = "unlocked",
+            timeRemaining = null,
+        ),
+        WalletLock(
+            id = "wl_003",
+            carrierId = 1,
+            carrierName = "MTN MoMo",
+            label = "Trip fund",
+            unlockAt = "2026-03-20 09:00:00",
+            displayStatus = "setup_pending",
+            timeRemaining = TimeRemaining(days = 0, hours = 1, minutes = 45, totalSeconds = 6300),
+        ),
+    )
+}
+
+@Preview(name = "Wallet Locks (Light)", showBackground = true, widthDp = 360, heightDp = 760)
+@Composable
+private fun PreviewWalletLocksTabLight() {
+    MaterialTheme {
+        WalletLocksTab(
+            carriers = previewCarriers(),
+            walletLocks = previewWalletLocks(),
+            onCheckBalance = {},
+            onRevealPin = {},
+        )
+    }
+}
+
+@Preview(
+    name = "Wallet Locks (Dark)",
+    showBackground = true,
+    widthDp = 360,
+    heightDp = 760,
+    uiMode = Configuration.UI_MODE_NIGHT_YES,
+)
+@Composable
+private fun PreviewWalletLocksTabDark() {
+    MaterialTheme {
+        WalletLocksTab(
+            carriers = previewCarriers(),
+            walletLocks = previewWalletLocks(),
+            onCheckBalance = {},
+            onRevealPin = {},
+        )
+    }
+}
+
+@Preview(name = "Wallet Setup (Light)", showBackground = true, widthDp = 360, heightDp = 760)
+@Composable
+private fun PreviewWalletSetupTabLight() {
+    MaterialTheme {
+        WalletSetupTab(
+            carriers = previewCarriers(),
+            onLockWallet = { _, _, _, _ -> },
+        )
+    }
+}
+
+@Preview(
+    name = "Wallet Setup (Dark)",
+    showBackground = true,
+    widthDp = 360,
+    heightDp = 760,
+    uiMode = Configuration.UI_MODE_NIGHT_YES,
+)
+@Composable
+private fun PreviewWalletSetupTabDark() {
+    MaterialTheme {
+        WalletSetupTab(
+            carriers = previewCarriers(),
+            onLockWallet = { _, _, _, _ -> },
+        )
+    }
 }

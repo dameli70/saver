@@ -1,6 +1,7 @@
 package com.locksmith.mobile
 
 import android.Manifest
+import android.content.res.Configuration
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -13,6 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 
 class MainActivity : ComponentActivity() {
@@ -241,5 +243,61 @@ private fun TotpScreen(
                 Text(if (busy) "Verifying…" else "Verify")
             }
         }
+    }
+}
+
+@Preview(name = "Login (Light)", showBackground = true, widthDp = 360, heightDp = 760)
+@Composable
+private fun PreviewLoginLight() {
+    MaterialTheme {
+        val ctx = LocalContext.current
+        val prefs = remember { AppPrefs(ctx) }
+        val api = remember { LocksmithApi(ctx, prefs) }
+        LoginScreen(api = api, prefs = prefs, onNeedsTotp = {}, onLoggedIn = {})
+    }
+}
+
+@Preview(
+    name = "Login (Dark)",
+    showBackground = true,
+    widthDp = 360,
+    heightDp = 760,
+    uiMode = Configuration.UI_MODE_NIGHT_YES,
+)
+@Composable
+private fun PreviewLoginDark() {
+    MaterialTheme {
+        val ctx = LocalContext.current
+        val prefs = remember { AppPrefs(ctx) }
+        val api = remember { LocksmithApi(ctx, prefs) }
+        LoginScreen(api = api, prefs = prefs, onNeedsTotp = {}, onLoggedIn = {})
+    }
+}
+
+@Preview(name = "TOTP (Light)", showBackground = true, widthDp = 360, heightDp = 760)
+@Composable
+private fun PreviewTotpLight() {
+    MaterialTheme {
+        val ctx = LocalContext.current
+        val prefs = remember { AppPrefs(ctx) }
+        val api = remember { LocksmithApi(ctx, prefs) }
+        TotpScreen(api = api, onBack = {}, onLoggedIn = {})
+    }
+}
+
+@Preview(
+    name = "TOTP (Dark)",
+    showBackground = true,
+    widthDp = 360,
+    heightDp = 760,
+    uiMode = Configuration.UI_MODE_NIGHT_YES,
+)
+@Composable
+private fun PreviewTotpDark() {
+    MaterialTheme {
+        val ctx = LocalContext.current
+        val prefs = remember { AppPrefs(ctx) }
+        val api = remember { LocksmithApi(ctx, prefs) }
+        TotpScreen(api = api, onBack = {}, onLoggedIn = {})
     }
 }
