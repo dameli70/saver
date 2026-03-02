@@ -695,6 +695,35 @@ private fun WalletSetupTab(
     val dt = remember(date, time) { LocalDateTime.of(date, time) }
     val fmt = remember { DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss") }
 
+    var confirmMarkUssd by remember { mutableStateOf<PendingWalletSetup?>(null) }
+
+    val p = confirmMarkUssd
+    if (p != null) {
+        AlertDialog(
+            onDismissRequest = { confirmMarkUssd = null },
+            title = { Text("Mark USSD as completed?") },
+            text = {
+                Text(
+                    "Only mark this if the wallet PIN was actually changed. " +
+                        "This will enable confirming the setup without sending the USSD from the app.",
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        confirmMarkUssd = null
+                        onMarkUssdCompleted(p)
+                    }
+                ) {
+                    Text("Mark completed")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { confirmMarkUssd = null }) { Text("Cancel") }
+            }
+        )
+    }
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -742,7 +771,7 @@ private fun WalletSetupTab(
                                 checked = stage >= 1,
                                 enabled = stage == 0,
                                 onCheckedChange = { checked ->
-                                    if (checked) onMarkUssdCompleted(pending)
+                                    if (checked) confirmMarkUssd = pending
                                 },
                             )
 
