@@ -1,7 +1,7 @@
 <?php
 // ============================================================
-//  API: POST /api/wallet_confirm.php
-//  Marks a wallet lock as active after the PIN-change USSD completes.
+//  API: POST /api/wallet_fail.php
+//  Marks a wallet lock setup as failed (client-side USSD could not complete).
 // ============================================================
 
 require_once __DIR__ . '/../includes/install_guard.php';
@@ -35,19 +35,19 @@ if (!$hasSetup) {
     jsonResponse(['error' => 'Wallet locks are not available (missing setup columns). Apply migrations in config/migrations/.'], 500);
 }
 
-$stmt = $db->prepare("UPDATE wallet_locks SET setup_status = 'active', setup_confirmed_at = NOW() WHERE id = ? AND user_id = ? AND is_active = 1 AND setup_status = 'pending'");
+$stmt = $db->prepare("UPDATE wallet_locks SET setup_status = 'failed', setup_failed_at = NOW() WHERE id = ? AND user_id = ? AND is_active = 1 AND setup_status = 'pending'");
 $stmt->execute([$walletId, (int)$userId]);
 
 if ($stmt->rowCount() < 1) {
-    // Idempotent confirm: if already active, treat as success.
+    // If it was already marked failed, treat it as idempotent.
     $stmt2 = $db->prepare("SELECT setup_status FROM wallet_locks WHERE id = ? AND user_id = ? AND is_active = 1 LIMIT 1");
     $stmt2->execute([$walletId, (int)$userId]);
     $row = $stmt2->fetch();
-    if ($row && $row['setup_status'] === 'active') {
+    if ($row && $row['setup_status'] === 'failed') {
         jsonResponse(['success' => true]);
     }
-    jsonResponse(['error' => 'Wallet lock not found or already confirmed'], 409);
+    jsonResponse(['error' => 'Wallet lock not found or not pending'], 409);
 }
 
-auditLog('wallet_lock_confirm', $walletId);
+auditLog('wallet_lock_fail', $walletId);
 jsonResponse(['success' => true]);

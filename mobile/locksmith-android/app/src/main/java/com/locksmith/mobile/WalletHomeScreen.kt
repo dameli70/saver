@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -16,6 +17,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import kotlinx.coroutines.delay
 import java.security.SecureRandom
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -39,6 +41,13 @@ fun WalletHomeScreen(
 
     var carriers by remember { mutableStateOf<List<Carrier>>(emptyList()) }
     var walletLocks by remember { mutableStateOf<List<WalletLock>>(emptyList()) }
+
+    var pendingSetup by remember { mutableStateOf<PendingWalletSetup?>(prefs.loadPendingWalletSetup()) }
+
+    val sims = remember { ussdClient.listActiveSims() }
+    var ussdSubId by remember { mutableStateOf(prefs.ussdSubscriptionId) }
+
+    var ussdFallback by remember { mutableStateOf<UssdFallbackDialog?>(null) }
 
     var msg by remember { mutableStateOf<String?>(null) }
     var err by remember { mutableStateOf<String?>(null) }
@@ -65,6 +74,14 @@ fun WalletHomeScreen(
 
     LaunchedEffect(Unit) {
         refreshAll()
+
+        if (ussdSubId == null && sims.isNotEmpty()) {
+            ussdSubId = sims.first().subscriptionId
+        }
+    }
+
+    LaunchedEffect(ussdSubId) {
+        prefs.ussdSubscriptionId = ussdSubId
     }
 
     fun ensureCallPermission(): Boolean {
@@ -116,6 +133,54 @@ fun WalletHomeScreen(
         // This helper just opens a TOTP dialog and runs the action after reauth.
         pendingTotpAction = run
         showTotpDialog = true
+    }
+
+    fun callWithTotpRetry(call: (cb: (Boolean, org.json.JSONObject?) -> Unit) -> Unit, cb: (Boolean, org.json.JSONObject?) -> Unit) {
+        call { ok, j ->
+            if (ok) {
+                cb(true, j)
+                return@call
+            }
+
+            val errorCode = j?.optString("error_code") ?: ""
+            if (errorCode == "reauth_required" && j.optJSONObject("methods")?.optBoolean("totp") == true) {
+                ensureStrongAuthThen { callWithTotpRetry(call, cb) }
+                return@call
+            }
+
+            cb(false, j)
+        }
+    }
+
+    fun sendUssdWithFallback(
+        ussd: String,
+        dialerFallbackUssd: String?,
+        onResult: (String) -> Unit,
+    ) {
+        ussdClient.sendUssd(
+            ussd = ussd,
+            subscriptionId = ussdSubId,
+            onResult = onResult,
+            onError = { e ->
+                ussdFallback = UssdFallbackDialog(
+                    message = e,
+                    dialerUssd = dialerFallbackUssd,
+                    onRetry = {
+                        ussdFallback = null
+                        sendUssdWithFallback(ussd, dialerFallbackUssd, onResult)
+                    },
+                    onOpenDialer = if (dialerFallbackUssd != null) {
+                        {
+                            ussdFallback = null
+                            ussdClient.openDialer(dialerFallbackUssd)
+                        }
+                    } else {
+                        null
+                    },
+                    onDismiss = { ussdFallback = null },
+                )
+            },
+        )
     }
 
     if (showPassDialog) {
@@ -203,6 +268,26 @@ fun WalletHomeScreen(
         )
     }
 
+    val uf = ussdFallback
+    if (uf != null) {
+        AlertDialog(
+            onDismissRequest = uf.onDismiss,
+            title = { Text("USSD failed") },
+            text = { Text(uf.message) },
+            confirmButton = {
+                Button(onClick = uf.onRetry) { Text("Retry") }
+            },
+            dismissButton = {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (uf.onOpenDialer != null) {
+                        OutlinedButton(onClick = uf.onOpenDialer) { Text("Open dialer") }
+                    }
+                    OutlinedButton(onClick = uf.onDismiss) { Text("Close") }
+                }
+            },
+        )
+    }
+
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
             title = { Text("Wallet Locks") },
@@ -215,6 +300,14 @@ fun WalletHomeScreen(
         TabRow(selectedTabIndex = tab) {
             Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Locks") })
             Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Setup") })
+        }
+
+        if (sims.isNotEmpty()) {
+            SimSelector(
+                sims = sims,
+                selectedSubscriptionId = ussdSubId,
+                onSelect = { ussdSubId = it },
+            )
         }
 
         if (msg != null) {
@@ -242,56 +335,50 @@ fun WalletHomeScreen(
                     if (!ensureCallPermission()) return@WalletLocksTab
 
                     msg = "Sending USSD…"
-                    ussdClient.sendUssd(
+                    sendUssdWithFallback(
                         ussd = c.ussdBalanceTemplate,
+                        dialerFallbackUssd = c.ussdBalanceTemplate,
                         onResult = { resp -> msg = resp },
-                        onError = { e -> err = e },
                     )
                 },
                 onRevealPin = { lock ->
-                    fun doReveal() {
-                        api.walletReveal(lock.id) { ok, j ->
-                            if (ok) {
-                                val wl = j?.optJSONObject("wallet_lock")
-                                if (wl == null) {
-                                    err = "Invalid response"
-                                    return@walletReveal
-                                }
-
-                                ensureVaultInitialized { pass ->
-                                    try {
-                                        val key = VaultCrypto.deriveKey(pass, wl.getString("kdf_salt"), wl.getInt("kdf_iterations"))
-                                        val pin = VaultCrypto.decryptAesGcm(
-                                            wl.getString("cipher_blob"),
-                                            wl.getString("iv"),
-                                            wl.getString("auth_tag"),
-                                            key,
-                                        )
-                                        msg = "PIN: $pin"
-                                        refreshAll()
-                                    } catch (t: Throwable) {
-                                        err = "Failed to decrypt"
-                                    }
-                                }
-                                return@walletReveal
+                    callWithTotpRetry(
+                        call = { cb -> api.walletReveal(lock.id, cb) },
+                        cb = { ok, j ->
+                            if (!ok) {
+                                err = j?.optString("error") ?: "Reveal failed"
+                                return@callWithTotpRetry
                             }
 
-                            val errorCode = j?.optString("error_code") ?: ""
-                            if (errorCode == "reauth_required" && j.optJSONObject("methods")?.optBoolean("totp") == true) {
-                                ensureStrongAuthThen { doReveal() }
-                                return@walletReveal
+                            val wl = j?.optJSONObject("wallet_lock")
+                            if (wl == null) {
+                                err = "Invalid response"
+                                return@callWithTotpRetry
                             }
 
-                            err = j?.optString("error") ?: "Reveal failed"
-                        }
-                    }
-
-                    doReveal()
+                            ensureVaultInitialized { pass ->
+                                try {
+                                    val key = VaultCrypto.deriveKey(pass, wl.getString("kdf_salt"), wl.getInt("kdf_iterations"))
+                                    val pin = VaultCrypto.decryptAesGcm(
+                                        wl.getString("cipher_blob"),
+                                        wl.getString("iv"),
+                                        wl.getString("auth_tag"),
+                                        key,
+                                    )
+                                    msg = "PIN: $pin"
+                                    refreshAll()
+                                } catch (t: Throwable) {
+                                    err = "Failed to decrypt"
+                                }
+                            }
+                        },
+                    )
                 },
             )
 
             1 -> WalletSetupTab(
                 carriers = carriers,
+                pending = pendingSetup,
                 onLockWallet = { carrier, currentPin, unlockAt, label ->
                     if (!ensureCallPermission()) return@WalletSetupTab
 
@@ -308,73 +395,138 @@ fun WalletHomeScreen(
                                 val key = VaultCrypto.deriveKey(passphrase, salt, iters)
                                 val enc = VaultCrypto.encryptAesGcm(newPin, key)
 
-                                fun doCreate() {
-                                    api.walletCreate(
-                                        carrierId = carrier.id,
-                                        label = label,
-                                        unlockAt = unlockAt,
-                                        cipher = enc,
-                                        kdfSalt = salt,
-                                        kdfIterations = iters,
-                                    ) { ok, j ->
+                                callWithTotpRetry(
+                                    call = { cb ->
+                                        api.walletCreate(
+                                            carrierId = carrier.id,
+                                            label = label,
+                                            unlockAt = unlockAt,
+                                            cipher = enc,
+                                            kdfSalt = salt,
+                                            kdfIterations = iters,
+                                            cb = cb,
+                                        )
+                                    },
+                                    cb = { ok, j ->
                                         if (!ok) {
-                                            val errorCode = j?.optString("error_code") ?: ""
-                                            if (errorCode == "reauth_required" && j.optJSONObject("methods")?.optBoolean("totp") == true) {
-                                                ensureStrongAuthThen { doCreate() }
-                                                return@walletCreate
-                                            }
-
                                             err = j?.optString("error") ?: "Failed"
-                                            return@walletCreate
+                                            return@callWithTotpRetry
                                         }
 
                                         val walletLockId = j?.optString("wallet_lock_id") ?: ""
                                         if (walletLockId.isBlank()) {
                                             err = "Invalid response"
-                                            return@walletCreate
+                                            return@callWithTotpRetry
                                         }
+
+                                        val devEnc = DeviceCrypto.encrypt(newPin)
+                                        prefs.savePendingWalletSetup(
+                                            PendingWalletSetup(
+                                                walletLockId = walletLockId,
+                                                carrierId = carrier.id,
+                                                unlockAt = unlockAt,
+                                                label = label,
+                                                newPinCipherB64 = devEnc.cipherB64,
+                                                newPinIvB64 = devEnc.ivB64,
+                                                createdAtMs = System.currentTimeMillis(),
+                                            )
+                                        )
+                                        pendingSetup = prefs.loadPendingWalletSetup()
 
                                         val ussd = carrier.ussdChangePinTemplate
                                             .replace("{old_pin}", currentPin)
                                             .replace("{new_pin}", newPin)
 
                                         msg = "Sending PIN-change USSD…"
-                                        ussdClient.sendUssd(
+                                        sendUssdWithFallback(
                                             ussd = ussd,
+                                            dialerFallbackUssd = null,
                                             onResult = { resp ->
                                                 msg = resp
 
-                                                fun doConfirm() {
-                                                    api.walletConfirm(walletLockId) { ok2, j2 ->
+                                                callWithTotpRetry(
+                                                    call = { cb2 -> api.walletConfirm(walletLockId, cb2) },
+                                                    cb = { ok2, j2 ->
                                                         if (!ok2) {
-                                                            val errorCode2 = j2?.optString("error_code") ?: ""
-                                                            if (errorCode2 == "reauth_required" && j2.optJSONObject("methods")?.optBoolean("totp") == true) {
-                                                                ensureStrongAuthThen { doConfirm() }
-                                                                return@walletConfirm
-                                                            }
                                                             err = j2?.optString("error") ?: "Failed to confirm"
-                                                            return@walletConfirm
+                                                            return@callWithTotpRetry
                                                         }
 
+                                                        prefs.clearPendingWalletSetup()
+                                                        pendingSetup = null
                                                         msg = "Wallet locked until $unlockAt"
                                                         refreshAll()
-                                                    }
-                                                }
-
-                                                doConfirm()
+                                                    },
+                                                )
                                             },
-                                            onError = { e2 -> err = e2 },
                                         )
-                                    }
-                                }
-
-                                doCreate()
+                                    },
+                                )
 
                             } catch (t: Throwable) {
                                 err = "Encryption failed"
                             }
                         }
                     }
+                },
+                onResumePending = { p, currentPin ->
+                    if (!ensureCallPermission()) return@WalletSetupTab
+
+                    val carrier = carriers.firstOrNull { it.id == p.carrierId }
+                    if (carrier == null) {
+                        err = "Carrier not found"
+                        return@WalletSetupTab
+                    }
+
+                    val newPin = try {
+                        DeviceCrypto.decrypt(DeviceEnc(cipherB64 = p.newPinCipherB64, ivB64 = p.newPinIvB64))
+                    } catch (_: Throwable) {
+                        err = "Failed to resume setup (device storage)"
+                        return@WalletSetupTab
+                    }
+
+                    val ussd = carrier.ussdChangePinTemplate
+                        .replace("{old_pin}", currentPin)
+                        .replace("{new_pin}", newPin)
+
+                    msg = "Sending PIN-change USSD…"
+                    sendUssdWithFallback(
+                        ussd = ussd,
+                        dialerFallbackUssd = null,
+                        onResult = { resp ->
+                            msg = resp
+
+                            callWithTotpRetry(
+                                call = { cb2 -> api.walletConfirm(p.walletLockId, cb2) },
+                                cb = { ok2, j2 ->
+                                    if (!ok2) {
+                                        err = j2?.optString("error") ?: "Failed to confirm"
+                                        return@callWithTotpRetry
+                                    }
+
+                                    prefs.clearPendingWalletSetup()
+                                    pendingSetup = null
+                                    msg = "Wallet locked until ${p.unlockAt}"
+                                    refreshAll()
+                                },
+                            )
+                        },
+                    )
+                },
+                onDiscardPending = { p ->
+                    callWithTotpRetry(
+                        call = { cb -> api.walletFail(p.walletLockId, cb) },
+                        cb = { ok, j ->
+                            if (!ok) {
+                                err = j?.optString("error") ?: "Failed"
+                                return@callWithTotpRetry
+                            }
+                            prefs.clearPendingWalletSetup()
+                            pendingSetup = null
+                            msg = "Pending setup discarded"
+                            refreshAll()
+                        },
+                    )
                 },
             )
         }
@@ -419,7 +571,7 @@ private fun WalletLocksTab(
 
                     val tr = lock.timeRemaining
                     if (tr != null) {
-                        Text("Remaining: ${tr.days}d ${tr.hours}h ${tr.minutes}m")
+                        ServerCountdown(totalSeconds = tr.totalSeconds)
                     }
 
                     Spacer(modifier = Modifier.height(10.dp))
@@ -445,110 +597,251 @@ private fun WalletLocksTab(
 @Composable
 private fun WalletSetupTab(
     carriers: List<Carrier>,
+    pending: PendingWalletSetup?,
     onLockWallet: (carrier: Carrier, currentPin: String, unlockAt: String, label: String?) -> Unit,
+    onResumePending: (PendingWalletSetup, String) -> Unit,
+    onDiscardPending: (PendingWalletSetup) -> Unit,
 ) {
     val ctx = LocalContext.current
 
-    var selectedCarrier by remember { mutableStateOf<Carrier?>(null) }
+    var resumePin by rememberSaveable { mutableStateOf("") }
+
+    var selectedCarrierId by rememberSaveable { mutableStateOf<Int?>(null) }
+    val selectedCarrier = remember(selectedCarrierId, carriers) {
+        carriers.firstOrNull { it.id == selectedCarrierId }
+    }
     var carrierMenu by remember { mutableStateOf(false) }
 
-    var label by remember { mutableStateOf("") }
-    var currentPin by remember { mutableStateOf("") }
+    var label by rememberSaveable { mutableStateOf("") }
+    var currentPin by rememberSaveable { mutableStateOf("") }
 
-    var date by remember { mutableStateOf(LocalDate.now().plusDays(1)) }
-    var time by remember { mutableStateOf(LocalTime.of(9, 0)) }
+    var dateStr by rememberSaveable { mutableStateOf(LocalDate.now().plusDays(1).toString()) }
+    var timeStr by rememberSaveable { mutableStateOf("09:00") }
+
+    val date = remember(dateStr) { runCatching { LocalDate.parse(dateStr) }.getOrElse { LocalDate.now().plusDays(1) } }
+    val time = remember(timeStr) { runCatching { LocalTime.parse(timeStr) }.getOrElse { LocalTime.of(9, 0) } }
 
     val dt = remember(date, time) { LocalDateTime.of(date, time) }
     val fmt = remember { DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss") }
 
-    Column(
+    LazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("Create wallet lock", style = MaterialTheme.typography.titleMedium)
+        if (pending != null) {
+            item {
+                Card {
+                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text("Pending setup detected", fontWeight = FontWeight.SemiBold)
+                        Text(pending.label ?: "Wallet lock")
+                        Text("Unlock at: ${pending.unlockAt}")
+
+                        OutlinedTextField(
+                            value = resumePin,
+                            onValueChange = { resumePin = it },
+                            label = { Text("Current wallet PIN (for USSD)") },
+                            visualTransformation = PasswordVisualTransformation(),
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                        )
+
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Button(
+                                onClick = { onResumePending(pending, resumePin) },
+                                enabled = resumePin.isNotBlank(),
+                            ) {
+                                Text("Continue")
+                            }
+                            OutlinedButton(onClick = { onDiscardPending(pending) }) {
+                                Text("Discard")
+                            }
+                        }
+
+                        Text(
+                            "If setup was interrupted, you can continue here. The generated PIN is kept encrypted in device storage and is not shown.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
+            }
+        }
+
+        item {
+            Text("Create wallet lock", style = MaterialTheme.typography.titleMedium)
+        }
+
+        item {
+            Text(
+                "Unlock timing is enforced by the server. Choose a date/time you can rely on.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+
+        item {
+            Box {
+                OutlinedButton(onClick = { carrierMenu = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text(selectedCarrier?.name ?: "Select carrier")
+                }
+
+                DropdownMenu(expanded = carrierMenu, onDismissRequest = { carrierMenu = false }) {
+                    carriers.forEach { c ->
+                        DropdownMenuItem(
+                            text = { Text(c.name) },
+                            onClick = {
+                                selectedCarrierId = c.id
+                                carrierMenu = false
+                            }
+                        )
+                    }
+                }
+            }
+        }
+
+        item {
+            OutlinedTextField(
+                value = label,
+                onValueChange = { label = it },
+                label = { Text("Label (optional)") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+            )
+        }
+
+        item {
+            OutlinedTextField(
+                value = currentPin,
+                onValueChange = { currentPin = it },
+                label = { Text("Current wallet PIN") },
+                visualTransformation = PasswordVisualTransformation(),
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+            )
+        }
+
+        item {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(
+                    onClick = {
+                        DatePickerDialog(
+                            ctx,
+                            { _, y, m, d -> dateStr = LocalDate.of(y, m + 1, d).toString() },
+                            date.year,
+                            date.monthValue - 1,
+                            date.dayOfMonth,
+                        ).show()
+                    },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Date: ${date}")
+                }
+
+                OutlinedButton(
+                    onClick = {
+                        TimePickerDialog(
+                            ctx,
+                            { _, hh, mm -> timeStr = "%02d:%02d".format(hh, mm) },
+                            time.hour,
+                            time.minute,
+                            true,
+                        ).show()
+                    },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Time: ${timeStr}")
+                }
+            }
+        }
+
+        item {
+            Text("Unlock at: ${dt.format(fmt)}")
+        }
+
+        item {
+            Button(
+                onClick = {
+                    val c = selectedCarrier ?: return@Button
+                    if (currentPin.isBlank()) return@Button
+                    val unlockAt = dt.format(fmt)
+                    onLockWallet(c, currentPin, unlockAt, label.trim().ifEmpty { null })
+                },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = selectedCarrier != null && currentPin.isNotBlank(),
+            ) {
+                Text("Lock wallet")
+            }
+        }
+
+        item {
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+    }
+}
+
+private data class UssdFallbackDialog(
+    val message: String,
+    val dialerUssd: String?,
+    val onRetry: () -> Unit,
+    val onOpenDialer: (() -> Unit)?,
+    val onDismiss: () -> Unit,
+)
+
+@Composable
+private fun SimSelector(
+    sims: List<SimSlot>,
+    selectedSubscriptionId: Int?,
+    onSelect: (Int?) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    val selected = sims.firstOrNull { it.subscriptionId == selectedSubscriptionId }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text("USSD SIM", style = MaterialTheme.typography.bodySmall)
 
         Box {
-            OutlinedButton(onClick = { carrierMenu = true }, modifier = Modifier.fillMaxWidth()) {
-                Text(selectedCarrier?.name ?: "Select carrier")
+            TextButton(onClick = { expanded = true }) {
+                Text(selected?.displayName ?: (sims.firstOrNull()?.displayName ?: "Default"))
             }
 
-            DropdownMenu(expanded = carrierMenu, onDismissRequest = { carrierMenu = false }) {
-                carriers.forEach { c ->
+            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                sims.forEach { s ->
                     DropdownMenuItem(
-                        text = { Text(c.name) },
+                        text = { Text(s.displayName) },
                         onClick = {
-                            selectedCarrier = c
-                            carrierMenu = false
+                            expanded = false
+                            onSelect(s.subscriptionId)
                         }
                     )
                 }
             }
         }
+    }
+}
 
-        OutlinedTextField(
-            value = label,
-            onValueChange = { label = it },
-            label = { Text("Label (optional)") },
-            modifier = Modifier.fillMaxWidth(),
-        )
+@Composable
+private fun ServerCountdown(totalSeconds: Long) {
+    var remaining by remember(totalSeconds) { mutableStateOf(totalSeconds) }
 
-        OutlinedTextField(
-            value = currentPin,
-            onValueChange = { currentPin = it },
-            label = { Text("Current wallet PIN") },
-            visualTransformation = PasswordVisualTransformation(),
-            modifier = Modifier.fillMaxWidth(),
-        )
-
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-            OutlinedButton(
-                onClick = {
-                    DatePickerDialog(
-                        ctx,
-                        { _, y, m, d -> date = LocalDate.of(y, m + 1, d) },
-                        date.year,
-                        date.monthValue - 1,
-                        date.dayOfMonth,
-                    ).show()
-                },
-                modifier = Modifier.weight(1f)
-            ) {
-                Text("Date: ${date}")
-            }
-
-            OutlinedButton(
-                onClick = {
-                    TimePickerDialog(
-                        ctx,
-                        { _, hh, mm -> time = LocalTime.of(hh, mm) },
-                        time.hour,
-                        time.minute,
-                        true,
-                    ).show()
-                },
-                modifier = Modifier.weight(1f)
-            ) {
-                Text("Time: %02d:%02d".format(time.hour, time.minute))
-            }
-        }
-
-        Text("Unlock at: ${dt.format(fmt)}")
-
-        Button(
-            onClick = {
-                val c = selectedCarrier ?: return@Button
-                if (currentPin.isBlank()) return@Button
-                val unlockAt = dt.format(fmt)
-                onLockWallet(c, currentPin, unlockAt, label.trim().ifEmpty { null })
-            },
-            modifier = Modifier.fillMaxWidth(),
-            enabled = selectedCarrier != null && currentPin.isNotBlank(),
-        ) {
-            Text("Lock wallet")
+    LaunchedEffect(totalSeconds) {
+        remaining = totalSeconds
+        while (remaining > 0) {
+            delay(1000)
+            remaining -= 1
         }
     }
+
+    val days = remaining / 86400
+    val hours = (remaining % 86400) / 3600
+    val mins = (remaining % 3600) / 60
+
+    Text("Remaining: ${days}d ${hours}h ${mins}m")
 }
 
 private fun generateCarrierPin(carrier: Carrier): String {
@@ -700,6 +993,18 @@ private fun previewWalletLocks(): List<WalletLock> {
     )
 }
 
+private fun previewPendingSetup(): PendingWalletSetup? {
+    return PendingWalletSetup(
+        walletLockId = "wl_pending_001",
+        carrierId = 1,
+        unlockAt = "2026-03-12 09:00:00",
+        label = "Resume example",
+        newPinCipherB64 = "AA==",
+        newPinIvB64 = "AA==",
+        createdAtMs = System.currentTimeMillis(),
+    )
+}
+
 @Preview(name = "Wallet Locks (Light)", showBackground = true, widthDp = 360, heightDp = 760)
 @Composable
 private fun PreviewWalletLocksTabLight() {
@@ -738,7 +1043,10 @@ private fun PreviewWalletSetupTabLight() {
     MaterialTheme {
         WalletSetupTab(
             carriers = previewCarriers(),
+            pending = previewPendingSetup(),
             onLockWallet = { _, _, _, _ -> },
+            onResumePending = { _, _ -> },
+            onDiscardPending = { _ -> },
         )
     }
 }
@@ -755,7 +1063,10 @@ private fun PreviewWalletSetupTabDark() {
     MaterialTheme {
         WalletSetupTab(
             carriers = previewCarriers(),
+            pending = previewPendingSetup(),
             onLockWallet = { _, _, _, _ -> },
+            onResumePending = { _, _ -> },
+            onDiscardPending = { _ -> },
         )
     }
 }

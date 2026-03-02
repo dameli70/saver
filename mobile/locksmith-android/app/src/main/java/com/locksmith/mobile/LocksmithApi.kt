@@ -8,8 +8,11 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.Response
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.IOException
+import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 
 class LocksmithApi(
@@ -22,6 +25,11 @@ class LocksmithApi(
 
     private var client: OkHttpClient = OkHttpClient.Builder()
         .cookieJar(cookieJar)
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(20, TimeUnit.SECONDS)
+        .writeTimeout(20, TimeUnit.SECONDS)
+        .callTimeout(30, TimeUnit.SECONDS)
+        .retryOnConnectionFailure(true)
         .build()
 
     private var csrfToken: String? = null
@@ -45,7 +53,7 @@ class LocksmithApi(
         thread {
             try {
                 val body = JSONObject().put("action", "logout").toString()
-                requestJson("POST", "/api/auth.php", body, addCsrf = false)
+                requestJson("POST", "/api/auth.php", body, addCsrf = false, idempotent = true)
             } catch (_: Throwable) {
             }
         }
@@ -66,7 +74,7 @@ class LocksmithApi(
                     .put("login_password", password)
                     .toString()
 
-                val j = requestJson("POST", "/api/auth.php", body, addCsrf = false)
+                val j = requestJson("POST", "/api/auth.php", body, addCsrf = false, idempotent = false)
 
                 if (j.optBoolean("success") && j.optBoolean("needs_totp")) {
                     cbOnMain { cb(LoginResult.NeedsTotp) }
@@ -99,7 +107,7 @@ class LocksmithApi(
                     .put("code", code)
                     .toString()
 
-                val j = requestJson("POST", "/api/auth.php", body, addCsrf = false)
+                val j = requestJson("POST", "/api/auth.php", body, addCsrf = false, idempotent = false)
                 if (!j.optBoolean("success")) {
                     cbOnMain { cb(false, j.optString("error", "TOTP failed")) }
                     return@thread
@@ -120,7 +128,7 @@ class LocksmithApi(
 
     fun refreshCsrf(): Boolean {
         return try {
-            val j = requestJson("GET", "/api/csrf.php", null, addCsrf = false)
+            val j = requestJson("GET", "/api/csrf.php", null, addCsrf = false, idempotent = true)
             if (!j.optBoolean("success")) return false
             csrfToken = j.optString("csrf_token", null)
             csrfToken != null
@@ -132,7 +140,7 @@ class LocksmithApi(
     fun getCarriers(cb: (List<Carrier>?, String?) -> Unit) {
         thread {
             try {
-                val j = requestJson("GET", "/api/carriers.php", null, addCsrf = false)
+                val j = requestJson("GET", "/api/carriers.php", null, addCsrf = false, idempotent = true)
                 if (!j.optBoolean("success")) {
                     cbOnMain { cb(null, j.optString("error", "Failed")) }
                     return@thread
@@ -165,7 +173,7 @@ class LocksmithApi(
     fun getWalletLocks(cb: (List<WalletLock>?, String?) -> Unit) {
         thread {
             try {
-                val j = requestJson("GET", "/api/wallet_locks.php", null, addCsrf = false)
+                val j = requestJson("GET", "/api/wallet_locks.php", null, addCsrf = false, idempotent = true)
                 if (!j.optBoolean("success")) {
                     cbOnMain { cb(null, j.optString("error", "Failed")) }
                     return@thread
@@ -210,7 +218,7 @@ class LocksmithApi(
     fun getSalt(cb: (String?, Int?, String?) -> Unit) {
         thread {
             try {
-                val j = requestJson("GET", "/api/salt.php", null, addCsrf = false)
+                val j = requestJson("GET", "/api/salt.php", null, addCsrf = false, idempotent = true)
                 if (!j.optBoolean("success")) {
                     cbOnMain { cb(null, null, j.optString("error", "Failed")) }
                     return@thread
@@ -226,7 +234,7 @@ class LocksmithApi(
         thread {
             try {
                 val body = JSONObject().put("action", "setup_status").toString()
-                val j = requestJson("POST", "/api/vault.php", body, addCsrf = true)
+                val j = requestJson("POST", "/api/vault.php", body, addCsrf = true, idempotent = true)
                 if (!j.optBoolean("success")) {
                     cbOnMain { cb(null, j.optString("error", "Failed")) }
                     return@thread
@@ -264,7 +272,7 @@ class LocksmithApi(
                     .put("code", code)
                     .toString()
 
-                val j = requestJson("POST", "/api/totp.php", body, addCsrf = true)
+                val j = requestJson("POST", "/api/totp.php", body, addCsrf = true, idempotent = false)
                 if (!j.optBoolean("success")) {
                     cbOnMain { cb(false, j.optString("error", "Reauth failed")) }
                     return@thread
@@ -288,7 +296,7 @@ class LocksmithApi(
                     .put("kdf_iterations", kdfIterations)
                     .toString()
 
-                val j = requestJson("POST", "/api/vault.php", body, addCsrf = true)
+                val j = requestJson("POST", "/api/vault.php", body, addCsrf = true, idempotent = false)
                 if (!j.optBoolean("success")) {
                     cbOnMain { cb(false, j.optString("error", "Failed")) }
                     return@thread
@@ -322,7 +330,7 @@ class LocksmithApi(
                     .put("kdf_iterations", kdfIterations)
                     .toString()
 
-                val j = requestJson("POST", "/api/wallet_create.php", body, addCsrf = true)
+                val j = requestJson("POST", "/api/wallet_create.php", body, addCsrf = true, idempotent = false)
                 cbOnMain { cb(j.optBoolean("success"), j) }
             } catch (e: Throwable) {
                 cbOnMain { cb(false, JSONObject().put("error", e.message ?: "Failed")) }
@@ -334,7 +342,7 @@ class LocksmithApi(
         thread {
             try {
                 val body = JSONObject().put("wallet_lock_id", walletLockId).toString()
-                val j = requestJson("POST", "/api/wallet_confirm.php", body, addCsrf = true)
+                val j = requestJson("POST", "/api/wallet_confirm.php", body, addCsrf = true, idempotent = true)
                 cbOnMain { cb(j.optBoolean("success"), j) }
             } catch (e: Throwable) {
                 cbOnMain { cb(false, JSONObject().put("error", e.message ?: "Failed")) }
@@ -346,7 +354,7 @@ class LocksmithApi(
         thread {
             try {
                 val body = JSONObject().put("wallet_lock_id", walletLockId).toString()
-                val j = requestJson("POST", "/api/wallet_reveal.php", body, addCsrf = true)
+                val j = requestJson("POST", "/api/wallet_reveal.php", body, addCsrf = true, idempotent = false)
                 cbOnMain { cb(j.optBoolean("success"), j) }
             } catch (e: Throwable) {
                 cbOnMain { cb(false, JSONObject().put("error", e.message ?: "Failed")) }
@@ -354,33 +362,97 @@ class LocksmithApi(
         }
     }
 
-    private fun requestJson(method: String, path: String, jsonBody: String?, addCsrf: Boolean): JSONObject {
+    fun walletFail(walletLockId: String, cb: (Boolean, JSONObject?) -> Unit) {
+        thread {
+            try {
+                val body = JSONObject().put("wallet_lock_id", walletLockId).toString()
+                val j = requestJson("POST", "/api/wallet_fail.php", body, addCsrf = true, idempotent = true)
+                cbOnMain { cb(j.optBoolean("success"), j) }
+            } catch (e: Throwable) {
+                cbOnMain { cb(false, JSONObject().put("error", e.message ?: "Failed")) }
+            }
+        }
+    }
+
+    private data class HttpJson(val code: Int, val text: String, val json: JSONObject?)
+
+    private fun decodeJson(text: String): JSONObject? {
+        if (text.isBlank()) return null
+        return try {
+            JSONObject(text)
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    private fun execute(req: Request): HttpJson {
+        client.newCall(req).execute().use { resp: Response ->
+            val text = resp.body?.string() ?: ""
+            return HttpJson(code = resp.code, text = text, json = decodeJson(text))
+        }
+    }
+
+    private fun requestJson(
+        method: String,
+        path: String,
+        jsonBody: String?,
+        addCsrf: Boolean,
+        idempotent: Boolean,
+    ): JSONObject {
         val url = apiUrl(path)
 
-        val builder = Request.Builder().url(url)
+        fun build(csrf: String?): Request {
+            val builder = Request.Builder().url(url)
 
-        if (addCsrf) {
-            val csrf = csrfToken
-            if (csrf == null) {
-                throw IllegalStateException("Missing CSRF token. Re-login.")
+            if (addCsrf) {
+                val token = csrf ?: throw IllegalStateException("Missing CSRF token. Re-login.")
+                builder.header("X-CSRF-Token", token)
             }
-            builder.header("X-CSRF-Token", csrf)
+
+            return if (method.uppercase() == "POST") {
+                val media = "application/json".toMediaType()
+                val body = (jsonBody ?: "{}").toRequestBody(media)
+                builder.post(body).build()
+            } else {
+                builder.get().build()
+            }
         }
 
-        val req = if (method.uppercase() == "POST") {
-            val media = "application/json".toMediaType()
-            val body = (jsonBody ?: "{}").toRequestBody(media)
-            builder.post(body).build()
-        } else {
-            builder.get().build()
-        }
+        val retries = if (idempotent) 2 else 0
+        var attempt = 0
+        var csrf = csrfToken
 
-        client.newCall(req).execute().use { resp ->
-            val text = resp.body?.string() ?: ""
-            if (text.isBlank()) {
-                throw IllegalStateException("Empty response")
+        while (true) {
+            try {
+                val res = execute(build(csrf))
+
+                // CSRF can expire mid-session. Refresh and retry once.
+                if (addCsrf && res.code == 403 && res.json?.optString("error") == "Invalid CSRF token") {
+                    if (refreshCsrf()) {
+                        csrf = csrfToken
+                        attempt++
+                        if (attempt <= retries + 1) continue
+                    }
+                }
+
+                val j = res.json
+                if (j != null) return j
+
+                if (res.text.isBlank()) {
+                    return JSONObject().put("success", false).put("error", "Empty response")
+                }
+
+                return JSONObject().put("success", false).put("error", "Invalid JSON response")
+
+            } catch (e: IOException) {
+                if (attempt >= retries) {
+                    throw e
+                }
+                val sleepMs = if (attempt == 0) 400L else 1200L
+                Thread.sleep(sleepMs)
+                attempt++
+                continue
             }
-            return JSONObject(text)
         }
     }
 }

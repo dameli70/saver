@@ -43,6 +43,16 @@ data class WalletCipher(
     val kdfIterations: Int,
 )
 
+data class PendingWalletSetup(
+    val walletLockId: String,
+    val carrierId: Int,
+    val unlockAt: String,
+    val label: String?,
+    val newPinCipherB64: String,
+    val newPinIvB64: String,
+    val createdAtMs: Long,
+)
+
 sealed class LoginResult {
     data object Success : LoginResult()
     data object NeedsTotp : LoginResult()
