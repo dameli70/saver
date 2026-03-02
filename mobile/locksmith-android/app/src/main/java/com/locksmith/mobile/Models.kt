@@ -50,7 +50,10 @@ data class PendingWalletSetup(
     val label: String?,
     val newPinCipherB64: String,
     val newPinIvB64: String,
-    val createdAtMs: Long,
+    // "pending" (server record created) or "ussd_sent" (USSD returned a response)
+    val stage: String,
+    val lastUssdMessage: String?,
+    val updatedAtMs: Long,
 )
 
 sealed class LoginResult {

@@ -7,6 +7,7 @@ import android.content.res.Configuration
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -43,6 +44,7 @@ fun WalletHomeScreen(
     var walletLocks by remember { mutableStateOf<List<WalletLock>>(emptyList()) }
 
     var pendingSetup by remember { mutableStateOf<PendingWalletSetup?>(prefs.loadPendingWalletSetup()) }
+    var confirmedBanner by remember { mutableStateOf<ConfirmedSetupBanner?>(null) }
 
     val sims = remember { ussdClient.listActiveSims() }
     var ussdSubId by remember { mutableStateOf(prefs.ussdSubscriptionId) }
@@ -82,6 +84,14 @@ fun WalletHomeScreen(
 
     LaunchedEffect(ussdSubId) {
         prefs.ussdSubscriptionId = ussdSubId
+    }
+
+    LaunchedEffect(confirmedBanner?.shownAtMs) {
+        val at = confirmedBanner?.shownAtMs ?: return@LaunchedEffect
+        delay(10_000)
+        if (confirmedBanner?.shownAtMs == at) {
+            confirmedBanner = null
+        }
     }
 
     fun ensureCallPermission(): Boolean {
@@ -180,6 +190,14 @@ fun WalletHomeScreen(
                     onDismiss = { ussdFallback = null },
                 )
             },
+        )
+    }
+
+    fun markConfirmed(label: String?, unlockAt: String) {
+        confirmedBanner = ConfirmedSetupBanner(
+            label = label,
+            unlockAt = unlockAt,
+            shownAtMs = System.currentTimeMillis(),
         )
     }
 
@@ -379,6 +397,8 @@ fun WalletHomeScreen(
             1 -> WalletSetupTab(
                 carriers = carriers,
                 pending = pendingSetup,
+                confirmed = confirmedBanner,
+                onDismissConfirmed = { confirmedBanner = null },
                 onLockWallet = { carrier, currentPin, unlockAt, label ->
                     if (!ensureCallPermission()) return@WalletSetupTab
 
@@ -420,18 +440,19 @@ fun WalletHomeScreen(
                                         }
 
                                         val devEnc = DeviceCrypto.encrypt(newPin)
-                                        prefs.savePendingWalletSetup(
-                                            PendingWalletSetup(
-                                                walletLockId = walletLockId,
-                                                carrierId = carrier.id,
-                                                unlockAt = unlockAt,
-                                                label = label,
-                                                newPinCipherB64 = devEnc.cipherB64,
-                                                newPinIvB64 = devEnc.ivB64,
-                                                createdAtMs = System.currentTimeMillis(),
-                                            )
+                                        val p0 = PendingWalletSetup(
+                                            walletLockId = walletLockId,
+                                            carrierId = carrier.id,
+                                            unlockAt = unlockAt,
+                                            label = label,
+                                            newPinCipherB64 = devEnc.cipherB64,
+                                            newPinIvB64 = devEnc.ivB64,
+                                            stage = "pending",
+                                            lastUssdMessage = null,
+                                            updatedAtMs = System.currentTimeMillis(),
                                         )
-                                        pendingSetup = prefs.loadPendingWalletSetup()
+                                        prefs.savePendingWalletSetup(p0)
+                                        pendingSetup = p0
 
                                         val ussd = carrier.ussdChangePinTemplate
                                             .replace("{old_pin}", currentPin)
@@ -444,6 +465,17 @@ fun WalletHomeScreen(
                                             onResult = { resp ->
                                                 msg = resp
 
+                                                val p = prefs.loadPendingWalletSetup()
+                                                if (p != null && p.walletLockId == walletLockId) {
+                                                    val p1 = p.copy(
+                                                        stage = "ussd_sent",
+                                                        lastUssdMessage = resp.take(200),
+                                                        updatedAtMs = System.currentTimeMillis(),
+                                                    )
+                                                    prefs.savePendingWalletSetup(p1)
+                                                    pendingSetup = p1
+                                                }
+
                                                 callWithTotpRetry(
                                                     call = { cb2 -> api.walletConfirm(walletLockId, cb2) },
                                                     cb = { ok2, j2 ->
@@ -454,6 +486,7 @@ fun WalletHomeScreen(
 
                                                         prefs.clearPendingWalletSetup()
                                                         pendingSetup = null
+                                                        markConfirmed(label, unlockAt)
                                                         msg = "Wallet locked until $unlockAt"
                                                         refreshAll()
                                                     },
@@ -496,6 +529,14 @@ fun WalletHomeScreen(
                         onResult = { resp ->
                             msg = resp
 
+                            val p1 = p.copy(
+                                stage = "ussd_sent",
+                                lastUssdMessage = resp.take(200),
+                                updatedAtMs = System.currentTimeMillis(),
+                            )
+                            prefs.savePendingWalletSetup(p1)
+                            pendingSetup = p1
+
                             callWithTotpRetry(
                                 call = { cb2 -> api.walletConfirm(p.walletLockId, cb2) },
                                 cb = { ok2, j2 ->
@@ -506,6 +547,7 @@ fun WalletHomeScreen(
 
                                     prefs.clearPendingWalletSetup()
                                     pendingSetup = null
+                                    markConfirmed(p.label, p.unlockAt)
                                     msg = "Wallet locked until ${p.unlockAt}"
                                     refreshAll()
                                 },
@@ -524,6 +566,22 @@ fun WalletHomeScreen(
                             prefs.clearPendingWalletSetup()
                             pendingSetup = null
                             msg = "Pending setup discarded"
+                            refreshAll()
+                        },
+                    )
+                },
+                onRetryConfirm = { p ->
+                    callWithTotpRetry(
+                        call = { cb -> api.walletConfirm(p.walletLockId, cb) },
+                        cb = { ok, j ->
+                            if (!ok) {
+                                err = j?.optString("error") ?: "Failed to confirm"
+                                return@callWithTotpRetry
+                            }
+                            prefs.clearPendingWalletSetup()
+                            pendingSetup = null
+                            markConfirmed(p.label, p.unlockAt)
+                            msg = "Setup confirmed"
                             refreshAll()
                         },
                     )
@@ -598,9 +656,12 @@ private fun WalletLocksTab(
 private fun WalletSetupTab(
     carriers: List<Carrier>,
     pending: PendingWalletSetup?,
+    confirmed: ConfirmedSetupBanner?,
+    onDismissConfirmed: () -> Unit,
     onLockWallet: (carrier: Carrier, currentPin: String, unlockAt: String, label: String?) -> Unit,
     onResumePending: (PendingWalletSetup, String) -> Unit,
     onDiscardPending: (PendingWalletSetup) -> Unit,
+    onRetryConfirm: (PendingWalletSetup) -> Unit,
 ) {
     val ctx = LocalContext.current
 
@@ -630,13 +691,42 @@ private fun WalletSetupTab(
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        if (pending != null) {
+        if (confirmed != null) {
             item {
                 Card {
                     Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text("Pending setup detected", fontWeight = FontWeight.SemiBold)
+                        Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                            Text("Setup confirmed", fontWeight = FontWeight.SemiBold)
+                            TextButton(onClick = onDismissConfirmed) { Text("Close") }
+                        }
+
+                        Text(confirmed.label ?: "Wallet lock")
+                        Text("Unlock at: ${confirmed.unlockAt}")
+                        SetupStepper(stage = 2)
+                    }
+                }
+            }
+        }
+
+        if (pending != null) {
+            val stage = when (pending.stage) {
+                "ussd_sent" -> 1
+                else -> 0
+            }
+
+            item {
+                Card {
+                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text("Wallet setup in progress", fontWeight = FontWeight.SemiBold)
                         Text(pending.label ?: "Wallet lock")
                         Text("Unlock at: ${pending.unlockAt}")
+
+                        SetupStepper(stage = stage)
+
+                        if (!pending.lastUssdMessage.isNullOrBlank()) {
+                            Text("Last USSD response:")
+                            Text(pending.lastUssdMessage, style = MaterialTheme.typography.bodySmall)
+                        }
 
                         OutlinedTextField(
                             value = resumePin,
@@ -647,20 +737,34 @@ private fun WalletSetupTab(
                             singleLine = true,
                         )
 
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
                             Button(
                                 onClick = { onResumePending(pending, resumePin) },
                                 enabled = resumePin.isNotBlank(),
+                                modifier = Modifier.weight(1f),
                             ) {
-                                Text("Continue")
+                                Text("Send USSD + Confirm")
                             }
-                            OutlinedButton(onClick = { onDiscardPending(pending) }) {
-                                Text("Discard")
+
+                            if (stage >= 1) {
+                                OutlinedButton(
+                                    onClick = { onRetryConfirm(pending) },
+                                    modifier = Modifier.weight(1f),
+                                ) {
+                                    Text("Retry confirm")
+                                }
                             }
                         }
 
+                        OutlinedButton(
+                            onClick = { onDiscardPending(pending) },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("Discard setup")
+                        }
+
                         Text(
-                            "If setup was interrupted, you can continue here. The generated PIN is kept encrypted in device storage and is not shown.",
+                            "Use Retry confirm if the USSD succeeded but the app could not confirm due to network/session issues. The generated PIN is stored encrypted on-device and is never displayed.",
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }
@@ -786,6 +890,73 @@ private data class UssdFallbackDialog(
     val onOpenDialer: (() -> Unit)?,
     val onDismiss: () -> Unit,
 )
+
+private data class ConfirmedSetupBanner(
+    val label: String?,
+    val unlockAt: String,
+    val shownAtMs: Long,
+)
+
+private enum class StepStatus { Done, Active, Todo }
+
+@Composable
+private fun SetupStepper(stage: Int) {
+    // stage: 0 = pending, 1 = ussd_sent, 2 = confirmed
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        SetupStepRow(index = 0, label = "Pending", status = statusFor(stage, 0))
+        SetupStepRow(index = 1, label = "USSD sent", status = statusFor(stage, 1))
+        SetupStepRow(index = 2, label = "Confirmed", status = statusFor(stage, 2))
+    }
+}
+
+private fun statusFor(stage: Int, stepIndex: Int): StepStatus {
+    return when {
+        stage > stepIndex -> StepStatus.Done
+        stage == stepIndex -> StepStatus.Active
+        else -> StepStatus.Todo
+    }
+}
+
+@Composable
+private fun SetupStepRow(index: Int, label: String, status: StepStatus) {
+    val bg = when (status) {
+        StepStatus.Done, StepStatus.Active -> MaterialTheme.colorScheme.primary
+        StepStatus.Todo -> MaterialTheme.colorScheme.surfaceVariant
+    }
+
+    val fg = when (status) {
+        StepStatus.Done, StepStatus.Active -> MaterialTheme.colorScheme.onPrimary
+        StepStatus.Todo -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
+    val text = when (status) {
+        StepStatus.Done -> "✓"
+        else -> (index + 1).toString()
+    }
+
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Surface(
+            modifier = Modifier.size(24.dp),
+            shape = CircleShape,
+            color = bg,
+            contentColor = fg,
+        ) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
+                Text(text)
+            }
+        }
+
+        Column {
+            Text(
+                label,
+                fontWeight = if (status == StepStatus.Active) FontWeight.SemiBold else FontWeight.Normal,
+            )
+            if (status == StepStatus.Active) {
+                Text("Current step", style = MaterialTheme.typography.bodySmall)
+            }
+        }
+    }
+}
 
 @Composable
 private fun SimSelector(
@@ -1001,7 +1172,17 @@ private fun previewPendingSetup(): PendingWalletSetup? {
         label = "Resume example",
         newPinCipherB64 = "AA==",
         newPinIvB64 = "AA==",
-        createdAtMs = System.currentTimeMillis(),
+        stage = "ussd_sent",
+        lastUssdMessage = "USSD response example…",
+        updatedAtMs = System.currentTimeMillis(),
+    )
+}
+
+private fun previewConfirmedBanner(): ConfirmedSetupBanner? {
+    return ConfirmedSetupBanner(
+        label = "Just confirmed",
+        unlockAt = "2026-03-12 09:00:00",
+        shownAtMs = System.currentTimeMillis(),
     )
 }
 
@@ -1044,9 +1225,12 @@ private fun PreviewWalletSetupTabLight() {
         WalletSetupTab(
             carriers = previewCarriers(),
             pending = previewPendingSetup(),
+            confirmed = previewConfirmedBanner(),
+            onDismissConfirmed = {},
             onLockWallet = { _, _, _, _ -> },
             onResumePending = { _, _ -> },
             onDiscardPending = { _ -> },
+            onRetryConfirm = { _ -> },
         )
     }
 }
@@ -1064,9 +1248,12 @@ private fun PreviewWalletSetupTabDark() {
         WalletSetupTab(
             carriers = previewCarriers(),
             pending = previewPendingSetup(),
+            confirmed = previewConfirmedBanner(),
+            onDismissConfirmed = {},
             onLockWallet = { _, _, _, _ -> },
             onResumePending = { _, _ -> },
             onDiscardPending = { _ -> },
+            onRetryConfirm = { _ -> },
         )
     }
 }

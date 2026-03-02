@@ -44,7 +44,9 @@ class AppPrefs(ctx: Context) {
             .putString("pending_label", p.label ?: "")
             .putString("pending_pin_ct", p.newPinCipherB64)
             .putString("pending_pin_iv", p.newPinIvB64)
-            .putLong("pending_created_at", p.createdAtMs)
+            .putString("pending_stage", p.stage)
+            .putString("pending_last_ussd", p.lastUssdMessage ?: "")
+            .putLong("pending_updated_at", p.updatedAtMs)
             .apply()
     }
 
@@ -57,7 +59,16 @@ class AppPrefs(ctx: Context) {
         val label = (prefs.getString("pending_label", "") ?: "").ifBlank { null }
         val ct = prefs.getString("pending_pin_ct", "") ?: ""
         val iv = prefs.getString("pending_pin_iv", "") ?: ""
-        val createdAt = prefs.getLong("pending_created_at", 0L)
+
+        val stage = (prefs.getString("pending_stage", "") ?: "").ifBlank { "pending" }
+        val lastUssd = (prefs.getString("pending_last_ussd", "") ?: "").ifBlank { null }
+
+        val updatedAt = if (prefs.contains("pending_updated_at")) {
+            prefs.getLong("pending_updated_at", 0L)
+        } else {
+            // Backward compat with earlier versions
+            prefs.getLong("pending_created_at", 0L)
+        }
 
         if (carrierId < 0 || unlockAt.isBlank() || ct.isBlank() || iv.isBlank()) return null
 
@@ -68,7 +79,9 @@ class AppPrefs(ctx: Context) {
             label = label,
             newPinCipherB64 = ct,
             newPinIvB64 = iv,
-            createdAtMs = createdAt,
+            stage = stage,
+            lastUssdMessage = lastUssd,
+            updatedAtMs = updatedAt,
         )
     }
 
@@ -80,6 +93,10 @@ class AppPrefs(ctx: Context) {
             .remove("pending_label")
             .remove("pending_pin_ct")
             .remove("pending_pin_iv")
+            .remove("pending_stage")
+            .remove("pending_last_ussd")
+            .remove("pending_updated_at")
+            // Backward compat cleanup
             .remove("pending_created_at")
             .apply()
     }

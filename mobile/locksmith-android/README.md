@@ -24,7 +24,7 @@ The app requests:
 ## Reliability features
 - Automatic CSRF refresh and retry for safe/idempotent requests.
 - Dual-SIM selection (when available) for USSD execution.
-- Pending setup resume: if wallet setup is interrupted after the server record is created, the app stores the generated PIN encrypted in Android Keystore and lets the user continue the USSD step later.
+- Pending setup resume: if wallet setup is interrupted after the server record is created, the app stores the generated PIN encrypted in Android Keystore and lets the user continue the USSD step later (with a stepper UI and a "Retry confirm" action).
 
 ## UI previews / screenshots
 This project includes Jetpack Compose previews that you can export as screenshots from Android Studio:
