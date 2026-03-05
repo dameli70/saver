@@ -237,15 +237,23 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
     </div>
 
     <div class="card" id="vault-unlock-card" style="display:none">
-      <div class="card-title"><div class="dot" style="background:var(--orange)"></div><span style="color:var(--orange)">Enter Vault Passphrase</span></div>
+      <div class="card-title"><div class="dot" style="background:var(--orange)"></div><span style="color:var(--orange)">Vault</span></div>
       <div style="font-size:12px;color:var(--muted);line-height:1.7;margin-bottom:14px;">
         Your vault passphrase is used to derive encryption keys in your browser. It is never sent to the server.
       </div>
+
+      <div id="vp-setup-note" class="msg msg-warn"></div>
+
       <div class="field"><label>Vault Passphrase</label>
         <input type="password" id="vp-input" placeholder="Your vault passphrase…" autocomplete="current-password">
       </div>
+
+      <div class="field" id="vp2-field" style="display:none"><label>Confirm Vault Passphrase</label>
+        <input type="password" id="vp-input2" placeholder="Confirm passphrase…" autocomplete="current-password">
+      </div>
+
       <div id="vp-err" class="msg msg-err"></div>
-      <button class="btn btn-primary" onclick="unlockVault()"><span id="vp-txt">Unlock Vault</span></button>
+      <button class="btn btn-primary" id="vp-btn" onclick="unlockVault()"><span id="vp-txt">Unlock Vault</span></button>
     </div>
 
     <div class="card" id="gen-card">
@@ -405,6 +413,16 @@ function toast(msg,type='ok'){const t=document.createElement('div');t.className=
 function bytesToB64(bytes){return btoa(String.fromCharCode(...bytes));}
 function b64ToBytes(b64){return Uint8Array.from(atob(b64), c => c.charCodeAt(0));}
 
+function requireWebCrypto(){
+  if (!window.crypto || !window.crypto.getRandomValues) {
+    throw new Error('Secure cryptography is unavailable in this browser.');
+  }
+  if (!window.isSecureContext || !window.crypto.subtle) {
+    throw new Error('Web Crypto API is unavailable. Use HTTPS (or localhost) to use the vault.');
+  }
+  return window.crypto;
+}
+
 function b64uToBuf(b64url){
   const b64 = String(b64url||'').replace(/-/g,'+').replace(/_/g,'/');
   const pad = b64.length % 4 ? '='.repeat(4 - (b64.length % 4)) : '';
@@ -424,10 +442,11 @@ function bufToB64u(buf){
 //  CRYPTO (browser-only)
 // ─────────────────────────────────────────────────
 async function deriveKey(passphrase, kdfSaltB64, iters){
+  const c = requireWebCrypto();
   const enc = new TextEncoder();
-  const baseKey = await crypto.subtle.importKey('raw', enc.encode(passphrase), 'PBKDF2', false, ['deriveKey']);
+  const baseKey = await c.subtle.importKey('raw', enc.encode(passphrase), 'PBKDF2', false, ['deriveKey']);
   const saltBytes = b64ToBytes(kdfSaltB64);
-  return crypto.subtle.deriveKey(
+  return c.subtle.deriveKey(
     {name:'PBKDF2', salt:saltBytes, iterations: iters, hash:'SHA-256'},
     baseKey,
     {name:'AES-GCM', length:256},
@@ -437,23 +456,25 @@ async function deriveKey(passphrase, kdfSaltB64, iters){
 }
 
 async function aesEncrypt(plain, key){
+  const c = requireWebCrypto();
   const iv = new Uint8Array(12);
-  crypto.getRandomValues(iv);
+  c.getRandomValues(iv);
   const enc = new TextEncoder();
-  const ct = new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM', iv, tagLength:128}, key, enc.encode(plain)));
+  const ct = new Uint8Array(await c.subtle.encrypt({name:'AES-GCM', iv, tagLength:128}, key, enc.encode(plain)));
   const tag = ct.slice(ct.length - 16);
   const cipher = ct.slice(0, ct.length - 16);
   return {cipher_blob: bytesToB64(cipher), iv: bytesToB64(iv), auth_tag: bytesToB64(tag)};
 }
 
 async function aesDecrypt(cipherBlobB64, ivB64, tagB64, key){
+  const c = requireWebCrypto();
   const cipher = b64ToBytes(cipherBlobB64);
   const iv = b64ToBytes(ivB64);
   const tag = b64ToBytes(tagB64);
   const data = new Uint8Array(cipher.length + tag.length);
   data.set(cipher, 0);
   data.set(tag, cipher.length);
-  const pt = await crypto.subtle.decrypt({name:'AES-GCM', iv, tagLength:128}, key, data);
+  const pt = await c.subtle.decrypt({name:'AES-GCM', iv, tagLength:128}, key, data);
   return new TextDecoder().decode(pt);
 }
 
@@ -465,8 +486,9 @@ function genPassword(type, length) {
     custom:       'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+[]{}|;:,.<>?',
   }[type] || 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
 
+  const c = requireWebCrypto();
   const arr = new Uint8Array(length * 4);
-  crypto.getRandomValues(arr);
+  c.getRandomValues(arr);
   let result = '', i = 0;
   while (result.length < length) {
     const byte = arr[i++ % arr.length];
@@ -541,18 +563,34 @@ async function loadVaultSetup(){
     }
 
     const note = document.getElementById('vp-setup-note');
-    const inp  = document.getElementById('vp-input');
-    const btn  = document.getElementById('vp-btn');
+    const vp2Field = document.getElementById('vp2-field');
+    const btnTxt = document.getElementById('vp-txt');
+
+    if(note){
+      note.classList.remove('show');
+      note.textContent='';
+    }
 
     if(vaultCheckAvailable && !vaultCheckInitialized){
-      if(note) note.style.display = 'block';
-      if(inp) inp.disabled = true;
-      if(btn) btn.disabled = true;
-    } else {
-      if(note) note.style.display = 'none';
-      if(inp) inp.disabled = false;
-      if(btn) btn.disabled = false;
+      if(note){
+        note.textContent = 'No vault passphrase is set yet. Choose one now (min 10 chars). If you lose it, your codes cannot be recovered.';
+        note.classList.add('show');
+      }
+      if(vp2Field) vp2Field.style.display = 'block';
+      if(btnTxt) btnTxt.textContent = 'Set Vault';
+      return;
     }
+
+    if(!vaultCheckAvailable){
+      if(note){
+        note.textContent = 'Vault validation is unavailable (missing migrations). You can still unlock and use the app, but it cannot validate your passphrase.';
+        note.classList.add('show');
+      }
+    }
+
+    if(vp2Field) vp2Field.style.display = 'none';
+    if(btnTxt) btnTxt.textContent = 'Unlock Vault';
+
   }catch{}
 }
 
@@ -571,6 +609,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   document.getElementById('vp-input').addEventListener('keydown', e => { if(e.key==='Enter') unlockVault(); });
+  const vp2 = document.getElementById('vp-input2');
+  if(vp2) vp2.addEventListener('keydown', e => { if(e.key==='Enter') unlockVault(); });
   document.getElementById('rv-vault').addEventListener('keydown', e => { if(e.key==='Enter') doReveal(); });
 
   const storedSlot = parseInt(localStorage.getItem('vault_slot') || '1', 10);
@@ -582,28 +622,72 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 function checkVaultUnlock() {
+  const genBtn = document.getElementById('g-btn');
+
   if (!vaultPhraseSession) {
     document.getElementById('vault-unlock-card').style.display = 'block';
-    document.getElementById('gen-card').style.opacity = '.4';
-    document.getElementById('gen-card').style.pointerEvents = 'none';
+    if(genBtn) genBtn.disabled = true;
+    return;
   }
+
+  document.getElementById('vault-unlock-card').style.display = 'none';
+  if(genBtn) genBtn.disabled = false;
 }
 
 async function unlockVault() {
   const vp = document.getElementById('vp-input').value;
+  const vp2 = (document.getElementById('vp-input2')||{}).value || '';
   const errEl = document.getElementById('vp-err');
   errEl.classList.remove('show');
+
   if (!vp || vp.length < 10) { errEl.textContent='Passphrase must be at least 10 characters'; errEl.classList.add('show'); return; }
 
-  if (vaultCheckAvailable && !vaultCheckInitialized) {
-    errEl.textContent = 'Vault passphrase is not set. Set it in Account first.';
-    errEl.classList.add('show');
-    return;
+  const setMode = (vaultCheckAvailable && !vaultCheckInitialized);
+  if (setMode) {
+    if (vp !== vp2) { errEl.textContent='Passphrases do not match'; errEl.classList.add('show'); return; }
   }
 
-  document.getElementById('vp-txt').innerHTML = '<span class="spin light"></span> Unlocking…';
+  const btnTxt = document.getElementById('vp-txt');
+  btnTxt.innerHTML = '<span class="spin light"></span> ' + (setMode ? 'Setting…' : 'Unlocking…');
 
   try {
+    // If vault check is not initialized yet, initialize it now.
+    if (setMode) {
+      const c = requireWebCrypto();
+      const saltBytes = new Uint8Array(32);
+      c.getRandomValues(saltBytes);
+      const kdf_salt = bytesToB64(saltBytes);
+
+      const key = await deriveKey(vp, kdf_salt, PBKDF2_ITERS);
+      const enc = await aesEncrypt(VAULT_CHECK_PLAIN, key);
+
+      const j = await postCsrf('/api/vault.php', {
+        action:'setup_save',
+        cipher_blob: enc.cipher_blob,
+        iv: enc.iv,
+        auth_tag: enc.auth_tag,
+        kdf_salt,
+        kdf_iterations: PBKDF2_ITERS,
+      });
+
+      if(!j.success){
+        throw new Error(j.error || 'Failed to set vault passphrase');
+      }
+
+      vaultCheckAvailable = true;
+      vaultCheckInitialized = true;
+      vaultCheck = {
+        cipher_blob: enc.cipher_blob,
+        iv: enc.iv,
+        auth_tag: enc.auth_tag,
+        kdf_salt,
+        kdf_iterations: PBKDF2_ITERS,
+      };
+      vaultSlotSession = 1;
+      localStorage.setItem('vault_slot', '1');
+    }
+
+    // If we have a vault check blob, validate the passphrase.
     if (vaultCheckAvailable && vaultCheckInitialized && vaultCheck) {
       const key = await deriveKey(vp, vaultCheck.kdf_salt, vaultCheck.kdf_iterations);
       const plain = await aesDecrypt(vaultCheck.cipher_blob, vaultCheck.iv, vaultCheck.auth_tag, key);
@@ -612,17 +696,16 @@ async function unlockVault() {
 
     vaultPhraseSession = vp;
 
-    document.getElementById('vault-unlock-card').style.display = 'none';
-    document.getElementById('gen-card').style.opacity = '1';
-    document.getElementById('gen-card').style.pointerEvents = '';
-    toast('Vault unlocked — passphrase held in memory only', 'ok');
+    toast(setMode ? 'Vault passphrase set and unlocked' : 'Vault unlocked — passphrase held in memory only', 'ok');
+    await loadVaultSetup();
+    checkVaultUnlock();
 
   } catch (e) {
-    if (e && e.name === 'OperationError') errEl.textContent = 'Incorrect vault passphrase';
-    else errEl.textContent = e.message || 'Incorrect vault passphrase';
+    if (e && e.name === 'OperationError') errEl.textContent = 'Incorrect vault passphrase or tampered data';
+    else errEl.textContent = e.message || 'Unlock failed';
     errEl.classList.add('show');
   } finally {
-    document.getElementById('vp-txt').textContent = 'Unlock Vault';
+    btnTxt.textContent = setMode ? 'Set Vault' : 'Unlock Vault';
   }
 }
 
@@ -1035,8 +1118,9 @@ async function rotateVaultPassphrase(){
     // Still zero-knowledge: this is just ciphertext of a constant.
     let nextVaultCheck = null;
     if (vaultCheckAvailable) {
+      const c = requireWebCrypto();
       const saltBytes = new Uint8Array(32);
-      crypto.getRandomValues(saltBytes);
+      c.getRandomValues(saltBytes);
       const kdf_salt = bytesToB64(saltBytes);
       const keyVc = await deriveKey(p1, kdf_salt, PBKDF2_ITERS);
       const encVc = await aesEncrypt(VAULT_CHECK_PLAIN, keyVc);

@@ -201,6 +201,47 @@ pre{white-space:pre-wrap;word-break:break-word;background:#000;border:1px solid 
   </div>
 
   <div class="card" style="margin-top:14px;">
+    <div class="card-title">Carriers (Mobile Money)</div>
+
+    <div class="p">Define carrier PIN policy and USSD templates. Placeholders: <code>{old_pin}</code>, <code>{new_pin}</code>.</div>
+
+    <div style="display:grid;grid-template-columns:1fr;gap:12px;margin-bottom:12px;">
+      <div class="field"><label>Name</label><input id="car-name" placeholder="e.g. MTN MoMo"></div>
+      <div class="field"><label>Country (optional)</label><input id="car-country" placeholder="e.g. GH"></div>
+      <div class="field"><label>PIN type</label><input id="car-pin-type" placeholder="numeric or alphanumeric" value="numeric"></div>
+      <div class="field"><label>PIN length</label><input id="car-pin-len" placeholder="e.g. 4" value="4"></div>
+      <div class="field"><label>USSD: Change PIN template</label><input id="car-ussd-change" placeholder="e.g. *170*00*{old_pin}*{new_pin}#"></div>
+      <div class="field"><label>USSD: Balance template</label><input id="car-ussd-balance" placeholder="e.g. *170#"></div>
+      <label class="chk" style="margin:0;"><input type="checkbox" id="car-active" checked> <span>Active</span></label>
+      <button class="btn btn-primary" onclick="createCarrier()">Add carrier</button>
+      <div id="car-msg" class="msg"></div>
+    </div>
+
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
+      <button class="btn btn-ghost btn-sm" onclick="loadCarriers()">↻ Refresh</button>
+    </div>
+
+    <div class="table-wrap">
+      <table class="table" id="carriers-table" style="min-width:1100px;">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Name</th>
+            <th>Country</th>
+            <th>PIN</th>
+            <th>Active</th>
+            <th>Balance USSD</th>
+            <th>Change PIN USSD</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div id="carriers-msg" class="msg"></div>
+  </div>
+
+  <div class="card" style="margin-top:14px;">
     <div class="card-title">Audit log</div>
 
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
@@ -240,6 +281,30 @@ pre{white-space:pre-wrap;word-break:break-word;background:#000;border:1px solid 
   </div>
 </div>
 
+<div class="modal" id="carrier-modal" onclick="closeCarrierModal(event)">
+  <div class="sheet">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;">
+      <h3 style="margin:0;">Edit carrier</h3>
+      <button class="btn btn-ghost btn-sm" onclick="closeCarrierModal()">Close</button>
+    </div>
+
+    <input type="hidden" id="car-edit-id">
+    <div class="field"><label>Name</label><input id="car-edit-name"></div>
+    <div class="field"><label>Country (optional)</label><input id="car-edit-country"></div>
+    <div class="field"><label>PIN type</label><input id="car-edit-pin-type" placeholder="numeric or alphanumeric"></div>
+    <div class="field"><label>PIN length</label><input id="car-edit-pin-len"></div>
+    <div class="field"><label>USSD: Change PIN template</label><input id="car-edit-ussd-change"></div>
+    <div class="field"><label>USSD: Balance template</label><input id="car-edit-ussd-balance"></div>
+    <label class="chk" style="margin:0;"><input type="checkbox" id="car-edit-active"> <span>Active</span></label>
+
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;">
+      <button class="btn btn-primary" onclick="saveCarrierEdit()">Save</button>
+      <button class="btn btn-ghost" onclick="closeCarrierModal()">Cancel</button>
+    </div>
+    <div id="car-edit-msg" class="msg"></div>
+  </div>
+</div>
+
 <script>
 const CSRF = <?= json_encode($csrf) ?>;
 
@@ -272,6 +337,7 @@ function setMsg(id, text, ok){
 }
 
 let usersCache = [];
+let carriersCache = [];
 
 async function loadUsers(){
   const tbody = document.querySelector('#users-table tbody');
@@ -430,6 +496,147 @@ async function loadCodes(){
   }
 }
 
+async function loadCarriers(){
+  const tbody = document.querySelector('#carriers-table tbody');
+  tbody.innerHTML = '<tr><td colspan="8" class="k">Loading…</td></tr>';
+
+  try{
+    const r = await get('/api/admin.php?action=carriers');
+    if(!r.success) throw new Error(r.error||'Failed');
+    carriersCache = r.carriers || [];
+
+    if(!carriersCache.length){
+      tbody.innerHTML = '<tr><td colspan="8" class="k">No carriers.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML='';
+    carriersCache.forEach(c => {
+      const tr = document.createElement('tr');
+      const pin = `${c.pin_type}/${c.pin_length}`;
+      tr.innerHTML = `
+        <td>${c.id}</td>
+        <td>${esc(c.name)}</td>
+        <td>${esc(c.country||'')}</td>
+        <td>${esc(pin)}</td>
+        <td>${c.is_active ? '✓' : '—'}</td>
+        <td>${esc(c.ussd_balance_template||'')}</td>
+        <td>${esc(c.ussd_change_pin_template||'')}</td>
+        <td>
+          <button class="btn btn-blue btn-sm" onclick="openCarrierEdit(${c.id})">Edit</button>
+          <button class="btn btn-blue btn-sm" onclick="toggleCarrierActive(${c.id}, ${c.is_active?1:0})">Active</button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+  }catch(e){
+    tbody.innerHTML = '<tr><td colspan="8" class="k">Failed to load carriers.</td></tr>';
+    setMsg('carriers-msg', e.message||'Failed', false);
+  }
+}
+
+async function createCarrier(){
+  const name = document.getElementById('car-name').value.trim();
+  const country = document.getElementById('car-country').value.trim();
+  const pinType = document.getElementById('car-pin-type').value.trim() || 'numeric';
+  const pinLen = parseInt(document.getElementById('car-pin-len').value || '0', 10);
+  const ussdChange = document.getElementById('car-ussd-change').value.trim();
+  const ussdBalance = document.getElementById('car-ussd-balance').value.trim();
+  const isActive = document.getElementById('car-active').checked ? 1 : 0;
+
+  document.getElementById('car-msg').className = 'msg';
+
+  try{
+    const r = await postCsrf('/api/admin.php', {
+      action:'carrier_create',
+      name,
+      country,
+      pin_type: pinType,
+      pin_length: pinLen,
+      ussd_change_pin_template: ussdChange,
+      ussd_balance_template: ussdBalance,
+      is_active: isActive,
+    });
+    if(!r.success) throw new Error(r.error||'Failed');
+
+    setMsg('car-msg', 'Carrier added.', true);
+    document.getElementById('car-name').value='';
+    document.getElementById('car-country').value='';
+    document.getElementById('car-ussd-change').value='';
+    document.getElementById('car-ussd-balance').value='';
+
+    loadCarriers();
+
+  }catch(e){
+    setMsg('car-msg', e.message||'Failed', false);
+  }
+}
+
+function openCarrierEdit(id){
+  const c = carriersCache.find(x => String(x.id) === String(id));
+  if(!c) return;
+
+  document.getElementById('car-edit-id').value = c.id;
+  document.getElementById('car-edit-name').value = c.name || '';
+  document.getElementById('car-edit-country').value = c.country || '';
+  document.getElementById('car-edit-pin-type').value = c.pin_type || 'numeric';
+  document.getElementById('car-edit-pin-len').value = c.pin_length || 4;
+  document.getElementById('car-edit-ussd-change').value = c.ussd_change_pin_template || '';
+  document.getElementById('car-edit-ussd-balance').value = c.ussd_balance_template || '';
+  document.getElementById('car-edit-active').checked = !!c.is_active;
+
+  document.getElementById('car-edit-msg').className = 'msg';
+  document.getElementById('carrier-modal').classList.add('show');
+}
+
+function closeCarrierModal(e){
+  if(e && e.target !== document.getElementById('carrier-modal')) return;
+  document.getElementById('carrier-modal').classList.remove('show');
+}
+
+async function saveCarrierEdit(){
+  const carrierId = parseInt(document.getElementById('car-edit-id').value || '0', 10);
+  const name = document.getElementById('car-edit-name').value.trim();
+  const country = document.getElementById('car-edit-country').value.trim();
+  const pinType = document.getElementById('car-edit-pin-type').value.trim() || 'numeric';
+  const pinLen = parseInt(document.getElementById('car-edit-pin-len').value || '0', 10);
+  const ussdChange = document.getElementById('car-edit-ussd-change').value.trim();
+  const ussdBalance = document.getElementById('car-edit-ussd-balance').value.trim();
+  const isActive = document.getElementById('car-edit-active').checked ? 1 : 0;
+
+  document.getElementById('car-edit-msg').className = 'msg';
+
+  try{
+    const r = await postCsrf('/api/admin.php', {
+      action:'carrier_update',
+      carrier_id: carrierId,
+      name,
+      country,
+      pin_type: pinType,
+      pin_length: pinLen,
+      ussd_change_pin_template: ussdChange,
+      ussd_balance_template: ussdBalance,
+      is_active: isActive,
+    });
+    if(!r.success) throw new Error(r.error||'Failed');
+    setMsg('car-edit-msg', 'Saved.', true);
+    loadCarriers();
+  }catch(e){
+    setMsg('car-edit-msg', e.message||'Failed', false);
+  }
+}
+
+async function toggleCarrierActive(id, cur){
+  const next = cur ? 0 : 1;
+  const ok = confirm(next ? 'Activate this carrier?' : 'Deactivate this carrier?');
+  if(!ok) return;
+
+  const r = await postCsrf('/api/admin.php', { action:'carrier_set_active', carrier_id: id, is_active: next });
+  if(!r.success){ setMsg('carriers-msg', r.error||'Failed', false); return; }
+  loadCarriers();
+}
+
 async function loadAudit(){
   const q = document.getElementById('audit-q').value.trim();
 
@@ -492,6 +699,7 @@ function closeDetail(e){
 
 loadUsers();
 loadCodes();
+loadCarriers();
 loadAudit();
 </script>
 </body>

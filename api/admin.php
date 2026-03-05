@@ -25,6 +25,12 @@ function intParam(mixed $v, int $default = 0): int {
     return (int)$s;
 }
 
+function hasColumn(PDO $db, string $table, string $column): bool {
+    $stmt = $db->prepare("SELECT 1 FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ? LIMIT 1");
+    $stmt->execute([$table, $column]);
+    return (bool)$stmt->fetchColumn();
+}
+
 if ($method === 'GET') {
     $action = $_GET['action'] ?? '';
 
@@ -140,6 +146,16 @@ if ($method === 'GET') {
         jsonResponse(['success' => true, 'code' => $row]);
     }
 
+    // ── CARRIERS LIST ───────────────────────────────────────
+    if ($action === 'carriers') {
+        $db = getDB();
+        $has = (bool)$db->query("SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'carriers' LIMIT 1")->fetchColumn();
+        if (!$has) jsonResponse(['error' => 'Carriers are not available. Apply migrations in config/migrations/.'], 500);
+
+        $rows = $db->query("SELECT id, name, country, pin_type, pin_length, ussd_change_pin_template, ussd_balance_template, is_active, created_at, updated_at FROM carriers ORDER BY name ASC")->fetchAll();
+        jsonResponse(['success' => true, 'carriers' => $rows]);
+    }
+
     // ── AUDIT LOG ────────────────────────────────────────────
     if ($action === 'audit') {
         $db = getDB();
@@ -241,6 +257,17 @@ if ($method === 'POST') {
 
         $userId = (int)$db->lastInsertId();
 
+        // Ensure key platform defaults are set for the user (for older installs / partial migrations).
+        if (hasColumn($db, 'users', 'vault_active_slot')) {
+            $db->prepare('UPDATE users SET vault_active_slot = 1 WHERE id = ?')->execute([$userId]);
+        }
+        if (hasColumn($db, 'users', 'vault_check_iterations')) {
+            $db->prepare('UPDATE users SET vault_check_iterations = ? WHERE id = ?')->execute([PBKDF2_ITERATIONS, $userId]);
+        }
+        if (hasColumn($db, 'users', 'require_webauthn')) {
+            $db->prepare('UPDATE users SET require_webauthn = 0 WHERE id = ?')->execute([$userId]);
+        }
+
         $devVerifyUrl = null;
         if (!$markVerified) {
             $devVerifyUrl = issueEmailVerification($userId, $email);
@@ -293,6 +320,17 @@ if ($method === 'POST') {
         if ($verified) {
             $db->prepare("UPDATE users SET email_verified_at = NOW(), email_verification_hash = NULL, email_verification_expires_at = NULL WHERE id = ?")
                ->execute([$userId]);
+
+            // Ensure key defaults exist for optimal usage.
+            if (hasColumn($db, 'users', 'vault_active_slot')) {
+                $db->prepare('UPDATE users SET vault_active_slot = 1 WHERE id = ?')->execute([$userId]);
+            }
+            if (hasColumn($db, 'users', 'vault_check_iterations')) {
+                $db->prepare('UPDATE users SET vault_check_iterations = ? WHERE id = ?')->execute([PBKDF2_ITERATIONS, $userId]);
+            }
+            if (hasColumn($db, 'users', 'require_webauthn')) {
+                $db->prepare('UPDATE users SET require_webauthn = 0 WHERE id = ?')->execute([$userId]);
+            }
         } else {
             $db->prepare("UPDATE users SET email_verified_at = NULL WHERE id = ?")
                ->execute([$userId]);
@@ -321,6 +359,101 @@ if ($method === 'POST') {
         $db->prepare("DELETE FROM users WHERE id = ?")->execute([$userId]);
 
         auditLog('admin_delete_user', null, getCurrentUserId());
+        jsonResponse(['success' => true]);
+    }
+
+    // ── CARRIERS: CREATE ───────────────────────────────────
+    if ($action === 'carrier_create') {
+        $name = trim((string)($body['name'] ?? ''));
+        $country = trim((string)($body['country'] ?? ''));
+        $pinType = (string)($body['pin_type'] ?? 'numeric');
+        $pinLen = intParam($body['pin_length'] ?? 0, 0);
+        $ussdChange = trim((string)($body['ussd_change_pin_template'] ?? ''));
+        $ussdBalance = trim((string)($body['ussd_balance_template'] ?? ''));
+        $isActive = !empty($body['is_active']) ? 1 : 0;
+
+        if ($name === '') jsonResponse(['error' => 'name required'], 400);
+        if (!in_array($pinType, ['numeric','alphanumeric'], true)) jsonResponse(['error' => 'Invalid pin_type'], 400);
+        if ($pinLen < 3 || $pinLen > 12) jsonResponse(['error' => 'pin_length must be 3–12'], 400);
+        if ($ussdChange === '') jsonResponse(['error' => 'ussd_change_pin_template required'], 400);
+        if ($ussdBalance === '') jsonResponse(['error' => 'ussd_balance_template required'], 400);
+
+        $db = getDB();
+        $has = (bool)$db->query("SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'carriers' LIMIT 1")->fetchColumn();
+        if (!$has) jsonResponse(['error' => 'Carriers are not available. Apply migrations in config/migrations/.'], 500);
+
+        $db->prepare("INSERT INTO carriers (name, country, pin_type, pin_length, ussd_change_pin_template, ussd_balance_template, is_active, created_at, updated_at)
+                      VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NULL)")
+           ->execute([
+               sanitize($name),
+               $country !== '' ? sanitize($country) : null,
+               $pinType,
+               $pinLen,
+               $ussdChange,
+               $ussdBalance,
+               $isActive,
+           ]);
+
+        $carrierId = (int)$db->lastInsertId();
+        auditLog('admin_carrier_create', null, getCurrentUserId());
+        jsonResponse(['success' => true, 'carrier_id' => $carrierId]);
+    }
+
+    // ── CARRIERS: UPDATE ────────────────────────────────────
+    if ($action === 'carrier_update') {
+        $carrierId = intParam($body['carrier_id'] ?? 0, 0);
+        if ($carrierId < 1) jsonResponse(['error' => 'carrier_id required'], 400);
+
+        $name = trim((string)($body['name'] ?? ''));
+        $country = trim((string)($body['country'] ?? ''));
+        $pinType = (string)($body['pin_type'] ?? 'numeric');
+        $pinLen = intParam($body['pin_length'] ?? 0, 0);
+        $ussdChange = trim((string)($body['ussd_change_pin_template'] ?? ''));
+        $ussdBalance = trim((string)($body['ussd_balance_template'] ?? ''));
+        $isActive = isset($body['is_active']) ? (!empty($body['is_active']) ? 1 : 0) : null;
+
+        if ($name === '') jsonResponse(['error' => 'name required'], 400);
+        if (!in_array($pinType, ['numeric','alphanumeric'], true)) jsonResponse(['error' => 'Invalid pin_type'], 400);
+        if ($pinLen < 3 || $pinLen > 12) jsonResponse(['error' => 'pin_length must be 3–12'], 400);
+        if ($ussdChange === '') jsonResponse(['error' => 'ussd_change_pin_template required'], 400);
+        if ($ussdBalance === '') jsonResponse(['error' => 'ussd_balance_template required'], 400);
+
+        $db = getDB();
+        $has = (bool)$db->query("SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'carriers' LIMIT 1")->fetchColumn();
+        if (!$has) jsonResponse(['error' => 'Carriers are not available. Apply migrations in config/migrations/.'], 500);
+
+        $db->prepare("UPDATE carriers
+                      SET name = ?, country = ?, pin_type = ?, pin_length = ?,
+                          ussd_change_pin_template = ?, ussd_balance_template = ?,
+                          is_active = COALESCE(?, is_active), updated_at = NOW()
+                      WHERE id = ?")
+           ->execute([
+               sanitize($name),
+               $country !== '' ? sanitize($country) : null,
+               $pinType,
+               $pinLen,
+               $ussdChange,
+               $ussdBalance,
+               $isActive,
+               $carrierId,
+           ]);
+
+        auditLog('admin_carrier_update', null, getCurrentUserId());
+        jsonResponse(['success' => true]);
+    }
+
+    // ── CARRIERS: SET ACTIVE ─────────────────────────────────
+    if ($action === 'carrier_set_active') {
+        $carrierId = intParam($body['carrier_id'] ?? 0, 0);
+        $isActive = !empty($body['is_active']) ? 1 : 0;
+        if ($carrierId < 1) jsonResponse(['error' => 'carrier_id required'], 400);
+
+        $db = getDB();
+        $has = (bool)$db->query("SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'carriers' LIMIT 1")->fetchColumn();
+        if (!$has) jsonResponse(['error' => 'Carriers are not available. Apply migrations in config/migrations/.'], 500);
+
+        $db->prepare('UPDATE carriers SET is_active = ?, updated_at = NOW() WHERE id = ?')->execute([$isActive, $carrierId]);
+        auditLog('admin_carrier_set_active', null, getCurrentUserId());
         jsonResponse(['success' => true]);
     }
 
