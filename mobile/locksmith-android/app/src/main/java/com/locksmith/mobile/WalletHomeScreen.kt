@@ -697,6 +697,10 @@ private fun WalletSetupTab(
 
     var confirmMarkUssd by remember { mutableStateOf<PendingWalletSetup?>(null) }
 
+    LaunchedEffect(pending?.walletLockId) {
+        confirmMarkUssd = null
+    }
+
     val p = confirmMarkUssd
     if (p != null) {
         AlertDialog(
