@@ -10,6 +10,10 @@ if (!isLoggedIn()) {
     exit;
 }
 
+// This page has been superseded by profile.php + security.php.
+header('Location: profile.php');
+exit;
+
 $userId = getCurrentUserId();
 $db     = getDB();
 

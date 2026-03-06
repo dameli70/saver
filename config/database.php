@@ -13,17 +13,20 @@ define('DB_USER',    'root');
 define('DB_PASS',    '');
 define('DB_CHARSET', 'utf8mb4');
 
-// Used ONLY for HMAC-signing audit log entries and CSRF tokens.
-// NOT used for encryption. Compromise of this key cannot decrypt any password.
+// Used ONLY for server-side integrity and secret wrapping:
+// - HMAC hashing session IDs (logout-all)
+// - Deriving a server-side key to encrypt TOTP secrets
+// - Audit log integrity
+// NOT used for code/lock encryption. Compromise of this key cannot decrypt stored vault contents.
 define('APP_HMAC_SECRET', 'REPLACE_WITH_64+_RANDOM_BYTES_hex_php_r_echo_bin2hex_random_bytes_32');
 
 define('APP_ENV', 'development'); // 'production' in prod
 
 define('APP_NAME', 'LOCKSMITH');
 
-// Optional: if set, used for email links and mobile app configuration.
+// Optional: override the app base URL used in verification/reset links.
 // Example: https://example.com or https://example.com/locksmith
-// Leave empty to auto-detect from the current request.
+// Leave blank to auto-detect from the current request.
 define('APP_BASE_URL', '');
 
 define('MAIL_FROM', 'no-reply@localhost');

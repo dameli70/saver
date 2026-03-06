@@ -216,7 +216,7 @@ f.addEventListener('submit', async (e)=>{
     try{
       const vc = await setupVaultCheck(vault);
       if(!vc.success && vc.error){
-        // If this fails (e.g., missing migrations), the Account page can still guide setup.
+        // If this fails (e.g., missing migrations), the Profile page can still guide setup.
         console.warn('Vault setup failed:', vc.error);
       }
     }catch(e){
