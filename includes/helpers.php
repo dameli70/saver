@@ -537,7 +537,7 @@ function requireStrongAuth(): void {
 
     if (!$methods['totp'] && !$methods['passkey']) {
         jsonResponse([
-            'error' => 'Security setup required. Enable TOTP or add a passkey from your account page.',
+            'error' => 'Security setup required. Enable TOTP or add a passkey from your security page.',
             'error_code' => 'security_setup_required',
             'methods' => $methods,
         ], 403);

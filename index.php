@@ -45,7 +45,7 @@ a{color:inherit;}
 .nav{display:flex;align-items:center;justify-content:space-between;padding:max(16px,var(--sat)) 20px 16px;border-bottom:1px solid var(--b1);background:rgba(6,7,10,.92);backdrop-filter:blur(14px);position:sticky;top:0;}
 .logo{font-family:var(--display);font-weight:900;letter-spacing:-1px;font-size:18px;text-decoration:none;}
 .logo span{color:var(--accent);} 
-.nav-r{display:flex;align-items:center;gap:10px;}
+.nav-r{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end;}
 .pill{font-size:10px;color:var(--muted);letter-spacing:1px;max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:none;}
 @media(min-width:560px){.pill{display:block;}}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;
@@ -69,9 +69,10 @@ a{color:inherit;}
 .card h3{font-family:var(--display);font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--accent);margin-bottom:10px;}
 .card p{color:var(--muted);font-size:12px;line-height:1.7;}
 .how{max-width:960px;margin:0 auto;padding:10px 18px 60px;}
-.how h2{font-family:var(--display);font-weight:900;font-size:16px;letter-spacing:1px;</old_code><new_code>.steps{display:grid;grid-template-columns:1fr;gap:10px;}
+.how h2{font-family:var(--display);font-weight:900;font-size:16px;letter-spacing:1px;margin-bottom:12px;}
+.steps{display:grid;grid-template-columns:1fr;gap:10px;}
 @media(min-width:740px){.steps{grid-template-columns:repeat(2,1fr);} }
-.step{background:rgba(13,15,20,.7);border:1px solid var(--b1);padding:16px;border-radius-colum</old_code><new_code>.step{background:rgba(13,15,20,.7);border:1px solid var(--b1);padding:16px;border-radius:var(--r);}
+.step{background:rgba(13,15,20,.7);border:1px solid var(--b1);padding:16px;border-radius:var(--r);}
 .step .n{font-family:var(--display);font-weight:900;color:var(--accent);font-size:18px;margin-bottom:6px;}
 .step .t{font-size:12px;letter-spacing:1px;text-transform:uppercase;color:var(--text);margin-bottom:6px;}
 .step .d{font-size:12px;line-height:1.7;color:var(--muted);} 
@@ -90,19 +91,16 @@ a{color:inherit;}
       <?php if ($loggedIn): ?>
         <span class="pill"><?= htmlspecialchars($userEmail) ?></span>
         <?php if ($verified): ?>
-         <<a class="btn btn-ghost" href="dashboard.php">Dashboa</</a>
-         <<a class="btn btn-ghost" href="codes.php">Cod</tna>
-         <ra class="btn btn-ghost" href="profile.php">Profi</
- a>
-         <ea class="btn btn-ghost" href="security.php">Securi</oua>
-          <?php if ($isAdmin): ?>
-           < a class="btn btn-ghost" href="admin.php">Adm</hpa>
-          <?php endif; ?>
+          <a class="btn btn-ghost" href="dashboard.php">Dashboard</a>
+          <a class="btn btn-ghost" href="codes.php">Codes</a>
+          <a class="btn btn-ghost" href="profile.php">Profile</a>
+          <a class="btn btn-ghost" href="security.php">Security</a>
+          <?php if ($isAdmin): ?><a class="btn btn-ghost" href="admin.php">Admin</a><?php endif; ?>
         <?php else: ?>
-         < a class="btn btn-ghost" href="profile.php">Verify Ema</ila>
+          <a class="btn btn-ghost" href="profile.php">Verify Email</a>
         <?php endif; ?>
-       < a class="btn btn-ghost" href="faq.php">F</AQa>
-       < a class="btn btn-ghost
+        <a class="btn btn-ghost" href="faq.php">FAQ</a>
+        <a class="btn btn-ghost" href="logout.php">Logout</a>
       <?php else: ?>
         <a class="btn btn-ghost" href="login.php">Login</a>
         <a class="btn btn-primary" href="signup.php">Create account</a>

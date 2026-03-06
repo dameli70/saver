@@ -10,7 +10,7 @@ if (isLoggedIn()) {
         header('Location: dashboard.php');
         exit;
     }
-    header('Location: account.php');
+    header('Location: profile.php');
     exit;
 }
 

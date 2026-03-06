@@ -21,8 +21,8 @@ define('APP_ENV', 'development'); // 'production' in prod
 
 define('APP_NAME', 'LOCKSMITH');
 
-// Optional explicit base URL for emails and mobile app configuration.
-// Example: https://locksmith.example.com
+// Optional: if set, used for email links and mobile app configuration.
+// Example: https://example.com or https://example.com/locksmith
 // Leave empty to auto-detect from the current request.
 define('APP_BASE_URL', '');
 

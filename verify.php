@@ -25,7 +25,7 @@ function page(string $title, string $msg, bool $ok = false): void {
 }
 
 if (!filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($token) < 10) {
-    page('Verification failed', '<strong>Invalid verification link.</strong> Please request a new one from your account page.');
+    page('Verification failed', '<strong>Invalid verification link.</strong> Please request a new one from your profile page.');
     exit;
 }
 
@@ -49,12 +49,12 @@ $expires  = $u['email_verification_expires_at'] ?? null;
 $given    = hash('sha256', $token);
 
 if (!$expected || !hash_equals($expected, $given)) {
-    page('Verification failed', '<strong>Verification link is invalid.</strong> Please request a new one from your account page.');
+    page('Verification failed', '<strong>Verification link is invalid.</strong> Please request a new one from your profile page.');
     exit;
 }
 
 if (!$expires || new DateTime($expires) < new DateTime()) {
-    page('Verification failed', '<strong>Verification link expired.</strong> Please request a new one from your account page.');
+    page('Verification failed', '<strong>Verification link expired.</strong> Please request a new one from your profile page.');
     exit;
 }
 

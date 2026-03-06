@@ -10,7 +10,7 @@ if (isLoggedIn()) {
         header('Location: dashboard.php');
         exit;
     }
-    header('Location: account.php');
+    header('Location: profile.php');
     exit;
 }
 
@@ -122,7 +122,7 @@ f.addEventListener('submit', async (e)=>{
     if(!j.success){showErr(j.error||'Reset failed');return;}
 
     if(j.verified){window.location='dashboard.php';}
-    else window.location='account.php';
+    else window.location='profile.php';
 
   }catch{
     showErr('Network error');
