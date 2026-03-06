@@ -37,13 +37,30 @@ if ($iv === '')         jsonResponse(['error' => 'iv missing'], 400);
 if ($authTag === '')    jsonResponse(['error' => 'auth_tag missing'], 400);
 if ($kdfSalt === '')    jsonResponse(['error' => 'kdf_salt missing'], 400);
 
-// Verify salt was legitimately issued by this server for this user/session
-$sessionKey = 'pending_salt_' . getCurrentUserId();
-$issuedSalt = $_SESSION[$sessionKey] ?? null;
-if (!$issuedSalt || !hash_equals($issuedSalt, $kdfSalt)) {
+// Verify salt was legitimately issued by this server for this user/session.
+// Support multiple pending salts (e.g., multiple tabs generating in parallel).
+$userIdForSalt = (int)getCurrentUserId();
+$listKey = 'pending_salts_' . $userIdForSalt;
+$singleKey = 'pending_salt_' . $userIdForSalt;
+
+$pending = [];
+if (!empty($_SESSION[$listKey]) && is_array($_SESSION[$listKey])) {
+    $pending = array_values(array_filter($_SESSION[$listKey], 'is_string'));
+} elseif (!empty($_SESSION[$singleKey]) && is_string($_SESSION[$singleKey])) {
+    // Backward-compatible: older installs stored a single pending salt.
+    $pending = [$_SESSION[$singleKey]];
+}
+
+$idx = array_search($kdfSalt, $pending, true);
+if ($idx === false) {
     jsonResponse(['error' => 'Invalid or expired KDF salt — request a new one'], 400);
 }
-unset($_SESSION[$sessionKey]); // One-time use
+
+// One-time use: remove the used salt.
+unset($pending[$idx]);
+$pending = array_values($pending);
+$_SESSION[$listKey] = $pending;
+unset($_SESSION[$singleKey]);
 
 $validTypes = ['numeric','alpha','alphanumeric','custom'];
 if (!in_array($type, $validTypes, true)) jsonResponse(['error' => 'Invalid type'], 400);
@@ -52,8 +69,11 @@ if (strlen($hint) > 500)                 jsonResponse(['error' => 'Hint too long
 if ($revealDate === '')                  jsonResponse(['error' => 'Reveal date required'], 400);
 
 try {
-    $revealDt = new DateTime($revealDate);
-    if ($revealDt <= new DateTime()) jsonResponse(['error' => 'Reveal date must be future'], 400);
+    // Normalize reveal_date to UTC to avoid timezone ambiguity across client/PHP/MySQL.
+    // Accepts ISO-8601 (recommended) or legacy "Y-m-d H:i:s" strings.
+    $revealDt = new DateTimeImmutable($revealDate, new DateTimeZone('UTC'));
+    $nowUtc   = new DateTimeImmutable('now', new DateTimeZone('UTC'));
+    if ($revealDt <= $nowUtc) jsonResponse(['error' => 'Reveal date must be future'], 400);
 } catch (Exception) {
     jsonResponse(['error' => 'Invalid reveal date'], 400);
 }
@@ -99,7 +119,7 @@ try {
             $cipherBlob, $iv, $authTag, $kdfSalt, PBKDF2_ITERATIONS, $slot,
             $type, $length,
             $hint ? sanitize($hint) : null,
-            $revealDt->format('Y-m-d H:i:s'),
+            $revealDt->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s'),
         ];
     } else {
         $sql = "
@@ -113,7 +133,7 @@ try {
             $cipherBlob, $iv, $authTag, $kdfSalt, PBKDF2_ITERATIONS,
             $type, $length,
             $hint ? sanitize($hint) : null,
-            $revealDt->format('Y-m-d H:i:s'),
+            $revealDt->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s'),
         ];
     }
 
@@ -125,7 +145,7 @@ try {
         'success'     => true,
         'lock_id'     => $lockId,
         'label'       => sanitize($label),
-        'reveal_date' => $revealDt->format('Y-m-d H:i:s'),
+        'reveal_date' => $revealDt->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s'),
     ]);
 
 } catch (Exception $e) {

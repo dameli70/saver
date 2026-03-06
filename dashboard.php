@@ -772,7 +772,8 @@ async function doGenerate(){
       label,
       type,
       length,
-      reveal_date: new Date(revealDate).toISOString().slice(0,19).replace('T',' '),
+      // Send an ISO-8601 timestamp with timezone (UTC). The server will normalize.
+      reveal_date: new Date(revealDate).toISOString(),
       hint,
       vault_verifier_slot: vaultSlotSession,
       cipher_blob: enc.cipher_blob,

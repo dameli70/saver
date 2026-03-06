@@ -19,11 +19,11 @@ $stmt = $db->prepare("
            reveal_date, confirmation_status,
            copied_at, confirmed_at, rejected_at, auto_saved_at, revealed_at, created_at,
            CASE
-               WHEN confirmation_status='confirmed' AND reveal_date <= NOW() THEN 'unlocked'
-               WHEN confirmation_status='confirmed'                          THEN 'locked'
-               WHEN confirmation_status='pending'                            THEN 'pending'
-               WHEN confirmation_status='rejected'                           THEN 'rejected'
-               WHEN confirmation_status='auto_saved'                         THEN 'auto_saved'
+               WHEN confirmation_status='confirmed' AND reveal_date <= UTC_TIMESTAMP() THEN 'unlocked'
+               WHEN confirmation_status='confirmed'                                    THEN 'locked'
+               WHEN confirmation_status='pending'                                      THEN 'pending'
+               WHEN confirmation_status='rejected'                                     THEN 'rejected'
+               WHEN confirmation_status='auto_saved'                                   THEN 'auto_saved'
                ELSE 'unknown'
            END AS display_status
     FROM locks
@@ -33,10 +33,10 @@ $stmt = $db->prepare("
 $stmt->execute([$userId]);
 $locks = $stmt->fetchAll();
 
-$now = new DateTime();
+$now = new DateTime('now', new DateTimeZone('UTC'));
 foreach ($locks as &$lock) {
     if ($lock['display_status'] === 'locked') {
-        $r    = new DateTime($lock['reveal_date']);
+        $r    = new DateTime($lock['reveal_date'], new DateTimeZone('UTC'));
         $diff = $now->diff($r);
         $lock['time_remaining'] = [
             'days' => (int)$diff->days, 'hours' => (int)$diff->h,
