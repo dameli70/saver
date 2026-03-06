@@ -410,6 +410,29 @@ async function postCsrf(url,body){
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function toast(msg,type='ok'){const t=document.createElement('div');t.className=`toast ${type}`;t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),3200);} 
 
+function pad2(n){return String(n).padStart(2,'0');}
+function toLocalDatetimeValue(d){
+  return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+
+// Server returns MySQL DATETIME (YYYY-MM-DD HH:MM:SS) without timezone.
+// We store reveal_date as UTC (see doGenerate), so interpret these strings as UTC.
+function parseServerUtcDateTime(s){
+  if(!s) return null;
+  const str = String(s);
+  let iso = str.includes(' ') ? str.replace(' ','T') : str;
+  // If the string has no timezone info, treat it as UTC.
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(iso)) iso += 'Z';
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function fmtServerUtcDateTime(s){
+  const d = parseServerUtcDateTime(s);
+  if(!d) return String(s||'');
+  return d.toLocaleString(undefined, {year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+} 
+
 function bytesToB64(bytes){return btoa(String.fromCharCode(...bytes));}
 function b64ToBytes(b64){return Uint8Array.from(atob(b64), c => c.charCodeAt(0));}
 
@@ -599,7 +622,7 @@ async function loadVaultSetup(){
 // ─────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
   const d = new Date(); d.setDate(d.getDate()+1); d.setSeconds(0,0);
-  document.getElementById('g-date').value = d.toISOString().slice(0,16);
+  document.getElementById('g-date').value = toLocalDatetimeValue(d);
 
   document.querySelectorAll('#type-grid .type-opt').forEach(b => {
     b.addEventListener('click', () => {
@@ -889,7 +912,8 @@ function buildCard(lock){
   el.className=`lock-card st-${st}`;
 
   const badges={locked:'🔒 Locked',unlocked:'🔓 Unlocked',pending:'⏳ Pending',auto_saved:'💾 Auto-saved',rejected:'✗ Void'};
-  const rd=new Date(lock.reveal_date).toLocaleDateString('en-US',{year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+  const rd=fmtServerUtcDateTime(lock.reveal_date);
+tring('en-US',{year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
 
   const top=document.createElement('div');
   top.className='lc-top';

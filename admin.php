@@ -325,9 +325,18 @@ async function postCsrf(url, body){
   return r.json();
 }
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function parseServerUtcDateTime(s){
+  if(!s) return null;
+  const str = String(s);
+  let iso = str.includes(' ') ? str.replace(' ','T') : str;
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(iso)) iso += 'Z';
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? null : d;
+}
 function fmt(ts){
   if(!ts) return '';
-  try{ return new Date(ts).toLocaleString(); }catch{ return String(ts); }
+  const d = parseServerUtcDateTime(ts);
+  try{ return (d ? d.toLocaleString() : String(ts)); }catch{ return String(ts); }
 }
 function setMsg(id, text, ok){
   const el = document.getElementById(id);
