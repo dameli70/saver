@@ -10,11 +10,11 @@ if (isLoggedIn()) {
         header('Location: dashboard.php');
         exit;
     }
-    header('Location: account.php');
+    header('Location: profile.php');
     exit;
 }
 
-header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none';");
+header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none';");
 header("X-Frame-Options: DENY");
 header("X-Content-Type-Options: nosniff");
 header("Referrer-Policy: no-referrer");
@@ -27,6 +27,8 @@ header("Referrer-Policy: no-referrer");
 <title>Create account — LOCKSMITH</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#06070a">
 <style>
 :root{
   --bg:#06070a;--s1:#0d0f14;--s2:#13161d;
@@ -34,34 +36,35 @@ header("Referrer-Policy: no-referrer");
   --accent:#e8ff47;--red:#ff4757;--green:#47ffb0;--orange:#ffaa00;--text:#dde1ec;--muted:#525970;
   --mono:'DM Mono',monospace;--display:'Unbounded',sans-serif;
   --sat:env(safe-area-inset-top,0px);--sab:env(safe-area-inset-bottom,0px);
+  --r:14px;
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 body{background:var(--bg);color:var(--text);font-family:var(--mono);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:max(40px,var(--sat)) 18px max(40px,var(--sab));}
-.box{width:100%;max-width:520px;background:var(--s1);border:1px solid var(--b1);padding:22px 22px 18px;}
+.box{width:100%;max-width:520px;background:var(--s1);border:1px solid var(--b1);padding:22px 22px 18px;border-radius:var(--r);}
 .logo{font-family:var(--display);font-weight:900;letter-spacing:-1px;font-size:28px;margin-bottom:4px;}
 .logo span{color:var(--accent);} 
 .sub{color:var(--muted);font-size:11px;letter-spacing:2px;text-transform:uppercase;margin-bottom:10px;}
-.callout{background:rgba(71,255,176,.05);border:1px solid rgba(71,255,176,.14);padding:12px 14px;margin:14px 0 16px;color:var(--muted);font-size:11px;line-height:1.7;}
+.callout{background:rgba(71,255,176,.05);border:1px solid rgba(71,255,176,.14);padding:12px 14px;margin:14px 0 16px;color:var(--muted);font-size:11px;line-height:1.7;border-radius:var(--r);}
 .callout strong{color:var(--green);} 
 .field{margin-bottom:14px;}
 .field label{display:block;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:6px;}
 .field input{width:100%;background:var(--s2);border:1px solid var(--b1);color:var(--text);font-family:var(--mono);
-  font-size:15px;padding:14px;outline:none;transition:border-color .2s;border-radius:0;-webkit-appearance:none;}
+  font-size:15px;padding:14px;outline:none;transition:border-color .2s;border-radius:var(--r);-webkit-appearance:none;}
 .field input:focus{border-color:var(--accent);} 
 .note{font-size:10px;color:var(--muted);margin-top:6px;line-height:1.6;}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;
   padding:14px 18px;font-family:var(--mono);font-size:12px;letter-spacing:2px;text-transform:uppercase;
-  cursor:pointer;border:none;transition:all .15s;border-radius:0;-webkit-appearance:none;min-height:48px;}
+  cursor:pointer;border:none;transition:all .15s;border-radius:var(--r);-webkit-appearance:none;min-height:48px;}
 .btn-primary{background:var(--accent);color:#000;font-weight:600;}
 .btn-primary:disabled{opacity:.45;pointer-events:none;}
-.msg{display:none;margin-bottom:12px;padding:12px 14px;font-size:12px;line-height:1.6;letter-spacing:.4px;}
+.msg{display:none;margin-bottom:12px;padding:12px 14px;font-size:12px;line-height:1.6;letter-spacing:.4px;border-radius:var(--r);}
 .msg.show{display:block;}
 .msg-err{background:rgba(255,71,87,.08);border:1px solid rgba(255,71,87,.2);color:var(--red);} 
 .msg-ok{background:rgba(71,255,176,.08);border:1px solid rgba(71,255,176,.2);color:var(--green);} 
 .links{display:flex;justify-content:space-between;gap:10px;margin-top:14px;font-size:11px;color:var(--muted);} 
 .links a{color:var(--text);text-decoration:none;border-bottom:1px solid transparent;}
 .links a:hover{border-bottom-color:var(--text);} 
-.dev{margin-top:12px;border:1px dashed rgba(255,170,0,.35);background:rgba(255,170,0,.06);padding:10px 12px;font-size:11px;color:var(--muted);line-height:1.6;}
+.dev{margin-top:12px;border:1px dashed rgba(255,170,0,.35);background:rgba(255,170,0,.06);padding:10px 12px;font-size:11px;color:var(--muted);line-height:1.6;border-radius:var(--r);}
 .dev a{color:var(--orange);} 
 .spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(0,0,0,.35);border-top-color:#000;border-radius:50%;animation:spin .5s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg);}}
@@ -225,7 +228,7 @@ f.addEventListener('submit', async (e)=>{
       dev.innerHTML='DEV: Email sending is often disabled locally. Use this verification link: <br><a href="'+j.dev_verify_url+'">'+j.dev_verify_url+'</a>';
     }
 
-    setTimeout(()=>{window.location='account.php';}, 900);
+    setTimeout(()=>{window.location='profile.php';}, 900);
 
   }catch{
     showErr('Network error');
@@ -234,6 +237,9 @@ f.addEventListener('submit', async (e)=>{
     btnTxt.textContent='Create account';
   }
 });
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
 </script>
 </body>
 </html>

@@ -10,7 +10,7 @@ if (!isLoggedIn()) {
     exit;
 }
 if (!isEmailVerified()) {
-    header('Location: account.php');
+    header('Location: profile.php');
     exit;
 }
 
@@ -20,10 +20,11 @@ $csrf    = getCsrfToken();
 $userId = (int)(getCurrentUserId() ?? 0);
 $showSecurityBanner = !userHasTotp($userId) && !userHasPasskeys($userId);
 
-header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none';");
+header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none';");
 header("X-Frame-Options: DENY");
 header("X-Content-Type-Options: nosniff");
 header("Referrer-Policy: no-referrer");
+header("Permissions-Policy: clipboard-write=(self)");
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -33,6 +34,8 @@ header("Referrer-Policy: no-referrer");
 <title>Backups — LOCKSMITH</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#06070a">
 <style>
 :root{
   --bg:#06070a;--s1:#0d0f14;--s2:#13161d;--s3:#1a1d27;
@@ -40,16 +43,17 @@ header("Referrer-Policy: no-referrer");
   --accent:#e8ff47;--red:#ff4757;--green:#47ffb0;--orange:#ffaa00;--text:#dde1ec;--muted:#525970;
   --mono:'DM Mono',monospace;--display:'Unbounded',sans-serif;
   --sat:env(safe-area-inset-top,0px);--sab:env(safe-area-inset-bottom,0px);
+  --r:14px;
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-body{background:var(--bg);color:var(--text);font-family:var(--mono);min-height:100vh;overflow-x:hidden;}
+body{background:var(--bg);color:var(--text);font-family:var(--mono);min-height:100vh;overflow-x:hidden;-webkit-font-smoothing:antialiased;}
 .nav{display:flex;align-items:center;justify-content:space-between;padding:max(16px,var(--sat)) 20px 16px;border-bottom:1px solid var(--b1);background:rgba(6,7,10,.92);backdrop-filter:blur(14px);position:sticky;top:0;}
 .logo{font-family:var(--display);font-weight:900;letter-spacing:-1px;font-size:18px;text-decoration:none;color:var(--text);}
 .logo span{color:var(--accent);} 
 .nav-r{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end;}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;
   padding:12px 18px;font-family:var(--mono);font-size:11px;letter-spacing:2px;
-  text-transform:uppercase;cursor:pointer;border:none;transition:all .15s;border-radius:0;
+  text-transform:uppercase;cursor:pointer;border:none;transition:all .15s;border-radius:var(--r);
   -webkit-appearance:none;min-height:42px;text-decoration:none;}
 .btn-primary{background:var(--accent);color:#000;font-weight:600;}
 .btn-primary:disabled{opacity:.45;pointer-events:none;}
@@ -60,30 +64,29 @@ body{background:var(--bg);color:var(--text);font-family:var(--mono);min-height:1
 .h{font-family:var(--display);font-weight:900;font-size:18px;letter-spacing:1px;margin-bottom:8px;}
 .p{color:var(--muted);font-size:12px;line-height:1.7;margin-bottom:16px;}
 
-/* ── SECURITY BANNER ── */
 .sec-banner{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
   background:rgba(255,170,0,.06);border:1px solid rgba(255,170,0,.22);
-  padding:14px 14px;margin:0 0 14px 0;}
+  padding:14px 14px;margin:0 0 14px 0;border-radius:var(--r);}
 .sec-banner-title{font-family:var(--display);font-weight:800;font-size:12px;letter-spacing:1px;color:var(--orange);}
 .sec-banner-sub{font-size:11px;color:var(--muted);line-height:1.6;max-width:620px;}
 
-.card{background:rgba(13,15,20,.9);border:1px solid var(--b1);padding:18px;margin-bottom:14px;}
+.card{background:rgba(13,15,20,.9);border:1px solid var(--b1);padding:18px;margin-bottom:14px;border-radius:var(--r);}
 .card-title{font-family:var(--display);font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--accent);margin-bottom:12px;}
 .row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
 .field{margin-bottom:12px;}
 .field label{display:block;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:6px;}
 .field input{width:100%;background:var(--s2);border:1px solid var(--b1);color:var(--text);
-  font-family:var(--mono);font-size:14px;padding:12px;outline:none;border-radius:0;-webkit-appearance:none;}
+  font-family:var(--mono);font-size:14px;padding:12px;outline:none;border-radius:var(--r);-webkit-appearance:none;}
 .field input:focus{border-color:var(--accent);} 
 .small{font-size:11px;color:var(--muted);line-height:1.6;}
-.msg{display:none;margin-top:12px;padding:12px 14px;font-size:12px;line-height:1.6;letter-spacing:.4px;}
+.msg{display:none;margin-top:12px;padding:12px 14px;font-size:12px;line-height:1.6;letter-spacing:.4px;border-radius:var(--r);}
 .msg.show{display:block;}
 .msg-err{background:rgba(255,71,87,.08);border:1px solid rgba(255,71,87,.2);color:var(--red);} 
 .msg-ok{background:rgba(71,255,176,.08);border:1px solid rgba(71,255,176,.2);color:var(--green);} 
 .spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(0,0,0,.35);border-top-color:#000;border-radius:50%;animation:spin .5s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg);}}
 .list{display:flex;flex-direction:column;gap:10px;}
-.item{border:1px solid var(--b1);background:rgba(19,22,29,.6);padding:14px;}
+.item{border:1px solid var(--b1);background:rgba(19,22,29,.6);padding:14px;border-radius:var(--r);}
 .item-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap;}
 .item-title{font-family:var(--display);font-size:12px;font-weight:700;}
 .item-meta{font-size:11px;color:var(--muted);line-height:1.6;}
@@ -95,7 +98,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--mono);min-height:1
     <a class="logo" href="index.php">LOCK<span>SMITH</span></a>
     <div class="nav-r">
       <a class="btn btn-ghost" href="dashboard.php">Dashboard</a>
-      <a class="btn btn-ghost" href="account.php">Account</a>
+      <a class="btn btn-ghost" href="codes.php">Codes</a>
+      <a class="btn btn-ghost" href="profile.php">Profile</a>
+      <a class="btn btn-ghost" href="security.php">Security</a>
+      <a class="btn btn-ghost" href="faq.php">FAQ</a>
       <?php if ($isAdmin): ?>
         <a class="btn btn-ghost" href="admin.php">Admin</a>
       <?php endif; ?>
@@ -113,7 +119,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--mono);min-height:1
         <div class="sec-banner-title">Security setup required</div>
         <div class="sec-banner-sub">Enable TOTP or add a passkey to protect sensitive actions (cloud backups, restore, export).</div>
       </div>
-      <a class="btn btn-ghost" href="account.php#totp-card">Open account</a>
+      <a class="btn btn-ghost" href="security.php#totp-card">Open security</a>
     </div>
     <?php endif; ?>
 
@@ -238,7 +244,7 @@ async function ensureReauth(methods){
     return !!r.success;
   }
 
-  show(localErr, 'Enable TOTP or add a passkey in Account to use backups.');
+  show(localErr, 'Enable TOTP or add a passkey in Security to use backups.');
   return false;
 }
 
@@ -430,6 +436,9 @@ document.getElementById('btn-cloud-save').addEventListener('click', async ()=>{
 });
 
 refreshCloud();
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
 </script>
 </body>
 </html>

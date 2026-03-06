@@ -20,6 +20,12 @@ define('APP_HMAC_SECRET', 'REPLACE_WITH_64+_RANDOM_BYTES_hex_php_r_echo_bin2hex_
 define('APP_ENV', 'development'); // 'production' in prod
 
 define('APP_NAME', 'LOCKSMITH');
+
+// Optional explicit base URL for emails and mobile app configuration.
+// Example: https://locksmith.example.com
+// Leave empty to auto-detect from the current request.
+define('APP_BASE_URL', '');
+
 define('MAIL_FROM', 'no-reply@localhost');
 define('EMAIL_VERIFY_TTL_HOURS', 24);
 

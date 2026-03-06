@@ -35,16 +35,22 @@ $locks = $stmt->fetchAll();
 
 $now = new DateTime();
 foreach ($locks as &$lock) {
-    if ($lock['display_status'] === 'locked') {
-        $r    = new DateTime($lock['reveal_date']);
-        $diff = $now->diff($r);
-        $lock['time_remaining'] = [
-            'days' => (int)$diff->days, 'hours' => (int)$diff->h,
-            'minutes' => (int)$diff->i, 'total_seconds' => max(0, $r->getTimestamp() - $now->getTimestamp()),
-        ];
-    } else {
-        $lock['time_remaining'] = null;
-    }
+    $r = new DateTime($lock['reveal_date']);
+    $seconds = max(0, $r->getTimestamp() - $now->getTimestamp());
+    $days = (int)floor($seconds / 86400);
+    $hours = (int)floor(($seconds % 86400) / 3600);
+    $minutes = (int)floor(($seconds % 3600) / 60);
+
+    $lock['time_remaining'] = [
+        'days' => $days,
+        'hours' => $hours,
+        'minutes' => $minutes,
+        'total_seconds' => $seconds,
+    ];
 }
 unset($lock);
-jsonResponse(['success' => true, 'locks' => $locks]);
+jsonResponse([
+    'success' => true,
+    'server_now' => $now->format('Y-m-d H:i:s'),
+    'locks' => $locks,
+]);

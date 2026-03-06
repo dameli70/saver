@@ -10,7 +10,7 @@ $verified = $loggedIn ? isEmailVerified() : false;
 $isAdmin  = $loggedIn ? isAdmin() : false;
 $userEmail = getCurrentUserEmail() ?? '';
 
-header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none';");
+header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none';");
 header("X-Frame-Options: DENY");
 header("X-Content-Type-Options: nosniff");
 header("Referrer-Policy: no-referrer");
@@ -23,6 +23,8 @@ header("Referrer-Policy: no-referrer");
 <title>LOCKSMITH — Time-Locked Codes</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#06070a">
 <style>
 :root{
   --bg:#06070a;--s1:#0d0f14;--s2:#13161d;--s3:#1a1d27;
@@ -31,6 +33,7 @@ header("Referrer-Policy: no-referrer");
   --text:#dde1ec;--muted:#525970;
   --mono:'DM Mono',monospace;--display:'Unbounded',sans-serif;
   --sat:env(safe-area-inset-top,0px);--sab:env(safe-area-inset-bottom,0px);
+  --r:14px;
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 body{background:var(--bg);color:var(--text);font-family:var(--mono);min-height:100vh;overflow-x:hidden;-webkit-font-smoothing:antialiased;}
@@ -47,7 +50,7 @@ a{color:inherit;}
 @media(min-width:560px){.pill{display:block;}}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;
   padding:12px 18px;font-family:var(--mono);font-size:11px;letter-spacing:2px;
-  text-transform:uppercase;cursor:pointer;border:none;transition:all .15s;border-radius:0;
+  text-transform:uppercase;cursor:pointer;border:none;transition:all .15s;border-radius:var(--r);
   -webkit-appearance:none;min-height:42px;text-decoration:none;}
 .btn-primary{background:var(--accent);color:#000;font-weight:600;}
 .btn-primary:hover{background:#f0ff60;}
@@ -62,14 +65,13 @@ a{color:inherit;}
 .cta{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px;}
 .grid{display:grid;grid-template-columns:1fr;gap:12px;margin-top:26px;}
 @media(min-width:740px){.grid{grid-template-columns:repeat(3,1fr);} }
-.card{background:rgba(13,15,20,.9);border:1px solid var(--b1);padding:18px;}
+.card{background:rgba(13,15,20,.9);border:1px solid var(--b1);padding:18px;border-radius:var(--r);}
 .card h3{font-family:var(--display);font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--accent);margin-bottom:10px;}
 .card p{color:var(--muted);font-size:12px;line-height:1.7;}
 .how{max-width:960px;margin:0 auto;padding:10px 18px 60px;}
-.how h2{font-family:var(--display);font-weight:900;font-size:16px;letter-spacing:1px;margin:18px 0 12px;}
-.steps{display:grid;grid-template-columns:1fr;gap:10px;}
+.how h2{font-family:var(--display);font-weight:900;font-size:16px;letter-spacing:1px;</old_code><new_code>.steps{display:grid;grid-template-columns:1fr;gap:10px;}
 @media(min-width:740px){.steps{grid-template-columns:repeat(2,1fr);} }
-.step{background:rgba(13,15,20,.7);border:1px solid var(--b1);padding:16px;}
+.step{background:rgba(13,15,20,.7);border:1px solid var(--b1);padding:16px;border-radius-colum</old_code><new_code>.step{background:rgba(13,15,20,.7);border:1px solid var(--b1);padding:16px;border-radius:var(--r);}
 .step .n{font-family:var(--display);font-weight:900;color:var(--accent);font-size:18px;margin-bottom:6px;}
 .step .t{font-size:12px;letter-spacing:1px;text-transform:uppercase;color:var(--text);margin-bottom:6px;}
 .step .d{font-size:12px;line-height:1.7;color:var(--muted);} 
@@ -88,14 +90,19 @@ a{color:inherit;}
       <?php if ($loggedIn): ?>
         <span class="pill"><?= htmlspecialchars($userEmail) ?></span>
         <?php if ($verified): ?>
-          <a class="btn btn-ghost" href="dashboard.php">Dashboard</a>
+         <<a class="btn btn-ghost" href="dashboard.php">Dashboa</</a>
+         <<a class="btn btn-ghost" href="codes.php">Cod</tna>
+         <ra class="btn btn-ghost" href="profile.php">Profi</
+ a>
+         <ea class="btn btn-ghost" href="security.php">Securi</oua>
           <?php if ($isAdmin): ?>
-            <a class="btn btn-ghost" href="admin.php">Admin</a>
+           < a class="btn btn-ghost" href="admin.php">Adm</hpa>
           <?php endif; ?>
         <?php else: ?>
-          <a class="btn btn-ghost" href="account.php">Verify Email</a>
+         < a class="btn btn-ghost" href="profile.php">Verify Ema</ila>
         <?php endif; ?>
-        <a class="btn btn-ghost" href="logout.php">Logout</a>
+       < a class="btn btn-ghost" href="faq.php">F</AQa>
+       < a class="btn btn-ghost
       <?php else: ?>
         <a class="btn btn-ghost" href="login.php">Login</a>
         <a class="btn btn-primary" href="signup.php">Create account</a>
@@ -119,9 +126,9 @@ a{color:inherit;}
     <div class="cta">
       <?php if ($loggedIn && $verified): ?>
         <a class="btn btn-primary" href="dashboard.php">Generate a code</a>
-        <a class="btn btn-ghost" href="dashboard.php#codes">View my codes</a>
+        <a class="btn btn-ghost" href="codes.php">View my codes</a>
       <?php elseif ($loggedIn && !$verified): ?>
-        <a class="btn btn-primary" href="account.php">Verify email to continue</a>
+        <a class="btn btn-primary" href="profile.php">Verify email to continue</a>
         <a class="btn btn-ghost" href="logout.php">Switch account</a>
       <?php else: ?>
         <a class="btn btn-primary" href="signup.php">Generate a code</a>
@@ -146,16 +153,22 @@ a{color:inherit;}
   </div>
 
   <div class="how">
-    <h2>How it works</h2>
+    <h2>Getting started</h2>
     <div class="steps">
-      <div class="step"><div class="n">1</div><div class="t">Create an account</div><div class="d">Pick a login password and a vault passphrase (used only in your browser).</div></div>
-      <div class="step"><div class="n">2</div><div class="t">Verify your email</div><div class="d">Email verification is required before you can generate or reveal any codes.</div></div>
-      <div class="step"><div class="n">3</div><div class="t">Generate + encrypt</div><div class="d">Your browser generates a random code and encrypts it with AES-256-GCM using a key derived from your passphrase.</div></div>
-      <div class="step"><div class="n">4</div><div class="t">Seal until reveal date</div><div class="d">The server stores ciphertext and enforces the reveal date using its own clock.</div></div>
+      <div class="step"><div class="n">1</div><div class="t">Create account + verify email</div><div class="d">You’ll set a login password and a vault passphrase. Email verification is required before you can generate or reveal codes.</div></div>
+      <div class="step"><div class="n">2</div><div class="t">Generate + lock</div><div class="d">Codes are encrypted in your browser. The server enforces the reveal date using its own clock.</div></div>
+    </div>
+    <div style="margin-top:14px;color:var(--muted);font-size:12px;line-height:1.7;">
+      Want details? <a href="faq.php" style="color:var(--text);">Read the FAQ</a>.
     </div>
   </div>
 
   <div class="footer">© <?= date('Y') ?> LOCKSMITH • Time-locked code vault</div>
 </div>
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+</script>
 </body>
 </html>

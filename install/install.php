@@ -41,8 +41,12 @@ Options:
 
   --app-env=development|production
   --app-name=NAME                 Default: LOCKSMITH
+  --app-base-url=URL              Optional; used for emails and mobile app config
   --mail-from=EMAIL               Default: no-reply@localhost
   --email-verify-ttl-hours=HOURS  Default: 24
+
+  --admin-email=EMAIL             Create initial admin user (recommended)
+  --admin-password=PASS
 
   --smtp-host=HOST                Optional; if empty, PHP mail() is used
   --smtp-port=PORT                Default: 587
@@ -109,6 +113,30 @@ function phpSingleQuoted(string $value): string {
     return "'" . str_replace(["\\", "'"], ["\\\\", "\\'"], $value) . "'";
 }
 
+function argonHash(string $value): string {
+    return password_hash($value, PASSWORD_ARGON2ID, [
+        'memory_cost' => 65536,
+        'time_cost'   => 4,
+        'threads'     => 2,
+    ]);
+}
+
+function createInitialAdmin(PDO $db, string $email, string $password): void {
+    if ($email === '' || $password === '') return;
+
+    $count = (int)$db->query('SELECT COUNT(*) FROM users')->fetchColumn();
+    if ($count > 0) return;
+
+    $loginHash = argonHash($password);
+
+    // Legacy schema still requires these columns (not used for reveals).
+    $vaultVerifierSalt = bin2hex(random_bytes(32));
+    $vaultVerifier = argonHash(bin2hex(random_bytes(32)) . $vaultVerifierSalt);
+
+    $stmt = $db->prepare("INSERT INTO users (email, login_hash, vault_verifier, vault_verifier_salt, is_admin, email_verified_at) VALUES (?, ?, ?, ?, 1, NOW())");
+    $stmt->execute([$email, $loginHash, $vaultVerifier, $vaultVerifierSalt]);
+}
+
 function updateConfigFile(string $path, array $vals, bool $force): void {
     if (!file_exists($path)) {
         fwrite(STDERR, "Missing config file: {$path}\n");
@@ -144,6 +172,7 @@ function updateConfigFile(string $path, array $vals, bool $force): void {
         'APP_HMAC_SECRET' => $vals['app_hmac_secret'],
         'APP_ENV' => $vals['app_env'],
         'APP_NAME' => $vals['app_name'],
+        'APP_BASE_URL' => $vals['app_base_url'],
         'MAIL_FROM' => $vals['mail_from'],
         'EMAIL_VERIFY_TTL_HOURS' => (string)$vals['email_verify_ttl_hours'],
 
@@ -305,6 +334,7 @@ if (!in_array($vals['app_env'], ['development', 'production'], true)) {
 }
 
 $vals['app_name'] = $get('app-name', 'LOCKSMITH');
+$vals['app_base_url'] = rtrim(trim($get('app-base-url', '')), '/');
 $vals['mail_from'] = $get('mail-from', 'no-reply@localhost');
 $ttl = $get('email-verify-ttl-hours', '24');
 if (!ctype_digit((string)$ttl) || (int)$ttl < 1 || (int)$ttl > 168) {
@@ -349,6 +379,22 @@ if ($vals['smtp_host'] !== '') {
 
 $vals['app_hmac_secret'] = bin2hex(random_bytes(32));
 
+$adminEmail = strtolower(trim((string)($args['admin-email'] ?? '')));
+$adminPassword = (string)($args['admin-password'] ?? '');
+if (!$nonInteractive) {
+    $adminEmail = strtolower(trim(prompt('ADMIN EMAIL', $adminEmail ?: 'admin@example.com')));
+    $adminPassword = prompt('ADMIN PASSWORD (min 8 chars)', '');
+}
+
+if ($adminEmail !== '' && !filter_var($adminEmail, FILTER_VALIDATE_EMAIL)) {
+    fwrite(STDERR, "Invalid --admin-email\n");
+    exit(1);
+}
+if ($adminEmail !== '' && strlen($adminPassword) < 8) {
+    fwrite(STDERR, "Admin password must be at least 8 characters\n");
+    exit(1);
+}
+
 $initDb = (($args['init-db'] ?? '') === '1');
 $applyMigrations = (($args['apply-migrations'] ?? '') === '1');
 
@@ -363,6 +409,8 @@ fwrite(STDOUT, "Validating MySQL credentials...\n");
 try {
     // Always validate credentials against the server first (catches wrong user/pass)
     $serverPdo = connectPdoServer($vals['db_host'], $vals['db_charset'], $vals['db_user'], $vals['db_pass']);
+
+    $dbPdo = null;
 
     if ($initDb || $applyMigrations) {
         // Create DB if possible. If privileges are missing, the next step will fail clearly.
@@ -399,7 +447,11 @@ try {
         }
     } else {
         // No schema work requested, but still verify the database is reachable.
-        connectPdoDb($vals['db_host'], $vals['db_name'], $vals['db_charset'], $vals['db_user'], $vals['db_pass']);
+        $dbPdo = connectPdoDb($vals['db_host'], $vals['db_name'], $vals['db_charset'], $vals['db_user'], $vals['db_pass']);
+    }
+
+    if ($dbPdo instanceof PDO) {
+        createInitialAdmin($dbPdo, $adminEmail, $adminPassword);
     }
 
 } catch (Throwable $e) {
@@ -415,6 +467,7 @@ updateConfigFile($configPath, $vals, $force);
 $flagPath = $root . '/config/installed.flag';
 $flagBody = "installed_at=" . date('c') . "\n";
 $flagBody .= "installed_by=cli\n";
+$flagBody .= "app_base_url=" . ($vals['app_base_url'] !== '' ? $vals['app_base_url'] : '') . "\n";
 if (file_put_contents($flagPath, $flagBody) === false) {
     fwrite(STDERR, "\nWARNING: Could not write {$flagPath}.\n");
     fwrite(STDERR, "The web app will redirect to /install/ until this file exists.\n");

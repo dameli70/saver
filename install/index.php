@@ -60,6 +60,7 @@ function updateConfigFile(string $path, array $vals): void {
         'APP_HMAC_SECRET' => $vals['app_hmac_secret'],
         'APP_ENV' => $vals['app_env'],
         'APP_NAME' => $vals['app_name'],
+        'APP_BASE_URL' => $vals['app_base_url'],
         'MAIL_FROM' => $vals['mail_from'],
         'EMAIL_VERIFY_TTL_HOURS' => (string)$vals['email_verify_ttl_hours'],
 
@@ -106,6 +107,28 @@ function connectPdoDb(string $host, string $db, string $charset, string $user, s
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         PDO::ATTR_EMULATE_PREPARES => false,
     ]);
+}
+
+function argonHash(string $value): string {
+    return password_hash($value, PASSWORD_ARGON2ID, [
+        'memory_cost' => 65536,
+        'time_cost'   => 4,
+        'threads'     => 2,
+    ]);
+}
+
+function createInitialAdmin(PDO $db, string $email, string $password): void {
+    $count = (int)$db->query('SELECT COUNT(*) FROM users')->fetchColumn();
+    if ($count > 0) return;
+
+    $loginHash = argonHash($password);
+
+    // Legacy schema still requires these columns (not used for reveals).
+    $vaultVerifierSalt = bin2hex(random_bytes(32));
+    $vaultVerifier = argonHash(bin2hex(random_bytes(32)) . $vaultVerifierSalt);
+
+    $stmt = $db->prepare("INSERT INTO users (email, login_hash, vault_verifier, vault_verifier_salt, is_admin, email_verified_at) VALUES (?, ?, ?, ?, 1, NOW())");
+    $stmt->execute([$email, $loginHash, $vaultVerifier, $vaultVerifierSalt]);
 }
 
 function splitSqlStatements(string $sql): array {
@@ -167,6 +190,10 @@ function markMigrationApplied(PDO $pdo, string $filename): void {
 $basePath   = getAppBasePath();
 $installUrl = getInstallUrlPath();
 
+$scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+$host   = $_SERVER['HTTP_HOST'] ?? 'localhost';
+$defaultBaseUrl = $scheme . '://' . $host . ($basePath ? $basePath : '');
+
 if (isAppInstalled()) {
     header('Location: ' . ($basePath ? $basePath : '') . '/');
     exit;
@@ -183,6 +210,7 @@ $vals = [
     'db_charset' => 'utf8mb4',
     'app_env' => 'development',
     'app_name' => 'LOCKSMITH',
+    'app_base_url' => $defaultBaseUrl,
     'mail_from' => 'no-reply@localhost',
     'email_verify_ttl_hours' => 24,
 
@@ -192,6 +220,10 @@ $vals = [
     'smtp_pass' => '',
     'smtp_secure' => 'tls',
     'smtp_verify_peer' => 1,
+
+    'admin_email' => '',
+    'admin_password' => '',
+    'admin_password2' => '',
 
     'init_db' => 1,
     'apply_migrations' => 1,
@@ -208,8 +240,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $vals['app_env'] = trim((string)($_POST['app_env'] ?? 'development'));
     $vals['app_name'] = trim((string)($_POST['app_name'] ?? 'LOCKSMITH'));
+    $vals['app_base_url'] = trim((string)($_POST['app_base_url'] ?? ''));
     $vals['mail_from'] = trim((string)($_POST['mail_from'] ?? 'no-reply@localhost'));
     $vals['email_verify_ttl_hours'] = (int)($_POST['email_verify_ttl_hours'] ?? 24);
+
+    $vals['admin_email'] = strtolower(trim((string)($_POST['admin_email'] ?? '')));
+    $vals['admin_password'] = (string)($_POST['admin_password'] ?? '');
+    $vals['admin_password2'] = (string)($_POST['admin_password2'] ?? '');
 
     $vals['smtp_host'] = trim((string)($_POST['smtp_host'] ?? ''));
     $vals['smtp_port'] = (int)($_POST['smtp_port'] ?? 587);
@@ -226,8 +263,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($vals['db_user'] === '') $errors[] = 'Database user is required.';
     if (!in_array($vals['app_env'], ['development', 'production'], true)) $errors[] = 'Invalid APP_ENV.';
     if ($vals['app_name'] === '') $errors[] = 'APP_NAME is required.';
+    if ($vals['app_base_url'] !== '' && !filter_var($vals['app_base_url'], FILTER_VALIDATE_URL)) $errors[] = 'APP_BASE_URL must be a valid URL (include https://).';
     if (!filter_var($vals['mail_from'], FILTER_VALIDATE_EMAIL)) $errors[] = 'MAIL_FROM must be a valid email.';
     if ($vals['email_verify_ttl_hours'] < 1 || $vals['email_verify_ttl_hours'] > 168) $errors[] = 'Email verification TTL must be 1–168 hours.';
+
+    if (!filter_var($vals['admin_email'], FILTER_VALIDATE_EMAIL)) $errors[] = 'Admin email must be a valid email.';
+    if (strlen($vals['admin_password']) < 8) $errors[] = 'Admin password must be at least 8 characters.';
+    if ($vals['admin_password'] !== $vals['admin_password2']) $errors[] = 'Admin passwords do not match.';
 
     if ($vals['smtp_host'] !== '') {
         if ($vals['smtp_port'] < 1 || $vals['smtp_port'] > 65535) $errors[] = 'SMTP_PORT must be 1–65535.';
@@ -253,6 +295,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Validate DB credentials before writing config/database.php
             $serverPdo = connectPdoServer($vals['db_host'], $vals['db_charset'], $vals['db_user'], $vals['db_pass']);
 
+            $dbPdo = null;
+
             if ($vals['init_db'] || $vals['apply_migrations']) {
                 $dbName = $vals['db_name'];
                 $quotedDb = '`' . str_replace('`', '``', $dbName) . '`';
@@ -276,7 +320,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             } else {
                 // No schema work requested, but still verify the DB itself is reachable.
-                connectPdoDb($vals['db_host'], $vals['db_name'], $vals['db_charset'], $vals['db_user'], $vals['db_pass']);
+                $dbPdo = connectPdoDb($vals['db_host'], $vals['db_name'], $vals['db_charset'], $vals['db_user'], $vals['db_pass']);
+            }
+
+            if ($dbPdo instanceof PDO) {
+                createInitialAdmin($dbPdo, $vals['admin_email'], $vals['admin_password']);
             }
 
             $vals['app_hmac_secret'] = bin2hex(random_bytes(32));
@@ -284,6 +332,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $flagBody = "installed_at=" . date('c') . "\n";
             $flagBody .= "app_base_path=" . ($basePath ? $basePath : '/') . "\n";
+            $flagBody .= "app_base_url=" . ($vals['app_base_url'] !== '' ? rtrim($vals['app_base_url'], '/') : '') . "\n";
             if (file_put_contents($flagPath, $flagBody) === false) {
                 throw new RuntimeException('Failed to write config/installed.flag (make config/ writable).');
             }
@@ -405,8 +454,19 @@ hr{border:none;border-top:1px solid var(--b1);margin:16px 0;}
           </div>
 
           <div class="field"><label>APP_NAME</label><input name="app_name" value="<?= htmlspecialchars($vals['app_name']) ?>" required></div>
+          <div class="field"><label>APP_BASE_URL</label><input name="app_base_url" value="<?= htmlspecialchars($vals['app_base_url']) ?>" placeholder="https://example.com"></div>
+          <div class="note" style="margin-top:-4px;">Used for emails and for the mobile app. Leave as-is unless your server sits behind a proxy.</div>
+          <div style="height:8px"></div>
           <div class="field"><label>MAIL_FROM</label><input name="mail_from" value="<?= htmlspecialchars($vals['mail_from']) ?>" required></div>
           <div class="field"><label>Email verification TTL (hours)</label><input name="email_verify_ttl_hours" type="number" min="1" max="168" value="<?= (int)$vals['email_verify_ttl_hours'] ?>" required></div>
+
+          <hr>
+          <h3 style="font-family:var(--display);font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--accent);margin-bottom:12px;">Initial admin account</h3>
+
+          <div class="field"><label>Admin email</label><input name="admin_email" value="<?= htmlspecialchars($vals['admin_email']) ?>" placeholder="admin@example.com" required></div>
+          <div class="field"><label>Admin password</label><input type="password" name="admin_password" value="" required></div>
+          <div class="field"><label>Confirm admin password</label><input type="password" name="admin_password2" value="" required></div>
+          <div class="note">This user will be created with <code>is_admin=1</code> and <strong>email verified</strong>.</div>
 
           <hr>
           <h3 style="font-family:var(--display);font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--accent);margin-bottom:12px;">Mail (SMTP optional)</h3>

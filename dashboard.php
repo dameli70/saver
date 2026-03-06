@@ -10,7 +10,7 @@ if (!isLoggedIn()) {
     exit;
 }
 if (!isEmailVerified()) {
-    header('Location: account.php');
+    header('Location: profile.php');
     exit;
 }
 
@@ -22,7 +22,7 @@ $userId = (int)(getCurrentUserId() ?? 0);
 $showSecurityBanner = !userHasTotp($userId) && !userHasPasskeys($userId);
 
 // Strict security headers
-header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none';");
+header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none';");
 header("X-Frame-Options: DENY");
 header("X-Content-Type-Options: nosniff");
 header("Referrer-Policy: no-referrer");
@@ -39,6 +39,8 @@ header("Permissions-Policy: clipboard-write=(self)");
 <title>LOCKSMITH — Dashboard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#06070a">
 <style>
 :root{
   --bg:#06070a;--s1:#0d0f14;--s2:#13161d;--s3:#1a1d27;
@@ -47,11 +49,11 @@ header("Permissions-Policy: clipboard-write=(self)");
   --text:#dde1ec;--muted:#525970;
   --mono:'DM Mono',monospace;--display:'Unbounded',sans-serif;
   --sat:env(safe-area-inset-top,0px);--sab:env(safe-area-inset-bottom,0px);
+  --r:14px;
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 html{scroll-behavior:smooth;-webkit-tap-highlight-color:transparent;}
-body{background:var(--bg);color:var(--text);font-family:var(--mono);font-size:14px;
-  min-height:100vh;overflow-x:hidden;-webkit-font-smoothing:antialiased;}
+body{background:var(--bg);color:var(--text);font-family:var(--mono);font-size:14px;min-height:100vh;overflow-x:hidden;-webkit-font-smoothing:antialiased;}
 body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9998;opacity:.5;
   background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.035'/%3E%3C/svg%3E");}
 .orb{position:fixed;border-radius:50%;filter:blur(100px);pointer-events:none;z-index:0;}
@@ -61,7 +63,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9998;o
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;
   padding:15px 24px;font-family:var(--mono);font-size:12px;letter-spacing:2px;
   text-transform:uppercase;cursor:pointer;border:none;transition:all .15s;
-  border-radius:0;-webkit-appearance:none;touch-action:manipulation;min-height:48px;text-decoration:none;}
+  border-radius:var(--r);-webkit-appearance:none;touch-action:manipulation;min-height:48px;text-decoration:none;}
 .btn-primary{background:var(--accent);color:#000;font-weight:500;width:100%;}
 .btn-primary:hover{background:#f0ff60;}
 .btn-primary:active{transform:scale(.98);}
@@ -70,13 +72,13 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9998;o
 .btn-ghost:hover{border-color:var(--text);}
 .btn-green{background:var(--green);color:#000;font-weight:500;}
 .btn-red{background:rgba(255,71,87,.1);border:1px solid rgba(255,71,87,.3);color:var(--red);}
-.btn-sm{padding:10px 16px;font-size:11px;min-height:40px;}
+.btn-sm{padding:10px 16px;font-size:11px;min-height:40px;width:auto;}
 
 .spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(0,0,0,.35);border-top-color:#000;border-radius:50%;animation:spin .5s linear infinite;}
 .spin.light{border-color:rgba(255,255,255,.25);border-top-color:var(--accent);}
 @keyframes spin{to{transform:rotate(360deg);}}
 
-.msg{padding:12px 14px;font-size:12px;margin-bottom:12px;display:none;letter-spacing:.4px;line-height:1.6;}
+.msg{padding:12px 14px;font-size:12px;margin-bottom:12px;display:none;letter-spacing:.4px;line-height:1.6;border-radius:var(--r);}
 .msg.show{display:block;}
 .msg-err{background:rgba(255,71,87,.08);border:1px solid rgba(255,71,87,.2);color:var(--red);}
 .msg-ok{background:rgba(71,255,176,.08);border:1px solid rgba(71,255,176,.2);color:var(--green);}
@@ -86,7 +88,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9998;o
 .field label{display:block;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:6px;}
 .field input,.field select{width:100%;background:var(--s2);border:1px solid var(--b1);color:var(--text);
   font-family:var(--mono);font-size:15px;padding:14px;outline:none;transition:border-color .2s;
-  -webkit-appearance:none;border-radius:0;-webkit-text-size-adjust:100%;}
+  -webkit-appearance:none;border-radius:var(--r);-webkit-text-size-adjust:100%;}
 .field input:focus,.field select:focus{border-color:var(--accent);}
 
 #app{min-height:100vh;position:relative;z-index:1;padding-bottom:max(20px,var(--sab));}
@@ -100,17 +102,19 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9998;o
 .user-pill{font-size:10px;color:var(--muted);letter-spacing:1px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:none;}
 @media(min-width:560px){.user-pill{display:block;}}
 
-.app-body{max-width:680px;margin:0 auto;padding:22px 16px;}
+.app-body{max-width:1100px;margin:0 auto;padding:22px 16px;}
 @media(min-width:600px){.app-body{padding:30px 24px;}}
 
-/* ── SECURITY BANNER ── */
+.layout{display:grid;grid-template-columns:1fr;gap:16px;}
+@media(min-width:1020px){.layout{grid-template-columns:1fr 1.05fr;align-items:start;}}
+
 .sec-banner{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
   background:rgba(255,170,0,.06);border:1px solid rgba(255,170,0,.22);
-  padding:14px 14px;margin:0 0 16px 0;}
+  padding:14px 14px;margin:0 0 16px 0;border-radius:var(--r);}
 .sec-banner-title{font-family:var(--display);font-weight:800;font-size:12px;letter-spacing:1px;color:var(--orange);}
 .sec-banner-sub{font-size:11px;color:var(--muted);line-height:1.6;max-width:520px;}
 
-.card{background:var(--s1);border:1px solid var(--b1);padding:20px;margin-bottom:16px;position:relative;}
+.card{background:var(--s1);border:1px solid var(--b1);padding:20px;margin-bottom:16px;position:relative;border-radius:var(--r);}
 @media(min-width:600px){.card{padding:24px 28px;}}
 .card-title{font-family:var(--display);font-size:11px;font-weight:700;letter-spacing:2px;
   text-transform:uppercase;color:var(--accent);margin-bottom:18px;display:flex;align-items:center;gap:8px;}
@@ -121,25 +125,25 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9998;o
 .type-opt{padding:12px 6px;border:1px solid var(--b1);background:transparent;
   color:var(--muted);font-family:var(--mono);font-size:10px;letter-spacing:1px;
   text-transform:uppercase;cursor:pointer;text-align:center;transition:all .15s;
-  min-height:44px;display:flex;align-items:center;justify-content:center;}
+  min-height:44px;display:flex;align-items:center;justify-content:center;border-radius:12px;}
 .type-opt:hover{border-color:var(--b2);color:var(--text);}
 .type-opt.sel{border-color:var(--accent);color:var(--accent);background:rgba(232,255,71,.06);}
 
 .slider-row{display:flex;align-items:center;gap:14px;}
 .slider-val{font-family:var(--display);font-size:26px;font-weight:900;color:var(--accent);min-width:40px;text-align:right;}
 input[type=range]{-webkit-appearance:none;flex:1;height:4px;background:var(--b2);outline:none;cursor:pointer;border-radius:2px;}
-input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;background:var(--accent);cursor:pointer;border-radius:0;}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;background:var(--accent);cursor:pointer;border-radius:12px;}
 
 .kdf-progress{display:none;margin-top:12px;}
 .kdf-progress.show{display:block;}
-.kdf-bar-wrap{height:3px;background:var(--b2);overflow:hidden;margin-bottom:6px;}
+.kdf-bar-wrap{height:3px;background:var(--b2);overflow:hidden;margin-bottom:6px;border-radius:999px;}
 .kdf-bar{height:100%;background:var(--accent);transition:width .1s linear;width:0%;}
 .kdf-label{font-size:10px;color:var(--muted);letter-spacing:1px;text-align:center;}
 
 .sec-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
 
 .locks-grid{display:flex;flex-direction:column;gap:12px;}
-.lock-card{background:var(--s1);border:1px solid var(--b1);padding:16px 18px;position:relative;transition:border-color .2s;}
+.lock-card{background:var(--s1);border:1px solid var(--b1);padding:16px 18px;position:relative;transition:border-color .2s;border-radius:var(--r);}
 .lock-card:hover{border-color:var(--b2);}
 .lock-card.st-locked{border-left:3px solid rgba(255,71,87,.5);}
 .lock-card.st-unlocked{border-left:3px solid rgba(71,255,176,.5);}
@@ -149,7 +153,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
 .lc-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:10px;}
 .lc-label{font-family:var(--display);font-size:14px;font-weight:700;word-break:break-word;}
 .lc-badge{display:inline-flex;align-items:center;flex-shrink:0;font-size:9px;
-  letter-spacing:1px;text-transform:uppercase;padding:4px 8px;border:1px solid;}
+  letter-spacing:1px;text-transform:uppercase;padding:4px 8px;border:1px solid;border-radius:999px;}
 .lc-badge.locked{background:rgba(255,71,87,.07);border-color:rgba(255,71,87,.2);color:var(--red);}
 .lc-badge.unlocked{background:rgba(71,255,176,.07);border-color:rgba(71,255,176,.2);color:var(--green);}
 .lc-badge.pending{background:rgba(255,170,0,.07);border-color:rgba(255,170,0,.2);color:var(--orange);}
@@ -162,21 +166,20 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
 .lc-countdown{font-size:12px;color:var(--accent);margin-bottom:10px;letter-spacing:1px;}
 .lc-actions{display:flex;gap:8px;flex-wrap:wrap;}
 .lc-autosave-note{font-size:10px;color:var(--blue);letter-spacing:.4px;
-  padding:6px 10px;border:1px solid rgba(71,184,255,.15);background:rgba(71,184,255,.05);margin-bottom:8px;line-height:1.5;}
+  padding:6px 10px;border:1px solid rgba(71,184,255,.15);background:rgba(71,184,255,.05);margin-bottom:8px;line-height:1.5;border-radius:var(--r);}
 
 .empty{text-align:center;padding:60px 20px;color:var(--muted);}
 .empty-icon{font-size:44px;margin-bottom:14px;}
 .empty h3{font-family:var(--display);font-size:15px;font-weight:700;color:var(--text);margin-bottom:8px;}
 .empty p{font-size:12px;line-height:1.6;}
 
-/* overlays */
 #confirm-overlay,#reveal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.9);
   display:none;align-items:flex-end;justify-content:center;z-index:500;padding:0 0 max(0px,var(--sab)) 0;}
 #confirm-overlay.show,#reveal-overlay.show{display:flex;}
 .confirm-sheet,.reveal-sheet{background:var(--s1);border:1px solid var(--b2);border-bottom:none;
-  padding:28px 22px max(28px,var(--sab));width:100%;max-width:480px;position:relative;}
+  padding:28px 22px max(28px,var(--sab));width:100%;max-width:480px;position:relative;border-radius:var(--r) var(--r) 0 0;}
 @media(min-width:600px){#confirm-overlay,#reveal-overlay{align-items:center;}
-  .confirm-sheet,.reveal-sheet{border:1px solid var(--b2);max-width:480px;padding:32px;}}
+  .confirm-sheet,.reveal-sheet{border:1px solid var(--b2);max-width:480px;padding:32px;border-radius:var(--r);}}
 .modal-close{position:absolute;top:12px;right:14px;background:none;border:none;color:var(--muted);
   font-size:22px;cursor:pointer;padding:4px;min-width:32px;min-height:32px;
   display:flex;align-items:center;justify-content:center;}
@@ -186,15 +189,15 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
 .reveal-sub{font-size:10px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:18px;}
 .reveal-pwd{font-size:clamp(16px,4vw,22px);color:var(--accent);letter-spacing:3px;
   word-break:break-all;background:#000;padding:16px;border:1px solid rgba(232,255,71,.12);
-  margin-bottom:16px;line-height:1.5;user-select:all;-webkit-user-select:all;display:none;}
+  margin-bottom:16px;line-height:1.5;user-select:all;-webkit-user-select:all;display:none;border-radius:var(--r);}
 .vault-input-wrap{margin-bottom:16px;}
 .vault-input-wrap label{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:6px;}
 .vault-input-wrap input{width:100%;background:#000;border:1px solid rgba(232,255,71,.2);
   color:var(--accent);font-family:var(--mono);font-size:15px;padding:13px;outline:none;
-  border-radius:0;-webkit-appearance:none;}
+  border-radius:var(--r);-webkit-appearance:none;}
 
 .toast{position:fixed;bottom:max(24px,var(--sab));left:50%;transform:translateX(-50%);
-  background:#000;border:1px solid var(--b2);padding:10px 14px;font-size:12px;letter-spacing:.4px;z-index:900;max-width:92vw;}
+  background:#000;border:1px solid var(--b2);padding:10px 14px;font-size:12px;letter-spacing:.4px;z-index:900;max-width:92vw;border-radius:var(--r);}
 .toast.ok{border-color:rgba(71,255,176,.25);color:var(--green);}
 .toast.err{border-color:rgba(255,71,87,.3);color:var(--red);}
 .toast.warn{border-color:rgba(255,170,0,.35);color:var(--orange);}
@@ -209,8 +212,11 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
     <div class="topbar-r">
       <span class="user-pill"><?= htmlspecialchars($userEmail) ?></span>
       <?php if ($isAdmin): ?><a class="btn btn-ghost btn-sm" href="admin.php">Admin</a><?php endif; ?>
-      <a class="btn btn-ghost btn-sm" href="backup.php">Backup</a>
-      <a class="btn btn-ghost btn-sm" href="account.php">Account</a>
+      <a class="btn btn-ghost btn-sm" href="codes.php">Codes</a>
+      <a class="btn btn-ghost btn-sm" href="backup.php">Backups</a>
+      <a class="btn btn-ghost btn-sm" href="profile.php">Profile</a>
+      <a class="btn btn-ghost btn-sm" href="security.php">Security</a>
+      <a class="btn btn-ghost btn-sm" href="faq.php">FAQ</a>
       <a class="btn btn-ghost btn-sm" href="logout.php">Logout</a>
     </div>
   </div>
@@ -223,7 +229,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
         <div class="sec-banner-title">Security setup required</div>
         <div class="sec-banner-sub">Enable TOTP or add a passkey to protect sensitive actions (reveal, backups, vault changes).</div>
       </div>
-      <a class="btn btn-ghost btn-sm" href="account.php#totp-card">Open account</a>
+      <a class="btn btn-ghost btn-sm" href="security.php#totp-card">Open security</a>
     </div>
     <?php endif; ?>
 
@@ -232,100 +238,111 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
       <div class="card-title"><div class="dot"></div>Strong security</div>
       <div style="font-size:12px;color:var(--muted);line-height:1.7;">
         Vault passphrases never leave your browser. Revealing codes and committing vault rotation requires <strong style="color:var(--accent)">TOTP or a passkey</strong>.
-        Set this up in <a href="account.php" style="color:var(--text);">Account</a>.
+        Set this up in <a href="security.php" style="color:var(--text);">Security</a>.
       </div>
     </div>
 
-    <div class="card" id="vault-unlock-card" style="display:none">
-      <div class="card-title"><div class="dot" style="background:var(--orange)"></div><span style="color:var(--orange)">Vault</span></div>
-      <div style="font-size:12px;color:var(--muted);line-height:1.7;margin-bottom:14px;">
-        Your vault passphrase is used to derive encryption keys in your browser. It is never sent to the server.
+   <div class="layout">
+      <div>
+
+        <div class="card" id="vault-unlock-card" style="display:none">
+          <div class="card-title"><div class="dot" style="background:var(--orange)"></div><span style="color:var(--orange)">Vault</span></div>
+          <div style="font-size:12px;color:var(--muted);line-height:1.7;margin-bottom:14px;">
+            Your vault passphrase is used to derive encryption keys in your browser. It is never sent to the server.
+          </div>
+
+          <div id="vp-setup-note" class="msg msg-warn"></div>
+
+          <div class="field"><label>Vault Passphrase</label>
+            <input type="password" id="vp-input" placeholder="Your vault passphrase…" autocomplete="current-password">
+          </div>
+
+          <div class="field" id="vp2-field" style="display:none"><label>Confirm Vault Passphrase</label>
+            <input type="password" id="vp-input2" placeholder="Confirm passphrase…" autocomplete="current-password">
+          </div>
+
+          <div id="vp-err" class="msg msg-err"></div>
+          <button class="btn btn-primary" id="vp-btn" onclick="unlockVault()"><span id="vp-txt">Unlock Vault</span></button>
+        </div>
+
+        <div class="card" id="gen-card">
+          <div class="card-title"><div class="dot"></div>Generate &amp; Lock</div>
+
+          <div class="field"><label>Label</label>
+            <input id="g-label" type="text" placeholder="e.g. Bank PIN" maxlength="120">
+          </div>
+
+          <div class="field"><label>Type</label>
+            <div class="type-grid" id="type-grid">
+              <button class="type-opt sel" data-type="alphanumeric" type="button">A-Z0-9</button>
+              <button class="type-opt" data-type="alpha" type="button">A-Z</button>
+              <button class="type-opt" data-type="numeric" type="button">0-9</button>
+              <button class="type-opt" data-type="custom" type="button">Custom</button>
+            </div>
+          </div>
+
+          <div class="field"><label>Length</label>
+            <div class="slider-row">
+              <input type="range" min="4" max="64" value="16" id="g-len" oninput="document.getElementById('len-val').textContent=this.value;">
+              <div class="slider-val" id="len-val">16</div>
+            </div>
+          </div>
+
+          <div class="field"><label>Reveal Date &amp; Time</label>
+            <input type="datetime-local" id="g-date">
+          </div>
+
+          <div class="field"><label>Memory Hint <span style="color:var(--muted);font-size:10px;">(optional — never the code)</span></label>
+            <input type="text" id="g-hint" placeholder="e.g. Set before my summer trip" maxlength="500">
+          </div>
+
+          <div id="g-err" class="msg msg-err"></div>
+
+          <div class="kdf-progress" id="kdf-progress">
+            <div class="kdf-bar-wrap"><div class="kdf-bar" id="kdf-bar"></div></div>
+            <div class="kdf-label" id="kdf-label">Deriving encryption key in your browser…</div>
+          </div>
+
+          <button class="btn btn-primary" id="g-btn" onclick="doGenerate()" style="margin-top:10px;">
+            <span id="g-txt">Generate &amp; Lock</span>
+          </button>
+        </div>
+
       </div>
 
-      <div id="vp-setup-note" class="msg msg-warn"></div>
+      <div>
+        <div class="sec-header" id="codes">
+          <div class="card-title" style="margin-bottom:0"><div class="dot"></div>My Codes</div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <a class="btn btn-ghost btn-sm" href="codes.php">All</a>
+            <button class="btn btn-ghost btn-sm" onclick="loadLocks()">↻</button>
+          </div>
+        </div>
+        <div id="locks-wrap">
+          <div class="empty"><div class="empty-icon">🔒</div><h3>No codes yet</h3><p>Create your first code above.</p></div>
+        </div>
 
-      <div class="field"><label>Vault Passphrase</label>
-        <input type="password" id="vp-input" placeholder="Your vault passphrase…" autocomplete="current-password">
-      </div>
-
-      <div class="field" id="vp2-field" style="display:none"><label>Confirm Vault Passphrase</label>
-        <input type="password" id="vp-input2" placeholder="Confirm passphrase…" autocomplete="current-password">
-      </div>
-
-      <div id="vp-err" class="msg msg-err"></div>
-      <button class="btn btn-primary" id="vp-btn" onclick="unlockVault()"><span id="vp-txt">Unlock Vault</span></button>
-    </div>
-
-    <div class="card" id="gen-card">
-      <div class="card-title"><div class="dot"></div>Generate &amp; Lock</div>
-
-      <div class="field"><label>Label</label>
-        <input id="g-label" type="text" placeholder="e.g. Bank PIN" maxlength="120">
-      </div>
-
-      <div class="field"><label>Type</label>
-        <div class="type-grid" id="type-grid">
-          <button class="type-opt sel" data-type="alphanumeric" type="button">A-Z0-9</button>
-          <button class="type-opt" data-type="alpha" type="button">A-Z</button>
-          <button class="type-opt" data-type="numeric" type="button">0-9</button>
-          <button class="type-opt" data-type="custom" type="button">Custom</button>
+        <div class="card" id="vault-settings">
+          <div class="card-title"><div class="dot"></div>Vault Settings</div>
+          <p style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.6;">
+            Rotate your vault passphrase by re-encrypting <strong>already-unlocked</strong> codes (reveal date has passed).
+            Locked codes cannot be rotated until they unlock.
+          </p>
+          <div class="field"><label>Current Vault Passphrase</label>
+            <input type="password" id="rot-cur" placeholder="your current passphrase" autocomplete="current-password">
+          </div>
+          <div class="field"><label>New Vault Passphrase</label>
+            <input type="password" id="rot-new" placeholder="min 10 chars" autocomplete="new-password">
+          </div>
+          <div class="field"><label>Confirm New Vault Passphrase</label>
+            <input type="password" id="rot-new2" placeholder="repeat new passphrase" autocomplete="new-password">
+          </div>
+          <div id="rot-err" class="msg msg-err"></div>
+          <button class="btn btn-ghost" id="rot-btn" onclick="rotateVaultPassphrase()" style="margin-top:10px;">
+            <span id="rot-txt">Rotate vault passphrase</span>
+          </button>
         </div>
       </div>
-
-      <div class="field"><label>Length</label>
-        <div class="slider-row">
-          <input type="range" min="4" max="64" value="16" id="g-len" oninput="document.getElementById('len-val').textContent=this.value;">
-          <div class="slider-val" id="len-val">16</div>
-        </div>
-      </div>
-
-      <div class="field"><label>Reveal Date &amp; Time</label>
-        <input type="datetime-local" id="g-date">
-      </div>
-
-      <div class="field"><label>Memory Hint <span style="color:var(--muted);font-size:10px;">(optional — never the code)</span></label>
-        <input type="text" id="g-hint" placeholder="e.g. Set before my summer trip" maxlength="500">
-      </div>
-
-      <div id="g-err" class="msg msg-err"></div>
-
-      <div class="kdf-progress" id="kdf-progress">
-        <div class="kdf-bar-wrap"><div class="kdf-bar" id="kdf-bar"></div></div>
-        <div class="kdf-label" id="kdf-label">Deriving encryption key in your browser…</div>
-      </div>
-
-      <button class="btn btn-primary" id="g-btn" onclick="doGenerate()" style="margin-top:10px;">
-        <span id="g-txt">Generate &amp; Lock</span>
-      </button>
-    </div>
-
-    <div class="sec-header" id="codes">
-      <div class="card-title" style="margin-bottom:0"><div class="dot"></div>My Codes</div>
-      <button class="btn btn-ghost btn-sm" onclick="loadLocks()">↻</button>
-    </div>
-    <div id="locks-wrap">
-      <div class="empty"><div class="empty-icon">🔒</div><h3>No codes yet</h3><p>Create your first code above.</p></div>
-    </div>
-
-    <div class="card" id="vault-settings">
-      <div class="card-title"><div class="dot"></div>Vault Settings</div>
-      <p style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.6;">
-        Rotate your vault passphrase by re-encrypting <strong>already-unlocked</strong> codes (reveal date has passed).
-        Locked codes cannot be rotated until they unlock.
-      </p>
-      <div class="field"><label>Current Vault Passphrase</label>
-        <input type="password" id="rot-cur" placeholder="your current passphrase" autocomplete="current-password">
-      </div>
-      <div class="field"><label>New Vault Passphrase</label>
-        <input type="password" id="rot-new" placeholder="min 10 chars" autocomplete="new-password">
-      </div>
-      <div class="field"><label>Confirm New Vault Passphrase</label>
-        <input type="password" id="rot-new2" placeholder="repeat new passphrase" autocomplete="new-password">
-      </div>
-      <div id="rot-err" class="msg msg-err"></div>
-      <button class="btn btn-ghost" id="rot-btn" onclick="rotateVaultPassphrase()" style="margin-top:10px;">
-        <span id="rot-txt">Rotate vault passphrase</span>
-      </button>
     </div>
 
   </div>
@@ -393,6 +410,7 @@ let pendingLock = null;
 let revealedPwd = null;
 let currentRevealLockId = null;
 let currentRevealLabel  = null;
+let countdownTimer = null;
 
 // ─────────────────────────────────────────────────
 //  HTTP
@@ -409,6 +427,28 @@ async function postCsrf(url,body){
 // ─────────────────────────────────────────────────
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function toast(msg,type='ok'){const t=document.createElement('div');t.className=`toast ${type}`;t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),3200);} 
+
+function formatCountdown(totalSeconds){
+  const sec = Math.max(0, parseInt(totalSeconds||0,10));
+  const days = Math.floor(sec / 86400);
+  const hours = Math.floor((sec % 86400) / 3600);
+  const minutes = Math.floor((sec % 3600) / 60);
+  return `${days}d ${hours}h ${minutes}m`;
+}
+
+function updateCountdowns(){
+  document.querySelectorAll('.lc-countdown').forEach(el=>{
+    const cur = Math.max(0, parseInt(el.dataset.remaining||'0',10));
+    const next = Math.max(0, cur - 1);
+    el.dataset.remaining = String(next);
+    el.textContent = next > 0 ? `⏱ ${formatCountdown(next)} remaining` : '⏱ Reveal available';
+  });
+}
+
+function startCountdownTick(){
+  if(countdownTimer) clearInterval(countdownTimer);
+  countdownTimer = setInterval(updateCountdowns, 1000);
+}
 
 function pad2(n){return String(n).padStart(2,'0');}
 function toLocalDatetimeValue(d){
@@ -526,34 +566,36 @@ function genPassword(type, length) {
 // ─────────────────────────────────────────────────
 //  STRONG AUTH (step-up)
 // ─────────────────────────────────────────────────
+
 async function ensureReauth(methods){
   if(methods && methods.passkey && window.PublicKeyCredential){
-    try{
-      const begin = await postCsrf('/api/webauthn.php', {action:'reauth_begin'});
-      if(begin.success){
-        const pk = begin.publicKey || {};
-        const allow = (pk.allowCredentials||[]).map(c => ({type:c.type, id: b64uToBuf(c.id)}));
-        const cred = await navigator.credentials.get({publicKey:{
-          challenge: b64uToBuf(pk.challenge),
-          rpId: pk.rpId,
-          timeout: pk.timeout||60000,
-          userVerification: pk.userVerification||'required',
-          allowCredentials: allow,
-        }});
-        const a = cred.response;
-        const fin = await postCsrf('/api/webauthn.php', {
-          action:'reauth_finish',
-          rawId: bufToB64u(cred.rawId),
-          response:{
-            clientDataJSON: bufToB64u(a.clientDataJSON),
-            authenticatorData: bufToB64u(a.authenticatorData),
-            signature: bufToB64u(a.signature),
-            userHandle: a.userHandle ? bufToB64u(a.userHandle) : null,
-          }
-        });
-        if(fin.success) return true;
-      }
-    }catch{}
+    const begin = await postCsrf('/api/webauthn.php', {action:'reauth_begin'});
+    if(begin.success){
+      const pk = begin.publicKey || {};
+      const allow = (pk.allowCredentials||[]).map(c => ({type:c.type, id: b64uToBuf(c.id)}));
+
+      const cred = await navigator.credentials.get({publicKey:{
+        challenge: b64uToBuf(pk.challenge),
+        rpId: pk.rpId,
+        timeout: pk.timeout||60000,
+        userVerification: pk.userVerification||'required',
+        allowCredentials: allow,
+      }});
+
+      const a = cred.response;
+      const finish = await postCsrf('/api/webauthn.php', {
+        action:'reauth_finish',
+        rawId: bufToB64u(cred.rawId),
+        response:{
+          clientDataJSON: bufToB64u(a.clientDataJSON),
+          authenticatorData: bufToB64u(a.authenticatorData),
+          signature: bufToB64u(a.signature),
+          userHandle: a.userHandle ? bufToB64u(a.userHandle) : null,
+        }
+      });
+
+      return !!finish.success;
+    }
   }
 
   if(methods && methods.totp){
@@ -563,7 +605,7 @@ async function ensureReauth(methods){
     return !!r.success;
   }
 
-  toast('Enable TOTP or add a passkey in Account', 'warn');
+  toast('Enable TOTP or add a passkey in Security', 'warn');
   return false;
 }
 
@@ -901,6 +943,7 @@ async function loadLocks(){
     }
     wrap.innerHTML='<div class="locks-grid" id="locks-grid"></div>';
     r.locks.forEach(l=>document.getElementById('locks-grid').appendChild(buildCard(l)));
+    startCountdownTick();
   }catch{
     wrap.innerHTML='<div class="empty"><p>Failed to load.</p></div>';
   }
@@ -913,7 +956,6 @@ function buildCard(lock){
 
   const badges={locked:'🔒 Locked',unlocked:'🔓 Unlocked',pending:'⏳ Pending',auto_saved:'💾 Auto-saved',rejected:'✗ Void'};
   const rd=fmtServerUtcDateTime(lock.reveal_date);
-tring('en-US',{year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
 
   const top=document.createElement('div');
   top.className='lc-top';
@@ -944,13 +986,12 @@ tring('en-US',{year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:
     el.appendChild(note);
   }
 
-  if(st==='locked'&&lock.time_remaining){
-    const t=lock.time_remaining;
-    const countdown=document.createElement('div');
-    countdown.className='lc-countdown';
-    countdown.textContent=`⏱ ${t.days}d ${t.hours}h ${t.minutes}m remaining`;
-    el.appendChild(countdown);
-  }
+  const total = lock.time_remaining ? parseInt(lock.time_remaining.total_seconds||0,10) : 0;
+  const countdown=document.createElement('div');
+  countdown.className='lc-countdown';
+  countdown.dataset.remaining = String(total);
+  countdown.textContent = total > 0 ? `⏱ ${formatCountdown(total)} remaining` : '⏱ Reveal available';
+  el.appendChild(countdown);
 
   const meta=document.createElement('div');
   meta.className='lc-meta';
@@ -1197,6 +1238,10 @@ async function rotateVaultPassphrase(){
     btn.disabled=false;
     txt.textContent='Rotate vault passphrase';
   }
+}
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
 }
 </script>
 </body>

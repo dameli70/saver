@@ -11,7 +11,7 @@ if (!isLoggedIn()) {
 }
 
 if (!isEmailVerified()) {
-    header('Location: account.php');
+    header('Location: profile.php');
     exit;
 }
 
@@ -23,10 +23,11 @@ if (!isAdmin()) {
 $userEmail = getCurrentUserEmail() ?? '';
 $csrf      = getCsrfToken();
 
-header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none';");
+header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none';");
 header("X-Frame-Options: DENY");
 header("X-Content-Type-Options: nosniff");
 header("Referrer-Policy: no-referrer");
+header("Permissions-Policy: clipboard-write=(self)");
 ?>
 <!doctype html>
 <html lang="en">
@@ -36,32 +37,38 @@ header("Referrer-Policy: no-referrer");
 <title>Admin — LOCKSMITH</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#06070a">
 <style>
 :root{
   --bg:#06070a;--s1:#0d0f14;--s2:#13161d;--s3:#1a1d27;
   --b1:rgba(255,255,255,.07);--b2:rgba(255,255,255,.13);
-  --accent:#e8ff47;--red:#ff4757;--green:#47ffb0;--orange:#ffaa00;--blue:#47b8ff;
+  --accent:#e8ff47;--red:#ff4757;--blue:#47b8ff;--green:#47ffb0;--orange:#ffaa00;
   --text:#dde1ec;--muted:#525970;
   --mono:'DM Mono',monospace;--display:'Unbounded',sans-serif;
   --sat:env(safe-area-inset-top,0px);--sab:env(safe-area-inset-bottom,0px);
+  --r:14px;
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-body{background:var(--bg);color:var(--text);font-family:var(--mono);min-height:100vh;overflow-x:hidden;}
+body{background:var(--bg);color:var(--text);font-family:var(--mono);min-height:100vh;overflow-x:hidden;-webkit-font-smoothing:antialiased;}
 .orb{position:fixed;border-radius:50%;filter:blur(120px);pointer-events:none;z-index:0;}
 .orb1{width:520px;height:520px;background:rgba(232,255,71,.035);top:-170px;right:-120px;}
 .orb2{width:360px;height:360px;background:rgba(71,184,255,.03);bottom:40px;left:-90px;}
+
 .nav{position:sticky;top:0;z-index:10;display:flex;align-items:center;justify-content:space-between;
   padding:max(16px,var(--sat)) 20px 16px;border-bottom:1px solid var(--b1);background:rgba(6,7,10,.92);backdrop-filter:blur(14px);}
 .logo{font-family:var(--display);font-weight:900;letter-spacing:-1px;font-size:18px;text-decoration:none;color:inherit;}
 .logo span{color:var(--accent);} 
 .nav-r{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end;}
-.pill{font-size:10px;color:var(--muted);letter-spacing:1px;border:1px solid rgba(255,255,255,.13);padding:6px 10px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.badge{font-size:10px;letter-spacing:2px;text-transform:uppercase;border:1px solid rgba(232,255,71,.25);color:var(--accent);padding:6px 10px;}
+.pill{font-size:10px;color:var(--muted);letter-spacing:1px;border:1px solid rgba(255,255,255,.13);padding:6px 10px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-radius:var(--r);}
+.badge{font-size:10px;letter-spacing:2px;text-transform:uppercase;border:1px solid rgba(232,255,71,.25);color:var(--accent);padding:6px 10px;border-radius:var(--r);}
+
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;
   padding:12px 18px;font-family:var(--mono);font-size:11px;letter-spacing:2px;
-  text-transform:uppercase;cursor:pointer;border:none;transition:all .15s;border-radius:0;
+  text-transform:uppercase;cursor:pointer;border:none;transition:all .15s;border-radius:var(--r);
   -webkit-appearance:none;min-height:42px;text-decoration:none;}
 .btn-primary{background:var(--accent);color:#000;font-weight:600;}
+.btn-primary:disabled{opacity:.45;pointer-events:none;}
 .btn-ghost{background:transparent;border:1px solid var(--b2);color:var(--text);} 
 .btn-ghost:hover{border-color:var(--text);} 
 .btn-red{background:rgba(255,71,87,.1);border:1px solid rgba(255,71,87,.3);color:var(--red);} 
@@ -69,35 +76,44 @@ body{background:var(--bg);color:var(--text);font-family:var(--mono);min-height:1
 .btn-blue{background:rgba(71,184,255,.12);border:1px solid rgba(71,184,255,.25);color:var(--blue);} 
 .btn-blue:hover{background:rgba(71,184,255,.18);} 
 .btn-sm{padding:10px 14px;min-height:38px;font-size:10px;}
+
 .wrap{position:relative;z-index:1;max-width:1200px;margin:0 auto;padding:26px 18px 60px;}
 .h{font-family:var(--display);font-weight:900;font-size:18px;letter-spacing:1px;margin-bottom:8px;}
 .p{color:var(--muted);font-size:12px;line-height:1.7;margin-bottom:16px;}
+
 .grid{display:grid;grid-template-columns:1fr;gap:14px;}
 @media(min-width:980px){.grid{grid-template-columns:1fr 1fr;}}
-.card{background:rgba(13,15,20,.9);border:1px solid var(--b1);padding:18px;}
+
+.card{background:rgba(13,15,20,.9);border:1px solid var(--b1);padding:18px;border-radius:var(--r);}
 .card-title{font-family:var(--display);font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--accent);margin-bottom:14px;}
+
 .field{margin-bottom:12px;}
 .field label{display:block;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:6px;}
 .field input{width:100%;background:var(--s2);border:1px solid var(--b1);color:var(--text);
-  font-family:var(--mono);font-size:14px;padding:12px;outline:none;border-radius:0;-webkit-appearance:none;}
+  font-family:var(--mono);font-size:14px;padding:12px;outline:none;border-radius:var(--r);-webkit-appearance:none;}
 .field input:focus{border-color:var(--accent);} 
+
 .chk{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:12px;line-height:1.4;margin:12px 0;}
 .chk input{width:16px;height:16px;}
-.msg{display:none;margin-top:12px;padding:12px 14px;font-size:12px;line-height:1.6;letter-spacing:.4px;}
+
+.msg{display:none;margin-top:12px;padding:12px 14px;font-size:12px;line-height:1.6;letter-spacing:.4px;border-radius:var(--r);}
 .msg.show{display:block;}
 .msg-err{background:rgba(255,71,87,.08);border:1px solid rgba(255,71,87,.2);color:var(--red);} 
 .msg-ok{background:rgba(71,255,176,.08);border:1px solid rgba(71,255,176,.2);color:var(--green);} 
-.table-wrap{overflow:auto;border:1px solid var(--b1);background:rgba(0,0,0,.2);}
+
+.table-wrap{overflow:auto;border:1px solid var(--b1);background:rgba(0,0,0,.2);border-radius:var(--r);}
 .table{width:100%;border-collapse:collapse;min-width:980px;}
 .table th,.table td{padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.06);text-align:left;font-size:12px;white-space:nowrap;}
 .table th{color:var(--muted);font-size:10px;letter-spacing:2px;text-transform:uppercase;background:rgba(0,0,0,.25);}
 .k{color:var(--muted);} 
+
 hr{border:none;border-top:1px solid var(--b1);margin:16px 0;}
+
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.92);display:none;align-items:center;justify-content:center;z-index:999;padding:24px;}
 .modal.show{display:flex;}
-.sheet{width:100%;max-width:980px;background:var(--s1);border:1px solid var(--b2);padding:18px;max-height:85vh;overflow:auto;}
+.sheet{width:100%;max-width:980px;background:var(--s1);border:1px solid var(--b2);padding:18px;max-height:85vh;overflow:auto;border-radius:var(--r);}
 .sheet h3{font-family:var(--display);font-size:14px;margin-bottom:10px;}
-pre{white-space:pre-wrap;word-break:break-word;background:#000;border:1px solid rgba(255,255,255,.08);padding:12px;color:rgba(255,255,255,.82);font-size:12px;line-height:1.6;}
+pre{white-space:pre-wrap;word-break:break-word;background:#000;border:1px solid rgba(255,255,255,.08);padding:12px;color:rgba(255,255,255,.82);font-size:12px;line-height:1.6;border-radius:var(--r);}
 </style>
 </head>
 <body>
@@ -109,7 +125,10 @@ pre{white-space:pre-wrap;word-break:break-word;background:#000;border:1px solid 
     <span class="badge">SUPER ADMIN</span>
     <span class="pill"><?= htmlspecialchars($userEmail) ?></span>
     <a class="btn btn-ghost btn-sm" href="dashboard.php">Dashboard</a>
-    <a class="btn btn-ghost btn-sm" href="account.php">Account</a>
+    <a class="btn btn-ghost btn-sm" href="codes.php">Codes</a>
+    <a class="btn btn-ghost btn-sm" href="profile.php">Profile</a>
+    <a class="btn btn-ghost btn-sm" href="security.php">Security</a>
+    <a class="btn btn-ghost btn-sm" href="faq.php">FAQ</a>
     <a class="btn btn-ghost btn-sm" href="logout.php">Logout</a>
   </div>
 </div>
@@ -148,7 +167,6 @@ pre{white-space:pre-wrap;word-break:break-word;background:#000;border:1px solid 
       <div class="card-title">Add user</div>
       <div class="field"><label>Email</label><input id="nu-email" type="email" placeholder="user@example.com" autocomplete="off"></div>
       <div class="field"><label>Login password</label><input id="nu-login" type="password" placeholder="min 8 chars" autocomplete="new-password"></div>
-      
 
       <label class="chk"><input type="checkbox" id="nu-verified"> <span>Mark email as verified (skip email verification)</span></label>
       <label class="chk"><input type="checkbox" id="nu-admin"> <span>Make this user an admin</span></label>
@@ -202,7 +220,6 @@ pre{white-space:pre-wrap;word-break:break-word;background:#000;border:1px solid 
 
   <div class="card" style="margin-top:14px;">
     <div class="card-title">Carriers (Mobile Money)</div>
-
     <div class="p">Define carrier PIN policy and USSD templates. Placeholders: <code>{old_pin}</code>, <code>{new_pin}</code>.</div>
 
     <div style="display:grid;grid-template-columns:1fr;gap:12px;margin-bottom:12px;">
@@ -505,6 +522,27 @@ async function loadCodes(){
   }
 }
 
+async function deleteCode(lockId){
+  const ok = confirm('Deactivate this code? It will disappear from the user dashboard.');
+  if(!ok) return;
+  const r = await postCsrf('/api/admin.php', { action: 'delete_code', lock_id: lockId });
+  if(!r.success){ setMsg('codes-msg', r.error||'Failed', false); return; }
+  loadCodes();
+  loadUsers();
+}
+
+async function openDetail(lockId){
+  const r = await get('/api/admin.php?action=code_detail&lock_id=' + encodeURIComponent(lockId));
+  if(!r.success){ setMsg('codes-msg', r.error||'Failed', false); return; }
+  document.getElementById('detail-pre').textContent = JSON.stringify(r.code, null, 2);
+  document.getElementById('detail-modal').classList.add('show');
+}
+
+function closeDetail(e){
+  if(e && e.target !== document.getElementById('detail-modal')) return;
+  document.getElementById('detail-modal').classList.remove('show');
+}
+
 async function loadCarriers(){
   const tbody = document.querySelector('#carriers-table tbody');
   tbody.innerHTML = '<tr><td colspan="8" class="k">Loading…</td></tr>';
@@ -543,6 +581,13 @@ async function loadCarriers(){
     tbody.innerHTML = '<tr><td colspan="8" class="k">Failed to load carriers.</td></tr>';
     setMsg('carriers-msg', e.message||'Failed', false);
   }
+}
+
+async function toggleCarrierActive(carrierId, cur){
+  const next = cur ? 0 : 1;
+  const r = await postCsrf('/api/admin.php', { action:'carrier_set_active', carrier_id: carrierId, is_active: next });
+  if(!r.success){ setMsg('carriers-msg', r.error||'Failed', false); return; }
+  loadCarriers();
 }
 
 async function createCarrier(){
@@ -629,21 +674,14 @@ async function saveCarrierEdit(){
       is_active: isActive,
     });
     if(!r.success) throw new Error(r.error||'Failed');
+
     setMsg('car-edit-msg', 'Saved.', true);
     loadCarriers();
+    setTimeout(()=>closeCarrierModal(), 600);
+
   }catch(e){
     setMsg('car-edit-msg', e.message||'Failed', false);
   }
-}
-
-async function toggleCarrierActive(id, cur){
-  const next = cur ? 0 : 1;
-  const ok = confirm(next ? 'Activate this carrier?' : 'Deactivate this carrier?');
-  if(!ok) return;
-
-  const r = await postCsrf('/api/admin.php', { action:'carrier_set_active', carrier_id: id, is_active: next });
-  if(!r.success){ setMsg('carriers-msg', r.error||'Failed', false); return; }
-  loadCarriers();
 }
 
 async function loadAudit(){
@@ -663,18 +701,16 @@ async function loadAudit(){
       return;
     }
 
-    tbody.innerHTML='';
+    tbody.innerHTML = '';
     rows.forEach(a => {
       const tr = document.createElement('tr');
-      const ua = (a.user_agent||'');
-      const uaShort = ua.length > 80 ? ua.slice(0,80) + '…' : ua;
       tr.innerHTML = `
         <td>${fmt(a.created_at)}</td>
         <td>${esc(a.user_email||'')}</td>
         <td>${esc(a.action)}</td>
         <td>${esc(a.lock_id||'')}</td>
         <td>${esc(a.ip_address||'')}</td>
-        <td title="${esc(ua)}">${esc(uaShort)}</td>
+        <td>${esc(a.user_agent||'')}</td>
       `;
       tbody.appendChild(tr);
     });
@@ -685,31 +721,14 @@ async function loadAudit(){
   }
 }
 
-async function deleteCode(lockId){
-  const ok = confirm('Deactivate this code? It will disappear from the user dashboard.');
-  if(!ok) return;
-  const r = await postCsrf('/api/admin.php', { action: 'delete_code', lock_id: lockId });
-  if(!r.success){ setMsg('codes-msg', r.error||'Failed', false); return; }
-  loadCodes();
-  loadUsers();
-}
-
-async function openDetail(lockId){
-  const r = await get('/api/admin.php?action=code_detail&lock_id=' + encodeURIComponent(lockId));
-  if(!r.success){ setMsg('codes-msg', r.error||'Failed', false); return; }
-  document.getElementById('detail-pre').textContent = JSON.stringify(r.code, null, 2);
-  document.getElementById('detail-modal').classList.add('show');
-}
-
-function closeDetail(e){
-  if(e && e.target !== document.getElementById('detail-modal')) return;
-  document.getElementById('detail-modal').classList.remove('show');
-}
-
 loadUsers();
 loadCodes();
 loadCarriers();
 loadAudit();
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
 </script>
 </body>
 </html>

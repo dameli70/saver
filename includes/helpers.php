@@ -297,6 +297,11 @@ function issuePasswordReset(int $userId, string $email): ?string {
 }
 
 function getAppBaseUrl(): string {
+    if (defined('APP_BASE_URL')) {
+        $v = trim((string)APP_BASE_URL);
+        if ($v !== '') return rtrim($v, '/');
+    }
+
     $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
     $host   = $_SERVER['HTTP_HOST'] ?? 'localhost';
     $dir    = rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? '/'), '/');
