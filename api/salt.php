@@ -21,9 +21,22 @@ requireVerifiedEmail();
 
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') jsonResponse(['error' => 'Method not allowed'], 405);
 
-$salt       = generateKdfSalt(); // base64(32 random bytes)
-$sessionKey = 'pending_salt_' . getCurrentUserId();
-$_SESSION[$sessionKey] = $salt;
+$salt = generateKdfSalt(); // base64(32 random bytes)
+
+// Allow multiple concurrent "generate" flows (e.g., multiple tabs).
+$userId = (int)getCurrentUserId();
+$listKey = 'pending_salts_' . $userId;
+$pending = [];
+if (!empty($_SESSION[$listKey]) && is_array($_SESSION[$listKey])) {
+    $pending = array_values(array_filter($_SESSION[$listKey], 'is_string'));
+}
+$pending[] = $salt;
+// Keep the list bounded to reduce session bloat.
+$pending = array_slice($pending, -25);
+$_SESSION[$listKey] = $pending;
+
+// Backward compatibility: also set the single key (older code paths).
+$_SESSION['pending_salt_' . $userId] = $salt;
 
 jsonResponse([
     'success'        => true,
