@@ -109,6 +109,7 @@ pre{white-space:pre-wrap;word-break:break-word;background:#000;border:1px solid 
     <span class="badge">SUPER ADMIN</span>
     <span class="pill"><?= htmlspecialchars($userEmail) ?></span>
     <a class="btn btn-ghost btn-sm" href="dashboard.php">Dashboard</a>
+    <a class="btn btn-ghost btn-sm" href="notifications.php">Notifications</a>
     <a class="btn btn-ghost btn-sm" href="account.php">Account</a>
     <a class="btn btn-ghost btn-sm" href="logout.php">Logout</a>
   </div>

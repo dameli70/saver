@@ -111,6 +111,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--mono);min-height:1
     <?php if ($isAdmin): ?><a class="btn btn-ghost btn-sm" href="admin.php">Admin</a><?php endif; ?>
     <a class="btn btn-ghost btn-sm" href="rooms.php">Rooms</a>
     <a class="btn btn-ghost btn-sm" href="dashboard.php">Dashboard</a>
+    <a class="btn btn-ghost btn-sm" href="notifications.php">Notifications</a>
     <a class="btn btn-ghost btn-sm" href="logout.php">Logout</a>
   </div>
 </div>
@@ -248,6 +249,31 @@ body{background:var(--bg);color:var(--text);font-family:var(--mono);min-height:1
         </div>
 
         <div id="typeb-msg" class="msg"></div>
+      </div>
+
+      <div id="exit-block" style="display:none; margin-top:12px;">
+        <div class="hr" style="border-top:1px solid var(--b1);margin:16px 0;"></div>
+        <div class="card-title" style="margin-bottom:10px;">Exit request (Type B)</div>
+        <div class="p" style="margin-bottom:10px;">After the room starts, exiting requires maker approval + 60% participant approval. A settlement entry is recorded as a refund minus a 20% platform fee.</div>
+
+        <div class="v" id="exit-meta">—</div>
+
+        <div id="exit-actions-request" style="display:none;margin-top:10px;">
+          <button class="btn btn-red btn-sm" onclick="createExitRequest()">Request to exit</button>
+        </div>
+
+        <div id="exit-actions-vote" style="display:none;margin-top:10px;">
+          <div style="display:flex;gap:10px;flex-wrap:wrap;">
+            <button class="btn btn-blue btn-sm" onclick="voteExit('approve')">Approve exit</button>
+            <button class="btn btn-red btn-sm" onclick="voteExit('reject')">Reject</button>
+          </div>
+        </div>
+
+        <div id="exit-actions-cancel" style="display:none;margin-top:10px;">
+          <button class="btn btn-ghost btn-sm" onclick="cancelExitRequest()">Cancel request</button>
+        </div>
+
+        <div id="exit-msg" class="msg"></div>
       </div>
 
       <div id="invite-block" style="display:none; margin-top:12px;">
@@ -569,6 +595,41 @@ function renderRoom(){
     }
   }
 
+  const exitBlock = document.getElementById('exit-block');
+  if(exitBlock){
+    const canUseExit = (r.saving_type === 'B' && r.room_state === 'active' && r.my_status === 'active');
+    exitBlock.style.display = canUseExit ? 'block' : 'none';
+
+    if(canUseExit){
+      const meta = document.getElementById('exit-meta');
+      const actReq = document.getElementById('exit-actions-request');
+      const actVote = document.getElementById('exit-actions-vote');
+      const actCancel = document.getElementById('exit-actions-cancel');
+
+      const er = r.exit_request;
+
+      if(!er){
+        if(meta) meta.textContent = 'No open exit request.';
+        if(actReq) actReq.style.display = 'block';
+        if(actVote) actVote.style.display = 'none';
+        if(actCancel) actCancel.style.display = 'none';
+      } else {
+        const makerVote = (er.votes && er.votes.maker_vote) ? er.votes.maker_vote : '—';
+        const approvals = (er.votes && typeof er.votes.approvals !== 'undefined') ? er.votes.approvals : 0;
+        const required = (er.votes && typeof er.votes.required !== 'undefined') ? er.votes.required : 0;
+        const myVote = er.my_vote ? er.my_vote : '—';
+
+        if(meta) meta.textContent = `Open · requested by ${er.requested_by_email} · approvals ${approvals}/${required} · maker ${makerVote} · your vote ${myVote}`;
+
+        if(actReq) actReq.style.display = 'none';
+
+        const isRequester = !!er.is_requester;
+        if(actVote) actVote.style.display = isRequester ? 'none' : 'block';
+        if(actCancel) actCancel.style.display = isRequester ? 'block' : 'none';
+      }
+    }
+  }
+
   if(r.is_maker){
     document.getElementById('maker-card').style.display='block';
     document.getElementById('escrow-card').style.display='block';
@@ -664,6 +725,8 @@ function addFeedItem(ev){
   else if(ev.event_type === 'typeB_turn_expired') line = 'Type B turn expired';
   else if(ev.event_type === 'typeB_turn_advanced') line = 'Type B turn advanced';
   else if(ev.event_type === 'rotation_blocked_dispute') line = 'Rotation blocked (dispute)';
+  else if(ev.event_type === 'rotation_blocked_debt') line = 'Rotation blocked (unpaid contribution)';
+  else if(ev.event_type === 'rotation_unblocked_debt') line = 'Rotation unblocked (debt cleared)';
   else if(ev.event_type === 'dispute_raised') line = 'Dispute raised';
   else if(ev.event_type === 'dispute_ack_updated') line = 'Dispute acknowledgment updated';
   else if(ev.event_type === 'dispute_validated') line = 'Dispute validated';
@@ -674,6 +737,10 @@ function addFeedItem(ev){
   else if(ev.event_type === 'underfilled_resolved') line = 'Underfilled resolved';
   else if(ev.event_type === 'room_auto_cancelled_underfilled') line = 'Room auto-cancelled (underfilled)';
   else if(ev.event_type === 'room_cancelled_by_maker') line = 'Room cancelled by maker';
+  else if(ev.event_type === 'exit_requested') line = 'Exit request opened';
+  else if(ev.event_type === 'exit_vote_updated') line = 'Exit request vote updated';
+  else if(ev.event_type === 'exit_approved') line = 'Exit request approved';
+  else if(ev.event_type === 'exit_cancelled') line = 'Exit request cancelled';
   else line = ev.event_type;
 
   const extra = payload && Object.keys(payload).length ? ' — ' + esc(JSON.stringify(payload)) : '';
@@ -1002,6 +1069,77 @@ async function typeBAckDispute(){
     if(!res.success) throw new Error(res.error||'Failed');
 
     setMsg(msgId,'Acknowledged.', true);
+    await loadRoom();
+    await pollFeed();
+
+  }catch(e){
+    setMsg(msgId, e.message||'Failed', false);
+  }
+}
+
+async function createExitRequest(){
+  const msgId = 'exit-msg';
+  document.getElementById(msgId).className='msg';
+
+  const ok = confirm('Request to exit this room? This requires approvals and will record a refund-minus-fee settlement.');
+  if(!ok) return;
+
+  try{
+    const res = await postCsrf('/api/rooms.php', {action:'typeB_exit_request_create', room_id: ROOM_ID});
+    if(!res.success) throw new Error(res.error||'Failed');
+
+    setMsg(msgId,'Exit request submitted.', true);
+    await loadRoom();
+    await pollFeed();
+
+  }catch(e){
+    setMsg(msgId, e.message||'Failed', false);
+  }
+}
+
+async function voteExit(vote){
+  const msgId = 'exit-msg';
+  document.getElementById(msgId).className='msg';
+
+  const r = roomCache;
+  const er = r ? r.exit_request : null;
+  if(!er){
+    setMsg(msgId,'No open exit request.', false);
+    return;
+  }
+
+  try{
+    const res = await postCsrf('/api/rooms.php', {action:'typeB_exit_request_vote', room_id: ROOM_ID, exit_request_id: er.id, vote});
+    if(!res.success) throw new Error(res.error||'Failed');
+
+    setMsg(msgId, res.approved ? 'Exit approved.' : 'Vote saved.', true);
+    await loadRoom();
+    await pollFeed();
+
+  }catch(e){
+    setMsg(msgId, e.message||'Failed', false);
+  }
+}
+
+async function cancelExitRequest(){
+  const msgId = 'exit-msg';
+  document.getElementById(msgId).className='msg';
+
+  const r = roomCache;
+  const er = r ? r.exit_request : null;
+  if(!er){
+    setMsg(msgId,'No open exit request.', false);
+    return;
+  }
+
+  const ok = confirm('Cancel your exit request?');
+  if(!ok) return;
+
+  try{
+    const res = await postCsrf('/api/rooms.php', {action:'typeB_exit_request_cancel', room_id: ROOM_ID, exit_request_id: er.id});
+    if(!res.success) throw new Error(res.error||'Failed');
+
+    setMsg(msgId,'Exit request cancelled.', true);
     await loadRoom();
     await pollFeed();
 

@@ -147,6 +147,102 @@ function findActiveUnlistedInvite(PDO $db, string $roomId, string $token): ?arra
     return $row ?: null;
 }
 
+function recordRoomSettlement(PDO $db, string $roomId, int $userId, string $policy, float $feeRate, string $reason): void {
+    $sum = $db->prepare("SELECT COALESCE(SUM(amount), 0) FROM saving_room_contributions
+                         WHERE room_id = ?
+                           AND user_id = ?
+                           AND status IN ('paid','paid_in_grace')");
+    $sum->execute([$roomId, (int)$userId]);
+    $total = round((float)$sum->fetchColumn(), 2);
+    if ($total <= 0) return;
+
+    $fee = 0.00;
+    $refund = 0.00;
+
+    if ($policy === 'refund_minus_fee') {
+        $fee = round($total * $feeRate, 2);
+        $refund = round($total - $fee, 2);
+    }
+
+    $db->prepare("INSERT IGNORE INTO saving_room_escrow_settlements
+                    (room_id, removed_user_id, policy, reason, fee_rate, total_contributed, platform_fee_amount, refund_amount, redistribution_json)
+                  VALUES
+                    (?, ?, ?, ?, ?, ?, ?, ?, NULL)")
+       ->execute([
+           $roomId,
+           (int)$userId,
+           $policy,
+           $reason,
+           number_format($feeRate, 4, '.', ''),
+           number_format($total, 2, '.', ''),
+           number_format($fee, 2, '.', ''),
+           number_format($refund, 2, '.', ''),
+       ]);
+}
+
+function advanceTypeBWindowAfterExit(PDO $db, string $roomId): void {
+    $curStmt = $db->prepare("SELECT w.rotation_index, w.user_id
+                             FROM saving_room_rotation_windows w
+                             WHERE w.room_id = ?
+                               AND w.status IN ('pending_votes','revealed','blocked_dispute','blocked_debt')
+                             ORDER BY w.rotation_index DESC
+                             LIMIT 1");
+    $curStmt->execute([$roomId]);
+    $cur = $curStmt->fetch();
+    if (!$cur) return;
+
+    $curIndex = (int)$cur['rotation_index'];
+
+    // Close the current window.
+    $db->prepare("UPDATE saving_room_rotation_windows
+                  SET status='expired', expires_at=COALESCE(expires_at, NOW())
+                  WHERE room_id = ? AND rotation_index = ?")
+       ->execute([$roomId, $curIndex]);
+
+    $db->prepare("UPDATE saving_room_rotation_queue
+                  SET status='completed'
+                  WHERE room_id = ? AND status='active_window'")
+       ->execute([$roomId]);
+
+    // Find the next queued active participant.
+    $attempts = 0;
+    $nextUserId = 0;
+
+    while ($attempts < 3 && $nextUserId <= 0) {
+        $next = $db->prepare("SELECT q.user_id
+                              FROM saving_room_rotation_queue q
+                              JOIN saving_room_participants p
+                                ON p.room_id = q.room_id
+                               AND p.user_id = q.user_id
+                              WHERE q.room_id = ?
+                                AND q.status = 'queued'
+                                AND p.status = 'active'
+                              ORDER BY q.position ASC
+                              LIMIT 1");
+        $next->execute([$roomId]);
+        $nextUserId = (int)$next->fetchColumn();
+
+        if ($nextUserId <= 0) {
+            // Start a new rotation loop.
+            $db->prepare("UPDATE saving_room_rotation_queue SET status='queued' WHERE room_id = ? AND status='completed'")
+               ->execute([$roomId]);
+        }
+
+        $attempts++;
+    }
+
+    if ($nextUserId <= 0) return;
+
+    $db->prepare("INSERT IGNORE INTO saving_room_rotation_windows (room_id, user_id, rotation_index, status)
+                  VALUES (?, ?, ?, 'pending_votes')")
+       ->execute([$roomId, $nextUserId, $curIndex + 1]);
+
+    $db->prepare("UPDATE saving_room_rotation_queue SET status='active_window' WHERE room_id = ? AND user_id = ?")
+       ->execute([$roomId, $nextUserId]);
+
+    activityLog($roomId, 'typeB_turn_advanced', ['rotation_index' => $curIndex + 1]);
+}
+
 // ── DISCOVERY (public rooms only; filtered by trust level) ───
 if ($action === 'discover') {
     requireLogin();
@@ -223,7 +319,7 @@ if ($action === 'my_rooms') {
                           FROM saving_room_participants p
                           JOIN saving_rooms r ON r.id = p.room_id
                           WHERE p.user_id = ?
-                            AND p.status IN ('pending','approved','active','removed','completed')
+                            AND p.status IN ('pending','approved','active','removed','completed','exited_prestart','exited_poststart')
                           ORDER BY r.start_at ASC
                           LIMIT 200");
     $stmt->execute([$userId]);
@@ -276,17 +372,39 @@ if ($action === 'room_detail') {
     // Private rooms: require membership or an active private-user invite.
     $myInvite = null;
     if ($vis === 'private' && !$myStatus && !isAdmin($userId)) {
+        $myEmail = strtolower(trim(getCurrentUserEmail() ?? ''));
+
+        // Prefer in-app identity match, but also support token links (for invited emails that don't yet have a user).
         $inv = $db->prepare("SELECT i.id, i.status, i.expires_at, i.created_at
                              FROM saving_room_invites i
                              WHERE i.room_id = ?
                                AND i.invite_mode = 'private_user'
-                               AND i.invited_user_id = ?
                                AND i.status = 'active'
                                AND (i.expires_at IS NULL OR i.expires_at > NOW())
+                               AND (i.invited_user_id = ? OR (i.invited_email IS NOT NULL AND i.invited_email = ?))
                              ORDER BY i.created_at DESC
                              LIMIT 1");
-        $inv->execute([$roomId, $userId]);
+        $inv->execute([$roomId, $userId, $myEmail]);
         $row = $inv->fetch();
+
+        if (!$row) {
+            $token = trim((string)($_GET['invite'] ?? ''));
+            if ($token !== '' && strlen($token) <= 200 && preg_match('/^[a-f0-9]{16,128}$/i', $token)) {
+                $hash = hashInviteToken($token);
+                $inv2 = $db->prepare("SELECT i.id, i.status, i.expires_at, i.created_at
+                                      FROM saving_room_invites i
+                                      WHERE i.room_id = ?
+                                        AND i.invite_mode = 'private_user'
+                                        AND i.invite_token_hash = ?
+                                        AND i.status = 'active'
+                                        AND (i.expires_at IS NULL OR i.expires_at > NOW())
+                                      ORDER BY i.created_at DESC
+                                      LIMIT 1");
+                $inv2->execute([$roomId, $hash]);
+                $row = $inv2->fetch();
+            }
+        }
+
         if (!$row) {
             jsonResponse(['error' => 'Room is private'], 403);
         }
@@ -338,7 +456,7 @@ if ($action === 'room_detail') {
                                       FROM saving_room_participants p
                                       JOIN users u ON u.id = p.user_id
                                       WHERE p.room_id = ?
-                                        AND p.status IN ('approved','active','removed','completed')
+                                        AND p.status IN ('approved','active','removed','completed','exited_prestart','exited_poststart')
                                       ORDER BY p.joined_at ASC");
     $participantsStmt->execute([$roomId]);
     $participants = $participantsStmt->fetchAll();
@@ -514,6 +632,70 @@ if ($action === 'room_detail') {
         }
     }
 
+    $exitRequest = null;
+    if ($room['saving_type'] === 'B' && $room['room_state'] === 'active' && $myStatus === 'active') {
+        $er = $db->prepare("SELECT er.id, er.requested_by_user_id, er.status, er.created_at,
+                                   u.email AS requested_by_email
+                            FROM saving_room_exit_requests er
+                            JOIN users u ON u.id = er.requested_by_user_id
+                            WHERE er.room_id = ? AND er.status = 'open'
+                            ORDER BY er.created_at DESC
+                            LIMIT 1");
+        $er->execute([$roomId]);
+        $req = $er->fetch();
+
+        if ($req) {
+            $activeCountStmt = $db->prepare("SELECT COUNT(*) FROM saving_room_participants WHERE room_id = ? AND status = 'active'");
+            $activeCountStmt->execute([$roomId]);
+            $activeCount = (int)$activeCountStmt->fetchColumn();
+
+            $requesterId = (int)$req['requested_by_user_id'];
+            $makerId = (int)$room['maker_user_id'];
+
+            $eligibleNonMaker = max(0, $activeCount - 1 - (($makerId === $requesterId) ? 0 : 1));
+            $required = (int)ceil($eligibleNonMaker * 0.6);
+
+            $approvalsStmt = $db->prepare("SELECT COUNT(*) FROM saving_room_unlock_votes
+                                           WHERE room_id = ?
+                                             AND scope = 'typeB_exit_request'
+                                             AND target_rotation_index = ?
+                                             AND vote = 'approve'
+                                             AND user_id <> ?
+                                             AND user_id <> ?");
+            $approvalsStmt->execute([$roomId, (int)$req['id'], $makerId, $requesterId]);
+            $approvals = (int)$approvalsStmt->fetchColumn();
+
+            $myVoteStmt = $db->prepare("SELECT vote FROM saving_room_unlock_votes
+                                        WHERE room_id = ? AND user_id = ?
+                                          AND scope='typeB_exit_request'
+                                          AND target_rotation_index = ?");
+            $myVoteStmt->execute([$roomId, $userId, (int)$req['id']]);
+            $myVote = $myVoteStmt->fetchColumn();
+
+            $makerVoteStmt = $db->prepare("SELECT vote FROM saving_room_unlock_votes
+                                           WHERE room_id = ? AND user_id = ?
+                                             AND scope='typeB_exit_request'
+                                             AND target_rotation_index = ?");
+            $makerVoteStmt->execute([$roomId, $makerId, (int)$req['id']]);
+            $makerVote = $makerVoteStmt->fetchColumn();
+
+            $exitRequest = [
+                'id' => (int)$req['id'],
+                'status' => $req['status'],
+                'requested_by_email' => $req['requested_by_email'],
+                'is_requester' => ($requesterId === $userId) ? 1 : 0,
+                'created_at' => $req['created_at'],
+                'votes' => [
+                    'approvals' => $approvals,
+                    'required' => $required,
+                    'eligible_non_maker' => $eligibleNonMaker,
+                    'maker_vote' => $makerVote ?: null,
+                ],
+                'my_vote' => $myVote ?: null,
+            ];
+        }
+    }
+
     $isMaker = ((int)$room['maker_user_id'] === $userId) || isAdmin($userId);
 
     $settlements = [];
@@ -564,6 +746,10 @@ if ($action === 'room_detail') {
                 'grace_ends_at' => $activeCycle['grace_ends_at'],
                 'status' => $activeCycle['status'],
             ] : null,
+            'destination_account' => $destinationAccount,
+            'unlock' => $unlock,
+            'rotation' => $rotation,
+            'exit_request' => $exitRequest,
         ],
         'participants' => $participants,
         'escrow_settlements' => $settlements,
@@ -589,15 +775,35 @@ if ($action === 'activity') {
     $myStatus = $myStmt->fetchColumn();
 
     if ($vis === 'private' && !$myStatus && !isAdmin($userId)) {
+        $myEmail = strtolower(trim(getCurrentUserEmail() ?? ''));
+
         $inv = $db->prepare("SELECT 1 FROM saving_room_invites
                              WHERE room_id = ?
                                AND invite_mode='private_user'
-                               AND invited_user_id = ?
                                AND status='active'
                                AND (expires_at IS NULL OR expires_at > NOW())
+                               AND (invited_user_id = ? OR (invited_email IS NOT NULL AND invited_email = ?))
                              LIMIT 1");
-        $inv->execute([$roomId, $userId]);
-        if (!$inv->fetchColumn()) {
+        $inv->execute([$roomId, $userId, $myEmail]);
+        $ok = (bool)$inv->fetchColumn();
+
+        if (!$ok) {
+            $token = trim((string)($_GET['invite'] ?? ''));
+            if ($token !== '' && strlen($token) <= 200 && preg_match('/^[a-f0-9]{16,128}$/i', $token)) {
+                $hash = hashInviteToken($token);
+                $inv2 = $db->prepare("SELECT 1 FROM saving_room_invites
+                                      WHERE room_id = ?
+                                        AND invite_mode='private_user'
+                                        AND invite_token_hash = ?
+                                        AND status='active'
+                                        AND (expires_at IS NULL OR expires_at > NOW())
+                                      LIMIT 1");
+                $inv2->execute([$roomId, $hash]);
+                $ok = (bool)$inv2->fetchColumn();
+            }
+        }
+
+        if (!$ok) {
             jsonResponse(['error' => 'Room is private'], 403);
         }
     }
@@ -776,7 +982,8 @@ if ($action === 'request_join') {
 
     $approvedCount = countApprovedParticipants($roomId);
     if ($approvedCount >= (int)$room['max_participants']) {
-        jsonResponse(['errorB();
+        jsonResponse(['error' => 'Room is full'], 403);
+    }
 
     $existingPart = $db->prepare('SELECT status FROM saving_room_participants WHERE room_id = ? AND user_id = ?');
     $existingPart->execute([$roomId, $userId]);
@@ -853,44 +1060,59 @@ if ($action === 'invite_user') {
     $u = $db->prepare('SELECT id FROM users WHERE email = ? LIMIT 1');
     $u->execute([$email]);
     $invitedUserId = (int)$u->fetchColumn();
-    if ($invitedUserId < 1) jsonResponse(['error' => 'No user found with that email'], 404);
     if ($invitedUserId === $userId) jsonResponse(['error' => 'You cannot invite yourself'], 400);
+
+    $token = bin2hex(random_bytes(16));
+    $hash = hashInviteToken($token);
 
     $expiresAt = (string)$room['start_at'];
 
     $db->beginTransaction();
 
+    // Revoke any prior active invite for this email / user.
     $db->prepare("UPDATE saving_room_invites
                   SET status='revoked', responded_at=NOW()
                   WHERE room_id = ?
                     AND invite_mode = 'private_user'
-                    AND invited_user_id = ?
-                    AND status = 'active'")
-       ->execute([$roomId, $invitedUserId]);
+                    AND status = 'active'
+                    AND ((invited_user_id IS NOT NULL AND invited_user_id = ?)
+                         OR (invited_email IS NOT NULL AND invited_email = ?))")
+       ->execute([$roomId, $invitedUserId > 0 ? $invitedUserId : null, $email]);
 
-    $db->prepare("INSERT INTO saving_room_invites (room_id, invite_mode, invited_user_id, status, expires_at)
-                  VALUES (?, 'private_user', ?, 'active', ?)")
-       ->execute([$roomId, $invitedUserId, $expiresAt]);
+    $db->prepare("INSERT INTO saving_room_invites (room_id, invite_mode, invite_token_hash, invited_user_id, invited_email, status, expires_at)
+                  VALUES (?, 'private_user', ?, ?, ?, 'active', ?)")
+       ->execute([$roomId, $hash, $invitedUserId > 0 ? $invitedUserId : null, $email, $expiresAt]);
 
     $inviteId = (int)$db->lastInsertId();
 
     activityLog($roomId, 'invite_created', ['mode' => 'private_user']);
 
-    notifyOnceApi(
-        $invitedUserId,
-        'room_invited',
-        'important',
-        'You have been invited to a private saving room',
-        'Open the room to accept or decline the invite.',
-        ['room_id' => $roomId, 'invite_id' => $inviteId],
-        'room',
-        $roomId
-    );
+    $link = getAppBaseUrl() . '/room.php?id=' . rawurlencode($roomId) . '&invite=' . rawurlencode($token);
+
+    if ($invitedUserId > 0) {
+        notifyOnceApi(
+            $invitedUserId,
+            'room_invited',
+            'important',
+            'You have been invited to a private saving room',
+            'Open the room to accept or decline the invite.',
+            ['room_id' => $roomId, 'invite_id' => $inviteId],
+            'room',
+            $roomId
+        );
+    } else {
+        // Best-effort email delivery (user may not exist yet).
+        sendEmail(
+            $email,
+            APP_NAME . ' — Private room invite',
+            "You have been invited to a private saving room.\n\nOpen this link after you have created an account and verified your email:\n\n{$link}\n\nThis invite expires at: {$expiresAt}\n"
+        );
+    }
 
     $db->commit();
 
     auditLog('room_invite_user');
-    jsonResponse(['success' => true, 'invite_id' => $inviteId]);
+    jsonResponse(['success' => true, 'invite_id' => $inviteId, 'invite_link' => $link]);
 }
 
 // ── USER: RESPOND TO INVITE ────────────────────────────────
@@ -908,7 +1130,7 @@ if ($action === 'respond_invite') {
 
     $db = getDB();
 
-    $stmt = $db->prepare("SELECT i.id, i.room_id, i.invite_mode, i.invited_user_id, i.status, i.expires_at,
+    $stmt = $db->prepare("SELECT i.id, i.room_id, i.invite_mode, i.invited_user_id, i.invited_email, i.status, i.expires_at,
                                  r.visibility, r.room_state, r.lobby_state, r.required_trust_level, r.max_participants, r.maker_user_id
                           FROM saving_room_invites i
                           JOIN saving_rooms r ON r.id = i.room_id
@@ -919,7 +1141,15 @@ if ($action === 'respond_invite') {
 
     if (!$inv) jsonResponse(['error' => 'Invite not found'], 404);
     if ((string)$inv['invite_mode'] !== 'private_user') jsonResponse(['error' => 'Invalid invite mode'], 400);
-    if ((int)$inv['invited_user_id'] !== $userId) jsonResponse(['error' => 'Not your invite'], 403);
+
+    $myEmail = strtolower(trim(getCurrentUserEmail() ?? ''));
+    $invEmail = strtolower(trim((string)($inv['invited_email'] ?? '')));
+    $invUserId = (int)($inv['invited_user_id'] ?? 0);
+
+    if (!($invUserId === $userId || ($invUserId <= 0 && $invEmail !== '' && $invEmail === $myEmail))) {
+        jsonResponse(['error' => 'Not your invite'], 403);
+    }
+
     if ((string)$inv['status'] !== 'active') jsonResponse(['error' => 'Invite is not active'], 409);
     if (!empty($inv['expires_at']) && strtotime((string)$inv['expires_at']) <= time()) {
         $db->prepare("UPDATE saving_room_invites SET status='expired', responded_at=NOW() WHERE id = ? AND status='active'")
@@ -968,8 +1198,10 @@ if ($action === 'respond_invite') {
 
     $db->beginTransaction();
 
-    $db->prepare("UPDATE saving_room_invites SET status='accepted', responded_at=NOW() WHERE id = ? AND status='active'")
-       ->execute([$inviteId]);
+    $db->prepare("UPDATE saving_room_invites
+                  SET status='accepted', responded_at=NOW(), invited_user_id = COALESCE(invited_user_id, ?)
+                  WHERE id = ? AND status='active'")
+       ->execute([$userId, $inviteId]);
 
     $db->prepare("INSERT INTO saving_room_participants (room_id, user_id, status, approved_at)
                   VALUES (?, ?, 'approved', NOW())
@@ -1145,9 +1377,9 @@ if ($action === 'maker_invites') {
     $db = getDB();
 
     $stmt = $db->prepare("SELECT i.id, i.status, i.expires_at, i.created_at,
-                                 u.email
+                                 COALESCE(u.email, i.invited_email) AS email
                           FROM saving_room_invites i
-                          JOIN users u ON u.id = i.invited_user_id
+                          LEFT JOIN users u ON u.id = i.invited_user_id
                           WHERE i.room_id = ?
                             AND i.invite_mode = 'private_user'
                           ORDER BY i.created_at DESC
@@ -1350,6 +1582,10 @@ if ($action === 'underfill_decide') {
         $db->prepare("UPDATE saving_rooms SET start_at = ?, reveal_at = ?, extensions_used = extensions_used + 1, updated_at=NOW() WHERE id = ?")
            ->execute([date('Y-m-d H:i:s', $startTs), date('Y-m-d H:i:s', $revealTs), $roomId]);
 
+        // Keep invite expiry aligned to the (possibly extended) start date.
+        $db->prepare("UPDATE saving_room_invites SET expires_at = ? WHERE room_id = ? AND status = 'active'")
+           ->execute([date('Y-m-d H:i:s', $startTs), $roomId]);
+
         $db->prepare("UPDATE saving_room_underfill_alerts SET status='resolved', resolved_at=NOW(), resolution_action='extend_start', resolution_payload=JSON_OBJECT('new_start_at', ?, 'new_reveal_at', ?) WHERE room_id = ?")
            ->execute([date('Y-m-d H:i:s', $startTs), date('Y-m-d H:i:s', $revealTs), $roomId]);
 
@@ -1384,6 +1620,35 @@ if ($action === 'underfill_decide') {
 
         $db->prepare("UPDATE saving_room_underfill_alerts SET status='resolved', resolved_at=NOW(), resolution_action='cancel', resolution_payload=JSON_OBJECT('by_maker', 1) WHERE room_id = ?")
            ->execute([$roomId]);
+
+        $db->prepare("UPDATE saving_room_join_requests SET status='cancelled', maker_decided_at=NOW() WHERE room_id = ? AND status='pending'")
+           ->execute([$roomId]);
+
+        $db->prepare("UPDATE saving_room_participants
+                      SET status='exited_prestart', removed_at=NOW(), removal_reason='room_cancelled_underfilled'
+                      WHERE room_id = ? AND status IN ('pending','approved')")
+           ->execute([$roomId]);
+
+        $paidUsers = $db->prepare("SELECT DISTINCT user_id FROM saving_room_contributions WHERE room_id = ? AND status IN ('paid','paid_in_grace')");
+        $paidUsers->execute([$roomId]);
+        foreach ($paidUsers->fetchAll() as $pu) {
+            recordRoomSettlement($db, $roomId, (int)$pu['user_id'], 'refund_minus_fee', 0.00, 'room_cancelled_underfilled');
+        }
+
+        $parts = $db->prepare("SELECT user_id FROM saving_room_participants WHERE room_id = ? AND status='exited_prestart'");
+        $parts->execute([$roomId]);
+        foreach ($parts->fetchAll() as $p) {
+            notifyOnceApi(
+                (int)$p['user_id'],
+                'room_cancelled_underfilled',
+                'important',
+                'Room cancelled',
+                'This saving room was cancelled before it started due to being underfilled.',
+                ['room_id' => $roomId],
+                'room',
+                $roomId
+            );
+        }
 
         activityLog($roomId, 'room_cancelled_by_maker', ['reason' => 'underfilled']);
     }
@@ -1654,6 +1919,253 @@ if ($action === 'typeB_vote') {
     ]);
 
     auditLog('room_typeB_vote');
+    jsonResponse(['success' => true]);
+}
+
+// ── TYPE B: EXIT REQUEST (create)
+if ($action === 'typeB_exit_request_create') {
+    requireLogin();
+    requireVerifiedEmail();
+    requireCsrf();
+    requireStrongAuth();
+
+    $userId = (int)getCurrentUserId();
+    $roomId = (string)($body['room_id'] ?? '');
+
+    if ($roomId === '' || strlen($roomId) !== 36) jsonResponse(['error' => 'Invalid room_id'], 400);
+
+    $db = getDB();
+
+    $roomStmt = $db->prepare('SELECT saving_type, room_state, maker_user_id FROM saving_rooms WHERE id = ?');
+    $roomStmt->execute([$roomId]);
+    $room = $roomStmt->fetch();
+    if (!$room) jsonResponse(['error' => 'Room not found'], 404);
+
+    if ($room['saving_type'] !== 'B') jsonResponse(['error' => 'Not a Type B room'], 400);
+    if ($room['room_state'] !== 'active') jsonResponse(['error' => 'Room is not active'], 403);
+
+    $mem = $db->prepare('SELECT status FROM saving_room_participants WHERE room_id = ? AND user_id = ?');
+    $mem->execute([$roomId, $userId]);
+    $st = (string)$mem->fetchColumn();
+    if ($st !== 'active') jsonResponse(['error' => 'Not an active participant'], 403);
+
+    $ex = $db->prepare("SELECT id FROM saving_room_exit_requests WHERE room_id = ? AND status = 'open' LIMIT 1");
+    $ex->execute([$roomId]);
+    if ($ex->fetchColumn()) jsonResponse(['error' => 'An exit request is already open'], 409);
+
+    $db->prepare("INSERT INTO saving_room_exit_requests (room_id, requested_by_user_id, status)
+                  VALUES (?, ?, 'open')")
+       ->execute([$roomId, $userId]);
+
+    $reqId = (int)$db->lastInsertId();
+
+    activityLog($roomId, 'exit_requested', ['exit_request_id' => $reqId]);
+
+    $makerId = (int)$room['maker_user_id'];
+    if ($makerId > 0) {
+        notifyOnceApi(
+            $makerId,
+            'typeB_exit_requested_maker',
+            'important',
+            'Exit request submitted (Type B)',
+            'A participant requested to exit this Type B room. Maker approval + participant votes are required.',
+            ['room_id' => $roomId, 'exit_request_id' => $reqId],
+            'room',
+            $roomId
+        );
+    }
+
+    auditLog('room_typeB_exit_request');
+    jsonResponse(['success' => true, 'exit_request_id' => $reqId]);
+}
+
+// ── TYPE B: EXIT REQUEST (vote)
+if ($action === 'typeB_exit_request_vote') {
+    requireLogin();
+    requireVerifiedEmail();
+    requireCsrf();
+    requireStrongAuth();
+
+    $userId = (int)getCurrentUserId();
+    $roomId = (string)($body['room_id'] ?? '');
+    $reqId  = (int)($body['exit_request_id'] ?? 0);
+    $vote   = (string)($body['vote'] ?? '');
+
+    if ($roomId === '' || strlen($roomId) !== 36) jsonResponse(['error' => 'Invalid room_id'], 400);
+    if ($reqId < 1) jsonResponse(['error' => 'exit_request_id required'], 400);
+    if (!in_array($vote, ['approve','reject'], true)) jsonResponse(['error' => 'Invalid vote'], 400);
+
+    $db = getDB();
+
+    $roomStmt = $db->prepare('SELECT saving_type, room_state, maker_user_id FROM saving_rooms WHERE id = ?');
+    $roomStmt->execute([$roomId]);
+    $room = $roomStmt->fetch();
+    if (!$room) jsonResponse(['error' => 'Room not found'], 404);
+
+    if ($room['saving_type'] !== 'B') jsonResponse(['error' => 'Not a Type B room'], 400);
+    if ($room['room_state'] !== 'active') jsonResponse(['error' => 'Room is not active'], 403);
+
+    $reqStmt = $db->prepare("SELECT id, requested_by_user_id, status FROM saving_room_exit_requests WHERE id = ? AND room_id = ? LIMIT 1");
+    $reqStmt->execute([$reqId, $roomId]);
+    $req = $reqStmt->fetch();
+    if (!$req) jsonResponse(['error' => 'Exit request not found'], 404);
+    if ((string)$req['status'] !== 'open') jsonResponse(['error' => 'Exit request is not open'], 409);
+
+    $requesterId = (int)$req['requested_by_user_id'];
+    if ($requesterId === $userId) jsonResponse(['error' => 'Requester cannot vote'], 403);
+
+    $mem = $db->prepare('SELECT status FROM saving_room_participants WHERE room_id = ? AND user_id = ?');
+    $mem->execute([$roomId, $userId]);
+    $st = (string)$mem->fetchColumn();
+    if ($st !== 'active') jsonResponse(['error' => 'Not an active participant'], 403);
+
+    $db->prepare("INSERT INTO saving_room_unlock_votes (room_id, user_id, scope, target_rotation_index, vote)
+                  VALUES (?, ?, 'typeB_exit_request', ?, ?)
+                  ON DUPLICATE KEY UPDATE vote=VALUES(vote), updated_at=NOW()")
+       ->execute([$roomId, $userId, $reqId, $vote]);
+
+    $activeCountStmt = $db->prepare("SELECT COUNT(*) FROM saving_room_participants WHERE room_id = ? AND status = 'active'");
+    $activeCountStmt->execute([$roomId]);
+    $activeCount = (int)$activeCountStmt->fetchColumn();
+
+    $makerId = (int)$room['maker_user_id'];
+    $eligibleNonMaker = max(0, $activeCount - 1 - (($makerId === $requesterId) ? 0 : 1));
+    $required = (int)ceil($eligibleNonMaker * 0.6);
+
+    $approvalsStmt = $db->prepare("SELECT COUNT(*) FROM saving_room_unlock_votes
+                                   WHERE room_id = ?
+                                     AND scope = 'typeB_exit_request'
+                                     AND target_rotation_index = ?
+                                     AND vote = 'approve'
+                                     AND user_id <> ?
+                                     AND user_id <> ?");
+    $approvalsStmt->execute([$roomId, $reqId, $makerId, $requesterId]);
+    $approvals = (int)$approvalsStmt->fetchColumn();
+
+    $makerVoteStmt = $db->prepare("SELECT vote FROM saving_room_unlock_votes
+                                   WHERE room_id = ? AND user_id = ?
+                                     AND scope='typeB_exit_request'
+                                     AND target_rotation_index = ?");
+    $makerVoteStmt->execute([$roomId, $makerId, $reqId]);
+    $makerVote = (string)($makerVoteStmt->fetchColumn() ?: '');
+
+    activityLog($roomId, 'exit_vote_updated', [
+        'exit_request_id' => $reqId,
+        'approvals' => $approvals,
+        'required' => $required,
+        'eligible_non_maker' => $eligibleNonMaker,
+        'maker_vote' => ($makerVote !== '' ? $makerVote : null),
+    ]);
+
+    $approved = ($makerVote === 'approve') && ($approvals >= $required);
+
+    if ($approved) {
+        $db->beginTransaction();
+
+        $upd = $db->prepare("UPDATE saving_room_exit_requests
+                              SET status='approved', resolved_at=NOW(), resolved_by_user_id=?
+                              WHERE id = ? AND status='open'");
+        $upd->execute([$userId, $reqId]);
+
+        if ($upd->rowCount() < 1) {
+            $db->rollBack();
+            auditLog('room_typeB_exit_vote');
+            jsonResponse(['success' => true, 'approved' => 1]);
+        }
+
+        $db->prepare("UPDATE saving_room_participants
+                      SET status='exited_poststart', removed_at=NOW(), removal_reason='exit_request'
+                      WHERE room_id = ? AND user_id = ? AND status='active'")
+           ->execute([$roomId, $requesterId]);
+
+        $db->prepare("UPDATE saving_room_rotation_queue SET status='skipped_removed' WHERE room_id = ? AND user_id = ?")
+           ->execute([$roomId, $requesterId]);
+
+        // If the exiting user is in the current active window, advance the rotation.
+        $curWinUser = $db->prepare("SELECT user_id FROM saving_room_rotation_windows
+                                    WHERE room_id = ? AND status IN ('pending_votes','revealed','blocked_dispute','blocked_debt')
+                                    ORDER BY rotation_index DESC LIMIT 1");
+        $curWinUser->execute([$roomId]);
+        $turnUserId = (int)$curWinUser->fetchColumn();
+        if ($turnUserId === $requesterId) {
+            advanceTypeBWindowAfterExit($db, $roomId);
+        }
+
+        // Record settlement ledger: refund minus 20% platform fee.
+        recordRoomSettlement($db, $roomId, $requesterId, 'refund_minus_fee', 0.20, 'exit_request');
+
+        activityLog($roomId, 'exit_approved', ['exit_request_id' => $reqId]);
+
+        $db->commit();
+
+        notifyOnceApi(
+            $requesterId,
+            'typeB_exit_approved',
+            'important',
+            'Exit request approved',
+            'Your exit request was approved. Your room status was updated and a settlement record was created (refund minus 20% platform fee).',
+            ['room_id' => $roomId, 'exit_request_id' => $reqId],
+            'room',
+            $roomId
+        );
+
+        if ($makerId > 0) {
+            notifyOnceApi(
+                $makerId,
+                'typeB_exit_approved_maker',
+                'important',
+                'Exit request approved',
+                'An exit request was approved and the participant has exited.',
+                ['room_id' => $roomId, 'exit_request_id' => $reqId],
+                'room',
+                $roomId
+            );
+        }
+    }
+
+    auditLog('room_typeB_exit_vote');
+    jsonResponse(['success' => true, 'approved' => $approved ? 1 : 0]);
+}
+
+// ── TYPE B: EXIT REQUEST (cancel)
+if ($action === 'typeB_exit_request_cancel') {
+    requireLogin();
+    requireVerifiedEmail();
+    requireCsrf();
+    requireStrongAuth();
+
+    $userId = (int)getCurrentUserId();
+    $roomId = (string)($body['room_id'] ?? '');
+    $reqId  = (int)($body['exit_request_id'] ?? 0);
+
+    if ($roomId === '' || strlen($roomId) !== 36) jsonResponse(['error' => 'Invalid room_id'], 400);
+    if ($reqId < 1) jsonResponse(['error' => 'exit_request_id required'], 400);
+
+    $db = getDB();
+
+    $reqStmt = $db->prepare("SELECT id, requested_by_user_id, status FROM saving_room_exit_requests WHERE id = ? AND room_id = ? LIMIT 1");
+    $reqStmt->execute([$reqId, $roomId]);
+    $req = $reqStmt->fetch();
+    if (!$req) jsonResponse(['error' => 'Exit request not found'], 404);
+    if ((string)$req['status'] !== 'open') jsonResponse(['error' => 'Exit request is not open'], 409);
+
+    if ((int)$req['requested_by_user_id'] !== $userId) jsonResponse(['error' => 'Not your exit request'], 403);
+
+    $db->beginTransaction();
+
+    $db->prepare("UPDATE saving_room_exit_requests
+                  SET status='cancelled', resolved_at=NOW(), resolved_by_user_id=?
+                  WHERE id = ? AND status='open'")
+       ->execute([$userId, $reqId]);
+
+    $db->prepare("DELETE FROM saving_room_unlock_votes WHERE room_id = ? AND scope='typeB_exit_request' AND target_rotation_index = ?")
+       ->execute([$roomId, $reqId]);
+
+    activityLog($roomId, 'exit_cancelled', ['exit_request_id' => $reqId]);
+
+    $db->commit();
+
+    auditLog('room_typeB_exit_cancel');
     jsonResponse(['success' => true]);
 }
 

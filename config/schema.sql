@@ -367,6 +367,7 @@ CREATE TABLE IF NOT EXISTS saving_room_invites (
 
     invite_token_hash   CHAR(64) NULL,
     invited_user_id     INT UNSIGNED NULL,
+    invited_email       VARCHAR(255) NULL,
 
     status              ENUM('active','accepted','declined','revoked','expired') NOT NULL DEFAULT 'active',
     expires_at          DATETIME NULL,
@@ -377,6 +378,7 @@ CREATE TABLE IF NOT EXISTS saving_room_invites (
     INDEX idx_room (room_id),
     INDEX idx_token (invite_token_hash),
     INDEX idx_invited_user (invited_user_id),
+    INDEX idx_invited_email (invited_email),
 
     FOREIGN KEY (room_id) REFERENCES saving_rooms(id) ON DELETE CASCADE,
     FOREIGN KEY (invited_user_id) REFERENCES users(id) ON DELETE SET NULL
@@ -532,6 +534,28 @@ CREATE TABLE IF NOT EXISTS saving_room_unlock_votes (
 ) ENGINE=InnoDB;
 
 -- ───────────────────────────────────────────────────────────
+-- Exit requests (Type B)
+-- ───────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS saving_room_exit_requests (
+    id                   INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    room_id              CHAR(36) NOT NULL,
+    requested_by_user_id INT UNSIGNED NOT NULL,
+
+    status               ENUM('open','approved','declined','cancelled') NOT NULL DEFAULT 'open',
+
+    created_at           DATETIME DEFAULT CURRENT_TIMESTAMP,
+    resolved_at          DATETIME NULL,
+    resolved_by_user_id  INT UNSIGNED NULL,
+
+    INDEX idx_room_status (room_id, status),
+    INDEX idx_room_time (room_id, created_at),
+
+    FOREIGN KEY (room_id) REFERENCES saving_rooms(id) ON DELETE CASCADE,
+    FOREIGN KEY (requested_by_user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (resolved_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+-- ───────────────────────────────────────────────────────────
 -- Disputes (Type B)
 -- ───────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS saving_room_disputes (
@@ -656,6 +680,8 @@ CREATE TABLE IF NOT EXISTS saving_room_escrow_settlements (
     removed_user_id      INT UNSIGNED NOT NULL,
 
     policy               ENUM('redistribute','refund_minus_fee') NOT NULL,
+    reason               VARCHAR(64) NULL,
+    fee_rate             DECIMAL(5,4) NOT NULL DEFAULT 0.1000,
 
     total_contributed    DECIMAL(14,2) NOT NULL,
     platform_fee_amount  DECIMAL(14,2) NOT NULL DEFAULT 0.00,

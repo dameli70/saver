@@ -618,13 +618,15 @@ foreach ($cycles as $c) {
                     }
 
                     $db->prepare("INSERT IGNORE INTO saving_room_escrow_settlements
-                                    (room_id, removed_user_id, policy, total_contributed, platform_fee_amount, refund_amount, redistribution_json)
+                                    (room_id, removed_user_id, policy, reason, fee_rate, total_contributed, platform_fee_amount, refund_amount, redistribution_json)
                                   VALUES
-                                    (?, ?, ?, ?, ?, ?, ?)")
+                                    (?, ?, ?, ?, ?, ?, ?, ?, ?)")
                        ->execute([
                            $roomId,
                            $uid,
                            $policy,
+                           'two_missed_contributions',
+                           number_format(($policy === 'refund_minus_fee') ? 0.10 : 0.0000, 4, '.', ''),
                            number_format($total, 2, '.', ''),
                            number_format($fee, 2, '.', ''),
                            number_format($refund, 2, '.', ''),

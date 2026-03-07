@@ -117,6 +117,7 @@ code{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);pad
       <?php if ($verified): ?>
         <a class="btn btn-ghost" href="dashboard.php">Dashboard</a>
         <a class="btn btn-ghost" href="rooms.php">Rooms</a>
+        <a class="btn btn-ghost" href="notifications.php">Notifications</a>
         <a class="btn btn-ghost" href="backup.php">Backups</a>
         <?php if ($isAdmin): ?>
           <a class="btn btn-ghost" href="admin.php">Admin</a>

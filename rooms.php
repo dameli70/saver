@@ -109,6 +109,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--mono);font-size:14
     <span class="pill"><?= htmlspecialchars($userEmail) ?></span>
     <?php if ($isAdmin): ?><a class="btn btn-ghost btn-sm" href="admin.php">Admin</a><?php endif; ?>
     <a class="btn btn-ghost btn-sm" href="dashboard.php">Dashboard</a>
+    <a class="btn btn-ghost btn-sm" href="notifications.php">Notifications</a>
     <a class="btn btn-ghost btn-sm" href="account.php">Account</a>
     <a class="btn btn-ghost btn-sm" href="logout.php">Logout</a>
   </div>

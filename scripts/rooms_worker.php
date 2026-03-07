@@ -170,7 +170,7 @@ function initTypeBRotation(PDO $db, string $roomId): void {
     activityLog($db, $roomId, 'typeB_turn_advanced', ['rotation_index' => 1]);
 }
 
-function recordEscrowSettlement(PDO $db, string $roomId, int $removedUserId, string $policy): void {
+function recordEscrowSettlement(PDO $db, string $roomId, int $removedUserId, string $policy, string $reason = 'two_missed_contributions', float $feeRate = 0.10): void {
     $sum = $db->prepare("SELECT COALESCE(SUM(amount), 0) FROM saving_room_contributions
                          WHERE room_id = ?
                            AND user_id = ?
@@ -185,7 +185,7 @@ function recordEscrowSettlement(PDO $db, string $roomId, int $removedUserId, str
     $redistribution = null;
 
     if ($policy === 'refund_minus_fee') {
-        $fee = round($total * 0.10, 2);
+        $fee = round($total * $feeRate, 2);
         $refund = round($total - $fee, 2);
     } else {
         $recipients = $db->prepare("SELECT p.user_id,
@@ -234,13 +234,15 @@ function recordEscrowSettlement(PDO $db, string $roomId, int $removedUserId, str
     }
 
     $db->prepare("INSERT IGNORE INTO saving_room_escrow_settlements
-                    (room_id, removed_user_id, policy, total_contributed, platform_fee_amount, refund_amount, redistribution_json)
+                    (room_id, removed_user_id, policy, reason, fee_rate, total_contributed, platform_fee_amount, refund_amount, redistribution_json)
                   VALUES
-                    (?, ?, ?, ?, ?, ?, ?)")
+                    (?, ?, ?, ?, ?, ?, ?, ?, ?)")
        ->execute([
            $roomId,
            (int)$removedUserId,
            $policy,
+           $reason,
+           number_format($feeRate, 4, '.', ''),
            number_format($total, 2, '.', ''),
            number_format($fee, 2, '.', ''),
            number_format($refund, 2, '.', ''),
@@ -586,6 +588,23 @@ foreach ($expired as $row) {
                   WHERE room_id = ? AND status='open'")
        ->execute([$roomId]);
 
+    // Mark pending join requests / participants as exited pre-start.
+    $db->prepare("UPDATE saving_room_join_requests SET status='cancelled', maker_decided_at=NOW() WHERE room_id = ? AND status='pending'")
+       ->execute([$roomId]);
+
+    $db->prepare("UPDATE saving_room_participants
+                  SET status='exited_prestart', removed_at=NOW(), removal_reason='room_cancelled_underfilled'
+                  WHERE room_id = ? AND status IN ('pending','approved')")
+       ->execute([$roomId]);
+
+    // Create settlement entries for any already-recorded contributions (fee=0 for cancellation).
+    $paidUsers = $db->prepare("SELECT DISTINCT user_id FROM saving_room_contributions WHERE room_id = ? AND status IN ('paid','paid_in_grace')");
+    $paidUsers->execute([$roomId]);
+    foreach ($paidUsers->fetchAll() as $pu) {
+        $uid = (int)$pu['user_id'];
+        recordEscrowSettlement($db, $roomId, $uid, 'refund_minus_fee', 'room_cancelled_underfilled', 0.00);
+    }
+
     activityLog($db, $roomId, 'room_auto_cancelled_underfilled', ['reason' => 'no_action_after_alert']);
 
     $db->commit();
@@ -601,6 +620,23 @@ foreach ($expired as $row) {
         'room',
         $roomId
     );
+
+    $parts = $db->prepare("SELECT user_id FROM saving_room_participants WHERE room_id = ? AND status = 'exited_prestart'");
+    $parts->execute([$roomId]);
+    foreach ($parts->fetchAll() as $p) {
+        $uid = (int)$p['user_id'];
+        notifyOnce(
+            $db,
+            $uid,
+            'room_cancelled_underfilled',
+            'important',
+            'Room cancelled',
+            'This saving room was cancelled before it started due to being underfilled.',
+            ['room_id' => $roomId],
+            'room',
+            $roomId
+        );
+    }
 
     logLine("Auto-cancelled underfilled room: {$roomId}");
 }
@@ -770,6 +806,36 @@ foreach ($pendingWins as $w) {
     if ($makerVote !== 'approve') continue;
     if ($required > 0 && $approvals < $required) continue;
 
+    // Block rotation reveal if the turn user has past-due unpaid contributions in this room.
+    $debt = $db->prepare("SELECT COUNT(*)
+                          FROM saving_room_contributions c
+                          JOIN saving_room_contribution_cycles cy ON cy.id = c.cycle_id
+                          WHERE c.room_id = ?
+                            AND c.user_id = ?
+                            AND c.status = 'unpaid'
+                            AND cy.due_at <= NOW()");
+    $debt->execute([$roomId, $turnUserId]);
+    if ((int)$debt->fetchColumn() > 0) {
+        $db->prepare("UPDATE saving_room_rotation_windows SET status='blocked_debt' WHERE id = ? AND status='pending_votes'")
+           ->execute([(int)$w['id']]);
+
+        activityLog($db, $roomId, 'rotation_blocked_debt', ['rotation_index' => $rotationIndex]);
+
+        notifyOnce(
+            $db,
+            $turnUserId,
+            'typeB_turn_blocked_debt',
+            'important',
+            'Type B turn blocked (unpaid contribution)',
+            'Your Type B turn cannot be revealed until you clear your past-due unpaid contribution(s) in this room.',
+            ['room_id' => $roomId, 'rotation_index' => $rotationIndex],
+            'room',
+            $roomId . ':' . $rotationIndex
+        );
+
+        continue;
+    }
+
     $expires = (new DateTimeImmutable('now'))->modify('+72 hours')->format('Y-m-d H:i:s');
     $disputeEnds = (new DateTimeImmutable('now'))->modify('+24 hours')->format('Y-m-d H:i:s');
 
@@ -791,6 +857,37 @@ foreach ($pendingWins as $w) {
         'room',
         $roomId . ':' . $rotationIndex
     );
+}
+
+$blockedDebtWins = $db->query("SELECT w.id, w.room_id, w.user_id, w.rotation_index
+                              FROM saving_room_rotation_windows w
+                              JOIN saving_rooms r ON r.id = w.room_id
+                              WHERE r.saving_type='B'
+                                AND r.room_state='active'
+                                AND w.status='blocked_debt'
+                              ORDER BY w.created_at ASC
+                              LIMIT 400")->fetchAll();
+
+foreach ($blockedDebtWins as $w) {
+    $roomId = (string)$w['room_id'];
+    $turnUserId = (int)$w['user_id'];
+    $rotationIndex = (int)$w['rotation_index'];
+
+    $debt = $db->prepare("SELECT COUNT(*)
+                          FROM saving_room_contributions c
+                          JOIN saving_room_contribution_cycles cy ON cy.id = c.cycle_id
+                          WHERE c.room_id = ?
+                            AND c.user_id = ?
+                            AND c.status = 'unpaid'
+                            AND cy.due_at <= NOW()");
+    $debt->execute([$roomId, $turnUserId]);
+
+    if ((int)$debt->fetchColumn() === 0) {
+        $db->prepare("UPDATE saving_room_rotation_windows SET status='pending_votes' WHERE id = ? AND status='blocked_debt'")
+           ->execute([(int)$w['id']]);
+
+        activityLog($db, $roomId, 'rotation_unblocked_debt', ['rotation_index' => $rotationIndex]);
+    }
 }
 
 $expiredWins = $db->query("SELECT w.id, w.room_id, w.user_id, w.rotation_index

@@ -42,15 +42,35 @@ $myStatus = $myStmt->fetchColumn();
 $vis = (string)$room['visibility'];
 
 if ($vis === 'private' && !$myStatus && !isAdmin($userId)) {
+    $myEmail = strtolower(trim(getCurrentUserEmail() ?? ''));
+
     $inv = $db->prepare("SELECT 1 FROM saving_room_invites
                          WHERE room_id = ?
                            AND invite_mode='private_user'
-                           AND invited_user_id = ?
                            AND status='active'
                            AND (expires_at IS NULL OR expires_at > NOW())
+                           AND (invited_user_id = ? OR (invited_email IS NOT NULL AND invited_email = ?))
                          LIMIT 1");
-    $inv->execute([$roomId, $userId]);
-    if (!$inv->fetchColumn()) {
+    $inv->execute([$roomId, $userId, $myEmail]);
+    $ok = (bool)$inv->fetchColumn();
+
+    if (!$ok) {
+        $token = trim((string)($_GET['invite'] ?? ''));
+        if ($token !== '' && strlen($token) <= 200 && preg_match('/^[a-f0-9]{16,128}$/i', $token)) {
+            $hash = hash('sha256', $token);
+            $inv2 = $db->prepare("SELECT 1 FROM saving_room_invites
+                                 WHERE room_id = ?
+                                   AND invite_mode='private_user'
+                                   AND invite_token_hash = ?
+                                   AND status='active'
+                                   AND (expires_at IS NULL OR expires_at > NOW())
+                                 LIMIT 1");
+            $inv2->execute([$roomId, $hash]);
+            $ok = (bool)$inv2->fetchColumn();
+        }
+    }
+
+    if (!$ok) {
         http_response_code(403);
         exit;
     }
