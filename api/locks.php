@@ -19,11 +19,11 @@ $db     = getDB();
 // don't remain "pending" forever if the browser tab is closed before the
 // client timer fires.
 $db->prepare("UPDATE locks
-              SET confirmation_status='auto_saved', auto_saved_at=NOW()
+              SET confirmation_status='auto_saved', auto_saved_at=UTC_TIMESTAMP()
               WHERE user_id = ?
                 AND is_active = 1
                 AND confirmation_status = 'pending'
-                AND created_at <= (NOW() - INTERVAL 2 MINUTE)")
+                AND created_at <= (UTC_TIMESTAMP() - INTERVAL 2 MINUTE)")
    ->execute([(int)$userId]);
 
 $stmt = $db->prepare("

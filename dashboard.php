@@ -933,7 +933,11 @@ function openConfirmSheet(lockId, label){
 
   setTimeout(async ()=>{
     if(!pendingLock) return;
-    await postCsrf('/api/confirm.php',{lock_id:lockId,action:'auto_save'});
+
+    // Best-effort UI indicator only. Auto-save is enforced server-side as well
+    // (worker + API safety net) so the lock won't remain stuck in "pending"
+    // if the tab is closed.
+    try{ await postCsrf('/api/confirm.php',{lock_id:lockId,action:'auto_save'}); }catch{}
     document.getElementById('autosave-bar').classList.add('show');
     loadLocks();
   }, 120000);

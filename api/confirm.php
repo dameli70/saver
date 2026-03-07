@@ -33,19 +33,29 @@ $stmt->execute([$lockId, $userId]);
 $lock = $stmt->fetch();
 
 if (!$lock) jsonResponse(['error' => 'Lock not found'], 404);
-if ($lock['confirmation_status'] !== 'pending') {
-    jsonResponse(['success' => true, 'already_set' => $lock['confirmation_status']]);
-}
+
+$status = (string)($lock['confirmation_status'] ?? '');
+
+// Allow late activation: auto-saved locks can be confirmed later.
+$confirmable = in_array($status, ['pending', 'auto_saved'], true);
 
 switch ($action) {
     case 'confirm':
-        $db->prepare("UPDATE locks SET confirmation_status='confirmed', confirmed_at=NOW() WHERE id=? AND user_id=?")
+        if (!$confirmable) {
+            jsonResponse(['success' => true, 'already_set' => $status]);
+        }
+
+        $db->prepare("UPDATE locks SET confirmation_status='confirmed', confirmed_at=UTC_TIMESTAMP() WHERE id=? AND user_id=?")
            ->execute([$lockId, $userId]);
         auditLog('confirm', $lockId);
         jsonResponse(['success' => true, 'status' => 'confirmed', 'reveal_date' => $lock['reveal_date']]);
 
     case 'reject':
-        $db->prepare("UPDATE locks SET confirmation_status='rejected', rejected_at=NOW() WHERE id=? AND user_id=?")
+        if (!$confirmable) {
+            jsonResponse(['success' => true, 'already_set' => $status]);
+        }
+
+        $db->prepare("UPDATE locks SET confirmation_status='rejected', rejected_at=UTC_TIMESTAMP() WHERE id=? AND user_id=?")
            ->execute([$lockId, $userId]);
         auditLog('reject', $lockId);
         // Return cipher blobs — browser decrypts with vault passphrase to show void password
@@ -60,7 +70,11 @@ switch ($action) {
         ]);
 
     case 'auto_save':
-        $db->prepare("UPDATE locks SET confirmation_status='auto_saved', auto_saved_at=NOW() WHERE id=? AND user_id=?")
+        if ($status !== 'pending') {
+            jsonResponse(['success' => true, 'already_set' => $status]);
+        }
+
+        $db->prepare("UPDATE locks SET confirmation_status='auto_saved', auto_saved_at=UTC_TIMESTAMP() WHERE id=? AND user_id=?")
            ->execute([$lockId, $userId]);
         auditLog('auto_save', $lockId);
         jsonResponse(['success' => true, 'status' => 'auto_saved']);
