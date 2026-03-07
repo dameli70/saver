@@ -160,6 +160,21 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
 .lc-hint{font-size:11px;color:var(--muted);font-style:italic;margin-bottom:10px;
   padding:6px 10px;border-left:2px solid var(--b2);}
 .lc-countdown{font-size:12px;color:var(--accent);margin-bottom:10px;letter-spacing:1px;}
+
+.dash-nav{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;}
+.dash-tab{flex:1;min-width:140px;padding:12px 14px;border:1px solid var(--b1);background:transparent;color:var(--muted);
+  font-family:var(--mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;cursor:pointer;transition:all .15s;min-height:42px;}
+.dash-tab:hover{border-color:var(--b2);color:var(--text);} 
+.dash-tab.sel{border-color:var(--accent);color:var(--accent);background:rgba(232,255,71,.06);} 
+
+/* Progressive disclosure: show only the selected section */
+body[data-view="create"] [data-section]{display:none;}
+body[data-view="codes"] [data-section]{display:none;}
+body[data-view="vault"] [data-section]{display:none;}
+
+body[data-view="create"] [data-section~="create"]{display:block;}
+body[data-view="codes"] [data-section~="codes"]{display:block;}
+body[data-view="vault"] [data-section~="vault"]{display:block;}
 .lc-actions{display:flex;gap:8px;flex-wrap:wrap;}
 .lc-autosave-note{font-size:10px;color:var(--blue);letter-spacing:.4px;
   padding:6px 10px;border:1px solid rgba(71,184,255,.15);background:rgba(71,184,255,.05);margin-bottom:8px;line-height:1.5;}
@@ -200,7 +215,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
 .toast.warn{border-color:rgba(255,170,0,.35);color:var(--orange);}
 </style>
 </head>
-<body>
+<body data-view="create">
 <div class="orb orb1"></div><div class="orb orb2"></div>
 
 <div id="app">
@@ -230,7 +245,13 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
     <?php endif; ?>
 
     
-    <div class="card">
+    <div class="dash-nav" id="dash-nav" style="margin-top:6px;">
+      <button class="dash-tab sel" type="button" data-view="create" onclick="setView('create')">Create</button>
+      <button class="dash-tab" type="button" data-view="codes" onclick="setView('codes')">My codes</button>
+      <button class="dash-tab" type="button" data-view="vault" onclick="setView('vault')">Vault</button>
+    </div>
+
+    <div class="card" id="security-card" data-section="vault">
       <div class="card-title"><div class="dot"></div>Strong security</div>
       <div style="font-size:12px;color:var(--muted);line-height:1.7;">
         Vault passphrases never leave your browser. Revealing codes and committing vault rotation requires <strong style="color:var(--accent)">TOTP or a passkey</strong>.
@@ -238,7 +259,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
       </div>
     </div>
 
-    <div class="card" id="vault-unlock-card" style="display:none">
+    <div class="card" id="vault-unlock-card" data-section="create vault" style="display:none">
       <div class="card-title"><div class="dot" style="background:var(--orange)"></div><span style="color:var(--orange)">Vault</span></div>
       <div style="font-size:12px;color:var(--muted);line-height:1.7;margin-bottom:14px;">
         Your vault passphrase is used to derive encryption keys in your browser. It is never sent to the server.
@@ -258,7 +279,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
       <button class="btn btn-primary" id="vp-btn" onclick="unlockVault()"><span id="vp-txt">Unlock Vault</span></button>
     </div>
 
-    <div class="card" id="gen-card">
+    <div class="card" id="gen-card" data-section="create">
       <div class="card-title"><div class="dot"></div>Generate &amp; Lock</div>
 
       <div class="field"><label>Label</label>
@@ -301,15 +322,15 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
       </button>
     </div>
 
-    <div class="sec-header" id="codes">
+    <div class="sec-header" id="codes" data-section="codes">
       <div class="card-title" style="margin-bottom:0"><div class="dot"></div>My Codes</div>
       <button class="btn btn-ghost btn-sm" onclick="loadLocks()">↻</button>
     </div>
-    <div id="locks-wrap">
+    <div id="locks-wrap" data-section="codes">
       <div class="empty"><div class="empty-icon">🔒</div><h3>No codes yet</h3><p>Create your first code above.</p></div>
     </div>
 
-    <div class="card" id="vault-settings">
+    <div class="card" id="vault-settings" data-section="vault">
       <div class="card-title"><div class="dot"></div>Vault Settings</div>
       <p style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.6;">
         Rotate your vault passphrase by re-encrypting <strong>already-unlocked</strong> codes (reveal date has passed).
@@ -339,6 +360,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
     <div class="confirm-title">Did you save the code?</div>
     <div class="confirm-sub" id="cs-sub">Code was copied to your clipboard.</div>
     <div class="msg msg-warn" id="autosave-bar">Auto-saved. Code stored but not time-locked until you confirm.</div>
+    <div id="autosave-countdown" style="margin-top:12px;font-size:11px;color:var(--muted);letter-spacing:1px;">Auto-save in 2:00</div>
 
     <div class="confirm-btns" id="confirm-btns">
       <button class="btn btn-green" onclick="doConfirm('confirm')">✓ Yes, I saved it</button>
@@ -384,7 +406,6 @@ const CSRF = <?= json_encode($csrf) ?>;
 const PBKDF2_ITERS = <?= (int)PBKDF2_ITERATIONS ?>;
 const VAULT_CHECK_PLAIN = 'LOCKSMITH_VAULT_CHECK_v1';
 
-// The vault passphrase never leaves this script context.
 let vaultPhraseSession = null;
 let vaultSlotSession   = 1;
 let vaultCheckAvailable = false;
@@ -395,6 +416,13 @@ let pendingLock = null;
 let revealedPwd = null;
 let currentRevealLockId = null;
 let currentRevealLabel  = null;
+
+let locksLoaded = false;
+let lockCountdownInterval = null;
+
+let confirmAutoSaveTimeout = null;
+let confirmAutoSaveInterval = null;
+let confirmAutoSaveEnd = 0;
 
 // ─────────────────────────────────────────────────
 //  HTTP
@@ -407,10 +435,44 @@ async function postCsrf(url,body){
 }
 
 // ─────────────────────────────────────────────────
+//  VIEW (progressive disclosure)
+// ─────────────────────────────────────────────────
+function normalizeView(v){
+  return (v === 'codes' || v === 'vault' || v === 'create') ? v : 'create';
+}
+function getView(){
+  return normalizeView(document.body.dataset.view || 'create');
+}
+function setView(view){
+  const v = normalizeView(view);
+  document.body.dataset.view = v;
+  try{ localStorage.setItem('dash_view', v); }catch{}
+
+  document.querySelectorAll('.dash-tab').forEach(b => {
+    b.classList.toggle('sel', (b.dataset.view === v));
+  });
+
+  if(v === 'codes'){
+    if(!locksLoaded) loadLocks();
+    else startLockCountdown();
+  } else {
+    stopLockCountdown();
+  }
+
+  checkVaultUnlock();
+}
+
+// ─────────────────────────────────────────────────
 //  UTILS
 // ─────────────────────────────────────────────────
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function toast(msg,type='ok'){const t=document.createElement('div');t.className=`toast ${type}`;t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),3200);} 
+
+async function wipeClipboard(){
+  if(!navigator.clipboard || !navigator.clipboard.writeText) return;
+  try{ await navigator.clipboard.writeText(''); }
+  catch{ try{ await navigator.clipboard.writeText(' '); }catch{} }
+}
 
 function bytesToB64(bytes){return btoa(String.fromCharCode(...bytes));}
 function b64ToBytes(b64){return Uint8Array.from(atob(b64), c => c.charCodeAt(0));}
@@ -618,21 +680,26 @@ document.addEventListener('DOMContentLoaded', async () => {
   const storedSlot = parseInt(localStorage.getItem('vault_slot') || '1', 10);
   vaultSlotSession = ([1,2].includes(storedSlot) ? storedSlot : 1);
 
+  const storedView = normalizeView((localStorage.getItem('dash_view') || 'create'));
+  setView(storedView);
+
   await loadVaultSetup();
   checkVaultUnlock();
-  loadLocks();
 });
 
 function checkVaultUnlock() {
   const genBtn = document.getElementById('g-btn');
+  const vaultCard = document.getElementById('vault-unlock-card');
+  const view = getView();
+  const canShowVaultCard = (view === 'create' || view === 'vault');
 
   if (!vaultPhraseSession) {
-    document.getElementById('vault-unlock-card').style.display = 'block';
+    if (vaultCard) vaultCard.style.display = canShowVaultCard ? 'block' : 'none';
     if(genBtn) genBtn.disabled = true;
     return;
   }
 
-  document.getElementById('vault-unlock-card').style.display = 'none';
+  if (vaultCard) vaultCard.style.display = 'none';
   if(genBtn) genBtn.disabled = false;
 }
 
@@ -653,7 +720,6 @@ async function unlockVault() {
   btnTxt.innerHTML = '<span class="spin light"></span> ' + (setMode ? 'Setting…' : 'Unlocking…');
 
   try {
-    // If vault check is not initialized yet, initialize it now.
     if (setMode) {
       const c = requireWebCrypto();
       const saltBytes = new Uint8Array(32);
@@ -689,7 +755,6 @@ async function unlockVault() {
       localStorage.setItem('vault_slot', '1');
     }
 
-    // If we have a vault check blob, validate the passphrase.
     if (vaultCheckAvailable && vaultCheckInitialized && vaultCheck) {
       const key = await deriveKey(vp, vaultCheck.kdf_salt, vaultCheck.kdf_iterations);
       const plain = await aesDecrypt(vaultCheck.cipher_blob, vaultCheck.iv, vaultCheck.auth_tag, key);
@@ -795,6 +860,7 @@ async function doGenerate(){
       lock_id: r.lock_id, label: r.label, reveal_date: r.reveal_date,
       kdf_salt, kdf_iterations,
       cipher_blob: enc.cipher_blob, iv: enc.iv, auth_tag: enc.auth_tag,
+      copied_to_clipboard: copied ? 1 : 0,
     };
 
     document.getElementById('g-label').value='';
@@ -815,6 +881,39 @@ async function doGenerate(){
 // ─────────────────────────────────────────────────
 //  CONFIRM
 // ─────────────────────────────────────────────────
+function stopConfirmAutoSave(){
+  if(confirmAutoSaveTimeout){
+    clearTimeout(confirmAutoSaveTimeout);
+    confirmAutoSaveTimeout = null;
+  }
+  if(confirmAutoSaveInterval){
+    clearInterval(confirmAutoSaveInterval);
+    confirmAutoSaveInterval = null;
+  }
+  confirmAutoSaveEnd = 0;
+}
+
+function updateConfirmAutoSaveCountdown(){
+  const el = document.getElementById('autosave-countdown');
+  if(!el) return;
+
+  if(!confirmAutoSaveEnd){
+    el.textContent = 'Auto-save in 2:00';
+    return;
+  }
+
+  const rem = confirmAutoSaveEnd - Date.now();
+  if(rem <= 0){
+    el.textContent = 'Auto-saving…';
+    return;
+  }
+
+  const sec = Math.ceil(rem / 1000);
+  const m = Math.floor(sec / 60);
+  const s = String(sec % 60).padStart(2, '0');
+  el.textContent = `Auto-save in ${m}:${s}`;
+}
+
 function openConfirmSheet(lockId, label){
   document.getElementById('cs-sub').textContent=`"${label}" — blind-copied to clipboard.`;
   document.getElementById('confirm-btns').style.display='grid';
@@ -823,10 +922,18 @@ function openConfirmSheet(lockId, label){
   document.getElementById('void-box').classList.remove('show');
   document.getElementById('confirm-overlay').classList.add('show');
 
-  setTimeout(async ()=>{
+  stopConfirmAutoSave();
+  confirmAutoSaveEnd = Date.now() + 120000;
+  updateConfirmAutoSaveCountdown();
+  confirmAutoSaveInterval = setInterval(updateConfirmAutoSaveCountdown, 250);
+
+  confirmAutoSaveTimeout = setTimeout(async ()=>{
     if(!pendingLock) return;
     await postCsrf('/api/confirm.php',{lock_id:lockId,action:'auto_save'});
     document.getElementById('autosave-bar').classList.add('show');
+    const c = document.getElementById('autosave-countdown');
+    if(c) c.textContent = 'Auto-saved.';
+    stopConfirmAutoSave();
     loadLocks();
   }, 120000);
 }
@@ -834,11 +941,15 @@ function openConfirmSheet(lockId, label){
 function closeConfirm(e){
   if(e&&e.target!==document.getElementById('confirm-overlay'))return;
   document.getElementById('confirm-overlay').classList.remove('show');
+  stopConfirmAutoSave();
   pendingLock=null;
 }
 
 async function doConfirm(action){
   if(!pendingLock)return;
+
+  const wasCopied = !!pendingLock.copied_to_clipboard;
+  stopConfirmAutoSave();
 
   const r=await postCsrf('/api/confirm.php',{lock_id:pendingLock.lock_id,action});
   document.getElementById('confirm-btns').style.display='none';
@@ -848,6 +959,10 @@ async function doConfirm(action){
   if(action==='confirm'){
     msg.textContent='✓ Lock activated.';
     loadLocks();
+    if(wasCopied){
+      await wipeClipboard();
+      toast('Clipboard cleared','ok');
+    }
   } else if(action==='reject'){
     msg.textContent='✗ Discarded. Decrypting void code in your browser…';
     if(pendingLock.cipher_blob && vaultPhraseSession){
@@ -869,18 +984,96 @@ async function doConfirm(action){
 // ─────────────────────────────────────────────────
 //  LOCKS
 // ─────────────────────────────────────────────────
+function stopLockCountdown(){
+  if(lockCountdownInterval){
+    clearInterval(lockCountdownInterval);
+    lockCountdownInterval = null;
+  }
+}
+
+function parseRevealAt(s){
+  if(!s) return NaN;
+  const str = String(s);
+  if(str.includes(' ') && !str.includes('T')) return Date.parse(str.replace(' ', 'T'));
+  return Date.parse(str);
+}
+
+function formatRemaining(ms){
+  if(ms <= 0) return '⏱ Unlocking…';
+
+  const sec = Math.ceil(ms / 1000);
+  const days = Math.floor(sec / 86400);
+  const hours = Math.floor((sec % 86400) / 3600);
+  const mins = Math.floor((sec % 3600) / 60);
+  const secs = sec % 60;
+
+  const hh = String(hours);
+  const mm = String(mins);
+  const ss = String(secs).padStart(2,'0');
+
+  if(days > 0) return `⏱ ${days}d ${hh}h ${mm}m ${ss}s remaining`;
+  return `⏱ ${hh}h ${mm}m ${ss}s remaining`;
+}
+
+function updateLockCountdowns(){
+  const now = Date.now();
+  let any = false;
+  let needsRefresh = false;
+
+  document.querySelectorAll('.lc-countdown[data-reveal-at]').forEach(el => {
+    const revealAt = parseInt(el.dataset.revealAt || '0', 10);
+    if(!revealAt) return;
+
+    const rem = revealAt - now;
+    if(rem <= 0){
+      el.textContent = '⏱ Unlocking…';
+      needsRefresh = true;
+      return;
+    }
+
+    any = true;
+    el.textContent = formatRemaining(rem);
+  });
+
+  if(needsRefresh){
+    stopLockCountdown();
+    setTimeout(()=>loadLocks(), 1200);
+    return;
+  }
+
+  if(!any) stopLockCountdown();
+}
+
+function startLockCountdown(){
+  stopLockCountdown();
+  updateLockCountdowns();
+  lockCountdownInterval = setInterval(updateLockCountdowns, 1000);
+}
+
 async function loadLocks(){
+  locksLoaded = true;
+  stopLockCountdown();
+
   const wrap=document.getElementById('locks-wrap');
   wrap.innerHTML='<div style="text-align:center;padding:40px;color:var(--muted);font-size:11px;letter-spacing:2px">LOADING…</div>';
   try{
     const r=await get('/api/locks.php');
-    if(!r.success||!r.locks||!r.locks.length){
+    if(!r.success){
+      locksLoaded = false;
+      wrap.innerHTML='<div class="empty"><p>Failed to load.</p></div>';
+      return;
+    }
+    if(!r.locks||!r.locks.length){
       wrap.innerHTML='<div class="empty"><div class="empty-icon">🔒</div><h3>No codes yet</h3><p>Create your first code above.</p></div>';
       return;
     }
+
     wrap.innerHTML='<div class="locks-grid" id="locks-grid"></div>';
     r.locks.forEach(l=>document.getElementById('locks-grid').appendChild(buildCard(l)));
+
+    if(getView()==='codes') startLockCountdown();
   }catch{
+    locksLoaded = false;
     wrap.innerHTML='<div class="empty"><p>Failed to load.</p></div>';
   }
 }
@@ -891,7 +1084,10 @@ function buildCard(lock){
   el.className=`lock-card st-${st}`;
 
   const badges={locked:'🔒 Locked',unlocked:'🔓 Unlocked',pending:'⏳ Pending',auto_saved:'💾 Auto-saved',rejected:'✗ Void'};
-  const rd=new Date(lock.reveal_date).toLocaleDateString('en-US',{year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+  const revealAt = parseRevealAt(lock.reveal_date);
+  const rd = Number.isNaN(revealAt)
+    ? String(lock.reveal_date||'')
+    : new Date(revealAt).toLocaleDateString('en-US',{year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
 
   const top=document.createElement('div');
   top.className='lc-top';
@@ -922,11 +1118,11 @@ function buildCard(lock){
     el.appendChild(note);
   }
 
-  if(st==='locked'&&lock.time_remaining){
-    const t=lock.time_remaining;
+  if(st==='locked' && !Number.isNaN(revealAt)){
     const countdown=document.createElement('div');
     countdown.className='lc-countdown';
-    countdown.textContent=`⏱ ${t.days}d ${t.hours}h ${t.minutes}m remaining`;
+    countdown.dataset.revealAt = String(revealAt);
+    countdown.textContent = formatRemaining(revealAt - Date.now());
     el.appendChild(countdown);
   }
 
