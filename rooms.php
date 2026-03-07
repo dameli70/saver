@@ -124,6 +124,13 @@ body{background:var(--bg);color:var(--text);font-family:var(--mono);font-size:14
   </div>
 
   <div class="grid">
+    <div class="card" style="grid-column:1/-1;">
+      <div class="card-title">My rooms</div>
+      <div class="p" style="margin-top:-6px;">Your active, pending, and completed rooms.</div>
+      <div id="myrooms-msg" class="msg"></div>
+      <div id="myrooms-wrap" class="rooms"></div>
+    </div>
+
     <div class="card">
       <div class="card-title">Rooms</div>
       <div id="rooms-msg" class="msg"></div>
@@ -319,6 +326,68 @@ function buildRoomCard(r){
   return el;
 }
 
+function buildMyRoomCard(r){
+  const el=document.createElement('div');
+  el.className='room';
+
+  const top=document.createElement('div');
+  top.className='room-top';
+
+  const goal=document.createElement('div');
+  goal.className='room-goal';
+  goal.textContent=r.goal || '';
+
+  const badge=document.createElement('div');
+  badge.className='badge';
+  badge.textContent = `${String((r.my_status||'').toUpperCase())} · TYPE ${r.saving_type}`;
+
+  top.appendChild(goal);
+  top.appendChild(badge);
+
+  const meta=document.createElement('div');
+  meta.className='meta';
+  meta.innerHTML = `Amount: <b>${esc(r.participation_amount)}</b><br>Period: <b>${esc(r.periodicity)}</b><br>State: <b>${esc(r.room_state)} / ${esc(r.lobby_state)}</b><br>Starts: <b>${esc(fmtDate(r.start_at))}</b>`;
+
+  const actions=document.createElement('div');
+  actions.className='actions';
+
+  const open=document.createElement('a');
+  open.className='btn btn-ghost btn-sm';
+  open.href='room.php?id=' + encodeURIComponent(r.id);
+  open.textContent='Open';
+
+  actions.appendChild(open);
+
+  el.appendChild(top);
+  el.appendChild(meta);
+  el.appendChild(actions);
+  return el;
+}
+
+async function loadMyRooms(){
+  const wrap=document.getElementById('myrooms-wrap');
+  wrap.innerHTML = '<div style="color:var(--muted);font-size:12px;">Loading…</div>';
+  document.getElementById('myrooms-msg').className='msg';
+
+  try{
+    const r=await get('/api/rooms.php?action=my_rooms');
+    if(!r.success) throw new Error(r.error||'Failed');
+
+    const rooms=r.rooms||[];
+    if(!rooms.length){
+      wrap.innerHTML = '<div style="color:var(--muted);font-size:12px;line-height:1.6;">No rooms yet.</div>';
+      return;
+    }
+
+    wrap.innerHTML='';
+    rooms.forEach(x => wrap.appendChild(buildMyRoomCard(x)));
+
+  }catch(e){
+    wrap.innerHTML = '<div style="color:var(--muted);font-size:12px;">Failed to load.</div>';
+    setMsg('myrooms-msg', e.message||'Failed', false);
+  }
+}
+
 async function loadRooms(){
   const wrap=document.getElementById('rooms-wrap');
   wrap.innerHTML = '<div style="color:var(--muted);font-size:12px;">Loading…</div>';
@@ -398,6 +467,7 @@ async function createRoom(){
 }
 
 renderCategories();
+loadMyRooms();
 loadRooms();
 </script>
 </body>
