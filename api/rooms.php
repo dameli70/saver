@@ -253,6 +253,10 @@ if ($action === 'room_detail') {
     $participantsStmt->execute([$roomId]);
     $participants = $participantsStmt->fetchAll();
 
+    $underfillStmt = $db->prepare("SELECT status, decision_deadline_at FROM saving_room_underfill_alerts WHERE room_id = ?");
+    $underfillStmt->execute([$roomId]);
+    $underfill = $underfillStmt->fetch();
+
     jsonResponse([
         'success' => true,
         'room' => [
@@ -276,6 +280,10 @@ if ($action === 'room_detail') {
             'maker_user_id' => (int)$room['maker_user_id'],
             'is_maker' => ((int)$room['maker_user_id'] === $userId) ? 1 : 0,
             'my_status' => $myStatus ?: null,
+            'underfill' => $underfill ? [
+                'status' => $underfill['status'],
+                'decision_deadline_at' => $underfill['decision_deadline_at'],
+            ] : null,
         ],
         'participants' => $participants,
     ]);
@@ -503,6 +511,117 @@ if ($action === 'maker_join_requests') {
     $stmt->execute([$roomId]);
 
     jsonResponse(['success' => true, 'requests' => $stmt->fetchAll()]);
+}
+
+// ── UNDERFILLED: MAKER DECISION ─────────────────────────────
+if ($action === 'underfill_decide') {
+    requireLogin();
+    requireVerifiedEmail();
+    requireCsrf();
+
+    $userId = (int)getCurrentUserId();
+    $roomId = (string)($body['room_id'] ?? '');
+    $decision = (string)($body['decision'] ?? '');
+
+    if ($roomId === '' || strlen($roomId) !== 36) jsonResponse(['error' => 'Invalid room_id'], 400);
+    if (!in_array($decision, ['extend_start','lower_min','cancel'], true)) jsonResponse(['error' => 'Invalid decision'], 400);
+
+    requireRoomMaker($roomId, $userId);
+
+    $db = getDB();
+
+    $room = roomExistsAndJoinable($roomId);
+    if ($room['room_state'] !== 'lobby') jsonResponse(['error' => 'Room is not in lobby'], 403);
+
+    $a = $db->prepare("SELECT status, decision_deadline_at FROM saving_room_underfill_alerts WHERE room_id = ?");
+    $a->execute([$roomId]);
+    $alert = $a->fetch();
+    if (!$alert || $alert['status'] !== 'open') jsonResponse(['error' => 'No active underfilled-room decision'], 403);
+
+    $deadlineTs = strtotime((string)$alert['decision_deadline_at']);
+    if ($deadlineTs && time() > $deadlineTs) jsonResponse(['error' => 'Decision window expired'], 403);
+
+    $approved = countApprovedParticipants($roomId);
+
+    $db->beginTransaction();
+
+    if ($decision === 'extend_start') {
+        $newStartAt = (string)($body['new_start_at'] ?? '');
+        $newRevealAt = (string)($body['new_reveal_at'] ?? '');
+
+        $startTs = strtotime($newStartAt);
+        $revealTs = strtotime($newRevealAt);
+
+        if (!$startTs || !$revealTs) {
+            $db->rollBack();
+            jsonResponse(['error' => 'Invalid dates'], 400);
+        }
+        if ($startTs <= time() + 300) {
+            $db->rollBack();
+            jsonResponse(['error' => 'Start date must be in the future'], 400);
+        }
+        if ($revealTs <= $startTs) {
+            $db->rollBack();
+            jsonResponse(['error' => 'Reveal date must be after start date'], 400);
+        }
+
+        $extensionsUsed = (int)$room['extensions_used'];
+        if ($extensionsUsed >= 2) {
+            $db->rollBack();
+            jsonResponse(['error' => 'Maximum extensions reached'], 403);
+        }
+
+        $oldStartTs = strtotime((string)$room['start_at']);
+        if ($oldStartTs && $startTs > ($oldStartTs + (30 * 86400))) {
+            $db->rollBack();
+            jsonResponse(['error' => 'Each extension is capped at 30 days'], 403);
+        }
+
+        $db->prepare("UPDATE saving_rooms SET start_at = ?, reveal_at = ?, extensions_used = extensions_used + 1, updated_at=NOW() WHERE id = ?")
+           ->execute([date('Y-m-d H:i:s', $startTs), date('Y-m-d H:i:s', $revealTs), $roomId]);
+
+        $db->prepare("UPDATE saving_room_underfill_alerts SET status='resolved', resolved_at=NOW(), resolution_action='extend_start', resolution_payload=JSON_OBJECT('new_start_at', ?, 'new_reveal_at', ?) WHERE room_id = ?")
+           ->execute([date('Y-m-d H:i:s', $startTs), date('Y-m-d H:i:s', $revealTs), $roomId]);
+
+        activityLog($roomId, 'underfilled_resolved', ['action' => 'extend_start']);
+
+    } else if ($decision === 'lower_min') {
+        $newMin = (int)($body['new_min_participants'] ?? 0);
+        if ($newMin < 2) {
+            $db->rollBack();
+            jsonResponse(['error' => 'Minimum participants must be at least 2'], 400);
+        }
+        if ($newMin > (int)$room['min_participants']) {
+            $db->rollBack();
+            jsonResponse(['error' => 'New minimum must be <= current minimum'], 400);
+        }
+        if ($approved < $newMin) {
+            $db->rollBack();
+            jsonResponse(['error' => 'New minimum cannot exceed current approved participants'], 400);
+        }
+
+        $db->prepare("UPDATE saving_rooms SET min_participants = ?, updated_at=NOW() WHERE id = ?")
+           ->execute([$newMin, $roomId]);
+
+        $db->prepare("UPDATE saving_room_underfill_alerts SET status='resolved', resolved_at=NOW(), resolution_action='lower_min', resolution_payload=JSON_OBJECT('new_min_participants', ?) WHERE room_id = ?")
+           ->execute([$newMin, $roomId]);
+
+        activityLog($roomId, 'underfilled_resolved', ['action' => 'lower_min', 'new_min_participants' => $newMin]);
+
+    } else {
+        $db->prepare("UPDATE saving_rooms SET room_state='cancelled', lobby_state='locked', updated_at=NOW() WHERE id = ? AND room_state='lobby'")
+           ->execute([$roomId]);
+
+        $db->prepare("UPDATE saving_room_underfill_alerts SET status='resolved', resolved_at=NOW(), resolution_action='cancel', resolution_payload=JSON_OBJECT('by_maker', 1) WHERE room_id = ?")
+           ->execute([$roomId]);
+
+        activityLog($roomId, 'room_cancelled_by_maker', ['reason' => 'underfilled']);
+    }
+
+    $db->commit();
+
+    auditLog('room_underfill_decide');
+    jsonResponse(['success' => true]);
 }
 
 // ── MAKER: APPROVE / DECLINE JOIN REQUEST ───────────────────

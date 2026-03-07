@@ -133,6 +133,20 @@ body{background:var(--bg);color:var(--text);font-family:var(--mono);min-height:1
       <div id="feed-msg" class="msg"></div>
     </div>
 
+    <div class="card" id="underfill-card" style="display:none;grid-column:1/-1;">
+      <div class="card-title">Underfilled room — action required</div>
+      <div class="p">This room has not reached its minimum participant count 72 hours before start. If no action is taken within 24 hours, it auto-cancels.</div>
+
+      <div id="underfill-meta" class="small"></div>
+
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
+        <button class="btn btn-blue btn-sm" onclick="underfillExtend()">Extend start date</button>
+        <button class="btn btn-blue btn-sm" onclick="underfillLowerMin()">Lower minimum</button>
+        <button class="btn btn-red btn-sm" onclick="underfillCancel()">Cancel room</button>
+      </div>
+      <div id="underfill-msg" class="msg"></div>
+    </div>
+
     <div class="card" id="maker-card" style="display:none;grid-column:1/-1;">
       <div class="card-title">Join requests (maker)</div>
       <div class="p">Review pending requests. You can see the applicant’s trust level and strikes summary.</div>
@@ -207,6 +221,7 @@ function renderRoom(){
   if(r.is_maker){
     document.getElementById('maker-card').style.display='block';
     loadJoinRequests();
+    loadUnderfillDecision();
   }
 }
 
@@ -273,6 +288,83 @@ async function pollFeed(){
     const msg = document.getElementById('feed-msg');
     msg.className = 'msg msg-err show';
     msg.textContent = e.message||'Feed error';
+  }
+}
+
+function renderUnderfillAlert(underfill){
+  const card = document.getElementById('underfill-card');
+  const meta = document.getElementById('underfill-meta');
+  const msg = document.getElementById('underfill-msg');
+
+  if(!card || !meta || !msg) return;
+  msg.className='msg';
+
+  if(!underfill || underfill.status !== 'open'){
+    card.style.display='none';
+    return;
+  }
+
+  card.style.display='block';
+  meta.textContent = underfill.decision_deadline_at ? ('Decision deadline: ' + String(underfill.decision_deadline_at)) : '';
+}
+
+function loadUnderfillDecision(){
+  if(!roomCache || !roomCache.is_maker) return;
+  renderUnderfillAlert(roomCache.underfill);
+}
+
+async function underfillExtend(){
+  const msg = document.getElementById('underfill-msg');
+  msg.className='msg';
+
+  const newStartAt = prompt('Enter new start date/time (YYYY-MM-DD HH:MM:SS)');
+  if(!newStartAt) return;
+  const newRevealAt = prompt('Enter new reveal date/time (YYYY-MM-DD HH:MM:SS)');
+  if(!newRevealAt) return;
+
+  try{
+    const res = await postCsrf('/api/rooms.php', {action:'underfill_decide', room_id: ROOM_ID, decision:'extend_start', new_start_at:newStartAt, new_reveal_at:newRevealAt});
+    if(!res.success) throw new Error(res.error||'Failed');
+    setMsg('underfill-msg','Saved.', true);
+    await loadRoom();
+  }catch(e){
+    setMsg('underfill-msg', e.message||'Failed', false);
+  }
+}
+
+async function underfillLowerMin(){
+  const msg = document.getElementById('underfill-msg');
+  msg.className='msg';
+
+  const newMinStr = prompt('Enter new minimum participants');
+  if(!newMinStr) return;
+  const newMin = parseInt(newMinStr, 10);
+  if(!newMin || newMin < 2){
+    setMsg('underfill-msg','Minimum must be at least 2', false);
+    return;
+  }
+
+  try{
+    const res = await postCsrf('/api/rooms.php', {action:'underfill_decide', room_id: ROOM_ID, decision:'lower_min', new_min_participants:newMin});
+    if(!res.success) throw new Error(res.error||'Failed');
+    setMsg('underfill-msg','Saved.', true);
+    await loadRoom();
+  }catch(e){
+    setMsg('underfill-msg', e.message||'Failed', false);
+  }
+}
+
+async function underfillCancel(){
+  const ok = confirm('Cancel this room?');
+  if(!ok) return;
+
+  try{
+    const res = await postCsrf('/api/rooms.php', {action:'underfill_decide', room_id: ROOM_ID, decision:'cancel'});
+    if(!res.success) throw new Error(res.error||'Failed');
+    setMsg('underfill-msg','Room cancelled.', true);
+    await loadRoom();
+  }catch(e){
+    setMsg('underfill-msg', e.message||'Failed', false);
   }
 }
 
