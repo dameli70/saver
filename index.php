@@ -20,7 +20,7 @@ header("Referrer-Policy: no-referrer");
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>LOCKSMITH — Time-Locked Codes</title>
+<title>LOCKSMITH — Vault + Saving Rooms + Wallet Locks</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
 <style>
@@ -110,7 +110,7 @@ a{color:inherit;}
   <?php endif; ?>
 
   <div class="hero">
-    <div class="kicker">Zero-knowledge • Time-gated • AES-256-GCM</div>
+    <div class="kicker">Vault zero-knowledge • Saving rooms • Wallet locks</div>
     <div class="h1">Time-lock your <span>codes</span> — reveal them only when the date arrives.</div>
     <div class="sub">
       LOCKSMITH encrypts vault codes in your browser and stores ciphertext on the server. The server enforces reveal dates; your device clock can’t bypass it.
@@ -122,12 +122,13 @@ a{color:inherit;}
       <?php if ($loggedIn && $verified): ?>
         <a class="btn btn-primary" href="dashboard.php">Generate a code</a>
         <a class="btn btn-ghost" href="dashboard.php#codes">View my codes</a>
+        <a class="btn btn-ghost" href="rooms.php">Saving Rooms</a>
       <?php elseif ($loggedIn && !$verified): ?>
         <a class="btn btn-primary" href="account.php">Verify email to continue</a>
         <a class="btn btn-ghost" href="logout.php">Switch account</a>
       <?php else: ?>
-        <a class="btn btn-primary" href="signup.php">Generate a code</a>
-        <a class="btn btn-ghost" href="login.php">I already have an account</a>
+        <a class="btn btn-primary" href="signup.php">Create account</a>
+        <a class="btn btn-ghost" href="login.php">Login</a>
       <?php endif; ?>
     </div>
 
@@ -148,6 +149,27 @@ a{color:inherit;}
   </div>
 
   <div class="how">
+    <h2>Also included</h2>
+    <div class="grid" style="margin-top:12px;">
+      <div class="card">
+        <h3>Saving rooms</h3>
+        <p>Coordinate savings groups with contributions, unlock voting, and a transparency feed.</p>
+      </div>
+      <div class="card">
+        <h3>Notifications</h3>
+        <p>In-app inbox for reminders, room events, and security prompts.</p>
+      </div>
+      <div class="card">
+        <h3>Wallet locks (Android)</h3>
+        <p>Optional Android USSD companion to help change mobile-money PINs without exposing them in the dialer UI.</p>
+      </div>
+    </div>
+    <div class="sub" style="margin-top:14px;">
+      Vault codes and wallet locks are decrypted in your browser. Some features use server-managed secrets (e.g., TOTP seeds and Saving Rooms destination unlock codes).
+    </div>
+  </div>
+
+  <div class="how">
     <h2>How it works</h2>
     <div class="steps">
       <div class="step"><div class="n">1</div><div class="t">Create an account</div><div class="d">Pick a login password and a vault passphrase (used only in your browser).</div></div>
@@ -157,7 +179,7 @@ a{color:inherit;}
     </div>
   </div>
 
-  <div class="footer">© <?= date('Y') ?> LOCKSMITH • Time-locked code vault</div>
+  <div class="footer">© <?= date('Y') ?> LOCKSMITH • Vault + Saving Rooms + Wallet Locks</div>
 </div>
 </body>
 </html>

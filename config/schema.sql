@@ -1,12 +1,12 @@
 -- ============================================================
---  LOCKSMITH — Zero-Knowledge Schema v3
+--  LOCKSMITH — Schema
 --
---  SECURITY GUARANTEE:
---  The server stores ONLY ciphertext. The decryption key is
---  derived entirely in the user's browser from their vault
---  passphrase — which is NEVER stored.
---  A full server dump + source code = mathematically useless
---  without the user's vault passphrase.
+--  SECURITY MODEL (summary):
+--  - Vault codes and wallet locks are stored as ciphertext and are decrypted
+--    only in the user's browser (zero-knowledge with respect to the vault passphrase).
+--  - Some server-managed secrets exist to support features (e.g., TOTP secrets
+--    for verification, and Saving Rooms destination unlock codes). Those are
+--    decryptable by the server and are NOT zero-knowledge.
 -- ============================================================
 
 CREATE DATABASE IF NOT EXISTS locksmith

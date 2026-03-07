@@ -244,7 +244,7 @@ pre{white-space:pre-wrap;word-break:break-word;background:#000;border:1px solid 
 
   <div class="card" style="margin-top:14px;">
     <div class="card-title">Destination accounts (Saving Rooms)</div>
-    <div class="p">These accounts receive deposits for saving rooms. Unlock codes are stored encrypted and are only revealed to participants after consensus.</div>
+    <div class="p">These accounts receive deposits for saving rooms. Unlock codes are encrypted at rest but server-decryptable, and are only revealed to participants after consensus.</div>
 
     <div style="display:grid;grid-template-columns:1fr;gap:12px;margin-bottom:12px;">
       <div class="field">

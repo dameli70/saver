@@ -1,7 +1,8 @@
 -- Mobile Money carriers + time-locked wallet PINs
 --
 -- Carriers define USSD templates and PIN requirements.
--- Wallet locks store only ciphertext of the generated PIN (zero-knowledge).
+-- Wallet locks store ciphertext of the generated PIN (zero-knowledge with respect
+-- to the vault passphrase).
 
 CREATE TABLE IF NOT EXISTS carriers (
     id                      INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,

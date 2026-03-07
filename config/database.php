@@ -2,9 +2,14 @@
 // ============================================================
 //  LOCKSMITH — Database Configuration
 //  Edit DB_*, APP_HMAC_SECRET, and mail settings.
-//  The encryption key NEVER appears here — it lives only
-//  in the user's browser, derived from their vault passphrase.
-//  (The vault passphrase is never stored on the server.)
+//
+//  NOTE ON "ZERO-KNOWLEDGE":
+//  Vault code encryption keys are derived only in the browser from the user's
+//  vault passphrase (which is never stored on the server).
+//
+//  Some optional features require server-managed secrets (e.g. TOTP verification,
+//  Saving Rooms destination unlock codes) which are encrypted at rest but are
+//  decryptable by the server.
 // ============================================================
 
 define('DB_HOST',    'localhost');
@@ -17,9 +22,10 @@ define('DB_CHARSET', 'utf8mb4');
 // Today it is used for:
 // - Session-bound identifiers (session_id_hash in user_sessions)
 // - Encrypting server-stored secrets like TOTP seeds (AES-256-GCM)
+// - Encrypting admin-managed destination account unlock codes for Saving Rooms
 //
-// It is NOT used to encrypt user "locks" (codes). Those are encrypted/decrypted
-// only in the browser from the user's vault passphrase (zero-knowledge).
+// It is NOT used to encrypt vault codes or wallet locks. Those are encrypted/decrypted
+// only in the browser from the user's vault passphrase.
 define('APP_HMAC_SECRET', 'REPLACE_WITH_64+_RANDOM_BYTES_hex_php_r_echo_bin2hex_random_bytes_32');
 
 define('APP_ENV', 'development'); // 'production' in prod

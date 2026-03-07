@@ -1,17 +1,19 @@
 <?php
 // ============================================================
-//  LOCKSMITH — Server-Side Helpers (Zero-Knowledge Edition)
+//  LOCKSMITH — Server-Side Helpers
 //
-//  WHAT THIS FILE DOES NOT DO (by design):
-//  - Does NOT derive any encryption key
-//  - Does NOT store, transmit, or compute over plaintext passwords
-//  - Does NOT have any function that can decrypt a lock
+//  NOTE ON "ZERO-KNOWLEDGE":
+//  - Vault codes and wallet locks are decrypted in the browser; the server never
+//    receives the vault passphrase and cannot decrypt those ciphertext blobs.
+//  - Some features use server-managed secrets (e.g., TOTP seeds, Saving Rooms
+//    destination account unlock codes) which are encrypted at rest but are
+//    server-decryptable.
 //
 //  The only crypto here is:
 //  - Argon2id for login password hashing (authentication)
 //  - Argon2id for vault passphrase verification (legacy identity check only)
 //  - Session token generation (random)
-//  - Encrypting server-stored secrets (e.g., TOTP seed) with AES-256-GCM
+//  - Encrypting server-stored secrets (AES-256-GCM, server-decryptable)
 //  - UUID generation
 // ============================================================
 

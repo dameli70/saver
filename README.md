@@ -1,12 +1,11 @@
-# LOCKSMITH — Time-Locked Codes (Zero-Knowledge Vault)
+# LOCKSMITH — Vault + Saving Rooms + Wallet Locks
 ## PHP Web Application
 
 LOCKSMITH is a multi-page PHP app that includes:
 
 1) **Vault (time-locked codes)** — encrypt/decrypt exclusively in the browser (Web Crypto: PBKDF2 + AES-256-GCM). The server stores ciphertext + metadata and enforces reveal dates.
 2) **Saving Rooms (collaborative savings coordination)** — contribution tracking, trust/strike rules, disputes, voting, and destination-account unlock workflows (cron/worker driven).
-3) **Wallet Locks (mobile money PIN-change helper)** — time-locked ciphertext for the Android companion to execute USSD PIN changes.
-
+3) **3) **Wallet Locks (mobile money PIN-change helper)** — time-locked ciphertext for the Android companion to execute USSD PIN chan
 ### Important: scope of “zero-knowledge”
 - **Zero-knowledge applies to vault codes and wallet locks ciphertext**: the server never receives the vault passphrase and cannot decrypt those items.
 - **Not everything is zero-knowledge**: the server can decrypt some server-managed secrets to function (e.g. `totp_secret_enc` for TOTP verification, and Saving Rooms destination account unlock codes when a room unlocks).
@@ -62,13 +61,11 @@ Pages:
 - `verify.php` — handles verification token
 - `dashboard.php` — authenticated, email-verified app UI
 - `backup.php` — local export/import + cloud backups
-- `rooms.php` / `room.php` — Saving Rooms UI
-- `notifications.php` — in-app inbox
-- `admin.php` — super admin dashboard (requires admin)
-- `logout.php` — destroys session
-
+- `rooms.php` / `room.php` — Saving - `rooms.- `notifications.php` — in-app inbox- `notifications.php` — in-app inbox
+- `admin.php` — super admin dashboard (requires admin
 API:
 - Vault
+  - `api/auth.php` — registe- Vault
   - `api/auth.php` — register/login/logout + resend verification
   - `api/salt.php` — issues one-time per-lock KDF salt
   - `api/generate.php` — store a new encrypted code
