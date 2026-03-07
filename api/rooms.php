@@ -78,6 +78,24 @@ function activityLog(string $roomId, string $eventType, array $payload): void {
        ->execute([$roomId, $eventType, json_encode($payload, JSON_UNESCAPED_UNICODE)]);
 }
 
+function notifyOnceApi(int $userId, string $eventKey, string $tier, string $title, string $body, array $data = [], ?string $refType = null, ?string $refId = null, string $channelMask = ''): void {
+    $db = getDB();
+
+    if ($channelMask === '') {
+        if ($tier === 'critical') $channelMask = 'push,inapp,email';
+        else if ($tier === 'important') $channelMask = 'push,inapp';
+        else $channelMask = 'inapp';
+    }
+
+    $db->prepare('INSERT IGNORE INTO notification_events (user_id, event_key, ref_type, ref_id) VALUES (?, ?, ?, ?)')
+       ->execute([(int)$userId, $eventKey, $refType, $refId]);
+
+    if ($db->lastInsertId() === '0') return;
+
+    $db->prepare('INSERT INTO notifications (user_id, tier, channel_mask, title, body, data_json) VALUES (?, ?, ?, ?, ?, ?)')
+       ->execute([(int)$userId, $tier, $channelMask, $title, $body, $data ? json_encode($data, JSON_UNESCAPED_UNICODE) : null]);
+}
+
 function requireRoomMaker(string $roomId, int $userId): void {
     $db = getDB();
     $stmt = $db->prepare('SELECT maker_user_id FROM saving_rooms WHERE id = ?');
@@ -241,6 +259,19 @@ if ($action === 'room_detail') {
 
     $approvedCount = countApprovedParticipants($roomId);
 
+    $escrowSettlements = [];
+    $canSeeEscrow = (((int)$room['maker_user_id'] === $userId) || isAdmin($userId));
+    if ($canSeeEscrow) {
+        $es = $db->prepare("SELECT s.removed_user_id, u.email, s.policy, s.total_contributed, s.platform_fee_amount, s.refund_amount, s.status, s.created_at
+                            FROM saving_room_escrow_settlements s
+                            JOIN users u ON u.id = s.removed_user_id
+                            WHERE s.room_id = ?
+                            ORDER BY s.created_at DESC
+                            LIMIT 50");
+        $es->execute([$roomId]);
+        $escrowSettlements = $es->fetchAll();
+    }
+
     $participantsStmt = $db->prepare("SELECT p.user_id, p.status, u.email,
                                              (SELECT trust_level FROM user_trust WHERE user_id = p.user_id) AS trust_level,
                                              (SELECT COUNT(*) FROM user_strikes WHERE user_id = p.user_id AND created_at >= (NOW() - INTERVAL 6 MONTH)) AS strikes_6m,
@@ -265,6 +296,64 @@ if ($action === 'room_detail') {
                                     LIMIT 1");
     $activeCycleStmt->execute([$roomId]);
     $activeCycle = $activeCycleStmt->fetch();
+
+    $destinationAccount = null;
+    $canSeeDest = (((int)$room['maker_user_id'] === $userId) || isAdmin($userId) || in_array((string)$myStatus, ['approved','active'], true));
+    if ($canSeeDest) {
+        $da = $db->prepare("SELECT a.id, a.account_type, a.carrier_id, a.mobile_money_number,
+                                   a.bank_name, a.bank_account_name, a.bank_account_number, a.bank_routing_number, a.bank_swift, a.bank_iban,
+                                   a.code_rotated_at, a.code_rotation_version
+                            FROM saving_room_accounts ra
+                            JOIN platform_destination_accounts a ON a.id = ra.account_id
+                            WHERE ra.room_id = ?
+                            LIMIT 1");
+        $da->execute([$roomId]);
+        $destinationAccount = $da->fetch() ?: null;
+    }
+
+    $unlock = null;
+    if ($room['saving_type'] === 'A') {
+        $ue = $db->prepare('SELECT status, revealed_at, expires_at FROM saving_room_unlock_events WHERE room_id = ?');
+        $ue->execute([$roomId]);
+        $unlockEvent = $ue->fetch();
+
+        $eligibleStatuses = ($room['room_state'] === 'lobby') ? ['approved'] : ['active'];
+
+        $in = implode(',', array_fill(0, count($eligibleStatuses), '?'));
+        $voteSql = "SELECT
+                        SUM(CASE WHEN v.vote = 'approve' THEN 1 ELSE 0 END) AS approvals,
+                        COUNT(p.user_id) AS eligible
+                    FROM saving_room_participants p
+                    LEFT JOIN saving_room_unlock_votes v
+                           ON v.room_id = p.room_id
+                          AND v.user_id = p.user_id
+                          AND v.scope = 'typeA_room_unlock'
+                          AND v.target_rotation_index IS NULL
+                    WHERE p.room_id = ?
+                      AND p.status IN ({$in})";
+
+        $params = array_merge([$roomId], $eligibleStatuses);
+        $st = $db->prepare($voteSql);
+        $st->execute($params);
+        $vote = $st->fetch();
+
+        $myVoteStmt = $db->prepare("SELECT vote FROM saving_room_unlock_votes WHERE room_id = ? AND user_id = ? AND scope='typeA_room_unlock' AND target_rotation_index IS NULL");
+        $myVoteStmt->execute([$roomId, $userId]);
+        $myVote = $myVoteStmt->fetchColumn();
+
+        $unlock = [
+            'event' => $unlockEvent ? [
+                'status' => $unlockEvent['status'],
+                'revealed_at' => $unlockEvent['revealed_at'],
+                'expires_at' => $unlockEvent['expires_at'],
+            ] : null,
+            'votes' => [
+                'approvals' => (int)($vote['approvals'] ?? 0),
+                'eligible' => (int)($vote['eligible'] ?? 0),
+            ],
+            'my_vote' => $myVote ?: null,
+        ];
+    }
 
     jsonResponse([
         'success' => true,
@@ -300,6 +389,9 @@ if ($action === 'room_detail') {
                 'grace_ends_at' => $activeCycle['grace_ends_at'],
                 'status' => $activeCycle['status'],
             ] : null,
+            'unlock' => $unlock,
+            'destination_account' => $destinationAccount,
+            'escrow_settlements' => $escrowSettlements,
         ],
         'participants' => $participants,
     ]);
@@ -356,7 +448,7 @@ if ($action === 'activity') {
     jsonResponse(['success' => true, 'events' => $out]);
 }
 
-// ── CREATE ROOM ─────────────────────────────────────────────
+// ── CREATE ROOM ────────────────────────────────────────────
 if ($action === 'create_room') {
     requireLogin();
     requireVerifiedEmail();
@@ -364,86 +456,95 @@ if ($action === 'create_room') {
 
     $userId = (int)getCurrentUserId();
 
-    $goal = trim((string)($body['goal_text'] ?? ''));
     $purpose = (string)($body['purpose_category'] ?? 'other');
-    $savingType = (string)($body['saving_type'] ?? '');
+    $goal = trim((string)($body['goal_text'] ?? ''));
+    $savingType = (string)($body['saving_type'] ?? 'A');
     $visibility = (string)($body['visibility'] ?? 'public');
-
     $requiredLevel = (int)($body['required_trust_level'] ?? 1);
+
     $minP = (int)($body['min_participants'] ?? 2);
     $maxP = (int)($body['max_participants'] ?? 0);
 
     $amount = (string)($body['participation_amount'] ?? '');
-    $periodicity = (string)($body['periodicity'] ?? '');
+    $periodicity = (string)($body['periodicity'] ?? 'weekly');
 
-    $startAt = (string)($body['start_at'] ?? '');
-    $revealAt = (string)($body['reveal_at'] ?? '');
+    $startAt = trim((string)($body['start_at'] ?? ''));
+    $revealAt = trim((string)($body['reveal_at'] ?? ''));
 
     $privacyMode = !empty($body['privacy_mode']) ? 1 : 0;
     $escrowPolicy = (string)($body['escrow_policy'] ?? 'redistribute');
 
-    if ($goal === '' || strlen($goal) > 500) jsonResponse(['error' => 'Invalid goal'], 400);
-
     $allowedPurpose = ['education','travel','business','emergency','community','other'];
-    if (!in_array($purpose, $allowedPurpose, true)) jsonResponse(['error' => 'Invalid purpose'], 400);
-
-    if (!in_array($savingType, ['A','B'], true)) jsonResponse(['error' => 'Invalid saving type'], 400);
-
+    if (!in_array($purpose, $allowedPurpose, true)) jsonResponse(['error' => 'Invalid purpose_category'], 400);
+    if ($goal === '' || strlen($goal) > 500) jsonResponse(['error' => 'Invalid goal_text'], 400);
+    if (!in_array($savingType, ['A','B'], true)) jsonResponse(['error' => 'Invalid saving_type'], 400);
     if (!in_array($visibility, ['public','unlisted','private'], true)) jsonResponse(['error' => 'Invalid visibility'], 400);
+    if (!in_array($requiredLevel, [1,2,3], true)) jsonResponse(['error' => 'Invalid required_trust_level'], 400);
 
-    if ($requiredLevel < 1 || $requiredLevel > 3) jsonResponse(['error' => 'Invalid required trust level'], 400);
-    if ($minP < 2) jsonResponse(['error' => 'Minimum participants must be at least 2'], 400);
-    if ($maxP < $minP) jsonResponse(['error' => 'Max participants must be >= min participants'], 400);
+    if ($minP < 2) jsonResponse(['error' => 'min_participants must be at least 2'], 400);
+    if ($maxP < $minP) jsonResponse(['error' => 'max_participants must be >= min_participants'], 400);
+    if ($maxP > 50) jsonResponse(['error' => 'max_participants too large'], 400);
 
+    if (!is_numeric($amount) || (float)$amount <= 0) jsonResponse(['error' => 'Invalid participation_amount'], 400);
     if (!in_array($periodicity, ['weekly','biweekly','monthly'], true)) jsonResponse(['error' => 'Invalid periodicity'], 400);
-
-    if (!is_numeric($amount) || (float)$amount <= 0) jsonResponse(['error' => 'Invalid participation amount'], 400);
-
-    if (!in_array($escrowPolicy, ['redistribute','refund_minus_fee'], true)) jsonResponse(['error' => 'Invalid escrow policy'], 400);
-
-    // Maker is bound to required level
-    requireEligibleForRoom($userId, $requiredLevel);
 
     $startTs = strtotime($startAt);
     $revealTs = strtotime($revealAt);
-    if (!$startTs || !$revealTs) jsonResponse(['error' => 'Invalid dates'], 400);
+    if (!$startTs || !$revealTs) jsonResponse(['error' => 'Invalid start/reveal dates'], 400);
     if ($startTs <= time() + 300) jsonResponse(['error' => 'Start date must be in the future'], 400);
     if ($revealTs <= $startTs) jsonResponse(['error' => 'Reveal date must be after start date'], 400);
 
-    $roomId = generateUUID();
+    if (!in_array($escrowPolicy, ['redistribute','refund_minus_fee'], true)) jsonResponse(['error' => 'Invalid escrow_policy'], 400);
+
+    requireEligibleForRoom($userId, $requiredLevel);
 
     $db = getDB();
+
+    // Select a default active destination account.
+    $acctId = (int)$db->query("SELECT id FROM platform_destination_accounts WHERE is_active = 1 ORDER BY id ASC LIMIT 1")->fetchColumn();
+    if ($acctId < 1) {
+        jsonResponse(['error' => 'No active destination account is configured. Ask an admin to create one.'], 500);
+    }
+
+    $roomId = generateUUID();
+
     $db->beginTransaction();
 
-    $db->prepare("INSERT INTO saving_rooms (
-            id, maker_user_id, purpose_category, goal_text, saving_type, visibility,
-            required_trust_level, min_participants, max_participants,
-            participation_amount, periodicity, start_at, reveal_at,
-            lobby_state, room_state, privacy_mode, escrow_policy
-        ) VALUES (
-            ?, ?, ?, ?, ?, ?,
-            ?, ?, ?,
-            ?, ?, ?, ?,
-            'open', 'lobby', ?, ?
-        )")
-        ->execute([
-            $roomId, $userId, $purpose, $goal, $savingType, $visibility,
-            $requiredLevel, $minP, $maxP,
-            $amount, $periodicity, date('Y-m-d H:i:s', $startTs), date('Y-m-d H:i:s', $revealTs),
-            $privacyMode, $escrowPolicy,
-        ]);
+    $db->prepare("INSERT INTO saving_rooms
+                    (id, maker_user_id, purpose_category, goal_text, saving_type, visibility,
+                     required_trust_level, min_participants, max_participants,
+                     participation_amount, periodicity, start_at, reveal_at,
+                     privacy_mode, escrow_policy)
+                  VALUES
+                    (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+       ->execute([
+           $roomId,
+           $userId,
+           $purpose,
+           $goal,
+           $savingType,
+           $visibility,
+           $requiredLevel,
+           $minP,
+           $maxP,
+           $amount,
+           $periodicity,
+           date('Y-m-d H:i:s', $startTs),
+           date('Y-m-d H:i:s', $revealTs),
+           $privacyMode,
+           $escrowPolicy,
+       ]);
 
-    $db->prepare("INSERT INTO saving_room_participants (room_id, user_id, status, approved_at) VALUES (?, ?, 'approved', NOW())")
+    // Maker joins as approved participant.
+    $db->prepare("INSERT INTO saving_room_participants (room_id, user_id, status, approved_at)
+                  VALUES (?, ?, 'approved', NOW())")
        ->execute([$roomId, $userId]);
 
-    activityLog($roomId, 'room_created', [
-        'goal' => $goal,
-        'saving_type' => $savingType,
-        'visibility' => $visibility,
-        'required_level' => $requiredLevel,
-        'periodicity' => $periodicity,
-        'start_at' => date('c', $startTs),
-    ]);
+    // Link destination account.
+    $db->prepare("INSERT INTO saving_room_accounts (room_id, account_id) VALUES (?, ?)")
+       ->execute([$roomId, $acctId]);
+
+    activityLog($roomId, 'room_created', ['visibility' => $visibility, 'saving_type' => $savingType]);
 
     $db->commit();
 
@@ -451,7 +552,7 @@ if ($action === 'create_room') {
     jsonResponse(['success' => true, 'room_id' => $roomId]);
 }
 
-// ── REQUEST JOIN ────────────────────────────────────────────
+// ── REQUEST JOIN ───────────────────────────────────────────
 if ($action === 'request_join') {
     requireLogin();
     requireVerifiedEmail();
@@ -463,45 +564,61 @@ if ($action === 'request_join') {
 
     $room = roomExistsAndJoinable($roomId);
 
-    if ($room['room_state'] !== 'lobby') jsonResponse(['error' => 'Room is not joinable'], 403);
-    if ($room['lobby_state'] !== 'open') jsonResponse(['error' => 'Room lobby is locked'], 403);
+    if ($room['room_state'] !== 'lobby' || $room['lobby_state'] !== 'open') {
+        jsonResponse(['error' => 'Room is not accepting join requests'], 403);
+    }
 
-    // Visibility gating (unlisted/private will be enforced when invites are implemented)
-    if ($room['visibility'] === 'private') jsonResponse(['error' => 'Room is private'], 403);
-
-    // Eligibility
     requireEligibleForRoom($userId, (int)$room['required_trust_level']);
 
-    // Capacity check (approved + active)
+    $approvedCount = countApprovedParticipants($roomId);
+    if ($approvedCount >= (int)$room['max_participants']) {
+        jsonResponse(['error' => 'Room is full'], 403);
+    }
+
     $db = getDB();
-    $approved = countApprovedParticipants($roomId);
-    if ($approved >= (int)$room['max_participants']) jsonResponse(['error' => 'Room is full'], 403);
 
-    // Snapshot for maker
+    $existingPart = $db->prepare('SELECT status FROM saving_room_participants WHERE room_id = ? AND user_id = ?');
+    $existingPart->execute([$roomId, $userId]);
+    $ps = $existingPart->fetchColumn();
+    if ($ps && !in_array((string)$ps, ['declined'], true)) {
+        jsonResponse(['error' => 'You already have a participant status in this room'], 409);
+    }
+
     $lvl = getUserTrustLevel($userId);
-
-    $strikesStmt = $db->prepare("SELECT COUNT(*) FROM user_strikes WHERE user_id = ? AND created_at >= (NOW() - INTERVAL 6 MONTH)");
-    $strikesStmt->execute([$userId]);
-    $strikeCount = (int)$strikesStmt->fetchColumn();
+    $stmt = $db->prepare("SELECT COUNT(*) FROM user_strikes WHERE user_id = ? AND created_at >= (NOW() - INTERVAL 6 MONTH)");
+    $stmt->execute([$userId]);
+    $strikes6m = (int)$stmt->fetchColumn();
 
     $restrictedUntil = userRestrictedUntil($userId);
 
-    $db->prepare("INSERT INTO saving_room_join_requests (room_id, user_id, status, snapshot_level, snapshot_strikes_6m, snapshot_restricted_until)
-                  VALUES (?, ?, 'pending', ?, ?, ?)
-                  ON DUPLICATE KEY UPDATE status='pending', maker_decided_at=NULL, snapshot_level=VALUES(snapshot_level), snapshot_strikes_6m=VALUES(snapshot_strikes_6m), snapshot_restricted_until=VALUES(snapshot_restricted_until)")
-       ->execute([$roomId, $userId, $lvl, $strikeCount, $restrictedUntil]);
+    $db->beginTransaction();
 
-    $db->prepare("INSERT INTO saving_room_participants (room_id, user_id, status) VALUES (?, ?, 'pending')
+    $db->prepare("INSERT INTO saving_room_participants (room_id, user_id, status)
+                  VALUES (?, ?, 'pending')
                   ON DUPLICATE KEY UPDATE status='pending'")
        ->execute([$roomId, $userId]);
 
-    activityLog($roomId, 'join_requested', ['count' => 1]);
+    $db->prepare("INSERT INTO saving_room_join_requests
+                    (room_id, user_id, status, snapshot_level, snapshot_strikes_6m, snapshot_restricted_until)
+                  VALUES
+                    (?, ?, 'pending', ?, ?, ?)
+                  ON DUPLICATE KEY UPDATE
+                    status='pending',
+                    snapshot_level=VALUES(snapshot_level),
+                    snapshot_strikes_6m=VALUES(snapshot_strikes_6m),
+                    snapshot_restricted_until=VALUES(snapshot_restricted_until),
+                    created_at=NOW()")
+       ->execute([$roomId, $userId, $lvl, $strikes6m, $restrictedUntil]);
+
+    activityLog($roomId, 'join_requested', []);
+
+    $db->commit();
 
     auditLog('room_join_request');
     jsonResponse(['success' => true]);
 }
 
-// ── MAKER: LIST JOIN REQUESTS ───────────────────────────────
+// ── MAKER: LIST PENDING JOIN REQUESTS ───────────────────────
 if ($action === 'maker_join_requests') {
     requireLogin();
     requireVerifiedEmail();
@@ -513,8 +630,8 @@ if ($action === 'maker_join_requests') {
     requireRoomMaker($roomId, $userId);
 
     $db = getDB();
-    $stmt = $db->prepare("SELECT jr.id, jr.user_id, u.email, jr.status, jr.created_at,
-                                 jr.snapshot_level, jr.snapshot_strikes_6m, jr.snapshot_restricted_until,
+
+    $stmt = $db->prepare("SELECT jr.id, jr.user_id, u.email, jr.status, jr.snapshot_level, jr.snapshot_strikes_6m, jr.snapshot_restricted_until, jr.created_at,
                                  (SELECT trust_level FROM user_trust WHERE user_id = jr.user_id) AS current_level,
                                  (SELECT COUNT(*) FROM user_strikes WHERE user_id = jr.user_id AND created_at >= (NOW() - INTERVAL 6 MONTH)) AS current_strikes_6m,
                                  (SELECT restricted_until FROM user_restrictions WHERE user_id = jr.user_id AND restricted_until > NOW()) AS current_restricted_until
@@ -522,11 +639,81 @@ if ($action === 'maker_join_requests') {
                           JOIN users u ON u.id = jr.user_id
                           WHERE jr.room_id = ?
                             AND jr.status = 'pending'
-                          ORDER BY jr.created_at ASC
-                          LIMIT 200");
+                          ORDER BY jr.created_at ASC");
     $stmt->execute([$roomId]);
 
     jsonResponse(['success' => true, 'requests' => $stmt->fetchAll()]);
+}
+
+// ── MAKER: REVIEW JOIN REQUEST ──────────────────────────────
+if ($action === 'review_join') {
+    requireLogin();
+    requireVerifiedEmail();
+    requireCsrf();
+
+    $userId = (int)getCurrentUserId();
+    $reqId = (int)($body['request_id'] ?? 0);
+    $decision = (string)($body['decision'] ?? '');
+
+    if ($reqId <= 0) jsonResponse(['error' => 'request_id required'], 400);
+    if (!in_array($decision, ['approve','decline'], true)) jsonResponse(['error' => 'Invalid decision'], 400);
+
+    $db = getDB();
+
+    $reqStmt = $db->prepare('SELECT id, room_id, user_id, status FROM saving_room_join_requests WHERE id = ?');
+    $reqStmt->execute([$reqId]);
+    $req = $reqStmt->fetch();
+    if (!$req) jsonResponse(['error' => 'Request not found'], 404);
+    if ($req['status'] !== 'pending') jsonResponse(['error' => 'Request is not pending'], 409);
+
+    $room = roomExistsAndJoinable((string)$req['room_id']);
+    requireRoomMaker((string)$req['room_id'], $userId);
+
+    if ($room['room_state'] !== 'lobby' || $room['lobby_state'] !== 'open') {
+        jsonResponse(['error' => 'Room is not accepting approvals'], 403);
+    }
+
+    if ($decision === 'approve') {
+        $approvedCount = countApprovedParticipants((string)$req['room_id']);
+        if ($approvedCount >= (int)$room['max_participants']) {
+            jsonResponse(['error' => 'Room is full'], 403);
+        }
+
+        requireEligibleForRoomApproval((int)$req['user_id'], (int)$room['required_trust_level']);
+    }
+
+    $db->beginTransaction();
+
+    if ($decision === 'approve') {
+        $db->prepare("UPDATE saving_room_join_requests SET status='approved', maker_decided_at=NOW() WHERE id = ?")
+           ->execute([$reqId]);
+
+        $db->prepare("UPDATE saving_room_participants SET status='approved', approved_at=NOW() WHERE room_id = ? AND user_id = ?")
+           ->execute([(string)$req['room_id'], (int)$req['user_id']]);
+
+        activityLog((string)$req['room_id'], 'join_approved', []);
+
+        $newCount = countApprovedParticipants((string)$req['room_id']);
+        if ($newCount >= (int)$room['max_participants']) {
+            $db->prepare("UPDATE saving_rooms SET lobby_state='locked', updated_at=NOW() WHERE id = ?")
+               ->execute([(string)$req['room_id']]);
+            activityLog((string)$req['room_id'], 'lobby_locked', ['reason' => 'capacity_reached']);
+        }
+
+    } else {
+        $db->prepare("UPDATE saving_room_join_requests SET status='declined', maker_decided_at=NOW() WHERE id = ?")
+           ->execute([$reqId]);
+
+        $db->prepare("UPDATE saving_room_participants SET status='declined' WHERE room_id = ? AND user_id = ?")
+           ->execute([(string)$req['room_id'], (int)$req['user_id']]);
+
+        activityLog((string)$req['room_id'], 'join_declined', []);
+    }
+
+    $db->commit();
+
+    auditLog('room_review_join');
+    jsonResponse(['success' => true]);
 }
 
 // ── UNDERFILLED: MAKER DECISION ─────────────────────────────
@@ -640,75 +827,186 @@ if ($action === 'underfill_decide') {
     jsonResponse(['success' => true]);
 }
 
-// ── MAKER: APPROVE / DECLINE JOIN REQUEST ───────────────────
-if ($action === 'review_join') {
+// ── TYPE A: UNLOCK VOTE (consensus)
+if ($action === 'typeA_vote') {
     requireLogin();
     requireVerifiedEmail();
     requireCsrf();
 
     $userId = (int)getCurrentUserId();
-    $requestId = (int)($body['request_id'] ?? 0);
-    $decision = (string)($body['decision'] ?? '');
-    if ($requestId <= 0) jsonResponse(['error' => 'request_id required'], 400);
-    if (!in_array($decision, ['approve','decline'], true)) jsonResponse(['error' => 'Invalid decision'], 400);
+    $roomId = (string)($body['room_id'] ?? '');
+    $vote = (string)($body['vote'] ?? '');
+
+    if ($roomId === '' || strlen($roomId) !== 36) jsonResponse(['error' => 'Invalid room_id'], 400);
+    if (!in_array($vote, ['approve','reject'], true)) jsonResponse(['error' => 'Invalid vote'], 400);
 
     $db = getDB();
-    $req = $db->prepare('SELECT id, room_id, user_id, status FROM saving_room_join_requests WHERE id = ?');
-    $req->execute([$requestId]);
-    $jr = $req->fetch();
-    if (!$jr) jsonResponse(['error' => 'Join request not found'], 404);
+    $roomStmt = $db->prepare('SELECT saving_type, room_state, reveal_at FROM saving_rooms WHERE id = ?');
+    $roomStmt->execute([$roomId]);
+    $room = $roomStmt->fetch();
+    if (!$room) jsonResponse(['error' => 'Room not found'], 404);
 
-    $roomId = (string)$jr['room_id'];
-    requireRoomMaker($roomId, $userId);
+    if ($room['saving_type'] !== 'A') jsonResponse(['error' => 'Not a Type A room'], 400);
+    if (!in_array($room['room_state'], ['lobby','active'], true)) jsonResponse(['error' => 'Room is not votable'], 403);
 
-    $room = roomExistsAndJoinable($roomId);
-    if ($room['room_state'] !== 'lobby' || $room['lobby_state'] !== 'open') {
-        jsonResponse(['error' => 'Room is not accepting new participants'], 403);
+    $mem = $db->prepare('SELECT status FROM saving_room_participants WHERE room_id = ? AND user_id = ?');
+    $mem->execute([$roomId, $userId]);
+    $st = (string)$mem->fetchColumn();
+    if (!in_array($st, ['approved','active'], true)) jsonResponse(['error' => 'Not an eligible participant'], 403);
+
+    $db->prepare("INSERT INTO saving_room_unlock_votes (room_id, user_id, scope, target_rotation_index, vote)
+                  VALUES (?, ?, 'typeA_room_unlock', NULL, ?)
+                  ON DUPLICATE KEY UPDATE vote=VALUES(vote), updated_at=NOW()")
+       ->execute([$roomId, $userId, $vote]);
+
+    // Log aggregate only (no user_id)
+    $eligibleStatuses = ($room['room_state'] === 'lobby') ? ['approved'] : ['active'];
+    $in = implode(',', array_fill(0, count($eligibleStatuses), '?'));
+    $voteSql = "SELECT
+                    SUM(CASE WHEN v.vote = 'approve' THEN 1 ELSE 0 END) AS approvals,
+                    COUNT(p.user_id) AS eligible
+                FROM saving_room_participants p
+                LEFT JOIN saving_room_unlock_votes v
+                       ON v.room_id = p.room_id
+                      AND v.user_id = p.user_id
+                      AND v.scope = 'typeA_room_unlock'
+                      AND v.target_rotation_index IS NULL
+                WHERE p.room_id = ?
+                  AND p.status IN ({$in})";
+    $params = array_merge([$roomId], $eligibleStatuses);
+    $stmt = $db->prepare($voteSql);
+    $stmt->execute($params);
+    $agg = $stmt->fetch();
+
+    activityLog($roomId, 'unlock_vote_updated', [
+        'scope' => 'typeA',
+        'approvals' => (int)($agg['approvals'] ?? 0),
+        'eligible' => (int)($agg['eligible'] ?? 0),
+    ]);
+
+    auditLog('room_typeA_vote');
+    jsonResponse(['success' => true]);
+}
+
+// ── TYPE A: REVEAL UNLOCK CODE
+if ($action === 'typeA_reveal') {
+    requireLogin();
+    requireVerifiedEmail();
+    requireCsrf();
+    requireStrongAuth();
+
+    $userId = (int)getCurrentUserId();
+    $roomId = (string)($body['room_id'] ?? '');
+    if ($roomId === '' || strlen($roomId) !== 36) jsonResponse(['error' => 'Invalid room_id'], 400);
+
+    $db = getDB();
+
+    $roomStmt = $db->prepare('SELECT saving_type, room_state, reveal_at, privacy_mode FROM saving_rooms WHERE id = ?');
+    $roomStmt->execute([$roomId]);
+    $room = $roomStmt->fetch();
+    if (!$room) jsonResponse(['error' => 'Room not found'], 404);
+
+    if ($room['saving_type'] !== 'A') jsonResponse(['error' => 'Not a Type A room'], 400);
+    if ($room['room_state'] !== 'active') jsonResponse(['error' => 'Room is not active'], 403);
+
+    $mem = $db->prepare('SELECT status FROM saving_room_participants WHERE room_id = ? AND user_id = ?');
+    $mem->execute([$roomId, $userId]);
+    $st = (string)$mem->fetchColumn();
+    if ($st !== 'active') jsonResponse(['error' => 'Not an active participant'], 403);
+
+    $revealTs = strtotime((string)$room['reveal_at']);
+    if (!$revealTs || time() < $revealTs) {
+        jsonResponse(['error' => 'Reveal date has not arrived'], 403);
     }
 
-    $approved = countApprovedParticipants($roomId);
-    if ($decision === 'approve' && $approved >= (int)$room['max_participants']) {
-        jsonResponse(['error' => 'Room is already full'], 403);
+    // Ensure unanimous approval among active participants
+    $stmt = $db->prepare("SELECT
+                            SUM(CASE WHEN v.vote = 'approve' THEN 1 ELSE 0 END) AS approvals,
+                            COUNT(p.user_id) AS eligible
+                          FROM saving_room_participants p
+                          LEFT JOIN saving_room_unlock_votes v
+                                 ON v.room_id = p.room_id
+                                AND v.user_id = p.user_id
+                                AND v.scope = 'typeA_room_unlock'
+                                AND v.target_rotation_index IS NULL
+                          WHERE p.room_id = ?
+                            AND p.status = 'active'");
+    $stmt->execute([$roomId]);
+    $agg = $stmt->fetch();
+
+    $approvals = (int)($agg['approvals'] ?? 0);
+    $eligible = (int)($agg['eligible'] ?? 0);
+
+    if ($eligible < 1 || $approvals < $eligible) {
+        jsonResponse([
+            'error' => '100% participant approval required before unlock.',
+            'approvals' => $approvals,
+            'eligible' => $eligible,
+        ], 403);
     }
 
-    $targetUserId = (int)$jr['user_id'];
+    // Resolve destination account + decrypt unlock code
+    $acctStmt = $db->prepare("SELECT a.id, a.unlock_code_enc
+                              FROM saving_room_accounts ra
+                              JOIN platform_destination_accounts a ON a.id = ra.account_id
+                              WHERE ra.room_id = ?
+                              LIMIT 1");
+    $acctStmt->execute([$roomId]);
+    $acct = $acctStmt->fetch();
+    if (!$acct || empty($acct['unlock_code_enc'])) {
+        jsonResponse(['error' => 'Destination account is not configured for this room'], 500);
+    }
 
-    // Re-check eligibility at approval time
-    requireEligibleForRoomApproval($targetUserId, (int)$room['required_trust_level']);
+    $unlockCode = decryptFromDb((string)$acct['unlock_code_enc']);
 
-    $db->beginTransaction();
+    // Create / update unlock event status
+    $ev = $db->prepare('SELECT status, revealed_at, expires_at FROM saving_room_unlock_events WHERE room_id = ?');
+    $ev->execute([$roomId]);
+    $event = $ev->fetch();
 
-    if ($decision === 'approve') {
-        $db->prepare("UPDATE saving_room_join_requests SET status='approved', maker_decided_at=NOW() WHERE id = ?")
-           ->execute([$requestId]);
+    if ($event && $event['status'] === 'expired') {
+        jsonResponse(['error' => 'Unlock window has expired'], 403);
+    }
 
-        $db->prepare("UPDATE saving_room_participants SET status='approved', approved_at=NOW() WHERE room_id = ? AND user_id = ?")
-           ->execute([$roomId, $targetUserId]);
+    $now = date('Y-m-d H:i:s');
 
-        activityLog($roomId, 'join_approved', ['count' => 1]);
+    if (!$event || $event['status'] !== 'revealed') {
+        $expires = (new DateTimeImmutable('now'))->modify('+72 hours')->format('Y-m-d H:i:s');
+        $db->prepare("INSERT INTO saving_room_unlock_events (room_id, status, revealed_at, expires_at)
+                      VALUES (?, 'revealed', ?, ?)
+                      ON DUPLICATE KEY UPDATE status='revealed', revealed_at=COALESCE(revealed_at, VALUES(revealed_at)), expires_at=COALESCE(expires_at, VALUES(expires_at))")
+           ->execute([$roomId, $now, $expires]);
 
-        // Auto lock lobby if max reached
-        $after = countApprovedParticipants($roomId);
-        if ($after >= (int)$room['max_participants']) {
-            $db->prepare("UPDATE saving_rooms SET lobby_state='locked', updated_at=NOW() WHERE id = ?")
-               ->execute([$roomId]);
-            activityLog($roomId, 'lobby_locked', ['reason' => 'max_participants_reached']);
+        activityLog($roomId, 'unlock_revealed', ['expires_at' => $expires]);
+
+        // Notify all participants that the unlock window is open (no code in notification)
+        $parts = $db->prepare("SELECT user_id FROM saving_room_participants WHERE room_id = ? AND status = 'active'");
+        $parts->execute([$roomId]);
+        foreach ($parts->fetchAll() as $p) {
+            $uid = (int)$p['user_id'];
+            notifyOnceApi(
+                $uid,
+                'typeA_unlock_revealed',
+                'critical',
+                'Unlock window opened',
+                'Your Type A room unlock code is now available for 72 hours. Coordinate withdrawal and keep the code secure.',
+                ['room_id' => $roomId, 'expires_at' => $expires],
+                'room',
+                $roomId
+            );
         }
 
-    } else {
-        $db->prepare("UPDATE saving_room_join_requests SET status='declined', maker_decided_at=NOW() WHERE id = ?")
-           ->execute([$requestId]);
-
-        $db->prepare("UPDATE saving_room_participants SET status='declined' WHERE room_id = ? AND user_id = ?")
-           ->execute([$roomId, $targetUserId]);
-
-        activityLog($roomId, 'join_declined', ['count' => 1]);
+        $event = ['status' => 'revealed', 'revealed_at' => $now, 'expires_at' => $expires];
     }
 
-    $db->commit();
+    auditLog('room_typeA_reveal');
 
-    auditLog('room_review_join');
-    jsonResponse(['success' => true]);
+    jsonResponse([
+        'success' => true,
+        'code' => $unlockCode,
+        'revealed_at' => $event['revealed_at'],
+        'expires_at' => $event['expires_at'],
+    ]);
 }
 
 // ── CONTRIBUTION: CONFIRM (server-side acknowledgement)

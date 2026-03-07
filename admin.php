@@ -242,6 +242,70 @@ pre{white-space:pre-wrap;word-break:break-word;background:#000;border:1px solid 
   </div>
 
   <div class="card" style="margin-top:14px;">
+    <div class="card-title">Destination accounts (Saving Rooms)</div>
+    <div class="p">These accounts receive deposits for saving rooms. Unlock codes are stored encrypted and are only revealed to participants after consensus.</div>
+
+    <div style="display:grid;grid-template-columns:1fr;gap:12px;margin-bottom:12px;">
+      <div class="field">
+        <label>Account type</label>
+        <input id="da-type" placeholder="mobile_money or bank" value="mobile_money">
+      </div>
+
+      <div class="field">
+        <label>Carrier ID (mobile money)</label>
+        <input id="da-carrier" placeholder="e.g. 1">
+      </div>
+      <div class="field">
+        <label>Mobile money number</label>
+        <input id="da-mm" placeholder="e.g. +233...">
+      </div>
+
+      <div class="field">
+        <label>Bank name</label>
+        <input id="da-bank" placeholder="e.g. ABC Bank">
+      </div>
+      <div class="field">
+        <label>Bank account name (optional)</label>
+        <input id="da-bank-name" placeholder="e.g. LOCKSMITH ESCROW">
+      </div>
+      <div class="field">
+        <label>Bank account number</label>
+        <input id="da-bank-num" placeholder="e.g. 1234567890">
+      </div>
+
+      <div class="field">
+        <label>Unlock code</label>
+        <input id="da-code" placeholder="PIN / password / passphrase">
+      </div>
+
+      <label class="chk" style="margin:0;"><input type="checkbox" id="da-active" checked> <span>Active</span></label>
+
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <button class="btn btn-primary" onclick="createDestinationAccount()">Create destination account</button>
+        <button class="btn btn-ghost btn-sm" onclick="loadDestinationAccounts()">↻ Refresh</button>
+      </div>
+      <div id="da-msg" class="msg"></div>
+    </div>
+
+    <div class="table-wrap">
+      <table class="table" id="da-table" style="min-width:1100px;">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Type</th>
+            <th>Details</th>
+            <th>Rotated</th>
+            <th>Version</th>
+            <th>Active</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:14px;">
     <div class="card-title">Audit log</div>
 
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
@@ -324,6 +388,7 @@ async function postCsrf(url, body){
   });
   return r.json();
 }
+
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function fmt(ts){
   if(!ts) return '';
@@ -338,6 +403,7 @@ function setMsg(id, text, ok){
 
 let usersCache = [];
 let carriersCache = [];
+let destAccountsCache = [];
 
 async function loadUsers(){
   const tbody = document.querySelector('#users-table tbody');
@@ -496,6 +562,27 @@ async function loadCodes(){
   }
 }
 
+async function deleteCode(lockId){
+  const ok = confirm('Deactivate this code? It will disappear from the user dashboard.');
+  if(!ok) return;
+  const r = await postCsrf('/api/admin.php', { action: 'delete_code', lock_id: lockId });
+  if(!r.success){ setMsg('codes-msg', r.error||'Failed', false); return; }
+  loadCodes();
+  loadUsers();
+}
+
+async function openDetail(lockId){
+  const r = await get('/api/admin.php?action=code_detail&lock_id=' + encodeURIComponent(lockId));
+  if(!r.success){ setMsg('codes-msg', r.error||'Failed', false); return; }
+  document.getElementById('detail-pre').textContent = JSON.stringify(r.code, null, 2);
+  document.getElementById('detail-modal').classList.add('show');
+}
+
+function closeDetail(e){
+  if(e && e.target !== document.getElementById('detail-modal')) return;
+  document.getElementById('detail-modal').classList.remove('show');
+}
+
 async function loadCarriers(){
   const tbody = document.querySelector('#carriers-table tbody');
   tbody.innerHTML = '<tr><td colspan="8" class="k">Loading…</td></tr>';
@@ -637,6 +724,117 @@ async function toggleCarrierActive(id, cur){
   loadCarriers();
 }
 
+async function loadDestinationAccounts(){
+  const tbody = document.querySelector('#da-table tbody');
+  tbody.innerHTML = '<tr><td colspan="7" class="k">Loading…</td></tr>';
+  document.getElementById('da-msg').className = 'msg';
+
+  try{
+    const r = await get('/api/admin.php?action=destination_accounts');
+    if(!r.success) throw new Error(r.error||'Failed');
+    destAccountsCache = r.accounts || [];
+
+    if(!destAccountsCache.length){
+      tbody.innerHTML = '<tr><td colspan="7" class="k">No destination accounts.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML='';
+    destAccountsCache.forEach(a => {
+      const tr = document.createElement('tr');
+      const details = (a.account_type === 'mobile_money')
+        ? `carrier ${a.carrier_id||''} · ${a.mobile_money_number||''}`
+        : `${a.bank_name||''} · ${a.bank_account_number||''}`;
+
+      tr.innerHTML = `
+        <td>${a.id}</td>
+        <td>${esc(a.account_type)}</td>
+        <td>${esc(details)}</td>
+        <td>${fmt(a.code_rotated_at)}</td>
+        <td>${esc(a.code_rotation_version||'')}</td>
+        <td>${a.is_active ? '✓' : '—'}</td>
+        <td>
+          <button class="btn btn-blue btn-sm" onclick="rotateDestinationAccount(${a.id})">Rotate code</button>
+          <button class="btn btn-blue btn-sm" onclick="toggleDestinationAccountActive(${a.id}, ${a.is_active?1:0})">Active</button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+  }catch(e){
+    tbody.innerHTML = '<tr><td colspan="7" class="k">Failed to load destination accounts.</td></tr>';
+    setMsg('da-msg', e.message||'Failed', false);
+  }
+}
+
+async function createDestinationAccount(){
+  document.getElementById('da-msg').className = 'msg';
+
+  const account_type = document.getElementById('da-type').value.trim();
+  const carrier_id = parseInt(document.getElementById('da-carrier').value||'0',10);
+  const mobile_money_number = document.getElementById('da-mm').value.trim();
+  const bank_name = document.getElementById('da-bank').value.trim();
+  const bank_account_name = document.getElementById('da-bank-name').value.trim();
+  const bank_account_number = document.getElementById('da-bank-num').value.trim();
+  const unlock_code = document.getElementById('da-code').value;
+  const is_active = document.getElementById('da-active').checked ? 1 : 0;
+
+  try{
+    const r = await postCsrf('/api/admin.php', {
+      action:'destination_account_create',
+      account_type,
+      carrier_id,
+      mobile_money_number,
+      bank_name,
+      bank_account_name,
+      bank_account_number,
+      unlock_code,
+      is_active,
+    });
+
+    if(!r.success) throw new Error(r.error||'Failed');
+
+    setMsg('da-msg','Destination account created.', true);
+    document.getElementById('da-code').value='';
+    await loadDestinationAccounts();
+
+  }catch(e){
+    setMsg('da-msg', e.message||'Failed', false);
+  }
+}
+
+async function rotateDestinationAccount(id){
+  document.getElementById('da-msg').className = 'msg';
+
+  const unlock_code = prompt('Enter new unlock code');
+  if(!unlock_code) return;
+
+  try{
+    const r = await postCsrf('/api/admin.php', {action:'destination_account_rotate', account_id:id, unlock_code});
+    if(!r.success) throw new Error(r.error||'Failed');
+
+    setMsg('da-msg','Unlock code rotated.', true);
+    await loadDestinationAccounts();
+
+  }catch(e){
+    setMsg('da-msg', e.message||'Failed', false);
+  }
+}
+
+async function toggleDestinationAccountActive(id, cur){
+  document.getElementById('da-msg').className = 'msg';
+
+  try{
+    const r = await postCsrf('/api/admin.php', {action:'destination_account_set_active', account_id:id, is_active: cur?0:1});
+    if(!r.success) throw new Error(r.error||'Failed');
+
+    await loadDestinationAccounts();
+
+  }catch(e){
+    setMsg('da-msg', e.message||'Failed', false);
+  }
+}
+
 async function loadAudit(){
   const q = document.getElementById('audit-q').value.trim();
 
@@ -676,30 +874,10 @@ async function loadAudit(){
   }
 }
 
-async function deleteCode(lockId){
-  const ok = confirm('Deactivate this code? It will disappear from the user dashboard.');
-  if(!ok) return;
-  const r = await postCsrf('/api/admin.php', { action: 'delete_code', lock_id: lockId });
-  if(!r.success){ setMsg('codes-msg', r.error||'Failed', false); return; }
-  loadCodes();
-  loadUsers();
-}
-
-async function openDetail(lockId){
-  const r = await get('/api/admin.php?action=code_detail&lock_id=' + encodeURIComponent(lockId));
-  if(!r.success){ setMsg('codes-msg', r.error||'Failed', false); return; }
-  document.getElementById('detail-pre').textContent = JSON.stringify(r.code, null, 2);
-  document.getElementById('detail-modal').classList.add('show');
-}
-
-function closeDetail(e){
-  if(e && e.target !== document.getElementById('detail-modal')) return;
-  document.getElementById('detail-modal').classList.remove('show');
-}
-
 loadUsers();
 loadCodes();
 loadCarriers();
+loadDestinationAccounts();
 loadAudit();
 </script>
 </body>

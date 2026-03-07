@@ -34,17 +34,16 @@ function getRestrictionUntil(int $userId): ?string {
     return $v ? (string)$v : null;
 }
 
-function nextLevelHint(int $trustLevel, int $completedQualified): string {
+function nextLevelHint(int $trustLevel, int $monthOk, int $wk3Ok): string {
     if ($trustLevel >= 3) return 'Max level reached.';
 
     if ($trustLevel === 1) {
-        $remain = max(0, 2 - $completedQualified);
+        $remain = max(0, 2 - $monthOk);
         if ($remain === 0) return 'Eligible for Level 2 after verification by system rules.';
         return $remain . ' more completed reveal of minimum 1 month to reach Level 2';
     }
 
-    // Level 2 -> 3: 4–5 successful reveals (min 3 weeks each)
-    $remain = max(0, 4 - $completedQualified);
+    $remain = max(0, 4 - $wk3Ok);
     if ($remain === 0) return 'Eligible for Level 3 after verification by system rules.';
     return $remain . ' more completed reveal of minimum 3 weeks to reach Level 3';
 }
@@ -66,9 +65,16 @@ if ($action === 'passport') {
     $completed->execute([$userId]);
     $completedRows = $completed->fetchAll();
 
-    $qualifiedCountStmt = $db->prepare('SELECT COUNT(*) FROM user_completed_reveals WHERE user_id = ? AND qualified_for_level = 1');
-    $qualifiedCountStmt->execute([$userId]);
-    $qualifiedCount = (int)$qualifiedCountStmt->fetchColumn();
+    $countsStmt = $db->prepare('SELECT
+                                    SUM(CASE WHEN duration_days >= 30 THEN 1 ELSE 0 END) AS month_ok,
+                                    SUM(CASE WHEN duration_days >= 21 THEN 1 ELSE 0 END) AS wk3_ok
+                                FROM user_completed_reveals
+                                WHERE user_id = ?');
+    $countsStmt->execute([$userId]);
+    $counts = $countsStmt->fetch();
+
+    $monthOk = (int)($counts['month_ok'] ?? 0);
+    $wk3Ok = (int)($counts['wk3_ok'] ?? 0);
 
     $activeRooms = $db->prepare("SELECT r.id, r.goal_text, r.saving_type, r.start_at, r.reveal_at, r.room_state, r.lobby_state
                                 FROM saving_room_participants p
@@ -91,7 +97,9 @@ if ($action === 'passport') {
             'completed_reveals_count' => (int)($t['completed_reveals_count'] ?? 0),
             'strike_count_6m' => $strikeCount,
             'restricted_until' => $restrictedUntil,
-            'next_level_hint' => nextLevelHint((int)($t['trust_level'] ?? 1), $qualifiedCount),
+            'completed_reveals_month_ok' => $monthOk,
+            'completed_reveals_3weeks_ok' => $wk3Ok,
+            'next_level_hint' => nextLevelHint((int)($t['trust_level'] ?? 1), $monthOk, $wk3Ok),
         ],
         'completed_reveals' => $completedRows,
         'active_rooms' => $active,

@@ -154,6 +154,37 @@ body{background:var(--bg);color:var(--text);font-family:var(--mono);min-height:1
         <div id="contrib-msg" class="msg"></div>
       </div>
 
+      <div id="unlock-block" style="display:none; margin-top:12px;">
+        <div class="hr" style="border-top:1px solid var(--b1);margin:16px 0;"></div>
+        <div class="card-title" style="margin-bottom:10px;">Unlock (Type A)</div>
+        <div class="p" style="margin-bottom:10px;">Requires 100% approval after the reveal date. When revealed, the unlock code is valid for 72 hours.</div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div>
+            <div class="k">Consensus</div>
+            <div class="v" id="unlock-consensus">—</div>
+          </div>
+          <div>
+            <div class="k">Window</div>
+            <div class="v" id="unlock-window">—</div>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
+          <button class="btn btn-blue btn-sm" onclick="unlockVote('approve')">Approve unlock</button>
+          <button class="btn btn-red btn-sm" onclick="unlockVote('reject')">Reject</button>
+          <button class="btn btn-primary btn-sm" id="unlock-reveal-btn" onclick="unlockReveal()" style="display:none;">Reveal code</button>
+        </div>
+
+        <div id="unlock-code-wrap" style="display:none;margin-top:12px;">
+          <div class="k">Unlock code (auto-clears)</div>
+          <input id="unlock-code" readonly style="margin-top:6px;width:100%;background:var(--s2);border:1px solid var(--b1);color:var(--text);font-family:var(--mono);font-size:14px;padding:12px;outline:none;">
+          <div class="small" id="unlock-code-exp" style="margin-top:6px;"></div>
+        </div>
+
+        <div id="unlock-msg" class="msg"></div>
+      </div>
+
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
         <button class="btn btn-primary btn-sm" id="join-btn" onclick="requestJoin()" style="display:none;">Request to join</button>
         <a class="btn btn-ghost btn-sm" href="rooms.php">Back to discovery</a>
@@ -198,6 +229,27 @@ body{background:var(--bg);color:var(--text);font-family:var(--mono);min-height:1
           <tbody></tbody>
         </table>
       </div>
+
+      <div class="hr" style="border-top:1px solid var(--b1);margin:16px 0;"></div>
+      <div class="card-title" style="margin-bottom:10px;">Escrow settlements</div>
+      <div class="p" style="margin-top:-6px;">Records created when participants are removed for missed contributions.</div>
+      <div id="escrow-empty" class="k" style="display:none;">No escrow settlements.</div>
+      <div class="table-wrap" id="escrow-table-wrap" style="display:none;">
+        <table class="table" id="escrow-table">
+          <thead>
+            <tr>
+              <th>User</th>
+              <th>Policy</th>
+              <th>Total</th>
+              <th>Refund</th>
+              <th>Status</th>
+              <th>Created</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
       <div id="maker-msg" class="msg"></div>
     </div>
 
@@ -224,9 +276,21 @@ function setMsg(id, text, ok){
 function fmt(ts){
   try{return new Date(ts).toLocaleString();}catch{return String(ts||'');}
 }
+function destSummary(a){
+  if(!a) return '—';
+  if(a.account_type === 'mobile_money'){
+    const carrier = a.carrier_id ? ('carrier ' + a.carrier_id) : 'mobile money';
+    return carrier + ' · ' + (a.mobile_money_number||'');
+  }
+  if(a.account_type === 'bank'){
+    return (a.bank_name||'Bank') + ' · ' + (a.bank_account_number||'');
+  }
+  return a.account_type || '—';
+}
 
 let roomCache = null;
 let lastEventId = 0;
+let unlockClearTimer = null;
 
 function renderRoom(){
   const r = roomCache;
@@ -241,6 +305,7 @@ function renderRoom(){
       <div><span class="k">Purpose:</span> ${esc(r.purpose_category)}</div>
       <div><span class="k">Visibility:</span> ${esc(r.visibility)}</div>
       <div><span class="k">Participation amount:</span> ${esc(r.participation_amount)}</div>
+      <div><span class="k">Destination:</span> ${esc(destSummary(r.destination_account))}</div>
       <div><span class="k">Participants:</span> ${esc(r.approved_count)} / ${esc(r.max_participants)} (min ${esc(r.min_participants)})</div>
       <div><span class="k">Lobby:</span> ${esc(r.lobby_state)} · <span class="k">State:</span> ${esc(r.room_state)}</div>
       <div><span class="k">Reveal date:</span> ${esc(fmt(r.reveal_at))}</div>
@@ -252,7 +317,6 @@ function renderRoom(){
   const canJoin = (!r.my_status || r.my_status === 'declined') && r.room_state === 'lobby' && r.lobby_state === 'open' && r.visibility !== 'private';
   joinBtn.style.display = canJoin ? 'inline-flex' : 'none';
 
-  // Contribution UI (only for active participants during active rooms)
   const contrib = document.getElementById('contrib-block');
   if(contrib){
     const canContrib = (r.room_state === 'active' && r.my_status === 'active' && r.active_cycle);
@@ -268,28 +332,115 @@ function renderRoom(){
     }
   }
 
+  const unlock = document.getElementById('unlock-block');
+  if(unlock){
+    const isTypeA = (r.saving_type === 'A');
+    const canSee = isTypeA && r.my_status && (r.my_status === 'active' || r.my_status === 'approved');
+    unlock.style.display = canSee ? 'block' : 'none';
+
+    if(canSee){
+      const approvals = (r.unlock && r.unlock.votes) ? (r.unlock.votes.approvals||0) : 0;
+      const eligible = (r.unlock && r.unlock.votes) ? (r.unlock.votes.eligible||0) : 0;
+      const myVote = (r.unlock && r.unlock.my_vote) ? r.unlock.my_vote : 'none';
+
+      document.getElementById('unlock-consensus').textContent = `${approvals}/${eligible} (you: ${myVote})`;
+
+      const ev = r.unlock ? r.unlock.event : null;
+      if(ev && ev.status === 'revealed'){
+        document.getElementById('unlock-window').textContent = `Revealed · expires ${fmt(ev.expires_at)}`;
+      } else if(ev && ev.status === 'expired'){
+        document.getElementById('unlock-window').textContent = 'Expired';
+      } else {
+        document.getElementById('unlock-window').textContent = 'Pending';
+      }
+
+      const canReveal = (r.room_state === 'active' && approvals === eligible && eligible > 0 && (new Date(r.reveal_at).getTime() <= Date.now()) && (!ev || ev.status !== 'expired'));
+      document.getElementById('unlock-reveal-btn').style.display = canReveal ? 'inline-flex' : 'none';
+    }
+  }
+
   if(r.is_maker){
     document.getElementById('maker-card').style.display='block';
     loadJoinRequests();
     loadUnderfillDecision();
+    renderEscrowSettlements(r.escrow_settlements||[]);
+  } else {
+    document.getElementById('maker-card').style.display='none';
   }
 }
 
 async function loadRoom(){
+  document.getElementById('room-msg').className='msg';
   try{
     const res = await get('/api/rooms.php?action=room_detail&room_id=' + encodeURIComponent(ROOM_ID));
     if(!res.success) throw new Error(res.error||'Failed');
     roomCache = res.room;
     renderRoom();
   }catch(e){
-    setMsg('room-msg', e.message||'Failed to load room', false);
+    setMsg('room-msg', e.message||'Failed', false);
   }
+}
+
+async function pollFeed(){
+  const msg = document.getElementById('feed-msg');
+  msg.className='msg';
+
+  try{
+    const r = await get('/api/rooms.php?action=activity&room_id=' + encodeURIComponent(ROOM_ID) + '&since_id=' + encodeURIComponent(lastEventId) + '&limit=100');
+    if(!r.success) throw new Error(r.error||'Failed');
+
+    const events = r.events || [];
+    events.forEach(addFeedItem);
+    if(events.length){
+      lastEventId = events[events.length-1].id;
+    }
+
+  }catch(e){
+    setMsg('feed-msg', e.message||'Failed to load activity', false);
+  }
+}
+
+function addFeedItem(ev){
+  const feed = document.getElementById('feed');
+  const el = document.createElement('div');
+  el.className = 'feed-item';
+
+  const payload = ev.payload || {};
+
+  let line = '';
+  if(ev.event_type === 'room_created') line = 'Room created';
+  else if(ev.event_type === 'join_requested') line = 'New join request';
+  else if(ev.event_type === 'join_approved') line = 'Join request approved';
+  else if(ev.event_type === 'join_declined') line = 'Join request declined';
+  else if(ev.event_type === 'lobby_locked') line = 'Lobby locked';
+  else if(ev.event_type === 'room_started') line = 'Room started';
+  else if(ev.event_type === 'grace_window_started') line = 'Contribution grace window started';
+  else if(ev.event_type === 'contribution_confirmed') line = '✓ Contributed';
+  else if(ev.event_type === 'strike_logged') line = 'Strike logged';
+  else if(ev.event_type === 'participant_removed') line = 'Participant removed';
+  else if(ev.event_type === 'escrow_settlement_recorded') line = 'Escrow settlement recorded';
+  else if(ev.event_type === 'unlock_vote_updated') line = 'Unlock vote updated';
+  else if(ev.event_type === 'unlock_revealed') line = 'Unlock revealed';
+  else if(ev.event_type === 'unlock_expired') line = 'Unlock expired';
+  else if(ev.event_type === 'room_closed') line = 'Room closed';
+  else if(ev.event_type === 'underfilled_alerted') line = 'Underfilled alert sent';
+  else if(ev.event_type === 'underfilled_resolved') line = 'Underfilled resolved';
+  else if(ev.event_type === 'room_auto_cancelled_underfilled') line = 'Room auto-cancelled (underfilled)';
+  else if(ev.event_type === 'room_cancelled_by_maker') line = 'Room cancelled by maker';
+  else line = ev.event_type;
+
+  const extra = payload && Object.keys(payload).length ? ' — ' + esc(JSON.stringify(payload)) : '';
+  el.innerHTML = `<div>${esc(line)}${extra}</div><div class="feed-meta">${esc(fmt(ev.created_at))}</div>`;
+
+  feed.appendChild(el);
+  feed.scrollTop = feed.scrollHeight;
 }
 
 async function requestJoin(){
   document.getElementById('room-msg').className='msg';
   const btn = document.getElementById('join-btn');
   btn.disabled=true;
+
   try{
     const res = await postCsrf('/api/rooms.php', {action:'request_join', room_id: ROOM_ID});
     if(!res.success) throw new Error(res.error||'Failed');
@@ -303,9 +454,6 @@ async function requestJoin(){
 }
 
 async function confirmContribution(){
-  const msg = document.getElementById('contrib-msg');
-  msg.className='msg';
-
   const r = roomCache;
   if(!r || !r.active_cycle){
     setMsg('contrib-msg','No active cycle.', false);
@@ -325,74 +473,92 @@ async function confirmContribution(){
   }
 }
 
-function addFeedItem(ev){
-  const feed = document.getElementById('feed');
-  const el = document.createElement('div');
-  el.className = 'feed-item';
-
-  const payload = ev.payload || {};
-  let line = '';
-  if(ev.event_type === 'room_created') line = 'Room created';
-  else if(ev.event_type === 'join_requested') line = 'New join request';
-  else if(ev.event_type === 'join_approved') line = 'Join request approved';
-  else if(ev.event_type === 'join_declined') line = 'Join request declined';
-  else if(ev.event_type === 'lobby_locked') line = 'Lobby locked';
-  else if(ev.event_type === 'room_started') line = 'Room started';
-  else if(ev.event_type === 'grace_window_started') line = 'Contribution grace window started';
-  else if(ev.event_type === 'contribution_confirmed') line = '✓ Contributed';
-  else if(ev.event_type === 'strike_logged') line = 'Strike logged';
-  else if(ev.event_type === 'participant_removed') line = 'Participant removed';
-  else if(ev.event_type === 'underfilled_alerted') line = 'Underfilled alert sent';
-  else if(ev.event_type === 'underfilled_resolved') line = 'Underfilled resolved';
-  else if(ev.event_type === 'room_auto_cancelled_underfilled') line = 'Room auto-cancelled (underfilled)';
-  else if(ev.event_type === 'room_cancelled_by_maker') line = 'Room cancelled by maker';
-  else line = ev.event_type;
-
-  const extra = payload && Object.keys(payload).length ? ' — ' + esc(JSON.stringify(payload)) : '';
-
-  el.innerHTML = `<div>${esc(line)}${extra}</div><div class=\"feed-meta\">${esc(fmt(ev.created_at))}</div>`;
-  feed.appendChild(el);
-  feed.scrollTop = feed.scrollHeight;
-}
-
-async function pollFeed(){
+async function unlockVote(vote){
   try{
-    const qs = new URLSearchParams({action:'activity', room_id: ROOM_ID, since_id: String(lastEventId), limit:'200'});
-    const res = await get('/api/rooms.php?' + qs.toString());
+    const res = await postCsrf('/api/rooms.php', {action:'typeA_vote', room_id: ROOM_ID, vote});
     if(!res.success) throw new Error(res.error||'Failed');
-
-    const evs = res.events || [];
-    evs.forEach(ev => {
-      lastEventId = Math.max(lastEventId, parseInt(ev.id||0,10));
-      addFeedItem(ev);
-    });
+    setMsg('unlock-msg','Saved.', true);
+    await loadRoom();
   }catch(e){
-    const msg = document.getElementById('feed-msg');
-    msg.className = 'msg msg-err show';
-    msg.textContent = e.message||'Feed error';
+    setMsg('unlock-msg', e.message||'Failed', false);
   }
 }
 
-function renderUnderfillAlert(underfill){
+async function unlockReveal(){
+  try{
+    const res = await postCsrf('/api/rooms.php', {action:'typeA_reveal', room_id: ROOM_ID});
+    if(!res.success) throw new Error(res.error||'Failed');
+
+    const wrap = document.getElementById('unlock-code-wrap');
+    const input = document.getElementById('unlock-code');
+    const exp = document.getElementById('unlock-code-exp');
+
+    wrap.style.display='block';
+    input.value = String(res.code||'');
+    exp.textContent = `Expires at ${fmt(res.expires_at)}`;
+
+    if (unlockClearTimer) clearTimeout(unlockClearTimer);
+    unlockClearTimer = setTimeout(()=>{
+      input.value='';
+      wrap.style.display='none';
+    }, 30000);
+
+    setMsg('unlock-msg','Code revealed. It will auto-clear in 30 seconds.', true);
+    await loadRoom();
+    await pollFeed();
+
+  }catch(e){
+    setMsg('unlock-msg', e.message||'Failed', false);
+  }
+}
+
+function renderEscrowSettlements(rows){
+  const empty = document.getElementById('escrow-empty');
+  const wrap = document.getElementById('escrow-table-wrap');
+  const tbody = document.querySelector('#escrow-table tbody');
+
+  if(!tbody || !empty || !wrap) return;
+
+  rows = rows || [];
+
+  if(!rows.length){
+    empty.style.display='block';
+    wrap.style.display='none';
+    tbody.innerHTML='';
+    return;
+  }
+
+  empty.style.display='none';
+  wrap.style.display='block';
+  tbody.innerHTML='';
+
+  rows.forEach(r => {
+    const tr=document.createElement('tr');
+    const refund = (r.policy === 'refund_minus_fee') ? (r.refund_amount || '0.00') : '—';
+    tr.innerHTML = `
+      <td>${esc(r.email||('User ' + r.removed_user_id))}</td>
+      <td>${esc(r.policy)}</td>
+      <td>${esc(r.total_contributed||'0.00')}</td>
+      <td>${esc(refund)}</td>
+      <td>${esc(r.status||'')}</td>
+      <td>${esc(fmt(r.created_at))}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function loadUnderfillDecision(){
+  const r = roomCache;
   const card = document.getElementById('underfill-card');
-  const meta = document.getElementById('underfill-meta');
-  const msg = document.getElementById('underfill-msg');
+  if(!card || !r) return;
 
-  if(!card || !meta || !msg) return;
-  msg.className='msg';
-
-  if(!underfill || underfill.status !== 'open'){
+  if(!r.is_maker || !r.underfill || r.underfill.status !== 'open'){
     card.style.display='none';
     return;
   }
 
   card.style.display='block';
-  meta.textContent = underfill.decision_deadline_at ? ('Decision deadline: ' + String(underfill.decision_deadline_at)) : '';
-}
-
-function loadUnderfillDecision(){
-  if(!roomCache || !roomCache.is_maker) return;
-  renderUnderfillAlert(roomCache.underfill);
+  document.getElementById('underfill-meta').textContent = `Decision deadline: ${fmt(r.underfill.decision_deadline_at)}`;
 }
 
 async function underfillExtend(){

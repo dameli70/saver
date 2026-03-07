@@ -156,6 +156,33 @@ if ($method === 'GET') {
         jsonResponse(['success' => true, 'carriers' => $rows]);
     }
 
+    // ── DESTINATION ACCOUNTS (saving rooms) ─────────────────
+    if ($action === 'destination_accounts') {
+        $db = getDB();
+        $rows = $db->query("SELECT id, account_type, carrier_id, mobile_money_number, bank_name, bank_account_name, bank_account_number, bank_routing_number, bank_swift, bank_iban,
+                                   code_rotated_at, code_rotation_version, is_active, created_at, updated_at
+                            FROM platform_destination_accounts
+                            ORDER BY id DESC")->fetchAll();
+        jsonResponse(['success' => true, 'accounts' => $rows]);
+    }
+
+    if ($action === 'room_accounts') {
+        $db = getDB();
+        $limit  = intParam($_GET['limit'] ?? 200, 200);
+        $limit  = max(1, min(500, $limit));
+
+        $rows = $db->query("SELECT r.id AS room_id, r.goal_text, r.saving_type, r.room_state, r.start_at, r.reveal_at,
+                                   a.account_id,
+                                   pda.account_type, pda.mobile_money_number, pda.bank_name, pda.bank_account_number,
+                                   pda.code_rotation_version, pda.is_active
+                            FROM saving_rooms r
+                            LEFT JOIN saving_room_accounts a ON a.room_id = r.id
+                            LEFT JOIN platform_destination_accounts pda ON pda.id = a.account_id
+                            ORDER BY r.created_at DESC
+                            LIMIT {$limit}")->fetchAll();
+        jsonResponse(['success' => true, 'rooms' => $rows]);
+    }
+
     // ── AUDIT LOG ────────────────────────────────────────────
     if ($action === 'audit') {
         $db = getDB();
@@ -359,6 +386,128 @@ if ($method === 'POST') {
         $db->prepare("DELETE FROM users WHERE id = ?")->execute([$userId]);
 
         auditLog('admin_delete_user', null, getCurrentUserId());
+        jsonResponse(['success' => true]);
+    }
+
+    // ── DESTINATION ACCOUNTS: CREATE ────────────────────────
+    if ($action === 'destination_account_create') {
+        requireStrongAuth();
+
+        $accountType = (string)($body['account_type'] ?? '');
+        $unlockCode = (string)($body['unlock_code'] ?? '');
+        $isActive = !empty($body['is_active']) ? 1 : 0;
+
+        if (!in_array($accountType, ['mobile_money','bank'], true)) jsonResponse(['error' => 'Invalid account_type'], 400);
+        if (trim($unlockCode) === '') jsonResponse(['error' => 'unlock_code required'], 400);
+
+        $carrierId = intParam($body['carrier_id'] ?? 0, 0);
+        $mmNumber = trim((string)($body['mobile_money_number'] ?? ''));
+
+        $bankName = trim((string)($body['bank_name'] ?? ''));
+        $bankAccountName = trim((string)($body['bank_account_name'] ?? ''));
+        $bankAccountNumber = trim((string)($body['bank_account_number'] ?? ''));
+        $bankRouting = trim((string)($body['bank_routing_number'] ?? ''));
+        $bankSwift = trim((string)($body['bank_swift'] ?? ''));
+        $bankIban = trim((string)($body['bank_iban'] ?? ''));
+
+        if ($accountType === 'mobile_money') {
+            if ($mmNumber === '') jsonResponse(['error' => 'mobile_money_number required'], 400);
+        } else {
+            if ($bankName === '' || $bankAccountNumber === '') {
+                jsonResponse(['error' => 'bank_name and bank_account_number required'], 400);
+            }
+        }
+
+        $db = getDB();
+
+        $enc = encryptForDb($unlockCode);
+
+        $db->prepare("INSERT INTO platform_destination_accounts
+                        (account_type, carrier_id, mobile_money_number,
+                         bank_name, bank_account_name, bank_account_number, bank_routing_number, bank_swift, bank_iban,
+                         unlock_code_enc, code_rotated_at, code_rotation_version, is_active, created_at, updated_at)
+                      VALUES
+                        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), 1, ?, NOW(), NULL)")
+           ->execute([
+               $accountType,
+               $carrierId > 0 ? $carrierId : null,
+               $mmNumber !== '' ? $mmNumber : null,
+               $bankName !== '' ? $bankName : null,
+               $bankAccountName !== '' ? $bankAccountName : null,
+               $bankAccountNumber !== '' ? $bankAccountNumber : null,
+               $bankRouting !== '' ? $bankRouting : null,
+               $bankSwift !== '' ? $bankSwift : null,
+               $bankIban !== '' ? $bankIban : null,
+               $enc,
+               $isActive,
+           ]);
+
+        $id = (int)$db->lastInsertId();
+        auditLog('admin_destination_account_create', null, getCurrentUserId());
+        jsonResponse(['success' => true, 'account_id' => $id]);
+    }
+
+    // ── DESTINATION ACCOUNTS: ROTATE UNLOCK CODE ─────────────
+    if ($action === 'destination_account_rotate') {
+        requireStrongAuth();
+
+        $accountId = intParam($body['account_id'] ?? 0, 0);
+        $unlockCode = (string)($body['unlock_code'] ?? '');
+
+        if ($accountId < 1) jsonResponse(['error' => 'account_id required'], 400);
+        if (trim($unlockCode) === '') jsonResponse(['error' => 'unlock_code required'], 400);
+
+        $db = getDB();
+        $enc = encryptForDb($unlockCode);
+
+        $db->prepare("UPDATE platform_destination_accounts
+                      SET unlock_code_enc = ?, code_rotated_at = NOW(), code_rotation_version = code_rotation_version + 1, updated_at = NOW()
+                      WHERE id = ?")
+           ->execute([$enc, $accountId]);
+
+        auditLog('admin_destination_account_rotate', null, getCurrentUserId());
+        jsonResponse(['success' => true]);
+    }
+
+    // ── DESTINATION ACCOUNTS: TOGGLE ACTIVE ─────────────────
+    if ($action === 'destination_account_set_active') {
+        requireStrongAuth();
+
+        $accountId = intParam($body['account_id'] ?? 0, 0);
+        $isActive = !empty($body['is_active']) ? 1 : 0;
+        if ($accountId < 1) jsonResponse(['error' => 'account_id required'], 400);
+
+        $db = getDB();
+        $db->prepare('UPDATE platform_destination_accounts SET is_active = ?, updated_at = NOW() WHERE id = ?')
+           ->execute([$isActive, $accountId]);
+
+        auditLog('admin_destination_account_set_active', null, getCurrentUserId());
+        jsonResponse(['success' => true]);
+    }
+
+    // ── ROOMS: ASSIGN DESTINATION ACCOUNT ────────────────────
+    if ($action === 'room_assign_account') {
+        requireStrongAuth();
+
+        $roomId = trim((string)($body['room_id'] ?? ''));
+        $accountId = intParam($body['account_id'] ?? 0, 0);
+        if ($roomId === '' || strlen($roomId) !== 36) jsonResponse(['error' => 'Invalid room_id'], 400);
+        if ($accountId < 1) jsonResponse(['error' => 'account_id required'], 400);
+
+        $db = getDB();
+
+        $room = $db->prepare('SELECT id FROM saving_rooms WHERE id = ?');
+        $room->execute([$roomId]);
+        if (!$room->fetch()) jsonResponse(['error' => 'Room not found'], 404);
+
+        $acc = $db->prepare('SELECT id FROM platform_destination_accounts WHERE id = ?');
+        $acc->execute([$accountId]);
+        if (!$acc->fetch()) jsonResponse(['error' => 'Account not found'], 404);
+
+        $db->prepare('INSERT INTO saving_room_accounts (room_id, account_id) VALUES (?, ?) ON DUPLICATE KEY UPDATE account_id = VALUES(account_id), created_at = NOW()')
+           ->execute([$roomId, $accountId]);
+
+        auditLog('admin_room_assign_account', null, getCurrentUserId());
         jsonResponse(['success' => true]);
     }
 
