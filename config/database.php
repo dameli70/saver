@@ -13,8 +13,13 @@ define('DB_USER',    'root');
 define('DB_PASS',    '');
 define('DB_CHARSET', 'utf8mb4');
 
-// Used ONLY for HMAC-signing audit log entries and CSRF tokens.
-// NOT used for encryption. Compromise of this key cannot decrypt any password.
+// Application secret used for server-side integrity/authentication features.
+// Today it is used for:
+// - Session-bound identifiers (session_id_hash in user_sessions)
+// - Encrypting server-stored secrets like TOTP seeds (AES-256-GCM)
+//
+// It is NOT used to encrypt user "locks" (codes). Those are encrypted/decrypted
+// only in the browser from the user's vault passphrase (zero-knowledge).
 define('APP_HMAC_SECRET', 'REPLACE_WITH_64+_RANDOM_BYTES_hex_php_r_echo_bin2hex_random_bytes_32');
 
 define('APP_ENV', 'development'); // 'production' in prod

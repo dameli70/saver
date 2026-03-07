@@ -9,8 +9,9 @@
 //
 //  The only crypto here is:
 //  - Argon2id for login password hashing (authentication)
-//  - Argon2id for vault passphrase verification (identity check only)
-//  - CSRF token generation (HMAC-SHA256)
+//  - Argon2id for vault passphrase verification (legacy identity check only)
+//  - Session token generation (random)
+//  - Encrypting server-stored secrets (e.g., TOTP seed) with AES-256-GCM
 //  - UUID generation
 // ============================================================
 
@@ -381,6 +382,7 @@ function jsonResponse(array $data, int $status = 200): never {
 }
 
 // ── CSRF ─────────────────────────────────────────────────────
+// Random per-session token (not an HMAC).
 function getCsrfToken(): string {
     startSecureSession();
     if (empty($_SESSION['csrf_token'])) {

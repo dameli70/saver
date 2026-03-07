@@ -125,7 +125,7 @@ if ($action === 'rotate_prepare') {
 
     $slotFilter = hasLockVaultVerifierSlotColumn() ? ' AND vault_verifier_slot = ' . (int)$fromSlot : '';
 
-    $stmt = $db->prepare("SELECT id, cipher_blob, iv, auth_tag, kdf_salt, kdf_iterations FROM locks WHERE user_id = ? AND is_active = 1 AND reveal_date <= NOW(){$slotFilter} ORDER BY created_at ASC");
+    $stmt = $db->prepare("SELECT id, cipher_blob, iv, auth_tag, kdf_salt, kdf_iterations FROM locks WHERE user_id = ? AND is_active = 1 AND reveal_date <= UTC_TIMESTAMP(){$slotFilter} ORDER BY created_at ASC");
     $stmt->execute([(int)$userId]);
     $locks = $stmt->fetchAll();
 
@@ -197,7 +197,7 @@ if ($action === 'rotate_commit') {
     $db->beginTransaction();
 
     try {
-        $check = $db->prepare('SELECT id FROM locks WHERE id = ? AND user_id = ? AND is_active = 1 AND reveal_date <= NOW() AND vault_verifier_slot = ?');
+        $check = $db->prepare('SELECT id FROM locks WHERE id = ? AND user_id = ? AND is_active = 1 AND reveal_date <= UTC_TIMESTAMP() AND vault_verifier_slot = ?');
         $upd   = $db->prepare('UPDATE locks SET cipher_blob = ?, iv = ?, auth_tag = ?, vault_verifier_slot = ? WHERE id = ? AND user_id = ?');
 
         $count = 0;
