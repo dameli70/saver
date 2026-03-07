@@ -2,16 +2,16 @@
 // ============================================================
 //  LOCKSMITH — Saving Rooms Worker (cron)
 //
-//  Run every 1-5 minutes:
+//  Run every 1–5 minutes:
 //    php scripts/rooms_worker.php
 //
-//  Responsibilities (incremental rollout):
-//   - lobby lock at start date
-//   - start room at start date
-//   - underfilled alerts at T-72h
-//   - auto-cancel if no decision within 24h
-//   - contribution cycles (generate)
-//   - grace windows + strike enforcement (generate notifications + strikes)
+//  Responsibilities:
+//   - lobby lock / room start
+//   - contribution cycles + grace reminders + strike enforcement
+//   - participant removal after 2 missed contributions + escrow settlement record
+//   - underfilled alerts (T-72h) + auto-cancel after 24h
+//   - Type A unlock expiry warnings + close + trust completion update
+//   - Type B rotation processing (vote->reveal, expiry->advance)
 // ============================================================
 
 if (PHP_SAPI !== 'cli') {
@@ -34,20 +34,15 @@ function activityLog(PDO $db, string $roomId, string $eventType, array $payload)
        ->execute([$roomId, $eventType, json_encode($payload, JSON_UNESCAPED_UNICODE)]);
 }
 
-function notifyOnce(PDO $db, int $userId, string $eventKey, string $tier, string $title, string $body, array $data = [], string $refType = null, string $refId = null, string $channelMask = ''): void {
+function notifyOnce(PDO $db, int $userId, string $eventKey, string $tier, string $title, string $body, array $data = [], ?string $refType = null, ?string $refId = null, string $channelMask = ''): void {
     if ($channelMask === '') {
-        // Critical is push+inapp+email; important is push+inapp; informational is inapp.
         if ($tier === 'critical') $channelMask = 'push,inapp,email';
         else if ($tier === 'important') $channelMask = 'push,inapp';
         else $channelMask = 'inapp';
     }
 
-    // Dedup: if we already emitted this event for this user+ref, do nothing.
-    $rt = $refType;
-    $rid = $refId;
-
     $db->prepare('INSERT IGNORE INTO notification_events (user_id, event_key, ref_type, ref_id) VALUES (?, ?, ?, ?)')
-       ->execute([$userId, $eventKey, $rt, $rid]);
+       ->execute([$userId, $eventKey, $refType, $refId]);
 
     if ($db->lastInsertId() === '0') return;
 
@@ -61,28 +56,10 @@ function approvedCount(PDO $db, string $roomId): int {
     return (int)$stmt->fetchColumn();
 }
 
-$db = db();
-
-// ───────────────────────────────────────────────────────────
-//  1) Lock lobby when start date arrives (if still open)
-// ───────────────────────────────────────────────────────────
-$roomsToLock = $db->query("SELECT id FROM saving_rooms WHERE room_state = 'lobby' AND lobby_state = 'open' AND start_at <= NOW() LIMIT 500")->fetchAll();
-foreach ($roomsToLock as $r) {
-    $roomId = (string)$r['id'];
-    $db->prepare("UPDATE saving_rooms SET lobby_state='locked', updated_at=NOW() WHERE id = ? AND room_state='lobby'")
-       ->execute([$roomId]);
-    activityLog($db, $roomId, 'lobby_locked', ['reason' => 'start_date_reached']);
-    logLine("Lobby locked: {$roomId}");
-}
-
-// ───────────────────────────────────────────────────────────
-//  2) Start rooms when start date arrives
-// ───────────────────────────────────────────────────────────
-$roomsToStart = $db->query("SELECT id FROM saving_rooms WHERE room_state = 'lobby' AND start_at <= NOW() LIMIT 500")->fetchAll();
-function periodSpec(string $periodicity): array {
-    if ($periodicity === 'biweekly') return ['interval' => 'P14D', 'seconds' => 14 * 86400];
-    if ($periodicity === 'monthly') return ['interval' => 'P1M', 'seconds' => 30 * 86400];
-    return ['interval' => 'P7D', 'seconds' => 7 * 86400];
+function periodInterval(string $periodicity): DateInterval {
+    if ($periodicity === 'biweekly') return new DateInterval('P14D');
+    if ($periodicity === 'monthly') return new DateInterval('P1M');
+    return new DateInterval('P7D');
 }
 
 function ensureTrustRow(PDO $db, int $userId): void {
@@ -96,89 +73,33 @@ function strikes6m(PDO $db, int $userId): int {
     return (int)$s->fetchColumn();
 }
 
-function applyStrike(PDO $db, int $userId, string $strikeType, string $roomId = null, int $cycleId = null): void {
+function applyStrike(PDO $db, int $userId, string $strikeType, ?string $roomId = null, ?int $cycleId = null): void {
     $db->prepare('INSERT INTO user_strikes (user_id, room_id, cycle_id, strike_type) VALUES (?, ?, ?, ?)')
        ->execute([(int)$userId, $roomId, $cycleId, $strikeType]);
 
     ensureTrustRow($db, $userId);
 
+    $count = strikes6m($db, $userId);
+    if ($count < 3) return;
+
+    $until = (new DateTimeImmutable('now'))->modify('+30 days')->format('Y-m-d H:i:s');
+    $db->prepare("INSERT INTO user_restrictions (user_id, restricted_until, reason, updated_at)
+                  VALUES (?, ?, 'strikes_6m', NOW())
+                  ON DUPLICATE KEY UPDATE restricted_until = GREATEST(restricted_until, VALUES(restricted_until)), reason='strikes_6m', updated_at=NOW()")
+       ->execute([(int)$userId, $until]);
+
+    // Trust level regression: at most once per 6-month window
     $t = $db->prepare('SELECT trust_level, last_level_change_at FROM user_trust WHERE user_id = ?');
     $t->execute([(int)$userId]);
     $row = $t->fetch();
 
     $lvl = (int)($row['trust_level'] ?? 1);
-    if ($lvl < 1) $lvl = 1;
+    $last = $row && $row['last_level_change_at'] ? strtotime((string)$row['last_level_change_at']) : null;
+    $sixMonthsAgo = time() - (183 * 86400);
 
-    $lastChangeTs = null;
-    if (!empty($row['last_level_change_at'])) {
-        $lastChangeTs = strtotime((string)$row['last_level_change_at']);
-    }
-
-    $count = strikes6m($db, $userId);
-    if ($count >= 3) {
-        // 30-day join cooldown
-        $until = (new DateTimeImmutable('now'))->modify('+30 days')->format('Y-m-d H:i:s');
-        $db->prepare("INSERT INTO user_restrictions (user_id, restricted_until, reason, updated_at)
-                      VALUES (?, ?, 'strikes_6m', NOW())
-                      ON DUPLICATE KEY UPDATE restricted_until = GREATEST(restricted_until, VALUES(restricted_until)), reason='strikes_6m', updated_at=NOW()")
-           ->execute([(int)$userId, $until]);
-
-        // Level regression: demote once per rolling 6-month window.
-        $sixMonthsAgo = time() - (183 * 86400);
-        if ($lvl > 1 && (!$lastChangeTs || $lastChangeTs < $sixMonthsAgo)) {
-            $db->prepare('UPDATE user_trust SET trust_level = ?, last_level_change_at = NOW() WHERE user_id = ?')
-               ->execute([max(1, $lvl - 1), (int)$userId]);
-        }
-    }
-}
-
-function shuffleSecure(array &$arr): void {
-    $n = count($arr);
-    for ($i = $n - 1; $i > 0; $i--) {
-        $j = random_int(0, $i);
-        $tmp = $arr[$i];
-        $arr[$i] = $arr[$j];
-        $arr[$j] = $tmp;
-    }
-}
-
-function updateTrustAfterCompletion(PDO $db, int $userId): void {
-    ensureTrustRow($db, $userId);
-
-    $cnt = $db->prepare('SELECT COUNT(*) FROM user_completed_reveals WHERE user_id = ?');
-    $cnt->execute([(int)$userId]);
-    $completed = (int)$cnt->fetchColumn();
-
-    $db->prepare('UPDATE user_trust SET completed_reveals_count = ? WHERE user_id = ?')
-       ->execute([$completed, (int)$userId]);
-
-    $countsStmt = $db->prepare('SELECT
-                                    SUM(CASE WHEN duration_days >= 30 THEN 1 ELSE 0 END) AS month_ok,
-                                    SUM(CASE WHEN duration_days >= 21 THEN 1 ELSE 0 END) AS wk3_ok
-                                FROM user_completed_reveals
-                                WHERE user_id = ?');
-    $countsStmt->execute([(int)$userId]);
-    $counts = $countsStmt->fetch();
-
-    $monthOk = (int)($counts['month_ok'] ?? 0);
-    $wk3Ok = (int)($counts['wk3_ok'] ?? 0);
-
-    $t = $db->prepare('SELECT trust_level FROM user_trust WHERE user_id = ?');
-    $t->execute([(int)$userId]);
-    $lvl = (int)$t->fetchColumn();
-    if ($lvl < 1) $lvl = 1;
-
-    $newLvl = $lvl;
-    if ($newLvl < 2 && $monthOk >= 2) {
-        $newLvl = 2;
-    }
-    if ($newLvl < 3 && $newLvl >= 2 && $wk3Ok >= 4) {
-        $newLvl = 3;
-    }
-
-    if ($newLvl !== $lvl) {
+    if ($lvl > 1 && (!$last || $last < $sixMonthsAgo)) {
         $db->prepare('UPDATE user_trust SET trust_level = ?, last_level_change_at = NOW() WHERE user_id = ?')
-           ->execute([$newLvl, (int)$userId]);
+           ->execute([max(1, $lvl - 1), (int)$userId]);
     }
 }
 
@@ -188,84 +109,206 @@ function ensureContributionRow(PDO $db, string $roomId, int $userId, int $cycleI
        ->execute([$roomId, (int)$userId, (int)$cycleId, $amount]);
 }
 
+function updateTrustAfterCompletion(PDO $db, int $userId): void {
+    ensureTrustRow($db, $userId);
+
+    $db->prepare('UPDATE user_trust SET completed_reveals_count = (SELECT COUNT(*) FROM user_completed_reveals WHERE user_id = ?) WHERE user_id = ?')
+       ->execute([(int)$userId, (int)$userId]);
+
+    $curStmt = $db->prepare('SELECT trust_level FROM user_trust WHERE user_id = ?');
+    $curStmt->execute([(int)$userId]);
+    $cur = (int)$curStmt->fetchColumn();
+
+    $counts = $db->prepare('SELECT
+                                SUM(CASE WHEN duration_days >= 30 THEN 1 ELSE 0 END) AS month_ok,
+                                SUM(CASE WHEN duration_days >= 21 THEN 1 ELSE 0 END) AS wk3_ok
+                            FROM user_completed_reveals
+                            WHERE user_id = ?');
+    $counts->execute([(int)$userId]);
+    $c = $counts->fetch();
+
+    $monthOk = (int)($c['month_ok'] ?? 0);
+    $wk3Ok = (int)($c['wk3_ok'] ?? 0);
+
+    $target = 1;
+    if ($monthOk >= 2) $target = 2;
+    if ($wk3Ok >= 4) $target = 3;
+
+    if ($target > $cur) {
+        $db->prepare('UPDATE user_trust SET trust_level = ?, last_level_change_at = NOW() WHERE user_id = ?')
+           ->execute([$target, (int)$userId]);
+    }
+}
+
+function initTypeBRotation(PDO $db, string $roomId): void {
+    $cnt = $db->prepare('SELECT COUNT(*) FROM saving_room_rotation_queue WHERE room_id = ?');
+    $cnt->execute([$roomId]);
+    if ((int)$cnt->fetchColumn() > 0) return;
+
+    $parts = $db->prepare("SELECT user_id FROM saving_room_participants WHERE room_id = ? AND status='active' ORDER BY joined_at ASC");
+    $parts->execute([$roomId]);
+    $rows = $parts->fetchAll();
+    if (!$rows) return;
+
+    $pos = 1;
+    foreach ($rows as $r) {
+        $db->prepare("INSERT IGNORE INTO saving_room_rotation_queue (room_id, user_id, position, status)
+                      VALUES (?, ?, ?, 'queued')")
+           ->execute([$roomId, (int)$r['user_id'], $pos]);
+        $pos++;
+    }
+
+    $firstUser = (int)$rows[0]['user_id'];
+
+    $db->prepare("INSERT IGNORE INTO saving_room_rotation_windows (room_id, user_id, rotation_index, status)
+                  VALUES (?, ?, 1, 'pending_votes')")
+       ->execute([$roomId, $firstUser]);
+
+    $db->prepare("UPDATE saving_room_rotation_queue SET status='active_window' WHERE room_id = ? AND user_id = ?")
+       ->execute([$roomId, $firstUser]);
+
+    activityLog($db, $roomId, 'typeB_turn_advanced', ['rotation_index' => 1]);
+}
+
+function recordEscrowSettlement(PDO $db, string $roomId, int $removedUserId, string $policy): void {
+    $sum = $db->prepare("SELECT COALESCE(SUM(amount), 0) FROM saving_room_contributions
+                         WHERE room_id = ?
+                           AND user_id = ?
+                           AND status IN ('paid','paid_in_grace')");
+    $sum->execute([$roomId, (int)$removedUserId]);
+    $total = round((float)$sum->fetchColumn(), 2);
+
+    if ($total <= 0) return;
+
+    $fee = 0.00;
+    $refund = 0.00;
+    $redistribution = null;
+
+    if ($policy === 'refund_minus_fee') {
+        $fee = round($total * 0.10, 2);
+        $refund = round($total - $fee, 2);
+    } else {
+        $recipients = $db->prepare("SELECT p.user_id,
+                                           COALESCE(SUM(c.amount), 0) AS paid_sum
+                                    FROM saving_room_participants p
+                                    LEFT JOIN saving_room_contributions c
+                                      ON c.room_id = p.room_id
+                                     AND c.user_id = p.user_id
+                                     AND c.status IN ('paid','paid_in_grace')
+                                    WHERE p.room_id = ?
+                                      AND p.status = 'active'
+                                      AND p.user_id <> ?
+                                    GROUP BY p.user_id
+                                    ORDER BY p.user_id ASC");
+        $recipients->execute([$roomId, (int)$removedUserId]);
+        $rows = $recipients->fetchAll();
+
+        $n = count($rows);
+        if ($n > 0) {
+            $weightTotal = 0.0;
+            foreach ($rows as $r) $weightTotal += (float)$r['paid_sum'];
+
+            $dist = [];
+            $running = 0.0;
+
+            for ($i = 0; $i < $n; $i++) {
+                $uid = (int)$rows[$i]['user_id'];
+
+                if ($i === ($n - 1)) {
+                    $amt = round($total - $running, 2);
+                } else {
+                    if ($weightTotal > 0) {
+                        $amt = round($total * ((float)$rows[$i]['paid_sum'] / $weightTotal), 2);
+                    } else {
+                        $amt = round($total / $n, 2);
+                    }
+                    $running = round($running + $amt, 2);
+                }
+
+                if ($amt <= 0) continue;
+                $dist[] = ['user_id' => $uid, 'amount' => number_format($amt, 2, '.', '')];
+            }
+
+            $redistribution = $dist;
+        }
+    }
+
+    $db->prepare("INSERT IGNORE INTO saving_room_escrow_settlements
+                    (room_id, removed_user_id, policy, total_contributed, platform_fee_amount, refund_amount, redistribution_json)
+                  VALUES
+                    (?, ?, ?, ?, ?, ?, ?)")
+       ->execute([
+           $roomId,
+           (int)$removedUserId,
+           $policy,
+           number_format($total, 2, '.', ''),
+           number_format($fee, 2, '.', ''),
+           number_format($refund, 2, '.', ''),
+           $redistribution ? json_encode($redistribution, JSON_UNESCAPED_UNICODE) : null,
+       ]);
+}
+
+$db = db();
+
+// ───────────────────────────────────────────────────────────
+//  1) Lock lobby when start date arrives
+// ───────────────────────────────────────────────────────────
+$roomsToLock = $db->query("SELECT id FROM saving_rooms WHERE room_state='lobby' AND lobby_state='open' AND start_at <= NOW() LIMIT 500")->fetchAll();
+foreach ($roomsToLock as $r) {
+    $roomId = (string)$r['id'];
+    $db->prepare("UPDATE saving_rooms SET lobby_state='locked', updated_at=NOW() WHERE id = ? AND room_state='lobby'")
+       ->execute([$roomId]);
+    activityLog($db, $roomId, 'lobby_locked', ['reason' => 'start_date_reached']);
+    logLine("Lobby locked: {$roomId}");
+}
+
+// ───────────────────────────────────────────────────────────
+//  2) Start rooms
+// ───────────────────────────────────────────────────────────
+$roomsToStart = $db->query("SELECT id, participation_amount, saving_type FROM saving_rooms WHERE room_state='lobby' AND start_at <= NOW() LIMIT 500")->fetchAll();
 foreach ($roomsToStart as $r) {
     $roomId = (string)$r['id'];
-
-    $roomStmt = $db->prepare("SELECT id, periodicity, participation_amount, maker_user_id, saving_type FROM saving_rooms WHERE id = ?");
-    $roomStmt->execute([$roomId]);
-    $room = $roomStmt->fetch();
+    $amount = (string)$r['participation_amount'];
+    $savingType = (string)$r['saving_type'];
 
     $db->prepare("UPDATE saving_rooms SET room_state='active', lobby_state='locked', updated_at=NOW() WHERE id = ? AND room_state='lobby'")
        ->execute([$roomId]);
 
-    // Promote approved participants to active
     $db->prepare("UPDATE saving_room_participants SET status='active' WHERE room_id = ? AND status='approved'")
        ->execute([$roomId]);
 
-    // Create unlock event scaffolding
-    if (!empty($room['saving_type']) && $room['saving_type'] === 'A') {
-        $db->prepare("INSERT IGNORE INTO saving_room_unlock_events (room_id, status, created_at) VALUES (?, 'pending', NOW())")
-           ->execute([$roomId]);
-    }
-
-    // Create Type B rotation order + first window
-    if (!empty($room['saving_type']) && $room['saving_type'] === 'B') {
-        $parts = $db->prepare("SELECT user_id FROM saving_room_participants WHERE room_id = ? AND status = 'active' ORDER BY joined_at ASC");
-        $parts->execute([$roomId]);
-        $ids = array_map(fn($x) => (int)$x['user_id'], $parts->fetchAll());
-
-        if (count($ids) >= 2) {
-            shuffleSecure($ids);
-
-            $pos = 1;
-            foreach ($ids as $uid) {
-                $st = ($pos === 1) ? 'active_window' : 'queued';
-                $db->prepare("INSERT IGNORE INTO saving_room_rotation_queue (room_id, user_id, position, status) VALUES (?, ?, ?, ?)")
-                   ->execute([$roomId, $uid, $pos, $st]);
-                $pos++;
-            }
-
-            $firstUserId = (int)$ids[0];
-            $db->prepare("INSERT IGNORE INTO saving_room_rotation_windows (room_id, user_id, rotation_index, status) VALUES (?, ?, 1, 'pending_votes')")
-               ->execute([$roomId, $firstUserId]);
-
-            activityLog($db, $roomId, 'rotation_queue_created', ['rotation_index' => 1]);
-        }
-    }
-
-    // Create first contribution cycle due at start time (cycle_index=1)
-    // Grace window ends in 48 hours.
     $db->prepare("INSERT IGNORE INTO saving_room_contribution_cycles (room_id, cycle_index, due_at, grace_ends_at, status)
                   VALUES (?, 1, NOW(), (NOW() + INTERVAL 48 HOUR), 'open')")
        ->execute([$roomId]);
 
-    // Ensure each active participant has a contribution row for cycle 1
     $cycleIdStmt = $db->prepare("SELECT id FROM saving_room_contribution_cycles WHERE room_id = ? AND cycle_index = 1");
     $cycleIdStmt->execute([$roomId]);
     $cycleId = (int)$cycleIdStmt->fetchColumn();
 
     if ($cycleId > 0) {
-        $parts = $db->prepare("SELECT user_id FROM saving_room_participants WHERE room_id = ? AND status = 'active'");
+        $parts = $db->prepare("SELECT user_id FROM saving_room_participants WHERE room_id = ? AND status='active'");
         $parts->execute([$roomId]);
-        $amount = (string)$room['participation_amount'];
         foreach ($parts->fetchAll() as $p) {
             ensureContributionRow($db, $roomId, (int)$p['user_id'], $cycleId, $amount);
         }
     }
 
     activityLog($db, $roomId, 'room_started', []);
+
+    if ($savingType === 'B') {
+        initTypeBRotation($db, $roomId);
+    }
+
     logLine("Room started: {$roomId}");
 }
 
 // ───────────────────────────────────────────────────────────
-//  2b) Generate future contribution cycles for active rooms
-//      We keep at least 2 upcoming cycles.
+//  2b) Ensure future contribution cycles exist
 // ───────────────────────────────────────────────────────────
-$activeRooms = $db->query("SELECT id, periodicity, participation_amount FROM saving_rooms WHERE room_state='active' LIMIT 500")->fetchAll();
+$activeRooms = $db->query("SELECT id, periodicity FROM saving_rooms WHERE room_state='active' LIMIT 800")->fetchAll();
 foreach ($activeRooms as $r) {
     $roomId = (string)$r['id'];
     $period = (string)$r['periodicity'];
-    $spec = periodSpec($period);
 
     $last = $db->prepare("SELECT cycle_index, due_at FROM saving_room_contribution_cycles WHERE room_id = ? ORDER BY cycle_index DESC LIMIT 1");
     $last->execute([$roomId]);
@@ -275,24 +318,22 @@ foreach ($activeRooms as $r) {
     $lastIdx = (int)$lastRow['cycle_index'];
     $lastDue = new DateTimeImmutable((string)$lastRow['due_at']);
 
-    // ensure at least two future cycles exist
+    $due = $lastDue;
     for ($i = 1; $i <= 2; $i++) {
         $nextIdx = $lastIdx + $i;
-        $nextDue = $lastDue->add(new DateInterval($spec['interval']));
-        // advance lastDue for each loop
-        $lastDue = $nextDue;
+        $due = $due->add(periodInterval($period));
 
         $db->prepare("INSERT IGNORE INTO saving_room_contribution_cycles (room_id, cycle_index, due_at, grace_ends_at, status)
                       VALUES (?, ?, ?, DATE_ADD(?, INTERVAL 48 HOUR), 'open')")
-           ->execute([$roomId, $nextIdx, $nextDue->format('Y-m-d H:i:s'), $nextDue->format('Y-m-d H:i:s')]);
+           ->execute([$roomId, $nextIdx, $due->format('Y-m-d H:i:s'), $due->format('Y-m-d H:i:s')]);
     }
 }
 
 // ───────────────────────────────────────────────────────────
-//  2c) Contribution enforcement: grace window + strike
+//  2c) Contribution enforcement
 // ───────────────────────────────────────────────────────────
 $cycles = $db->query("SELECT c.id, c.room_id, c.cycle_index, c.due_at, c.grace_ends_at, c.status,
-                             r.privacy_mode, r.participation_amount, r.escrow_policy, r.maker_user_id
+                             r.participation_amount
                       FROM saving_room_contribution_cycles c
                       JOIN saving_rooms r ON r.id = c.room_id
                       WHERE r.room_state='active'
@@ -308,19 +349,14 @@ foreach ($cycles as $c) {
     $graceEnds = new DateTimeImmutable((string)$c['grace_ends_at']);
     $status = (string)$c['status'];
 
-    // Important notification: due in 24 hours (per participant)
     $dueIn = $dueAt->getTimestamp() - time();
 
-    $parts = $db->prepare("SELECT p.user_id
-                           FROM saving_room_participants p
-                           WHERE p.room_id = ?
-                             AND p.status = 'active'");
+    $parts = $db->prepare("SELECT user_id FROM saving_room_participants WHERE room_id = ? AND status='active'");
     $parts->execute([$roomId]);
     $pRows = $parts->fetchAll();
 
     foreach ($pRows as $p) {
         $uid = (int)$p['user_id'];
-
         ensureContributionRow($db, $roomId, $uid, $cycleId, (string)$c['participation_amount']);
 
         if ($dueIn > 0 && $dueIn <= 24 * 3600) {
@@ -338,51 +374,24 @@ foreach ($cycles as $c) {
         }
     }
 
-    // Move into grace if due has passed
     if ($status === 'open' && time() >= $dueAt->getTimestamp()) {
         $db->prepare("UPDATE saving_room_contribution_cycles SET status='grace' WHERE id = ?")
            ->execute([$cycleId]);
         activityLog($db, $roomId, 'grace_window_started', ['cycle_id' => $cycleId, 'cycle_index' => (int)$c['cycle_index']]);
+        $status = 'grace';
     }
 
-    // Grace reminders at +1h, +24h, +47h after due
-    if (time() >= $dueAt->getTimestamp()) {
-        $elapsed = time() - $dueAt->getTimestamp();
+    if (time() < $dueAt->getTimestamp()) continue;
 
-        $marks = [
-            1 * 3600 => 'contribution_grace_h1',
-            24 * 3600 => 'contribution_grace_h24',
-            47 * 3600 => 'contribution_grace_h47',
-        ];
+    $elapsed = time() - $dueAt->getTimestamp();
+    $marks = [
+        1 * 3600 => 'contribution_grace_h1',
+        24 * 3600 => 'contribution_grace_h24',
+        47 * 3600 => 'contribution_grace_h47',
+    ];
 
-        foreach ($marks as $sec => $key) {
-            if ($elapsed >= $sec && $elapsed < ($sec + 600)) {
-                foreach ($pRows as $p) {
-                    $uid = (int)$p['user_id'];
-                    // Only notify users who are still unpaid
-                    $st = $db->prepare("SELECT status FROM saving_room_contributions WHERE cycle_id = ? AND user_id = ?");
-                    $st->execute([$cycleId, $uid]);
-                    $cur = (string)$st->fetchColumn();
-                    if (in_array($cur, ['paid','paid_in_grace'], true)) continue;
-
-                    notifyOnce(
-                        $db,
-                        $uid,
-                        $key,
-                        'important',
-                        'Contribution grace window',
-                        'Your contribution is overdue and in the grace period.',
-                        ['room_id' => $roomId, 'cycle_id' => $cycleId, 'grace_ends_at' => $c['grace_ends_at']],
-                        'cycle',
-                        (string)$cycleId
-                    );
-                }
-            }
-        }
-
-        // Critical: grace ending in 6 hours
-        $remaining = $graceEnds->getTimestamp() - time();
-        if ($remaining > 0 && $remaining <= 6 * 3600) {
+    foreach ($marks as $sec => $key) {
+        if ($elapsed >= $sec && $elapsed < ($sec + 600)) {
             foreach ($pRows as $p) {
                 $uid = (int)$p['user_id'];
                 $st = $db->prepare("SELECT status FROM saving_room_contributions WHERE cycle_id = ? AND user_id = ?");
@@ -393,173 +402,204 @@ foreach ($cycles as $c) {
                 notifyOnce(
                     $db,
                     $uid,
-                    'contribution_grace_ending_6h',
-                    'critical',
-                    'Contribution grace window ending in 6 hours',
-                    'Your grace period is ending soon. Contribute now to avoid a strike.',
+                    $key,
+                    'important',
+                    'Contribution grace window',
+                    'Your contribution is overdue and in the grace period.',
                     ['room_id' => $roomId, 'cycle_id' => $cycleId, 'grace_ends_at' => $c['grace_ends_at']],
                     'cycle',
                     (string)$cycleId
                 );
             }
         }
+    }
 
-        // If grace ended: mark missed + strike
-        if ($status !== 'closed' && time() >= $graceEnds->getTimestamp()) {
-            $db->prepare("UPDATE saving_room_contribution_cycles SET status='closed' WHERE id = ?")
-               ->execute([$cycleId]);
+    $remaining = $graceEnds->getTimestamp() - time();
+    if ($remaining > 0 && $remaining <= 6 * 3600) {
+        foreach ($pRows as $p) {
+            $uid = (int)$p['user_id'];
+            $st = $db->prepare("SELECT status FROM saving_room_contributions WHERE cycle_id = ? AND user_id = ?");
+            $st->execute([$cycleId, $uid]);
+            $cur = (string)$st->fetchColumn();
+            if (in_array($cur, ['paid','paid_in_grace'], true)) continue;
 
-            foreach ($pRows as $p) {
-                $uid = (int)$p['user_id'];
+            notifyOnce(
+                $db,
+                $uid,
+                'contribution_grace_ending_6h',
+                'critical',
+                'Contribution grace window ending in 6 hours',
+                'Your grace period is ending soon. Contribute now to avoid a strike.',
+                ['room_id' => $roomId, 'cycle_id' => $cycleId, 'grace_ends_at' => $c['grace_ends_at']],
+                'cycle',
+                (string)$cycleId
+            );
+        }
+    }
 
-                $st = $db->prepare("SELECT status FROM saving_room_contributions WHERE cycle_id = ? AND user_id = ?");
-                $st->execute([$cycleId, $uid]);
-                $cur = (string)$st->fetchColumn();
-                if (in_array($cur, ['paid','paid_in_grace'], true)) continue;
+    if (time() < $graceEnds->getTimestamp()) continue;
 
-                $db->prepare("UPDATE saving_room_contributions SET status='missed' WHERE cycle_id = ? AND user_id = ?")
-                   ->execute([$cycleId, $uid]);
+    $db->prepare("UPDATE saving_room_contribution_cycles SET status='closed' WHERE id = ?")
+       ->execute([$cycleId]);
 
-                applyStrike($db, $uid, 'missed_contribution', $roomId, $cycleId);
+    foreach ($pRows as $p) {
+        $uid = (int)$p['user_id'];
+        $st = $db->prepare("SELECT status FROM saving_room_contributions WHERE cycle_id = ? AND user_id = ?");
+        $st->execute([$cycleId, $uid]);
+        $cur = (string)$st->fetchColumn();
+        if (in_array($cur, ['paid','paid_in_grace'], true)) continue;
 
-                $db->prepare("UPDATE saving_room_participants SET missed_contributions_count = missed_contributions_count + 1 WHERE room_id = ? AND user_id = ?")
-                   ->execute([$roomId, $uid]);
+        $db->prepare("UPDATE saving_room_contributions SET status='missed' WHERE cycle_id = ? AND user_id = ?")
+           ->execute([$cycleId, $uid]);
 
-                activityLog($db, $roomId, 'strike_logged', ['cycle_id' => $cycleId]);
+        applyStrike($db, $uid, 'missed_contribution', $roomId, $cycleId);
 
-                // Two missed contributions in same room -> automatic removal
-                $mc = $db->prepare("SELECT missed_contributions_count FROM saving_room_participants WHERE room_id = ? AND user_id = ?");
-                $mc->execute([$roomId, $uid]);
-                $missed = (int)$mc->fetchColumn();
+        $db->prepare("UPDATE saving_room_participants SET missed_contributions_count = missed_contributions_count + 1 WHERE room_id = ? AND user_id = ?")
+           ->execute([$roomId, $uid]);
 
-                if ($missed >= 2) {
-                    $db->prepare("UPDATE saving_room_participants SET status='removed', removed_at=NOW(), removal_reason='two_missed_contributions' WHERE room_id = ? AND user_id = ?")
-                       ->execute([$roomId, $uid]);
+        activityLog($db, $roomId, 'strike_logged', ['cycle_id' => $cycleId]);
 
-                    activityLog($db, $roomId, 'participant_removed', ['reason' => 'two_missed_contributions']);
+        $mc = $db->prepare("SELECT missed_contributions_count FROM saving_room_participants WHERE room_id = ? AND user_id = ?");
+        $mc->execute([$roomId, $uid]);
+        $missed = (int)$mc->fetchColumn();
 
-                    notifyOnce(
-                        $db,
-                        $uid,
-                        'removed_from_room',
-                        'critical',
-                        'You have been removed from a room',
-                        'You were removed after missing two contributions in this room. Funds are held in escrow and will be handled according to the room policy.',
-                        ['room_id' => $roomId],
-                        'room',
-                        $roomId
-                    );
+        if ($missed >= 2) {
+            $roomInfo = $db->prepare("SELECT escrow_policy, maker_user_id FROM saving_rooms WHERE id = ?");
+            $roomInfo->execute([$roomId]);
+            $ri = $roomInfo->fetch();
+            $policy = $ri ? (string)$ri['escrow_policy'] : 'redistribute';
+            $makerId = $ri ? (int)$ri['maker_user_id'] : 0;
 
-                    // Escrow handling for funds already contributed by this participant
-                    $sumStmt = $db->prepare("SELECT COALESCE(SUM(amount), 0) FROM saving_room_contributions
-                                             WHERE room_id = ? AND user_id = ? AND status IN ('paid','paid_in_grace')");
-                    $sumStmt->execute([$roomId, $uid]);
-                    $total = (float)$sumStmt->fetchColumn();
+            $db->prepare("UPDATE saving_room_participants SET status='removed', removed_at=NOW(), removal_reason='two_missed_contributions' WHERE room_id = ? AND user_id = ?")
+               ->execute([$roomId, $uid]);
 
-                    $policy = (string)($c['escrow_policy'] ?? 'redistribute');
+            recordEscrowSettlement($db, $roomId, $uid, $policy);
 
-                    $fee = 0.00;
-                    $refund = 0.00;
-                    $redistribution = null;
+            activityLog($db, $roomId, 'participant_removed', ['reason' => 'two_missed_contributions']);
+            activityLog($db, $roomId, 'escrow_settlement_recorded', ['policy' => $policy]);
 
-                    if ($policy === 'refund_minus_fee') {
-                        // Platform fee is aligned with the early-exit fee (10%).
-                        $fee = round($total * 0.10, 2);
-                        $refund = round(max(0, $total - $fee), 2);
+            notifyOnce(
+                $db,
+                $uid,
+                'removed_from_room',
+                'critical',
+                'You have been removed from a room',
+                'You were removed after missing two contributions in this room. Your contributed funds are held in escrow and will be handled according to the room policy.',
+                ['room_id' => $roomId, 'escrow_policy' => $policy],
+                'room',
+                $roomId
+            );
 
-                    } else {
-                        // Proportional redistribution across remaining active participants,
-                        // weighted by each participant's total paid contributions.
-                        $pStmt = $db->prepare("SELECT user_id FROM saving_room_participants WHERE room_id = ? AND status = 'active'");
-                        $pStmt->execute([$roomId]);
-                        $remaining = $pStmt->fetchAll();
-
-                        $weights = [];
-                        $weightSum = 0.0;
-                        foreach ($remaining as $rp) {
-                            $rid = (int)$rp['user_id'];
-                            $wStmt = $db->prepare("SELECT COALESCE(SUM(amount), 0) FROM saving_room_contributions
-                                                   WHERE room_id = ? AND user_id = ? AND status IN ('paid','paid_in_grace')");
-                            $wStmt->execute([$roomId, $rid]);
-                            $w = (float)$wStmt->fetchColumn();
-                            $weights[$rid] = $w;
-                            $weightSum += $w;
-                        }
-
-                        $dist = [];
-                        if (count($remaining) > 0 && $total > 0) {
-                            if ($weightSum <= 0) {
-                                $each = round($total / count($remaining), 2);
-                                $acc = 0.0;
-                                for ($i = 0; $i < count($remaining); $i++) {
-                                    $rid = (int)$remaining[$i]['user_id'];
-                                    $amt = ($i === (count($remaining) - 1)) ? round($total - $acc, 2) : $each;
-                                    $acc += $amt;
-                                    $dist[] = ['user_id' => $rid, 'amount' => $amt];
-                                }
-                            } else {
-                                $acc = 0.0;
-                                $keys = array_keys($weights);
-                                for ($i = 0; $i < count($keys); $i++) {
-                                    $rid = (int)$keys[$i];
-                                    $raw = ($weights[$rid] / $weightSum) * $total;
-                                    $amt = round($raw, 2);
-                                    if ($i === (count($keys) - 1)) {
-                                        $amt = round($total - $acc, 2);
-                                    }
-                                    $acc += $amt;
-                                    $dist[] = ['user_id' => $rid, 'amount' => $amt];
-                                }
-                            }
-                        }
-
-                        $redistribution = $dist;
-                    }
-
-                    $db->prepare("INSERT IGNORE INTO saving_room_escrow_settlements
-                                    (room_id, removed_user_id, policy, total_contributed, platform_fee_amount, refund_amount, redistribution_json)
-                                  VALUES
-                                    (?, ?, ?, ?, ?, ?, ?)")
-                       ->execute([
-                           $roomId,
-                           $uid,
-                           $policy,
-                           number_format($total, 2, '.', ''),
-                           number_format($fee, 2, '.', ''),
-                           number_format($refund, 2, '.', ''),
-                           $redistribution ? json_encode($redistribution, JSON_UNESCAPED_UNICODE) : null,
-                       ]);
-
-                    $payload = ['policy' => $policy];
-                    if (empty($c['privacy_mode'])) {
-                        $payload['total_contributed'] = number_format($total, 2, '.', '');
-                        if ($policy === 'refund_minus_fee') {
-                            $payload['platform_fee_amount'] = number_format($fee, 2, '.', '');
-                            $payload['refund_amount'] = number_format($refund, 2, '.', '');
-                        }
-                    }
-
-                    activityLog($db, $roomId, 'escrow_settlement_recorded', $payload);
-
-                    notifyOnce(
-                        $db,
-                        (int)$c['maker_user_id'],
-                        'escrow_settlement_recorded',
-                        'important',
-                        'Escrow settlement recorded',
-                        'A participant was removed for missed contributions. Their contributed funds have been handled according to the room escrow policy.',
-                        ['room_id' => $roomId, 'policy' => $policy],
-                        'room',
-                        $roomId
-                    );
-                }
+            if ($makerId > 0) {
+                notifyOnce(
+                    $db,
+                    $makerId,
+                    'escrow_settlement_recorded',
+                    'important',
+                    'Escrow settlement recorded',
+                    'A participant was removed after missing contributions. Their contributed funds have been recorded for escrow handling under the room policy.',
+                    ['room_id' => $roomId, 'escrow_policy' => $policy],
+                    'room',
+                    $roomId
+                );
             }
         }
     }
 }
 
 // ───────────────────────────────────────────────────────────
-//  2d) Type A unlock expiry warnings + close
+//  3) Underfilled room alerts at T-72h
+// ───────────────────────────────────────────────────────────
+$roomsForAlert = $db->query("SELECT id, maker_user_id, min_participants
+                             FROM saving_rooms
+                             WHERE room_state='lobby'
+                               AND start_at > NOW()
+                               AND start_at <= (NOW() + INTERVAL 72 HOUR)
+                               AND start_at > (NOW() + INTERVAL 48 HOUR)
+                               AND id NOT IN (SELECT room_id FROM saving_room_underfill_alerts)
+                             LIMIT 500")->fetchAll();
+
+foreach ($roomsForAlert as $r) {
+    $roomId = (string)$r['id'];
+    $makerId = (int)$r['maker_user_id'];
+    $min = (int)$r['min_participants'];
+    $cnt = approvedCount($db, $roomId);
+
+    if ($cnt >= $min) continue;
+
+    $deadline = (new DateTimeImmutable('now'))->modify('+24 hours')->format('Y-m-d H:i:s');
+
+    $db->prepare("INSERT INTO saving_room_underfill_alerts (room_id, alerted_at, decision_deadline_at, status)
+                  VALUES (?, NOW(), ?, 'open')")
+       ->execute([$roomId, $deadline]);
+
+    activityLog($db, $roomId, 'underfilled_alerted', [
+        'approved_count' => $cnt,
+        'min_participants' => $min,
+        'decision_deadline_at' => $deadline,
+    ]);
+
+    notifyOnce(
+        $db,
+        $makerId,
+        'room_underfilled_alert',
+        'important',
+        'Room underfilled — action required',
+        'Your saving room has not reached its minimum participant count. Choose to extend the start date, lower the minimum if permitted, or cancel. If you take no action within 24 hours, the room will auto-cancel.',
+        ['room_id' => $roomId, 'decision_deadline_at' => $deadline],
+        'room',
+        $roomId
+    );
+
+    logLine("Underfilled alert created: {$roomId} ({$cnt}/{$min})");
+}
+
+// ───────────────────────────────────────────────────────────
+//  4) Auto-cancel underfilled rooms with expired decision window
+// ───────────────────────────────────────────────────────────
+$expired = $db->query("SELECT a.room_id, r.maker_user_id
+                       FROM saving_room_underfill_alerts a
+                       JOIN saving_rooms r ON r.id = a.room_id
+                       WHERE a.status='open'
+                         AND a.decision_deadline_at <= NOW()
+                         AND r.room_state='lobby'
+                       LIMIT 500")->fetchAll();
+
+foreach ($expired as $row) {
+    $roomId = (string)$row['room_id'];
+    $makerId = (int)$row['maker_user_id'];
+
+    $db->beginTransaction();
+
+    $db->prepare("UPDATE saving_rooms SET room_state='cancelled', lobby_state='locked', updated_at=NOW() WHERE id = ? AND room_state='lobby'")
+       ->execute([$roomId]);
+
+    $db->prepare("UPDATE saving_room_underfill_alerts
+                  SET status='expired', resolved_at=NOW(), resolution_action='cancel', resolution_payload=JSON_OBJECT('auto', 1)
+                  WHERE room_id = ? AND status='open'")
+       ->execute([$roomId]);
+
+    activityLog($db, $roomId, 'room_auto_cancelled_underfilled', ['reason' => 'no_action_after_alert']);
+
+    $db->commit();
+
+    notifyOnce(
+        $db,
+        $makerId,
+        'room_underfilled_auto_cancelled',
+        'important',
+        'Room cancelled (underfilled)',
+        'No action was taken after the underfilled-room alert. The room has been cancelled.',
+        ['room_id' => $roomId],
+        'room',
+        $roomId
+    );
+
+    logLine("Auto-cancelled underfilled room: {$roomId}");
+}
+
+// ───────────────────────────────────────────────────────────
+//  5) Type A unlock expiry warnings + close
 // ───────────────────────────────────────────────────────────
 $typeAWarn = $db->query("SELECT ue.room_id, ue.expires_at
                          FROM saving_room_unlock_events ue
@@ -651,7 +691,6 @@ foreach ($typeAExpired as $x) {
 
     logLine("Type A room closed after unlock expiry: {$roomId}");
 
-    // Notify admins to rotate unlock code for the destination account
     $acctStmt = $db->prepare("SELECT account_id FROM saving_room_accounts WHERE room_id = ? LIMIT 1");
     $acctStmt->execute([$roomId]);
     $accountId = $acctStmt->fetchColumn();
@@ -676,297 +715,149 @@ foreach ($typeAExpired as $x) {
 }
 
 // ───────────────────────────────────────────────────────────
-//  2e) Type B rotation windows
+//  6) Type B rotation windows (vote -> reveal, expiry -> advance)
 // ───────────────────────────────────────────────────────────
-$typeBWindows = $db->query("SELECT w.id, w.room_id, w.user_id, w.rotation_index, w.status, w.revealed_at, w.expires_at,
-                                   r.maker_user_id, r.privacy_mode
-                            FROM saving_room_rotation_windows w
-                            JOIN saving_rooms r ON r.id = w.room_id
-                            WHERE r.saving_type = 'B'
-                              AND r.room_state = 'active'
-                              AND w.status IN ('pending_votes','revealed','blocked_dispute')
-                            ORDER BY w.created_at ASC
-                            LIMIT 500")->fetchAll();
-
-foreach ($typeBWindows as $w) {
-    $winId = (int)$w['id'];
-    $roomId = (string)$w['room_id'];
-    $turnUserId = (int)$w['user_id'];
-    $rotationIndex = (int)$w['rotation_index'];
-    $st = (string)$w['status'];
-
-    if (in_array($st, ['blocked_dispute','blocked_debt'], true)) {
-        continue;
-    }
-
-    $disp = $db->prepare("SELECT status FROM saving_room_disputes
-                          WHERE room_id = ? AND rotation_index = ?
-                            AND status IN ('open','threshold_met','escalated_admin')
-                          LIMIT 1");
-    $disp->execute([$roomId, $rotationIndex]);
-    $dispStatus = $disp->fetchColumn();
-
-    if ($dispStatus) {
-        $db->prepare("UPDATE saving_room_rotation_windows SET status='blocked_dispute' WHERE id = ?")
-           ->execute([$winId]);
-        activityLog($db, $roomId, 'rotation_blocked_dispute', ['rotation_index' => $rotationIndex]);
-        continue;
-    }
-
-    if ($st === 'pending_votes') {
-        $eligibleStmt = $db->prepare("SELECT COUNT(*) FROM saving_room_participants WHERE room_id = ? AND status = 'active'");
-        $eligibleStmt->execute([$roomId]);
-        $eligible = (int)$eligibleStmt->fetchColumn();
-        if ($eligible < 1) continue;
-
-        $need = (int)ceil(max(0, $eligible - 1) * 0.5);
-        if ($need < 0) $need = 0;
-
-        $approvalsStmt = $db->prepare("SELECT COUNT(*) FROM saving_room_unlock_votes
-                                       WHERE room_id = ?
-                                         AND scope = 'typeB_turn_unlock'
-                                         AND target_rotation_index = ?
-                                         AND vote = 'approve'
-                                         AND user_id <> ?");
-        $approvalsStmt->execute([$roomId, $rotationIndex, (int)$w['maker_user_id']]);
-        $approvals = (int)$approvalsStmt->fetchColumn();
-
-        $makerVoteStmt = $db->prepare("SELECT vote FROM saving_room_unlock_votes
-                                       WHERE room_id = ?
-                                         AND user_id = ?
-                                         AND scope = 'typeB_turn_unlock'
-                                         AND target_rotation_index = ?");
-        $makerVoteStmt->execute([$roomId, (int)$w['maker_user_id'], $rotationIndex]);
-        $makerVote = (string)$makerVoteStmt->fetchColumn();
-
-        if ($makerVote === 'approve' && $approvals >= $need) {
-            $expires = (new DateTimeImmutable('now'))->modify('+72 hours')->format('Y-m-d H:i:s');
-
-            $db->prepare("UPDATE saving_room_rotation_windows
-                          SET status='revealed', revealed_at=NOW(), expires_at=?, dispute_window_ends_at=?
-                          WHERE id = ? AND status='pending_votes'")
-               ->execute([$expires, $expires, $winId]);
-
-            activityLog($db, $roomId, 'typeB_turn_revealed', ['rotation_index' => $rotationIndex, 'expires_at' => $expires]);
-
-            notifyOnce(
-                $db,
-                $turnUserId,
-                'typeB_turn_revealed',
-                'critical',
-                'Your turn unlock window is open',
-                'The destination account unlock code is available to you for 72 hours. Keep it secure and do not share it.',
-                ['room_id' => $roomId, 'rotation_index' => $rotationIndex, 'expires_at' => $expires],
-                'rotation',
-                $roomId . ':' . $rotationIndex
-            );
-
-            $parts = $db->prepare("SELECT user_id FROM saving_room_participants WHERE room_id = ? AND status = 'active'");
-            $parts->execute([$roomId]);
-            foreach ($parts->fetchAll() as $p) {
-                $uid = (int)$p['user_id'];
-                if ($uid === $turnUserId) continue;
-                notifyOnce(
-                    $db,
-                    $uid,
-                    'typeB_turn_opened',
-                    'informational',
-                    'Rotation unlock window opened',
-                    'A participant rotation window has opened in one of your Type B rooms.',
-                    ['room_id' => $roomId, 'rotation_index' => $rotationIndex, 'expires_at' => $expires],
-                    'rotation',
-                    $roomId . ':' . $rotationIndex
-                );
-            }
-        }
-    }
-
-    if ($st === 'revealed') {
-        if (empty($w['expires_at'])) continue;
-        $expTs = strtotime((string)$w['expires_at']);
-        if ($expTs && time() >= $expTs) {
-            $db->beginTransaction();
-
-            $db->prepare("UPDATE saving_room_rotation_windows SET status='expired' WHERE id = ? AND status='revealed'")
-               ->execute([$winId]);
-
-            activityLog($db, $roomId, 'typeB_turn_expired', ['rotation_index' => $rotationIndex]);
-
-            $db->prepare("UPDATE saving_room_rotation_queue SET status='completed' WHERE room_id = ? AND user_id = ?")
-               ->execute([$roomId, $turnUserId]);
-
-            $next = $db->prepare("SELECT user_id, position FROM saving_room_rotation_queue
-                                  WHERE room_id = ? AND status = 'queued'
-                                  ORDER BY position ASC
-                                  LIMIT 1");
-            $next->execute([$roomId]);
-            $nextRow = $next->fetch();
-
-            if ($nextRow) {
-                $nextUserId = (int)$nextRow['user_id'];
-                $nextIndex = $rotationIndex + 1;
-
-                $db->prepare("UPDATE saving_room_rotation_queue SET status='active_window' WHERE room_id = ? AND user_id = ?")
-                   ->execute([$roomId, $nextUserId]);
-
-                $db->prepare("INSERT IGNORE INTO saving_room_rotation_windows (room_id, user_id, rotation_index, status)
-                              VALUES (?, ?, ?, 'pending_votes')")
-                   ->execute([$roomId, $nextUserId, $nextIndex]);
-
-                activityLog($db, $roomId, 'typeB_turn_advanced', ['rotation_index' => $nextIndex]);
-
-                $db->commit();
-
-            } else {
-                $roomStmt = $db->prepare("SELECT id, start_at FROM saving_rooms WHERE id = ?");
-                $roomStmt->execute([$roomId]);
-                $room = $roomStmt->fetch();
-
-                $unlockedAt = date('Y-m-d H:i:s');
-                $startedAt = $room ? (string)$room['start_at'] : $unlockedAt;
-
-                $dur = 0;
-                $stTs = strtotime($startedAt);
-                $unTs = strtotime($unlockedAt);
-                if ($stTs && $unTs && $unTs >= $stTs) {
-                    $dur = (int)floor(($unTs - $stTs) / 86400);
-                }
-
-                $db->prepare("UPDATE saving_rooms SET room_state='closed', updated_at=NOW() WHERE id = ? AND room_state='active'")
-                   ->execute([$roomId]);
-
-                $db->prepare("UPDATE saving_room_participants SET status='completed', completed_at=NOW() WHERE room_id = ? AND status='active'")
-                   ->execute([$roomId]);
-
-                activityLog($db, $roomId, 'room_closed', ['reason' => 'rotation_complete']);
-
-                $parts = $db->prepare("SELECT user_id FROM saving_room_participants WHERE room_id = ? AND status = 'completed'");
-                $parts->execute([$roomId]);
-
-                foreach ($parts->fetchAll() as $p) {
-                    $uid = (int)$p['user_id'];
-                    $qualified = ($dur >= 21) ? 1 : 0;
-                    $db->prepare("INSERT IGNORE INTO user_completed_reveals (user_id, room_id, started_at, unlocked_at, duration_days, qualified_for_level)
-                                  VALUES (?, ?, ?, ?, ?, ?)")
-                       ->execute([$uid, $roomId, $startedAt, $unlockedAt, $dur, $qualified]);
-                    updateTrustAfterCompletion($db, $uid);
-                }
-
-                $db->commit();
-
-                $acctStmt = $db->prepare("SELECT account_id FROM saving_room_accounts WHERE room_id = ? LIMIT 1");
-                $acctStmt->execute([$roomId]);
-                $accountId = $acctStmt->fetchColumn();
-
-                if ($accountId) {
-                    $admins = $db->query("SELECT id FROM users WHERE is_admin = 1")->fetchAll();
-                    foreach ($admins as $a) {
-                        $aid = (int)$a['id'];
-                        notifyOnce(
-                            $db,
-                            $aid,
-                            'destination_account_rotation_required',
-                            'critical',
-                            'Destination account unlock code rotation required',
-                            'A Type B rotation has completed. Rotate the destination account unlock code now.',
-                            ['account_id' => (int)$accountId, 'room_id' => $roomId],
-                            'account',
-                            (string)$accountId
-                        );
-                    }
-                }
-            }
-        }
-    }
+$typeBRooms = $db->query("SELECT id FROM saving_rooms WHERE saving_type='B' AND room_state='active' LIMIT 400")->fetchAll();
+foreach ($typeBRooms as $r) {
+    initTypeBRotation($db, (string)$r['id']);
 }
 
-// ───────────────────────────────────────────────────────────
-//  3) Underfilled room alerts at T-72h
-//     If approved_count < min_participants by 72 hours before start:
-//       - alert maker
-//       - maker has 24 hours to act
-// ───────────────────────────────────────────────────────────
-$roomsForAlert = $db->query("SELECT id, maker_user_id, min_participants, start_at
-                             FROM saving_rooms
-                             WHERE room_state = 'lobby'
-                               AND start_at > NOW()
-                               AND start_at <= (NOW() + INTERVAL 72 HOUR)
-                               AND start_at > (NOW() + INTERVAL 48 HOUR)
-                               AND id NOT IN (SELECT room_id FROM saving_room_underfill_alerts)
-                             LIMIT 500")->fetchAll();
+$pendingWins = $db->query("SELECT w.id, w.room_id, w.user_id, w.rotation_index, r.maker_user_id
+                           FROM saving_room_rotation_windows w
+                           JOIN saving_rooms r ON r.id = w.room_id
+                           WHERE r.saving_type='B'
+                             AND r.room_state='active'
+                             AND w.status='pending_votes'
+                           ORDER BY w.created_at ASC
+                           LIMIT 400")->fetchAll();
 
-foreach ($roomsForAlert as $r) {
-    $roomId = (string)$r['id'];
-    $makerId = (int)$r['maker_user_id'];
-    $min = (int)$r['min_participants'];
-    $cnt = approvedCount($db, $roomId);
+foreach ($pendingWins as $w) {
+    $roomId = (string)$w['room_id'];
+    $rotationIndex = (int)$w['rotation_index'];
+    $turnUserId = (int)$w['user_id'];
+    $makerId = (int)$w['maker_user_id'];
 
-    if ($cnt >= $min) continue;
+    $eligibleStmt = $db->prepare("SELECT COUNT(*) FROM saving_room_participants WHERE room_id = ? AND status = 'active'");
+    $eligibleStmt->execute([$roomId]);
+    $eligible = (int)$eligibleStmt->fetchColumn();
 
-    $deadline = (new DateTimeImmutable('now'))->modify('+24 hours')->format('Y-m-d H:i:s');
+    $required = (int)ceil(max(0, $eligible - 1) * 0.5);
 
-    $db->prepare("INSERT INTO saving_room_underfill_alerts (room_id, alerted_at, decision_deadline_at, status)
-                  VALUES (?, NOW(), ?, 'open')")
-       ->execute([$roomId, $deadline]);
+    $approvalsStmt = $db->prepare("SELECT COUNT(*) FROM saving_room_unlock_votes
+                                   WHERE room_id = ?
+                                     AND scope = 'typeB_turn_unlock'
+                                     AND target_rotation_index = ?
+                                     AND vote = 'approve'
+                                     AND user_id <> ?");
+    $approvalsStmt->execute([$roomId, $rotationIndex, $makerId]);
+    $approvals = (int)$approvalsStmt->fetchColumn();
 
-    activityLog($db, $roomId, 'underfilled_alerted', ['approved_count' => $cnt, 'min_participants' => $min, 'decision_deadline_at' => $deadline]);
+    $makerVoteStmt = $db->prepare("SELECT vote FROM saving_room_unlock_votes
+                                   WHERE room_id = ?
+                                     AND scope = 'typeB_turn_unlock'
+                                     AND target_rotation_index = ?
+                                     AND user_id = ?");
+    $makerVoteStmt->execute([$roomId, $rotationIndex, $makerId]);
+    $makerVote = (string)$makerVoteStmt->fetchColumn();
+
+    if ($makerVote !== 'approve') continue;
+    if ($required > 0 && $approvals < $required) continue;
+
+    $expires = (new DateTimeImmutable('now'))->modify('+72 hours')->format('Y-m-d H:i:s');
+    $disputeEnds = (new DateTimeImmutable('now'))->modify('+24 hours')->format('Y-m-d H:i:s');
+
+    $db->prepare("UPDATE saving_room_rotation_windows
+                  SET status='revealed', revealed_at=NOW(), expires_at=?, dispute_window_ends_at=?
+                  WHERE id = ? AND status='pending_votes'")
+       ->execute([$expires, $disputeEnds, (int)$w['id']]);
+
+    activityLog($db, $roomId, 'typeB_turn_revealed', ['rotation_index' => $rotationIndex, 'expires_at' => $expires]);
 
     notifyOnce(
         $db,
-        $makerId,
-        'room_underfilled_alert',
-        'important',
-        'Room underfilled — action required',
-        'Your saving room has not reached its minimum participant count. Choose to extend the start date, lower the minimum if permitted, or cancel for refunds. If you take no action within 24 hours, the room will auto-cancel.',
-        ['room_id' => $roomId, 'decision_deadline_at' => $deadline],
+        $turnUserId,
+        'typeB_turn_opened',
+        'critical',
+        'Your Type B turn was approved',
+        'Your turn unlock window is now open for 72 hours. You can reveal the unlock code in the room page.',
+        ['room_id' => $roomId, 'rotation_index' => $rotationIndex, 'expires_at' => $expires],
         'room',
-        $roomId
+        $roomId . ':' . $rotationIndex
     );
-
-    logLine("Underfilled alert created: {$roomId} ({$cnt}/{$min})");
 }
 
-// ───────────────────────────────────────────────────────────
-//  4) Auto-cancel underfilled rooms with expired decision window
-// ───────────────────────────────────────────────────────────
-$expired = $db->query("SELECT a.room_id, r.maker_user_id
-                       FROM saving_room_underfill_alerts a
-                       JOIN saving_rooms r ON r.id = a.room_id
-                       WHERE a.status = 'open'
-                         AND a.decision_deadline_at <= NOW()
-                         AND r.room_state = 'lobby'
-                       LIMIT 500")->fetchAll();
+$expiredWins = $db->query("SELECT w.id, w.room_id, w.user_id, w.rotation_index
+                           FROM saving_room_rotation_windows w
+                           JOIN saving_rooms r ON r.id = w.room_id
+                           WHERE r.saving_type='B'
+                             AND r.room_state='active'
+                             AND w.status='revealed'
+                             AND w.expires_at <= NOW()
+                           ORDER BY w.expires_at ASC
+                           LIMIT 200")->fetchAll();
 
-foreach ($expired as $row) {
-    $roomId = (string)$row['room_id'];
-    $makerId = (int)$row['maker_user_id'];
+foreach ($expiredWins as $w) {
+    $roomId = (string)$w['room_id'];
+    $rotationIndex = (int)$w['rotation_index'];
 
     $db->beginTransaction();
 
-    $db->prepare("UPDATE saving_rooms SET room_state='cancelled', lobby_state='locked', updated_at=NOW() WHERE id = ? AND room_state='lobby'")
-       ->execute([$roomId]);
+    $db->prepare("UPDATE saving_room_rotation_windows SET status='expired' WHERE id = ? AND status='revealed'")
+       ->execute([(int)$w['id']]);
 
-    $db->prepare("UPDATE saving_room_underfill_alerts SET status='expired', resolved_at=NOW(), resolution_action='cancel', resolution_payload=JSON_OBJECT('auto', 1) WHERE room_id = ? AND status='open'")
-       ->execute([$roomId]);
+    $db->prepare("UPDATE saving_room_rotation_queue SET status='completed' WHERE room_id = ? AND user_id = ? AND status='active_window'")
+       ->execute([$roomId, (int)$w['user_id']]);
 
-    // Note: refunds are handled in the contribution/escrow layer (implemented in later worker milestones)
-    activityLog($db, $roomId, 'room_auto_cancelled_underfilled', ['reason' => 'no_action_after_alert']);
+    activityLog($db, $roomId, 'typeB_turn_expired', ['rotation_index' => $rotationIndex]);
+
+    $nextIndex = $rotationIndex + 1;
+    $guard = 0;
+    $nextUserId = null;
+
+    while ($guard < 80) {
+        $guard++;
+
+        $next = $db->prepare("SELECT user_id FROM saving_room_rotation_queue WHERE room_id = ? AND status='queued' ORDER BY position ASC LIMIT 1");
+        $next->execute([$roomId]);
+        $candidate = $next->fetchColumn();
+
+        if (!$candidate) {
+            $db->prepare("UPDATE saving_room_rotation_queue SET status='queued' WHERE room_id = ? AND status='completed'")
+               ->execute([$roomId]);
+            $next->execute([$roomId]);
+            $candidate = $next->fetchColumn();
+            if (!$candidate) break;
+        }
+
+        $candId = (int)$candidate;
+        $st = $db->prepare("SELECT status FROM saving_room_participants WHERE room_id = ? AND user_id = ?");
+        $st->execute([$roomId, $candId]);
+        $pStatus = (string)$st->fetchColumn();
+
+        if ($pStatus !== 'active') {
+            $db->prepare("UPDATE saving_room_rotation_queue SET status='skipped_removed' WHERE room_id = ? AND user_id = ?")
+               ->execute([$roomId, $candId]);
+            continue;
+        }
+
+        $nextUserId = $candId;
+        break;
+    }
+
+    if ($nextUserId !== null) {
+        $db->prepare("INSERT IGNORE INTO saving_room_rotation_windows (room_id, user_id, rotation_index, status)
+                      VALUES (?, ?, ?, 'pending_votes')")
+           ->execute([$roomId, (int)$nextUserId, $nextIndex]);
+
+        $db->prepare("UPDATE saving_room_rotation_queue SET status='active_window' WHERE room_id = ? AND user_id = ?")
+           ->execute([$roomId, (int)$nextUserId]);
+
+        activityLog($db, $roomId, 'typeB_turn_advanced', ['rotation_index' => $nextIndex]);
+    }
 
     $db->commit();
 
-    notifyOnce(
-        $db,
-        $makerId,
-        'room_underfilled_auto_cancelled',
-        'important',
-        'Room cancelled (underfilled)',
-        'No action was taken after the underfilled-room alert. The room has been cancelled and refunds will be processed according to policy.',
-        ['room_id' => $roomId],
-        'room',
-        $roomId
-    );
-
-    logLine("Auto-cancelled underfilled room: {$roomId}");
+    logLine("Type B turn expired/advanced: {$roomId} #{$rotationIndex}");
 }
 
 logLine('Done.');

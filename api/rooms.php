@@ -261,6 +261,7 @@ if ($action === 'room_detail') {
 
     $escrowSettlements = [];
     $canSeeEscrow = (((int)$room['maker_user_id'] === $userId) || isAdmin($userId));
+
     if ($canSeeEscrow) {
         $es = $db->prepare("SELECT s.removed_user_id, u.email, s.policy, s.total_contributed, s.platform_fee_amount, s.refund_amount, s.status, s.created_at
                             FROM saving_room_escrow_settlements s
@@ -372,16 +373,18 @@ if ($action === 'room_detail') {
             $eligibleStmt = $db->prepare("SELECT COUNT(*) FROM saving_room_participants WHERE room_id = ? AND status = 'active'");
             $eligibleStmt->execute([$roomId]);
             $eligible = (int)$eligibleStmt->fetchColumn();
-    $required = (int)ceil(max(0, $eligible - 1) * 0.5);
 
-    $approvalsStmt = $db->prepare("SELECT COUNT(*) FROM saving_room_unlock_votes
+            $rotationIndex = (int)$w['rotation_index'];
+            $required = (int)ceil(max(0, $eligible - 1) * 0.5);
+
+            $approvalsStmt = $db->prepare("SELECT COUNT(*) FROM saving_room_unlock_votes
                                    WHERE room_id = ?
                                      AND scope = 'typeB_turn_unlock'
                                      AND target_rotation_index = ?
                                      AND vote = 'approve'
                                      AND user_id <> ?");
-    $approvalsStmt->execute([$roomId, $rotationIndex, (int)$room['maker_user_id']]);
-    $approvals = (int)$approvalsStmt->fetchColumn();
+            $approvalsStmt->execute([$roomId, $rotationIndex, (int)$room['maker_user_id']]);
+            $approvals = (int)$approvalsStmt->fetchColumn();
 
             $myVoteStmt = $db->prepare("SELECT vote FROM saving_room_unlock_votes
                                         WHERE room_id = ? AND user_id = ?
