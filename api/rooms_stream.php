@@ -56,7 +56,29 @@ if ($vis === 'private' && !$myStatus && !isAdmin($userId)) {
     }
 }
 
-if ($vis === 'public') {
+if ($vis === 'unlisted' && !$myStatus && !isAdmin($userId)) {
+    $token = trim((string)($_GET['invite'] ?? ''));
+    if ($token === '' || strlen($token) > 200 || !preg_match('/^[a-f0-9]{16,128}$/i', $token)) {
+        http_response_code(403);
+        exit;
+    }
+
+    $hash = hash('sha256', $token);
+    $inv = $db->prepare("SELECT 1 FROM saving_room_invites
+                         WHERE room_id = ?
+                           AND invite_mode='unlisted_link'
+                           AND invite_token_hash = ?
+                           AND status='active'
+                           AND (expires_at IS NULL OR expires_at > NOW())
+                         LIMIT 1");
+    $inv->execute([$roomId, $hash]);
+    if (!$inv->fetchColumn()) {
+        http_response_code(403);
+        exit;
+    }
+}
+
+if (!$myStatus && !isAdmin($userId) && in_array($vis, ['public','unlisted'], true)) {
     // Mirror api/rooms.php activity restrictions.
     $lvlStmt = $db->prepare('SELECT trust_level FROM user_trust WHERE user_id = ?');
     $lvlStmt->execute([$userId]);

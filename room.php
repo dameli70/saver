@@ -1,8 +1,12 @@
-async function loadRoom(){
-  document.getElementById('room-msg').className='msg';
-  try{
-    const res = await get('/api/rooms.php?action=room_detail&room_id=' + encodeURIComponent(ROOM_ID));
-Location: login.php');
+<?php
+require_once __DIR__ . '/includes/install_guard.php';
+requireInstalledForPage();
+
+require_once __DIR__ . '/includes/helpers.php';
+startSecureSession();
+
+if (!isLoggedIn()) {
+    header('Location: login.php');
     exit;
 }
 if (!isEmailVerified()) {
@@ -15,6 +19,9 @@ if ($roomId === '' || strlen($roomId) !== 36) {
     header('Location: rooms.php');
     exit;
 }
+
+$inviteToken = trim((string)($_GET['invite'] ?? ''));
+if (strlen($inviteToken) > 200) $inviteToken = '';
 
 $userEmail = getCurrentUserEmail() ?? '';
 $isAdmin   = isAdmin();
@@ -306,6 +313,24 @@ body{background:var(--bg);color:var(--text);font-family:var(--mono);min-height:1
       <div id="escrow-msg" class="msg"></div>
     </div>
 
+    <div class="card" id="unlisted-card" style="display:none;grid-column:1/-1;">
+      <div class="card-title">Unlisted invite link (maker)</div>
+      <div class="p">Unlisted rooms are not shown on discovery. Share a link to allow others to view and request to join (until the start date).</div>
+
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
+        <button class="btn btn-blue btn-sm" onclick="generateUnlistedLink()">Generate new link</button>
+        <button class="btn btn-red btn-sm" onclick="revokeUnlistedLink()">Revoke link</button>
+      </div>
+
+      <div id="unlisted-link-wrap" style="display:none;margin-top:12px;">
+        <div class="k">Shareable link (shown once)</div>
+        <input id="unlisted-link" readonly style="margin-top:6px;width:100%;background:var(--s2);border:1px solid var(--b1);color:var(--text);font-family:var(--mono);font-size:14px;padding:12px;outline:none;">
+      </div>
+
+      <div class="small" id="unlisted-meta" style="margin-top:10px;"></div>
+      <div id="unlisted-msg" class="msg"></div>
+    </div>
+
     <div class="card" id="invites-card" style="display:none;grid-column:1/-1;">
       <div class="card-title">Invites (maker)</div>
       <div class="p">Private rooms require invites. Invite by email; invited users can accept from the room page.</div>
@@ -359,7 +384,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--mono);min-height:1
 <script>
 const CSRF = <?= json_encode($csrf) ?>;
 const ROOM_ID = <?= json_encode($roomId) ?>;
-
+const INVITE_TOKEN = <?= json_encode($inviteToken) ?>;
 function apiUrl(url){return url.startsWith('/') ? url.slice(1) : url;}
 async function get(url){const r=await fetch(apiUrl(url),{credentials:'same-origin'});return r.json();}
 async function postCsrf(url,body){
@@ -547,19 +572,38 @@ function renderRoom(){
   if(r.is_maker){
     document.getElementById('maker-card').style.display='block';
     document.getElementById('escrow-card').style.display='block';
+
+    const invitesCard = document.getElementById('invites-card');
+    if(invitesCard){
+      invitesCard.style.display = (r.visibility === 'private') ? 'block' : 'none';
+      if(r.visibility === 'private') loadInvites();
+    }
+
+    const unlistedCard = document.getElementById('unlisted-card');
+    if(unlistedCard){
+      unlistedCard.style.display = (r.visibility === 'unlisted') ? 'block' : 'none';
+      if(r.visibility === 'unlisted') loadUnlistedInviteInfo();
+    }
+
     loadJoinRequests();
     loadUnderfillDecision();
     renderEscrowSettlements(r.escrow_settlements||[]);
   } else {
     document.getElementById('maker-card').style.display='none';
     document.getElementById('escrow-card').style.display='none';
+    const invitesCard = document.getElementById('invites-card');
+    if(invitesCard) invitesCard.style.display='none';
+    const unlistedCard = document.getElementById('unlisted-card');
+    if(unlistedCard) unlistedCard.style.display='none';
   }
 }
+
+function inviteParam(){return INVITE_TOKEN ? ('&invite=' + encodeURIComponent(INVITE_TOKEN)) : '';}
 
 async function loadRoom(){
   document.getElementById('room-msg').className='msg';
   try{
-    const res = await get('/api/rooms.php?action=room_detail&room_id=' + encodeURIComponent(ROOM_ID));
+    const res = await get('/api/rooms.php?action=room_detail&room_id=' + encodeURIComponent(ROOM_ID) + inviteParam());
     if(!res.success) throw new Error(res.error||'Failed');
     roomCache = res.room;
     roomCache.escrow_settlements = res.escrow_settlements || [];
@@ -575,7 +619,7 @@ async function pollFeed(){
   msg.className='msg';
 
   try{
-    const r = await get('/api/rooms.php?action=activity&room_id=' + encodeURIComponent(ROOM_ID) + '&since_id=' + encodeURIComponent(lastEventId) + '&limit=100');
+    const r = await get('/api/rooms.php?action=activity&room_id=' + encodeURIComponent(ROOM_ID) + inviteParam() + '&since_id=' + encodeURIComponent(lastEventId) + '&limit=100');
     if(!r.success) throw new Error(r.error||'Failed');
 
     const events = r.events || [];
@@ -645,7 +689,11 @@ async function requestJoin(){
   btn.disabled=true;
 
   try{
-    const res = await postCsrf('/api/rooms.php', {action:'request_join', room_id: ROOM_ID});
+    const payload = {action:'request_join', room_id: ROOM_ID};
+    if(roomCache && roomCache.visibility === 'unlisted') payload.invite_token = INVITE_TOKEN;
+
+    const res = await postCsrf('/api/rooms.php', payload);
+
     if(!res.success) throw new Error(res.error||'Failed');
     setMsg('room-msg','Join request sent.', true);
     await loadRoom();
@@ -670,6 +718,78 @@ async function respondInvite(decision){
     await loadRoom();
   }catch(e){
     setMsg('invite-msg', e.message||'Failed', false);
+  }
+}
+
+let unlistedLoadedAt = 0;
+async function loadUnlistedInviteInfo(force=false){
+  const now = Date.now();
+  if(!force && (now - unlistedLoadedAt) < 1500) return;
+  unlistedLoadedAt = now;
+
+  const meta = document.getElementById('unlisted-meta');
+  if(meta) meta.textContent='';
+
+  try{
+    const res = await get('/api/rooms.php?action=unlisted_invite_info&room_id=' + encodeURIComponent(ROOM_ID));
+    if(!res.success) throw new Error(res.error||'Failed');
+
+    const inv = res.invite;
+    if(!inv){
+      if(meta) meta.textContent = 'No link generated.';
+      return;
+    }
+
+    const activeTxt = inv.is_active ? 'active' : 'inactive';
+    const exp = inv.expires_at ? fmt(inv.expires_at) : '—';
+    if(meta) meta.textContent = `Link status: ${activeTxt} · expires ${exp}`;
+
+  }catch(e){
+    setMsg('unlisted-msg', e.message||'Failed', false);
+  }
+}
+
+async function generateUnlistedLink(){
+  document.getElementById('unlisted-msg').className='msg';
+
+  const wrap = document.getElementById('unlisted-link-wrap');
+  const input = document.getElementById('unlisted-link');
+  if(wrap) wrap.style.display='none';
+  if(input) input.value='';
+
+  try{
+    const res = await postCsrf('/api/rooms.php', {action:'unlisted_invite_create', room_id: ROOM_ID});
+    if(!res.success) throw new Error(res.error||'Failed');
+
+    if(input) input.value = res.link || '';
+    if(wrap) wrap.style.display='block';
+    if(input) input.select();
+
+    setMsg('unlisted-msg', 'Link generated. Copy it now; it will not be shown again.', true);
+    await loadUnlistedInviteInfo(true);
+
+  }catch(e){
+    setMsg('unlisted-msg', e.message||'Failed', false);
+  }
+}
+
+async function revokeUnlistedLink(){
+  document.getElementById('unlisted-msg').className='msg';
+  const ok = confirm('Revoke the current unlisted link?');
+  if(!ok) return;
+
+  const wrap = document.getElementById('unlisted-link-wrap');
+  const input = document.getElementById('unlisted-link');
+  if(wrap) wrap.style.display='none';
+  if(input) input.value='';
+
+  try{
+    const res = await postCsrf('/api/rooms.php', {action:'unlisted_invite_revoke', room_id: ROOM_ID});
+    if(!res.success) throw new Error(res.error||'Failed');
+    setMsg('unlisted-msg','Link revoked.', true);
+    await loadUnlistedInviteInfo(true);
+  }catch(e){
+    setMsg('unlisted-msg', e.message||'Failed', false);
   }
 }
 
@@ -1083,7 +1203,7 @@ function startSseFeed(){
     feedPollTimer = null;
   }
 
-  const url = apiUrl('/api/rooms_stream.php?room_id=' + encodeURIComponent(ROOM_ID) + '&since_id=' + encodeURIComponent(lastEventId));
+  const url = apiUrl('/api/rooms_stream.php?room_id=' + encodeURIComponent(ROOM_ID) + inviteParam() + '&since_id=' + encodeURIComponent(lastEventId));
   feedEs = new EventSource(url);
 
   feedEs.addEventListener('activity', (ev) => {

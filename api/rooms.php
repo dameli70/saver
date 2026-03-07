@@ -127,6 +127,26 @@ function hashInviteToken(string $token): string {
     return hash('sha256', $token);
 }
 
+function findActiveUnlistedInvite(PDO $db, string $roomId, string $token): ?array {
+    $t = trim($token);
+    if ($t === '' || strlen($t) > 200) return null;
+    if (!preg_match('/^[a-f0-9]{16,128}$/i', $t)) return null;
+
+    $hash = hashInviteToken($t);
+
+    $stmt = $db->prepare("SELECT id, status, created_at, expires_at
+                          FROM saving_room_invites
+                          WHERE room_id = ?
+                            AND invite_mode = 'unlisted_link'
+                            AND invite_token_hash = ?
+                            AND status = 'active'
+                            AND (expires_at IS NULL OR expires_at > NOW())
+                          LIMIT 1");
+    $stmt->execute([$roomId, $hash]);
+    $row = $stmt->fetch();
+    return $row ?: null;
+}
+
 // ── DISCOVERY (public rooms only; filtered by trust level) ───
 if ($action === 'discover') {
     requireLogin();
@@ -247,16 +267,13 @@ if ($action === 'room_detail') {
 
     $db = getDB();
 
-    // Viewer must be eligible to view public rooms; private requires membership or an active invitation.
     $vis = (string)$room['visibility'];
-    if ($vis === 'public') {
-        requireEligibleForRoom($userId, (int)$room['required_trust_level']);
-    }
 
     $myStmt = $db->prepare('SELECT status FROM saving_room_participants WHERE room_id = ? AND user_id = ?');
     $myStmt->execute([$roomId, $userId]);
     $myStatus = $myStmt->fetchColumn();
 
+    // Private rooms: require membership or an active private-user invite.
     $myInvite = null;
     if ($vis === 'private' && !$myStatus && !isAdmin($userId)) {
         $inv = $db->prepare("SELECT i.id, i.status, i.expires_at, i.created_at
@@ -280,6 +297,22 @@ if ($action === 'room_detail') {
             'expires_at' => $row['expires_at'],
             'created_at' => $row['created_at'],
         ];
+    }
+
+    // Unlisted rooms: if you're not a participant, require a valid invite token.
+    $unlistedAccess = 0;
+    if ($vis === 'unlisted' && !$myStatus && !isAdmin($userId)) {
+        $token = (string)($_GET['invite'] ?? '');
+        $ok = findActiveUnlistedInvite($db, $roomId, $token);
+        if (!$ok) {
+            jsonResponse(['error' => 'Unlisted room requires a valid invite link'], 403);
+        }
+        $unlistedAccess = 1;
+    }
+
+    // Eligibility (trust level + restriction) applies only to non-participants viewing public/unlisted rooms.
+    if (!$myStatus && !isAdmin($userId) && in_array($vis, ['public','unlisted'], true)) {
+        requireEligibleForRoom($userId, (int)$room['required_trust_level']);
     }
 
     $approvedCount = countApprovedParticipants($roomId);
@@ -504,6 +537,7 @@ if ($action === 'room_detail') {
             'saving_type' => $room['saving_type'],
             'visibility' => $room['visibility'],
             'my_invite' => $myInvite,
+            'unlisted_access' => $unlistedAccess,
             'required_trust_level' => (int)$room['required_trust_level'],
             'participation_amount' => (string)$room['participation_amount'],
             'periodicity' => $room['periodicity'],
@@ -568,7 +602,14 @@ if ($action === 'activity') {
         }
     }
 
-    if ($vis === 'public') {
+    if ($vis === 'unlisted' && !$myStatus && !isAdmin($userId)) {
+        $token = (string)($_GET['invite'] ?? '');
+        if (!findActiveUnlistedInvite($db, $roomId, $token)) {
+            jsonResponse(['error' => 'Unlisted room requires a valid invite link'], 403);
+        }
+    }
+
+    if (!$myStatus && !isAdmin($userId) && in_array($vis, ['public','unlisted'], true)) {
         requireEligibleForRoom($userId, (int)$room['required_trust_level']);
     }
 
@@ -712,9 +753,19 @@ if ($action === 'request_join') {
     if ($roomId === '' || strlen($roomId) !== 36) jsonResponse(['error' => 'Invalid room_id'], 400);
 
     $room = roomExistsAndJoinable($roomId);
+    $vis = (string)$room['visibility'];
 
-    if ((string)$room['visibility'] === 'private') {
+    if ($vis === 'private') {
         jsonResponse(['error' => 'This room is private and requires an invite.'], 403);
+    }
+
+    $db = getDB();
+
+    if ($vis === 'unlisted') {
+        $token = (string)($body['invite_token'] ?? '');
+        if (!findActiveUnlistedInvite($db, $roomId, $token)) {
+            jsonResponse(['error' => 'Unlisted room requires a valid invite link'], 403);
+        }
     }
 
     if ($room['room_state'] !== 'lobby' || $room['lobby_state'] !== 'open') {
@@ -725,10 +776,7 @@ if ($action === 'request_join') {
 
     $approvedCount = countApprovedParticipants($roomId);
     if ($approvedCount >= (int)$room['max_participants']) {
-        jsonResponse(['error' => 'Room is full'], 403);
-    }
-
-    $db = getDB();
+        jsonResponse(['errorB();
 
     $existingPart = $db->prepare('SELECT status FROM saving_room_participants WHERE room_id = ? AND user_id = ?');
     $existingPart->execute([$roomId, $userId]);
@@ -946,6 +994,140 @@ if ($action === 'respond_invite') {
     $db->commit();
 
     auditLog('room_invite_accept');
+    jsonResponse(['success' => true]);
+}
+
+// ── MAKER: UNLISTED INVITE INFO ────────────────────────────
+if ($action === 'unlisted_invite_info') {
+    requireLogin();
+    requireVerifiedEmail();
+
+    $userId = (int)getCurrentUserId();
+    $roomId = (string)($_GET['room_id'] ?? '');
+    if ($roomId === '' || strlen($roomId) !== 36) jsonResponse(['error' => 'Invalid room_id'], 400);
+
+    requireRoomMaker($roomId, $userId);
+
+    $room = roomExistsAndJoinable($roomId);
+    if ((string)$room['visibility'] !== 'unlisted') {
+        jsonResponse(['error' => 'Room is not unlisted'], 400);
+    }
+
+    $db = getDB();
+
+    $stmt = $db->prepare("SELECT id, status, created_at, expires_at
+                          FROM saving_room_invites
+                          WHERE room_id = ?
+                            AND invite_mode = 'unlisted_link'
+                          ORDER BY created_at DESC
+                          LIMIT 1");
+    $stmt->execute([$roomId]);
+    $row = $stmt->fetch();
+
+    $active = false;
+    if ($row && (string)$row['status'] === 'active') {
+        $active = empty($row['expires_at']) || strtotime((string)$row['expires_at']) > time();
+    }
+
+    jsonResponse([
+        'success' => true,
+        'invite' => $row ? [
+            'id' => (int)$row['id'],
+            'status' => (string)$row['status'],
+            'created_at' => $row['created_at'],
+            'expires_at' => $row['expires_at'],
+            'is_active' => $active ? 1 : 0,
+        ] : null,
+    ]);
+}
+
+// ── MAKER: CREATE/ROTATE UNLISTED INVITE LINK ───────────────
+if ($action === 'unlisted_invite_create') {
+    requireLogin();
+    requireVerifiedEmail();
+    requireCsrf();
+
+    $userId = (int)getCurrentUserId();
+    $roomId = (string)($body['room_id'] ?? '');
+    if ($roomId === '' || strlen($roomId) !== 36) jsonResponse(['error' => 'Invalid room_id'], 400);
+
+    requireRoomMaker($roomId, $userId);
+
+    $room = roomExistsAndJoinable($roomId);
+    if ((string)$room['visibility'] !== 'unlisted') {
+        jsonResponse(['error' => 'Room is not unlisted'], 400);
+    }
+
+    if ($room['room_state'] !== 'lobby' || $room['lobby_state'] !== 'open') {
+        jsonResponse(['error' => 'Room is not accepting join requests right now'], 403);
+    }
+
+    $token = bin2hex(random_bytes(16));
+    $hash = hashInviteToken($token);
+
+    $expiresAt = (string)$room['start_at'];
+
+    $db = getDB();
+    $db->beginTransaction();
+
+    $db->prepare("UPDATE saving_room_invites
+                  SET status='revoked', responded_at=NOW()
+                  WHERE room_id = ?
+                    AND invite_mode = 'unlisted_link'
+                    AND status = 'active'")
+       ->execute([$roomId]);
+
+    $db->prepare("INSERT INTO saving_room_invites (room_id, invite_mode, invite_token_hash, status, expires_at)
+                  VALUES (?, 'unlisted_link', ?, 'active', ?)")
+       ->execute([$roomId, $hash, $expiresAt]);
+
+    $inviteId = (int)$db->lastInsertId();
+
+    activityLog($roomId, 'invite_created', ['mode' => 'unlisted_link']);
+
+    $db->commit();
+
+    auditLog('room_unlisted_invite_create');
+
+    $link = getAppBaseUrl() . '/room.php?id=' . rawurlencode($roomId) . '&invite=' . rawurlencode($token);
+
+    jsonResponse([
+        'success' => true,
+        'invite_id' => $inviteId,
+        'expires_at' => $expiresAt,
+        'link' => $link,
+    ]);
+}
+
+// ── MAKER: REVOKE UNLISTED INVITE LINK ──────────────────────
+if ($action === 'unlisted_invite_revoke') {
+    requireLogin();
+    requireVerifiedEmail();
+    requireCsrf();
+
+    $userId = (int)getCurrentUserId();
+    $roomId = (string)($body['room_id'] ?? '');
+    if ($roomId === '' || strlen($roomId) !== 36) jsonResponse(['error' => 'Invalid room_id'], 400);
+
+    requireRoomMaker($roomId, $userId);
+
+    $room = roomExistsAndJoinable($roomId);
+    if ((string)$room['visibility'] !== 'unlisted') {
+        jsonResponse(['error' => 'Room is not unlisted'], 400);
+    }
+
+    $db = getDB();
+
+    $db->prepare("UPDATE saving_room_invites
+                  SET status='revoked', responded_at=NOW()
+                  WHERE room_id = ?
+                    AND invite_mode = 'unlisted_link'
+                    AND status = 'active'")
+       ->execute([$roomId]);
+
+    activityLog($roomId, 'invite_revoked', ['mode' => 'unlisted_link']);
+
+    auditLog('room_unlisted_invite_revoke');
     jsonResponse(['success' => true]);
 }
 
