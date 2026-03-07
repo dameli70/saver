@@ -8,6 +8,7 @@ requireInstalledForApi();
 
 require_once __DIR__ . '/../includes/helpers.php';
 header('Content-Type: application/json');
+registerApiErrorHandling();
 startSecureSession();
 
 date_default_timezone_set('UTC');

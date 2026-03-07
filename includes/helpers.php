@@ -420,6 +420,44 @@ function jsonException(Throwable $e, string $publicMessage = 'Server error', int
     jsonResponse(['error' => $publicMessage], $status);
 }
 
+function registerApiErrorHandling(): void {
+    static $installed = false;
+    if ($installed) return;
+    $installed = true;
+
+    set_exception_handler(function (Throwable $e): void {
+        jsonException($e);
+    });
+
+    set_error_handler(function (int $severity, string $message, string $file = '', int $line = 0): bool {
+        if (!(error_reporting() & $severity)) {
+            return true;
+        }
+        throw new ErrorException($message, 0, $severity, $file, $line);
+    });
+
+    register_shutdown_function(function (): void {
+        $e = error_get_last();
+        if (!$e) return;
+
+        $fatal = [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR];
+        if (!in_array($e['type'] ?? 0, $fatal, true)) return;
+
+        if (headers_sent()) return;
+
+        http_response_code(500);
+        header('Content-Type: application/json; charset=utf-8');
+        header('Cache-Control: no-store, no-cache, must-revalidate');
+        header('Pragma: no-cache');
+
+        $msg = (defined('APP_ENV') && APP_ENV === 'development')
+            ? 'Fatal error: ' . ($e['message'] ?? 'Unknown error')
+            : 'Server error';
+
+        echo json_encode(['error' => $msg], JSON_UNESCAPED_UNICODE);
+    });
+}
+
 function jsonResponse(array $data, int $status = 200): never {
     http_response_code($status);
     header('Content-Type: application/json; charset=utf-8');
