@@ -10,6 +10,8 @@ require_once __DIR__ . '/../includes/helpers.php';
 header('Content-Type: application/json');
 startSecureSession();
 
+date_default_timezone_set('UTC');
+
 requireLogin();
 requireCsrf();
 requireVerifiedEmail();
@@ -48,13 +50,14 @@ if (($row['setup_status'] ?? '') !== 'active') {
     jsonResponse(['error' => 'Wallet lock setup is not complete'], 409);
 }
 
-$unlockDt = new DateTime($row['unlock_at']);
-if ($unlockDt > new DateTime()) {
+$unlockDt = new DateTime($row['unlock_at'], new DateTimeZone('UTC'));
+$now = new DateTime('now', new DateTimeZone('UTC'));
+if ($unlockDt > $now) {
     jsonResponse(['error' => 'Not yet unlocked'], 403);
 }
 
 if (empty($row['revealed_at'])) {
-    $db->prepare('UPDATE wallet_locks SET revealed_at = NOW() WHERE id = ?')->execute([$walletId]);
+    $db->prepare('UPDATE wallet_locks SET revealed_at = UTC_TIMESTAMP() WHERE id = ?')->execute([$walletId]);
 }
 
 auditLog('wallet_lock_reveal', $walletId);

@@ -10,6 +10,8 @@ require_once __DIR__ . '/../includes/helpers.php';
 header('Content-Type: application/json');
 startSecureSession();
 
+date_default_timezone_set('UTC');
+
 requireLogin();
 requireCsrf();
 requireVerifiedEmail();
@@ -38,9 +40,9 @@ if ($authTag === '') jsonResponse(['error' => 'auth_tag missing'], 400);
 if ($kdfSalt === '') jsonResponse(['error' => 'kdf_salt missing'], 400);
 
 try {
-    $unlockDt = new DateTime($unlockAt);
-    if ($unlockDt <= new DateTime()) jsonResponse(['error' => 'Unlock time must be future'], 400);
-} catch (Exception) {
+    $unlockDt = parseClientDateTimeUtc($unlockAt);
+    if ($unlockDt <= utcNow()) jsonResponse(['error' => 'Unlock time must be future'], 400);
+} catch (Throwable $e) {
     jsonResponse(['error' => 'Invalid unlock time'], 400);
 }
 
@@ -85,7 +87,7 @@ $db->prepare("\
     (int)$userId,
     $carrierId,
     $label !== '' ? $label : null,
-    $unlockDt->format('Y-m-d H:i:s'),
+    $unlockDt->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s'),
     $cipherBlob,
     $iv,
     $authTag,
@@ -98,5 +100,5 @@ auditLog('wallet_lock_create', $walletId);
 jsonResponse([
     'success' => true,
     'wallet_lock_id' => $walletId,
-    'unlock_at' => $unlockDt->format('Y-m-d H:i:s'),
+    'unlock_at' => $unlockDt->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s'),
 ]);

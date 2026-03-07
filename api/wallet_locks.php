@@ -10,6 +10,8 @@ require_once __DIR__ . '/../includes/helpers.php';
 header('Content-Type: application/json');
 startSecureSession();
 
+date_default_timezone_set('UTC');
+
 requireLogin();
 requireVerifiedEmail();
 
@@ -44,7 +46,7 @@ $stmt = $db->prepare("\
         CASE
             WHEN w.is_active = 1 AND w.setup_status = 'pending' THEN 'setup_pending'
             WHEN w.is_active = 1 AND w.setup_status = 'failed'  THEN 'setup_failed'
-            WHEN w.is_active = 1 AND w.setup_status = 'active' AND w.unlock_at <= NOW() THEN 'unlocked'
+            WHEN w.is_active = 1 AND w.setup_status = 'active' AND w.unlock_at <= UTC_TIMESTAMP() THEN 'unlocked'
             WHEN w.is_active = 1 AND w.setup_status = 'active'                          THEN 'locked'
             ELSE 'inactive'
         END AS display_status
@@ -56,12 +58,12 @@ $stmt = $db->prepare("\
 $stmt->execute([(int)$userId]);
 $rows = $stmt->fetchAll();
 
-$now = new DateTime();
+$now = new DateTime('now', new DateTimeZone('UTC'));
 foreach ($rows as &$row) {
     $row['label'] = normalizeDisplayText($row['label'] ?? null);
 
     if ($row['display_status'] === 'locked') {
-        $r    = new DateTime($row['unlock_at']);
+        $r    = new DateTime($row['unlock_at'], new DateTimeZone('UTC'));
         $diff = $now->diff($r);
         $row['time_remaining'] = [
             'days' => (int)$diff->days,
