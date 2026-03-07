@@ -1949,6 +1949,10 @@ if ($action === 'typeB_exit_request_create') {
     $st = (string)$mem->fetchColumn();
     if ($st !== 'active') jsonResponse(['error' => 'Not an active participant'], 403);
 
+    if ((int)$room['maker_user_id'] === $userId) {
+        jsonResponse(['error' => 'Room maker cannot request exit'], 403);
+    }
+
     $ex = $db->prepare("SELECT id FROM saving_room_exit_requests WHERE room_id = ? AND status = 'open' LIMIT 1");
     $ex->execute([$roomId]);
     if ($ex->fetchColumn()) jsonResponse(['error' => 'An exit request is already open'], 409);
@@ -1970,8 +1974,26 @@ if ($action === 'typeB_exit_request_create') {
             'Exit request submitted (Type B)',
             'A participant requested to exit this Type B room. Maker approval + participant votes are required.',
             ['room_id' => $roomId, 'exit_request_id' => $reqId],
-            'room',
-            $roomId
+            'exit_request',
+            (string)$reqId
+        );
+    }
+
+    $parts = $db->prepare("SELECT user_id FROM saving_room_participants WHERE room_id = ? AND status = 'active' AND user_id <> ?");
+    $parts->execute([$roomId, $userId]);
+    foreach ($parts->fetchAll() as $p) {
+        $uid = (int)$p['user_id'];
+        if ($uid === $makerId) continue;
+
+        notifyOnceApi(
+            $uid,
+            'typeB_exit_requested_participant',
+            'important',
+            'Exit request opened (Type B)',
+            'A participant requested to exit your Type B room. Your vote may be required.',
+            ['room_id' => $roomId, 'exit_request_id' => $reqId],
+            'exit_request',
+            (string)$reqId
         );
     }
 
@@ -2105,8 +2127,8 @@ if ($action === 'typeB_exit_request_vote') {
             'Exit request approved',
             'Your exit request was approved. Your room status was updated and a settlement record was created (refund minus 20% platform fee).',
             ['room_id' => $roomId, 'exit_request_id' => $reqId],
-            'room',
-            $roomId
+            'exit_request',
+            (string)$reqId
         );
 
         if ($makerId > 0) {
@@ -2117,8 +2139,27 @@ if ($action === 'typeB_exit_request_vote') {
                 'Exit request approved',
                 'An exit request was approved and the participant has exited.',
                 ['room_id' => $roomId, 'exit_request_id' => $reqId],
-                'room',
-                $roomId
+                'exit_request',
+                (string)$reqId
+            );
+        }
+
+        $parts = $db->prepare("SELECT user_id FROM saving_room_participants WHERE room_id = ? AND status = 'active'");
+        $parts->execute([$roomId]);
+        foreach ($parts->fetchAll() as $p) {
+            $uid = (int)$p['user_id'];
+            if ($uid === $makerId) continue;
+            if ($uid === $requesterId) continue;
+
+            notifyOnceApi(
+                $uid,
+                'typeB_exit_approved_participant',
+                'informational',
+                'Participant exited (Type B)',
+                'An exit request was approved and a participant exited this room.',
+                ['room_id' => $roomId, 'exit_request_id' => $reqId],
+                'exit_request',
+                (string)$reqId
             );
         }
     }
@@ -2164,6 +2205,23 @@ if ($action === 'typeB_exit_request_cancel') {
     activityLog($roomId, 'exit_cancelled', ['exit_request_id' => $reqId]);
 
     $db->commit();
+
+    $makerStmt = $db->prepare('SELECT maker_user_id FROM saving_rooms WHERE id = ?');
+    $makerStmt->execute([$roomId]);
+    $makerId = (int)$makerStmt->fetchColumn();
+
+    if ($makerId > 0) {
+        notifyOnceApi(
+            $makerId,
+            'typeB_exit_cancelled_maker',
+            'informational',
+            'Exit request cancelled (Type B)',
+            'The exit request was cancelled by the requester.',
+            ['room_id' => $roomId, 'exit_request_id' => $reqId],
+            'exit_request',
+            (string)$reqId
+        );
+    }
 
     auditLog('room_typeB_exit_cancel');
     jsonResponse(['success' => true]);
