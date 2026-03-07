@@ -113,7 +113,9 @@ a{color:inherit;}
     <div class="kicker">Zero-knowledge • Time-gated • AES-256-GCM</div>
     <div class="h1">Time-lock your <span>codes</span> — reveal them only when the date arrives.</div>
     <div class="sub">
-      LOCKSMITH encrypts codes in your browser and stores only ciphertext on the server. The server enforces the reveal date; your device clock can’t bypass it.
+      LOCKSMITH encrypts vault codes in your browser and stores ciphertext on the server. The server enforces reveal dates; your device clock can’t bypass it.
+      <br><br>
+      Note: some optional features (2FA and Saving Rooms workflows) require the server to handle certain secrets to function; see README for details.
     </div>
 
     <div class="cta">
@@ -135,8 +137,8 @@ a{color:inherit;}
         <p>Reveal is controlled by the server clock. Users can’t cheat by changing their local time.</p>
       </div>
       <div class="card">
-        <h3>Zero-knowledge</h3>
-        <p>Encryption and decryption happen in your browser. The server only ever stores and returns opaque ciphertext.</p>
+        <h3>Zero-knowledge (vault)</h3>
+        <p>Vault encryption/decryption happen in your browser. The server stores and returns ciphertext for vault codes.</p>
       </div>
       <div class="card">
         <h3>Audit + safety</h3>
