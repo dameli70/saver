@@ -11,6 +11,8 @@ require_once __DIR__ . '/../includes/helpers.php';
 header('Content-Type: application/json');
 startSecureSession();
 
+date_default_timezone_set('UTC');
+
 $body = json_decode(file_get_contents('php://input'), true);
 $action = $body['action'] ?? ($_GET['action'] ?? '');
 
@@ -31,7 +33,7 @@ function getUserTrustLevel(int $userId): int {
 
 function userRestrictedUntil(int $userId): ?string {
     $db = getDB();
-    $stmt = $db->prepare('SELECT restricted_until FROM user_restrictions WHERE user_id = ? AND restricted_until > NOW()');
+    $stmt = $db->prepare('SELECT restricted_until FROM user_restrictions WHERE user_id = ? AND restricted_until > UTC_TIMESTAMP()');
     $stmt->execute([(int)$userId]);
     $v = $stmt->fetchColumn();
     return $v ? (string)$v : null;
@@ -140,7 +142,7 @@ function findActiveUnlistedInvite(PDO $db, string $roomId, string $token): ?arra
                             AND invite_mode = 'unlisted_link'
                             AND invite_token_hash = ?
                             AND status = 'active'
-                            AND (expires_at IS NULL OR expires_at > NOW())
+                            AND (expires_at IS NULL OR expires_at > UTC_TIMESTAMP())
                           LIMIT 1");
     $stmt->execute([$roomId, $hash]);
     $row = $stmt->fetch();
@@ -380,7 +382,7 @@ if ($action === 'room_detail') {
                              WHERE i.room_id = ?
                                AND i.invite_mode = 'private_user'
                                AND i.status = 'active'
-                               AND (i.expires_at IS NULL OR i.expires_at > NOW())
+                               AND (i.expires_at IS NULL OR i.expires_at > UTC_TIMESTAMP())
                                AND (i.invited_user_id = ? OR (i.invited_email IS NOT NULL AND i.invited_email = ?))
                              ORDER BY i.created_at DESC
                              LIMIT 1");
@@ -397,7 +399,7 @@ if ($action === 'room_detail') {
                                         AND i.invite_mode = 'private_user'
                                         AND i.invite_token_hash = ?
                                         AND i.status = 'active'
-                                        AND (i.expires_at IS NULL OR i.expires_at > NOW())
+                                        AND (i.expires_at IS NULL OR i.expires_at > UTC_TIMESTAMP())
                                       ORDER BY i.created_at DESC
                                       LIMIT 1");
                 $inv2->execute([$roomId, $hash]);
@@ -451,8 +453,8 @@ if ($action === 'room_detail') {
 
     $participantsStmt = $db->prepare("SELECT p.user_id, p.status, u.email,
                                              (SELECT trust_level FROM user_trust WHERE user_id = p.user_id) AS trust_level,
-                                             (SELECT COUNT(*) FROM user_strikes WHERE user_id = p.user_id AND created_at >= (NOW() - INTERVAL 6 MONTH)) AS strikes_6m,
-                                             (SELECT restricted_until FROM user_restrictions WHERE user_id = p.user_id AND restricted_until > NOW()) AS restricted_until
+                                             (SELECT COUNT(*) FROM user_strikes WHERE user_id = p.user_id AND created_at >= (UTC_TIMESTAMP() - INTERVAL 6 MONTH)) AS strikes_6m,
+                                             (SELECT restricted_until FROM user_restrERE user_id = p.user_id AND restricted_until > NOW()) AS restricted_until
                                       FROM saving_room_participants p
                                       JOIN users u ON u.id = p.user_id
                                       WHERE p.room_id = ?
@@ -781,7 +783,7 @@ if ($action === 'activity') {
                              WHERE room_id = ?
                                AND invite_mode='private_user'
                                AND status='active'
-                               AND (expires_at IS NULL OR expires_at > NOW())
+                               AND (expires_at IS NULL OR expires_at > UTC_TIMESTAMP())
                                AND (invited_user_id = ? OR (invited_email IS NOT NULL AND invited_email = ?))
                              LIMIT 1");
         $inv->execute([$roomId, $userId, $myEmail]);
@@ -796,7 +798,7 @@ if ($action === 'activity') {
                                         AND invite_mode='private_user'
                                         AND invite_token_hash = ?
                                         AND status='active'
-                                        AND (expires_at IS NULL OR expires_at > NOW())
+                                        AND (expires_at IS NULL OR expires_at > UTC_TIMESTAMP())
                                       LIMIT 1");
                 $inv2->execute([$roomId, $hash]);
                 $ok = (bool)$inv2->fetchColumn();
@@ -884,23 +886,18 @@ if ($action === 'create_room') {
     if (!is_numeric($amount) || (float)$amount <= 0) jsonResponse(['error' => 'Invalid participation_amount'], 400);
     if (!in_array($periodicity, ['weekly','biweekly','monthly'], true)) jsonResponse(['error' => 'Invalid periodicity'], 400);
 
-    $startTs = strtotime($startAt);
-    $revealTs = strtotime($revealAt);
-    if (!$startTs || !$revealTs) jsonResponse(['error' => 'Invalid start/reveal dates'], 400);
+    try {
+        $startDt = parseClientDateTimeUtc($startAt);
+        $revealDt = parseClientDateTimeUtc($revealAt);
+    } catch (Throwable $e) {
+        jsonResponse(['error' => 'Invalid start/reveal dates'], 400);
+    }
+
+    $startTs = $startDt->getTimestamp();
+    $revealTs = $revealDt->getTimestamp();
+
     if ($startTs <= time() + 300) jsonResponse(['error' => 'Start date must be in the future'], 400);
     if ($revealTs <= $startTs) jsonResponse(['error' => 'Reveal date must be after start date'], 400);
-
-    if (!in_array($escrowPolicy, ['redistribute','refund_minus_fee'], true)) jsonResponse(['error' => 'Invalid escrow_policy'], 400);
-
-    requireEligibleForRoom($userId, $requiredLevel);
-
-    $db = getDB();
-
-    // Select a default active destination account.
-    $acctId = (int)$db->query("SELECT id FROM platform_destination_accounts WHERE is_active = 1 ORDER BY id ASC LIMIT 1")->fetchColumn();
-    if ($acctId < 1) {
-        jsonResponse(['error' => 'No active destination account is configured. Ask an admin to create one.'], 500);
-    }
 
     $roomId = generateUUID();
 
@@ -925,8 +922,8 @@ if ($action === 'create_room') {
            $maxP,
            $amount,
            $periodicity,
-           date('Y-m-d H:i:s', $startTs),
-           date('Y-m-d H:i:s', $revealTs),
+           $startDt->format('Y-m-d H:i:s'),
+           $revealDt->format('Y-m-d H:i:s'),
            $privacyMode,
            $escrowPolicy,
        ]);
@@ -993,7 +990,7 @@ if ($action === 'request_join') {
     }
 
     $lvl = getUserTrustLevel($userId);
-    $stmt = $db->prepare("SELECT COUNT(*) FROM user_strikes WHERE user_id = ? AND created_at >= (NOW() - INTERVAL 6 MONTH)");
+    $stmt = $db->prepare("SELECT COUNT(*) FROM user_strikes WHERE user_id = ? AND created_at >= (UTC_TIMESTAMP() - INTERVAL 6 MONTH)");
     $stmt->execute([$userId]);
     $strikes6m = (int)$stmt->fetchColumn();
 
@@ -1551,13 +1548,16 @@ if ($action === 'underfill_decide') {
         $newStartAt = (string)($body['new_start_at'] ?? '');
         $newRevealAt = (string)($body['new_reveal_at'] ?? '');
 
-        $startTs = strtotime($newStartAt);
-        $revealTs = strtotime($newRevealAt);
-
-        if (!$startTs || !$revealTs) {
+        try {
+            $startDt = parseClientDateTimeUtc($newStartAt);
+            $revealDt = parseClientDateTimeUtc($newRevealAt);
+        } catch (Throwable $e) {
             $db->rollBack();
             jsonResponse(['error' => 'Invalid dates'], 400);
         }
+
+        $startTs = $startDt->getTimestamp();
+        $revealTs = $revealDt->getTimestamp();
         if ($startTs <= time() + 300) {
             $db->rollBack();
             jsonResponse(['error' => 'Start date must be in the future'], 400);
@@ -1580,14 +1580,14 @@ if ($action === 'underfill_decide') {
         }
 
         $db->prepare("UPDATE saving_rooms SET start_at = ?, reveal_at = ?, extensions_used = extensions_used + 1, updated_at=NOW() WHERE id = ?")
-           ->execute([date('Y-m-d H:i:s', $startTs), date('Y-m-d H:i:s', $revealTs), $roomId]);
+           ->execute([$startDt->format('Y-m-d H:i:s'), $revealDt->format('Y-m-d H:i:s'), $roomId]);
 
         // Keep invite expiry aligned to the (possibly extended) start date.
         $db->prepare("UPDATE saving_room_invites SET expires_at = ? WHERE room_id = ? AND status = 'active'")
-           ->execute([date('Y-m-d H:i:s', $startTs), $roomId]);
+           ->execute([$startDt->format('Y-m-d H:i:s'), $roomId]);
 
         $db->prepare("UPDATE saving_room_underfill_alerts SET status='resolved', resolved_at=NOW(), resolution_action='extend_start', resolution_payload=JSON_OBJECT('new_start_at', ?, 'new_reveal_at', ?) WHERE room_id = ?")
-           ->execute([date('Y-m-d H:i:s', $startTs), date('Y-m-d H:i:s', $revealTs), $roomId]);
+           ->execute([$startDt->format('Y-m-d H:i:s'), $revealDt->format('Y-m-d H:i:s'), $roomId]);
 
         activityLog($roomId, 'underfilled_resolved', ['action' => 'extend_start']);
 

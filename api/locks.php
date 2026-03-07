@@ -14,6 +14,17 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') jsonResponse(['error' => 'Method not a
 $userId = getCurrentUserId();
 $db     = getDB();
 
+// Server-side safety net: convert stale pending drafts to auto-saved so they
+// don't remain "pending" forever if the browser tab is closed before the
+// client timer fires.
+$db->prepare("UPDATE locks
+              SET confirmation_status='auto_saved', auto_saved_at=NOW()
+              WHERE user_id = ?
+                AND is_active = 1
+                AND confirmation_status = 'pending'
+                AND created_at <= (NOW() - INTERVAL 2 MINUTE)")
+   ->execute([(int)$userId]);
+
 $stmt = $db->prepare("
     SELECT id, label, password_type, password_length, hint,
            reveal_date, confirmation_status,

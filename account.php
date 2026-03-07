@@ -508,8 +508,15 @@ btn.addEventListener('click', async ()=>{
           it.className = 'item';
 
           const now = Date.now();
-          const startAt = r.start_at ? new Date(r.start_at).getTime() : null;
-          const revealAt = r.reveal_at ? new Date(r.reveal_at).getTime() : null;
+          const parseUtcMs = (ts) => {
+            const s = String(ts||'').trim();
+            if(!s) return null;
+            const d = s.includes('T') ? new Date(s) : new Date(s.replace(' ', 'T') + 'Z');
+            const ms = d.getTime();
+            return isNaN(ms) ? null : ms;
+          };
+          const startAt = r.start_at ? parseUtcMs(r.start_at) : null;
+          const revealAt = r.reveal_at ? parseUtcMs(r.reveal_at) : null;
 
           let cd = '';
           if(r.room_state === 'lobby' && startAt){

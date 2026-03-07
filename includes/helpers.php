@@ -386,6 +386,40 @@ function normalizeDisplayText(?string $s): ?string {
     return $decoded;
 }
 
+function utcNow(): DateTimeImmutable {
+    return new DateTimeImmutable('now', new DateTimeZone('UTC'));
+}
+
+function parseUtcDateTime(string $v): DateTimeImmutable {
+    return new DateTimeImmutable($v, new DateTimeZone('UTC'));
+}
+
+// Parse user-supplied datetimes where the client is expected to send ISO-8601
+// (recommended: toISOString()).
+function parseClientDateTimeUtc(string $v): DateTimeImmutable {
+    $v = trim($v);
+    if ($v === '') {
+        throw new RuntimeException('Date/time required');
+    }
+
+    // If a datetime-local value was sent (no timezone), treat it as UTC.
+    if (preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/', $v)) {
+        $v .= ':00Z';
+    } else if (preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/', $v)) {
+        $v .= 'Z';
+    }
+
+    $dt = new DateTimeImmutable($v);
+    return $dt->setTimezone(new DateTimeZone('UTC'));
+}
+
+function jsonException(Throwable $e, string $publicMessage = 'Server error', int $status = 500): never {
+    if (defined('APP_ENV') && APP_ENV === 'development') {
+        jsonResponse(['error' => $publicMessage . ': ' . $e->getMessage()], $status);
+    }
+    jsonResponse(['error' => $publicMessage], $status);
+}
+
 function jsonResponse(array $data, int $status = 200): never {
     http_response_code($status);
     header('Content-Type: application/json; charset=utf-8');

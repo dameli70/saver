@@ -5,6 +5,8 @@ requireInstalledForApi();
 require_once __DIR__ . '/../includes/helpers.php';
 startSecureSession();
 
+date_default_timezone_set('UTC');
+
 if (!isLoggedIn()) {
     http_response_code(401);
     exit;
@@ -48,7 +50,7 @@ if ($vis === 'private' && !$myStatus && !isAdmin($userId)) {
                          WHERE room_id = ?
                            AND invite_mode='private_user'
                            AND status='active'
-                           AND (expires_at IS NULL OR expires_at > NOW())
+                           AND (expires_at IS NULL OR expires_at > UTC_TIMESTAMP())
                            AND (invited_user_id = ? OR (invited_email IS NOT NULL AND invited_email = ?))
                          LIMIT 1");
     $inv->execute([$roomId, $userId, $myEmail]);
@@ -63,7 +65,7 @@ if ($vis === 'private' && !$myStatus && !isAdmin($userId)) {
                                    AND invite_mode='private_user'
                                    AND invite_token_hash = ?
                                    AND status='active'
-                                   AND (expires_at IS NULL OR expires_at > NOW())
+                                   AND (expires_at IS NULL OR expires_at > UTC_TIMESTAMP())
                                  LIMIT 1");
             $inv2->execute([$roomId, $hash]);
             $ok = (bool)$inv2->fetchColumn();
@@ -89,7 +91,7 @@ if ($vis === 'unlisted' && !$myStatus && !isAdmin($userId)) {
                            AND invite_mode='unlisted_link'
                            AND invite_token_hash = ?
                            AND status='active'
-                           AND (expires_at IS NULL OR expires_at > NOW())
+                           AND (expires_at IS NULL OR expires_at > UTC_TIMESTAMP())
                          LIMIT 1");
     $inv->execute([$roomId, $hash]);
     if (!$inv->fetchColumn()) {

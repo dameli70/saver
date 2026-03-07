@@ -27,7 +27,7 @@ $userEmail = getCurrentUserEmail() ?? '';
 $isAdmin   = isAdmin();
 $csrf      = getCsrfToken();
 
-header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none';");
+header("Content-Security-Policy: default-src 'self'; base-uri 'none'; object-src 'none'; form-action 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none';");
 header("X-Frame-Options: DENY");
 header("X-Content-Type-Options: nosniff");
 header("Referrer-Policy: no-referrer");
@@ -424,8 +424,17 @@ function setMsg(id, text, ok){
   el.className = 'msg ' + (ok ? 'msg-ok' : 'msg-err') + ' show';
   el.textContent = text;
 }
+function parseUtc(ts){
+  const s=String(ts||'').trim();
+  if(!s) return null;
+  if(s.includes('T')) return new Date(s);
+  return new Date(s.replace(' ', 'T') + 'Z');
+}
 function fmt(ts){
-  try{return new Date(ts).toLocaleString();}catch{return String(ts||'');}
+  try{
+    const d=parseUtc(ts);
+    return d ? d.toLocaleString() : String(ts||'');
+  }catch{return String(ts||'');}
 }
 function destSummary(a){
   if(!a) return '—';
@@ -511,7 +520,8 @@ function renderRoom(){
         document.getElementById('unlock-window').textContent = 'Pending';
       }
 
-      const canReveal = (r.room_state === 'active' && approvals === eligible && eligible > 0 && (new Date(r.reveal_at).getTime() <= Date.now()) && (!ev || ev.status !== 'expired'));
+      const rev = parseUtc(r.reveal_at);
+      const canReveal = (r.room_state === 'active' && approvals === eligible && eligible > 0 && rev && (rev.getTime() <= Date.now()) && (!ev || ev.status !== 'expired'));
       document.getElementById('unlock-reveal-btn').style.display = canReveal ? 'inline-flex' : 'none';
     }
   }
@@ -556,7 +566,8 @@ function renderRoom(){
           const actions = document.getElementById('typeb-dispute-actions');
           const ackBtn = document.getElementById('typeb-dispute-ack-btn');
 
-          const endsAt = cur.dispute_window_ends_at ? new Date(cur.dispute_window_ends_at).getTime() : 0;
+          const endsDt = parseUtc(cur.dispute_window_ends_at);
+          const endsAt = endsDt ? endsDt.getTime() : 0;
           const within = endsAt && Date.now() < endsAt;
           const dispute = (r.rotation && r.rotation.dispute) ? r.rotation.dispute : null;
 
@@ -1209,13 +1220,20 @@ async function underfillExtend(){
   const msg = document.getElementById('underfill-msg');
   msg.className='msg';
 
-  const newStartAt = prompt('Enter new start date/time (YYYY-MM-DD HH:MM:SS)');
-  if(!newStartAt) return;
-  const newRevealAt = prompt('Enter new reveal date/time (YYYY-MM-DD HH:MM:SS)');
-  if(!newRevealAt) return;
+  const newStartAtLocal = prompt('Enter new start date/time (YYYY-MM-DDTHH:MM)');
+  if(!newStartAtLocal) return;
+  const newRevealAtLocal = prompt('Enter new reveal date/time (YYYY-MM-DDTHH:MM)');
+  if(!newRevealAtLocal) return;
+
+  const startIso = new Date(newStartAtLocal).toISOString();
+  const revealIso = new Date(newRevealAtLocal).toISOString();
+  if(!startIso || startIso === 'Invalid Date' || !revealIso || revealIso === 'Invalid Date'){
+    setMsg('underfill-msg','Invalid date format.', false);
+    return;
+  }
 
   try{
-    const res = await postCsrf('/api/rooms.php', {action:'underfill_decide', room_id: ROOM_ID, decision:'extend_start', new_start_at:newStartAt, new_reveal_at:newRevealAt});
+    const res = await postCsrf('/api/rooms.php', {action:'underfill_decide', room_id: ROOM_ID, decision:'extend_start', new_start_at:startIso, new_reveal_at:revealIso});
     if(!res.success) throw new Error(res.error||'Failed');
     setMsg('underfill-msg','Saved.', true);
     await loadRoom();

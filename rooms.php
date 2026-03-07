@@ -18,7 +18,7 @@ $userEmail = getCurrentUserEmail() ?? '';
 $isAdmin   = isAdmin();
 $csrf      = getCsrfToken();
 
-header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none';");
+header("Content-Security-Policy: default-src 'self'; base-uri 'none'; object-src 'none'; form-action 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none';");
 header("X-Frame-Options: DENY");
 header("X-Content-Type-Options: nosniff");
 header("Referrer-Policy: no-referrer");
@@ -242,6 +242,19 @@ function setMsg(id, text, ok){
   el.textContent = text;
 }
 
+function parseUtc(ts){
+  const s=String(ts||'').trim();
+  if(!s) return null;
+  if(s.includes('T')) return new Date(s);
+  return new Date(s.replace(' ', 'T') + 'Z');
+}
+function fmtDate(ts){
+  try{
+    const d=parseUtc(ts);
+    return d ? d.toLocaleString() : String(ts||'');
+  }catch{return String(ts||'');}
+}
+
 let currentCategory = '';
 
 function renderCategories(){
@@ -265,10 +278,6 @@ function renderCategories(){
     b.onclick=()=>{currentCategory=c.k;renderCategories();loadRooms();};
     row.appendChild(b);
   });
-}
-
-function fmtDate(ts){
-  try{return new Date(ts).toLocaleString();}catch{return String(ts||'');}
 }
 
 function buildRoomCard(r){
@@ -415,11 +424,12 @@ async function loadRooms(){
   }
 }
 
-function toServerDateTimeLocal(v){
-  // datetime-local gives local time; server expects parseable string.
-  // We send the raw value; API uses strtotime() which interprets server timezone.
-  // For now, keep consistent behavior with existing app pages.
-  return String(v||'');
+function toServerUtcIso(v){
+  v = String(v||'').trim();
+  if(!v) return '';
+  const d = new Date(v);
+  if(isNaN(d.getTime())) return '';
+  return d.toISOString();
 }
 
 async function createRoom(){
@@ -434,8 +444,8 @@ async function createRoom(){
   const max_participants = parseInt(document.getElementById('cr-max').value||'0',10);
   const participation_amount = String(document.getElementById('cr-amt').value||'').trim();
   const periodicity = document.getElementById('cr-per').value;
-  const start_at = toServerDateTimeLocal(document.getElementById('cr-start').value);
-  const reveal_at = toServerDateTimeLocal(document.getElementById('cr-reveal').value);
+  const start_at = toServerUtcIso(document.getElementById('cr-start').value);
+  const reveal_at = toServerUtcIso(document.getElementById('cr-reveal').value);
   const privacy_mode = document.getElementById('cr-privacy').checked ? 1 : 0;
   const escrow_policy = document.getElementById('cr-escrow').value;
 

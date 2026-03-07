@@ -21,6 +21,8 @@ if (PHP_SAPI !== 'cli') {
 
 require_once __DIR__ . '/../config/database.php';
 
+date_default_timezone_set('UTC');
+
 function db(): PDO {
     return getDB();
 }
@@ -66,7 +68,7 @@ $db = db();
 // ───────────────────────────────────────────────────────────
 //  1) Lock lobby when start date arrives (if still open)
 // ───────────────────────────────────────────────────────────
-$roomsToLock = $db->query("SELECT id FROM saving_rooms WHERE room_state = 'lobby' AND lobby_state = 'open' AND start_at <= NOW() LIMIT 500")->fetchAll();
+$roomsToLock = $db->query("SELECT id FROM saving_rooms WHERE room_state = 'lobby' AND lobby_state = 'open' AND start_at <= UTC_TIMESTAMP() LIMIT 500")->fetchAll();
 foreach ($roomsToLock as $r) {
     $roomId = (string)$r['id'];
     $db->prepare("UPDATE saving_rooms SET lobby_state='locked', updated_at=NOW() WHERE id = ? AND room_state='lobby'")
@@ -78,7 +80,7 @@ foreach ($roomsToLock as $r) {
 // ───────────────────────────────────────────────────────────
 //  2) Start rooms when start date arrives
 // ───────────────────────────────────────────────────────────
-$roomsToStart = $db->query("SELECT id FROM saving_rooms WHERE room_state = 'lobby' AND start_at <= NOW() LIMIT 500")->fetchAll();
+$roomsToStart = $db->query("SELECT id FROM saving_rooms WHERE room_state = 'lobby' AND start_at <= UTC_TIMESTAMP() LIMIT 500")->fetchAll();
 function periodSpec(string $periodicity): array {
     if ($periodicity === 'biweekly') return ['interval' => 'P14D', 'seconds' => 14 * 86400];
     if ($periodicity === 'monthly') return ['interval' => 'P1M', 'seconds' => 30 * 86400];
@@ -91,7 +93,7 @@ function ensureTrustRow(PDO $db, int $userId): void {
 }
 
 function strikes6m(PDO $db, int $userId): int {
-    $s = $db->prepare("SELECT COUNT(*) FROM user_strikes WHERE user_id = ? AND created_at >= (NOW() - INTERVAL 6 MONTH)");
+    $s = $db->prepare("SELECT COUNT(*) FROM user_strikes WHERE user_id = ? AND created_at >= (UTC_TIMESTAMP() - INTERVAL 6 MONTH)");
     $s->execute([(int)$userId]);
     return (int)$s->fetchColumn();
 }
@@ -391,7 +393,7 @@ $cycles = $db->query("SELECT c.id, c.room_id, c.cycle_index, c.due_at, c.grace_e
                       JOIN saving_rooms r ON r.id = c.room_id
                       WHERE r.room_state='active'
                         AND c.status IN ('open','grace')
-                        AND c.due_at <= (NOW() + INTERVAL 24 HOUR)
+                        AND c.due_at <= (UTC_TIMESTAMP() + INTERVAL 24 HOUR)
                       ORDER BY c.due_at ASC
                       LIMIT 800")->fetchAll();
 
@@ -670,8 +672,8 @@ $typeAWarn = $db->query("SELECT ue.room_id, ue.expires_at
                          WHERE r.saving_type = 'A'
                            AND r.room_state = 'active'
                            AND ue.status = 'revealed'
-                           AND ue.expires_at > NOW()
-                           AND ue.expires_at <= (NOW() + INTERVAL 12 HOUR)
+                           AND ue.expires_at > UTC_TIMESTAMP()
+                           AND ue.expires_at <= (UTC_TIMESTAMP() + INTERVAL 12 HOUR)
                          LIMIT 500")->fetchAll();
 
 foreach ($typeAWarn as $x) {
@@ -701,7 +703,7 @@ $typeAExpired = $db->query("SELECT ue.room_id, ue.revealed_at, ue.expires_at
                             WHERE r.saving_type = 'A'
                               AND r.room_state = 'active'
                               AND ue.status = 'revealed'
-                              AND ue.expires_at <= NOW()
+                              AND ue.expires_at <= UTC_TIMESTAMP()
                             LIMIT 200")->fetchAll();
 
 foreach ($typeAExpired as $x) {
@@ -992,9 +994,9 @@ foreach ($typeBWindows as $w) {
 $roomsForAlert = $db->query("SELECT id, maker_user_id, min_participants, start_at
                              FROM saving_rooms
                              WHERE room_state = 'lobby'
-                               AND start_at > NOW()
-                               AND start_at <= (NOW() + INTERVAL 72 HOUR)
-                               AND start_at > (NOW() + INTERVAL 48 HOUR)
+                               AND start_at > UTC_TIMESTAMP()
+                               AND start_at <= (UTC_TIMESTAMP() + INTERVAL 72 HOUR)
+                               AND start_at > (UTC_TIMESTAMP() + INTERVAL 48 HOUR)
                                AND id NOT IN (SELECT room_id FROM saving_room_underfill_alerts)
                              LIMIT 500")->fetchAll();
 
@@ -1036,7 +1038,7 @@ $expired = $db->query("SELECT a.room_id, r.maker_user_id
                        FROM saving_room_underfill_alerts a
                        JOIN saving_rooms r ON r.id = a.room_id
                        WHERE a.status = 'open'
-                         AND a.decision_deadline_at <= NOW()
+                         AND a.decision_deadline_at <= UTC_TIMESTAMP()
                          AND r.room_state = 'lobby'
                        LIMIT 500")->fetchAll();
 
