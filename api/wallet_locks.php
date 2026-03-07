@@ -58,6 +58,8 @@ $rows = $stmt->fetchAll();
 
 $now = new DateTime();
 foreach ($rows as &$row) {
+    $row['label'] = normalizeDisplayText($row['label'] ?? null);
+
     if ($row['display_status'] === 'locked') {
         $r    = new DateTime($row['unlock_at']);
         $diff = $now->diff($r);

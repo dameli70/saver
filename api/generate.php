@@ -115,10 +115,10 @@ try {
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
         ";
         $params = [
-            $lockId, $userId, sanitize($label),
+            $lockId, $userId, $label,
             $cipherBlob, $iv, $authTag, $kdfSalt, PBKDF2_ITERATIONS, $slot,
             $type, $length,
-            $hint ? sanitize($hint) : null,
+            $hint !== '' ? $hint : null,
             $revealDt->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s'),
         ];
     } else {
@@ -129,10 +129,10 @@ try {
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
         ";
         $params = [
-            $lockId, $userId, sanitize($label),
+            $lockId, $userId, $label,
             $cipherBlob, $iv, $authTag, $kdfSalt, PBKDF2_ITERATIONS,
             $type, $length,
-            $hint ? sanitize($hint) : null,
+            $hint !== '' ? $hint : null,
             $revealDt->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s'),
         ];
     }
@@ -144,11 +144,11 @@ try {
     jsonResponse([
         'success'     => true,
         'lock_id'     => $lockId,
-        'label'       => sanitize($label),
+        'label'       => $label,
         'reveal_date' => $revealDt->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s'),
     ]);
 
 } catch (Exception $e) {
     auditLog('generate_error');
-    jsonResponse(['error' => 'Storage failed: ' . $e->getMessage()], 500);
+    jsonResponse(['error' => 'Storage failed'], 500);
 }
