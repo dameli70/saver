@@ -120,6 +120,40 @@ body{background:var(--bg);color:var(--text);font-family:var(--mono);min-height:1
     <div class="card">
       <div class="card-title">Overview</div>
       <div id="room-overview" class="k">Loading…</div>
+
+      <div id="contrib-block" style="display:none; margin-top:12px;">
+        <div class="hr" style="border-top:1px solid var(--b1);margin:16px 0;"></div>
+        <div class="card-title" style="margin-bottom:10px;">Contribution</div>
+        <div class="p" style="margin-bottom:10px;">Confirm your contribution for the active cycle. (Deposit verification / escrow processing is enforced by the worker milestone.)</div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div>
+            <div class="k">Cycle</div>
+            <div class="v" id="contrib-cycle">—</div>
+          </div>
+          <div>
+            <div class="k">Due</div>
+            <div class="v" id="contrib-due">—</div>
+          </div>
+        </div>
+
+        <div style="margin-top:12px;display:grid;grid-template-columns:1fr;gap:10px;">
+          <div>
+            <div class="k">Amount</div>
+            <input id="contrib-amt" style="margin-top:6px;width:100%;background:var(--s2);border:1px solid var(--b1);color:var(--text);font-family:var(--mono);font-size:14px;padding:12px;outline:none;" placeholder="e.g. 50.00">
+          </div>
+          <div>
+            <div class="k">Reference (optional)</div>
+            <input id="contrib-ref" style="margin-top:6px;width:100%;background:var(--s2);border:1px solid var(--b1);color:var(--text);font-family:var(--mono);font-size:14px;padding:12px;outline:none;" placeholder="e.g. bank tx id">
+          </div>
+        </div>
+
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
+          <button class="btn btn-primary btn-sm" onclick="confirmContribution()">Confirm contribution</button>
+        </div>
+        <div id="contrib-msg" class="msg"></div>
+      </div>
+
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
         <button class="btn btn-primary btn-sm" id="join-btn" onclick="requestJoin()" style="display:none;">Request to join</button>
         <a class="btn btn-ghost btn-sm" href="rooms.php">Back to discovery</a>
@@ -218,6 +252,22 @@ function renderRoom(){
   const canJoin = (!r.my_status || r.my_status === 'declined') && r.room_state === 'lobby' && r.lobby_state === 'open' && r.visibility !== 'private';
   joinBtn.style.display = canJoin ? 'inline-flex' : 'none';
 
+  // Contribution UI (only for active participants during active rooms)
+  const contrib = document.getElementById('contrib-block');
+  if(contrib){
+    const canContrib = (r.room_state === 'active' && r.my_status === 'active' && r.active_cycle);
+    contrib.style.display = canContrib ? 'block' : 'none';
+
+    if(canContrib){
+      document.getElementById('contrib-cycle').textContent = `#${r.active_cycle.cycle_index} (${r.active_cycle.status})`;
+      document.getElementById('contrib-due').textContent = fmt(r.active_cycle.due_at);
+      const amt = document.getElementById('contrib-amt');
+      if(amt && !amt.value){
+        amt.value = String(r.participation_amount||'');
+      }
+    }
+  }
+
   if(r.is_maker){
     document.getElementById('maker-card').style.display='block';
     loadJoinRequests();
@@ -252,6 +302,29 @@ async function requestJoin(){
   }
 }
 
+async function confirmContribution(){
+  const msg = document.getElementById('contrib-msg');
+  msg.className='msg';
+
+  const r = roomCache;
+  if(!r || !r.active_cycle){
+    setMsg('contrib-msg','No active cycle.', false);
+    return;
+  }
+
+  const amount = (document.getElementById('contrib-amt')||{}).value || '';
+  const reference = (document.getElementById('contrib-ref')||{}).value || '';
+
+  try{
+    const res = await postCsrf('/api/rooms.php', {action:'confirm_contribution', room_id: ROOM_ID, cycle_id: r.active_cycle.id, amount, reference});
+    if(!res.success) throw new Error(res.error||'Failed');
+    setMsg('contrib-msg','Contribution confirmed.', true);
+    await pollFeed();
+  }catch(e){
+    setMsg('contrib-msg', e.message||'Failed', false);
+  }
+}
+
 function addFeedItem(ev){
   const feed = document.getElementById('feed');
   const el = document.createElement('div');
@@ -264,11 +337,20 @@ function addFeedItem(ev){
   else if(ev.event_type === 'join_approved') line = 'Join request approved';
   else if(ev.event_type === 'join_declined') line = 'Join request declined';
   else if(ev.event_type === 'lobby_locked') line = 'Lobby locked';
+  else if(ev.event_type === 'room_started') line = 'Room started';
+  else if(ev.event_type === 'grace_window_started') line = 'Contribution grace window started';
+  else if(ev.event_type === 'contribution_confirmed') line = '✓ Contributed';
+  else if(ev.event_type === 'strike_logged') line = 'Strike logged';
+  else if(ev.event_type === 'participant_removed') line = 'Participant removed';
+  else if(ev.event_type === 'underfilled_alerted') line = 'Underfilled alert sent';
+  else if(ev.event_type === 'underfilled_resolved') line = 'Underfilled resolved';
+  else if(ev.event_type === 'room_auto_cancelled_underfilled') line = 'Room auto-cancelled (underfilled)';
+  else if(ev.event_type === 'room_cancelled_by_maker') line = 'Room cancelled by maker';
   else line = ev.event_type;
 
   const extra = payload && Object.keys(payload).length ? ' — ' + esc(JSON.stringify(payload)) : '';
 
-  el.innerHTML = `<div>${esc(line)}${extra}</div><div class="feed-meta">${esc(fmt(ev.created_at))}</div>`;
+  el.innerHTML = `<div>${esc(line)}${extra}</div><div class=\"feed-meta\">${esc(fmt(ev.created_at))}</div>`;
   feed.appendChild(el);
   feed.scrollTop = feed.scrollHeight;
 }

@@ -257,6 +257,15 @@ if ($action === 'room_detail') {
     $underfillStmt->execute([$roomId]);
     $underfill = $underfillStmt->fetch();
 
+    $activeCycleStmt = $db->prepare("SELECT id, cycle_index, due_at, grace_ends_at, status
+                                    FROM saving_room_contribution_cycles
+                                    WHERE room_id = ?
+                                      AND status IN ('open','grace')
+                                    ORDER BY cycle_index ASC
+                                    LIMIT 1");
+    $activeCycleStmt->execute([$roomId]);
+    $activeCycle = $activeCycleStmt->fetch();
+
     jsonResponse([
         'success' => true,
         'room' => [
@@ -283,6 +292,13 @@ if ($action === 'room_detail') {
             'underfill' => $underfill ? [
                 'status' => $underfill['status'],
                 'decision_deadline_at' => $underfill['decision_deadline_at'],
+            ] : null,
+            'active_cycle' => $activeCycle ? [
+                'id' => (int)$activeCycle['id'],
+                'cycle_index' => (int)$activeCycle['cycle_index'],
+                'due_at' => $activeCycle['due_at'],
+                'grace_ends_at' => $activeCycle['grace_ends_at'],
+                'status' => $activeCycle['status'],
             ] : null,
         ],
         'participants' => $participants,
@@ -692,6 +708,78 @@ if ($action === 'review_join') {
     $db->commit();
 
     auditLog('room_review_join');
+    jsonResponse(['success' => true]);
+}
+
+// ── CONTRIBUTION: CONFIRM (server-side acknowledgement)
+if ($action === 'confirm_contribution') {
+    requireLogin();
+    requireVerifiedEmail();
+    requireCsrf();
+
+    $userId = (int)getCurrentUserId();
+    $roomId = (string)($body['room_id'] ?? '');
+    $cycleId = (int)($body['cycle_id'] ?? 0);
+    $amount = (string)($body['amount'] ?? '');
+    $reference = trim((string)($body['reference'] ?? ''));
+
+    if ($roomId === '' || strlen($roomId) !== 36) jsonResponse(['error' => 'Invalid room_id'], 400);
+    if ($cycleId <= 0) jsonResponse(['error' => 'cycle_id required'], 400);
+    if (!is_numeric($amount) || (float)$amount <= 0) jsonResponse(['error' => 'Invalid amount'], 400);
+
+    $db = getDB();
+
+    $roomStmt = $db->prepare('SELECT room_state, privacy_mode, participation_amount FROM saving_rooms WHERE id = ?');
+    $roomStmt->execute([$roomId]);
+    $room = $roomStmt->fetch();
+    if (!$room) jsonResponse(['error' => 'Room not found'], 404);
+    if ($room['room_state'] !== 'active') jsonResponse(['error' => 'Room is not active'], 403);
+
+    $requiredAmount = (float)$room['participation_amount'];
+    $givenAmount = (float)$amount;
+    if (abs($requiredAmount - $givenAmount) > 0.00001) {
+        jsonResponse([
+            'error' => 'Contribution amount must match the room participation amount.',
+            'required_amount' => (string)$room['participation_amount'],
+        ], 400);
+    }
+
+    $mem = $db->prepare("SELECT status FROM saving_room_participants WHERE room_id = ? AND user_id = ?");
+    $mem->execute([$roomId, $userId]);
+    $myStatus = (string)$mem->fetchColumn();
+    if (!in_array($myStatus, ['active'], true)) jsonResponse(['error' => 'Not an active participant'], 403);
+
+    $cy = $db->prepare('SELECT id, status, due_at, grace_ends_at FROM saving_room_contribution_cycles WHERE id = ? AND room_id = ?');
+    $cy->execute([$cycleId, $roomId]);
+    $cycle = $cy->fetch();
+    if (!$cycle) jsonResponse(['error' => 'Cycle not found'], 404);
+
+    if ($cycle['status'] === 'closed') jsonResponse(['error' => 'Cycle is closed'], 403);
+
+    $dueTs = strtotime((string)$cycle['due_at']);
+    $inGrace = ($dueTs && time() > $dueTs);
+
+    $status = $inGrace ? 'paid_in_grace' : 'paid';
+
+    $db->beginTransaction();
+
+    $db->prepare("INSERT INTO saving_room_contributions (room_id, user_id, cycle_id, amount, status, reference, confirmed_at)
+                  VALUES (?, ?, ?, ?, ?, ?, NOW())
+                  ON DUPLICATE KEY UPDATE amount=VALUES(amount), status=VALUES(status), reference=VALUES(reference), confirmed_at=NOW()")
+       ->execute([$roomId, $userId, $cycleId, $amount, $status, $reference]);
+
+    // Activity feed: show ✓ Contributed; show amount only if privacy mode is disabled.
+    $payload = ['cycle_id' => $cycleId];
+    if (empty($room['privacy_mode'])) {
+        $payload['amount'] = $amount;
+    }
+
+    $db->prepare('INSERT INTO saving_room_activity (room_id, event_type, public_payload_json) VALUES (?, ?, ?)')
+       ->execute([$roomId, 'contribution_confirmed', json_encode($payload, JSON_UNESCAPED_UNICODE)]);
+
+    $db->commit();
+
+    auditLog('room_contribution_confirm');
     jsonResponse(['success' => true]);
 }
 
