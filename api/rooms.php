@@ -303,7 +303,7 @@ if ($action === 'discover') {
         ];
     }
 
-    jsonResponse(['success' => true, 'rooms' => $out]);
+    jsonResponse(isoizeUtcDateFields(['success' => true, 'rooms' => $out]));
 }
 
 // ── MY ROOMS (for UI navigation) ────────────────────────────
@@ -350,7 +350,7 @@ if ($action === 'my_rooms') {
         ];
     }
 
-    jsonResponse(['success' => true, 'rooms' => $out]);
+    jsonResponse(isoizeUtcDateFields(['success' => true, 'rooms' => $out]));
 }
 
 // ── ROOM DETAIL ─────────────────────────────────────────────
@@ -713,7 +713,7 @@ if ($action === 'room_detail') {
         $settlements = $st->fetchAll();
     }
 
-    jsonResponse([
+    jsonResponse(isoizeUtcDateFields([
         'success' => true,
         'room' => [
             'id' => $room['id'],
@@ -756,7 +756,7 @@ if ($action === 'room_detail') {
         ],
         'participants' => $participants,
         'escrow_settlements' => $settlements,
-    ]);
+    ]));
 }
 
 // ── ACTIVITY (polling fallback) ─────────────────────────────
@@ -844,7 +844,7 @@ if ($action === 'activity') {
         ];
     }
 
-    jsonResponse(['success' => true, 'events' => $out]);
+    jsonResponse(isoizeUtcDateFields(['success' => true, 'events' => $out]));
 }
 
 // ── CREATE ROOM ────────────────────────────────────────────
@@ -1259,7 +1259,7 @@ if ($action === 'unlisted_invite_info') {
         $active = empty($row['expires_at']) || strtotime((string)$row['expires_at']) > time();
     }
 
-    jsonResponse([
+    jsonResponse(isoizeUtcDateFields([
         'success' => true,
         'invite' => $row ? [
             'id' => (int)$row['id'],
@@ -1268,7 +1268,7 @@ if ($action === 'unlisted_invite_info') {
             'expires_at' => $row['expires_at'],
             'is_active' => $active ? 1 : 0,
         ] : null,
-    ]);
+    ]));
 }
 
 // ── MAKER: CREATE/ROTATE UNLISTED INVITE LINK ───────────────
@@ -1321,12 +1321,12 @@ if ($action === 'unlisted_invite_create') {
 
     $link = getAppBaseUrl() . '/room.php?id=' . rawurlencode($roomId) . '&invite=' . rawurlencode($token);
 
-    jsonResponse([
+    jsonResponse(isoizeUtcDateFields([
         'success' => true,
         'invite_id' => $inviteId,
         'expires_at' => $expiresAt,
         'link' => $link,
-    ]);
+    ]));
 }
 
 // ── MAKER: REVOKE UNLISTED INVITE LINK ──────────────────────
@@ -1384,7 +1384,7 @@ if ($action === 'maker_invites') {
                           LIMIT 200");
     $stmt->execute([$roomId]);
 
-    jsonResponse(['success' => true, 'invites' => $stmt->fetchAll()]);
+    jsonResponse(isoizeUtcDateFields(['success' => true, 'invites' => $stmt->fetchAll()]));
 }
 
 // ── MAKER: REVOKE INVITE ───────────────────────────────────
@@ -1439,7 +1439,7 @@ if ($action === 'maker_join_requests') {
                           ORDER BY jr.created_at ASC");
     $stmt->execute([$roomId]);
 
-    jsonResponse(['success' => true, 'requests' => $stmt->fetchAll()]);
+    jsonResponse(isoizeUtcDateFields(['success' => true, 'requests' => $stmt->fetchAll()]));
 }
 
 // ── MAKER: REVIEW JOIN REQUEST ──────────────────────────────
@@ -1834,12 +1834,12 @@ if ($action === 'typeA_reveal') {
 
     auditLog('room_typeA_reveal');
 
-    jsonResponse([
+    jsonResponse(isoizeUtcDateFields([
         'success' => true,
         'code' => $unlockCode,
         'revealed_at' => $event['revealed_at'],
         'expires_at' => $event['expires_at'],
-    ]);
+    ]));
 }
 
 // ── TYPE B: TURN VOTE (50% maker gate + 50% participant gate)
@@ -2281,13 +2281,13 @@ if ($action === 'typeB_reveal') {
 
     auditLog('room_typeB_reveal');
 
-    jsonResponse([
+    jsonResponse(isoizeUtcDateFields([
         'success' => true,
         'code' => $unlockCode,
         'rotation_index' => (int)$w['rotation_index'],
         'revealed_at' => $w['revealed_at'],
         'expires_at' => $w['expires_at'],
-    ]);
+    ]));
 }
 
 // ── TYPE B: RAISE DISPUTE (24h window after reveal)

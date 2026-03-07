@@ -91,7 +91,7 @@ if ($action === 'passport') {
     $strikeCount = strikesLast6MonthsCount($userId);
     $restrictedUntil = getRestrictionUntil($userId);
 
-    jsonResponse([
+    jsonResponse(isoizeUtcDateFields([
         'success' => true,
         'trust' => [
             'level' => (int)($t['trust_level'] ?? 1),
@@ -104,7 +104,7 @@ if ($action === 'passport') {
         ],
         'completed_reveals' => $completedRows,
         'active_rooms' => $active,
-    ]);
+    ]));
 }
 
 if ($action === 'user_summary') {

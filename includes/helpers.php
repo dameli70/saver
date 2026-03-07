@@ -396,6 +396,42 @@ function parseUtcDateTime(string $v): DateTimeImmutable {
     return new DateTimeImmutable($v, new DateTimeZone('UTC'));
 }
 
+function formatUtcIso(string $v): string {
+    $dt = new DateTimeImmutable($v, new DateTimeZone('UTC'));
+    return $dt->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d\TH:i:s\Z');
+}
+
+function isoizeUtcDateFields(mixed $data): mixed {
+    if (!is_array($data)) {
+        return $data;
+    }
+
+    foreach ($data as $k => $v) {
+        if (is_array($v)) {
+            $data[$k] = isoizeUtcDateFields($v);
+            continue;
+        }
+
+        if (!is_string($k) || !str_ends_with($k, '_at') || !is_string($v)) {
+            continue;
+        }
+
+        $s = trim($v);
+        if ($s === '') {
+            continue;
+        }
+
+        // Only convert values that look like datetimes.
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+\-]\d{2}:\d{2})?$/', $s)) {
+            continue;
+        }
+
+        $data[$k] = formatUtcIso($s);
+    }
+
+    return $data;
+}
+
 // Parse user-supplied datetimes where the client is expected to send ISO-8601
 // including an explicit timezone (recommended: Date.toISOString()).
 function parseClientDateTimeUtc(string $v): DateTimeImmutable {

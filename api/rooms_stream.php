@@ -157,7 +157,7 @@ while ((microtime(true) - $started) < $maxSeconds) {
                 'id' => $id,
                 'event_type' => (string)$r['event_type'],
                 'payload' => $payload,
-                'created_at' => (string)$r['created_at'],
+                'created_at' => formatUtcIso((string)$r['created_at']),
             ];
 
             echo 'id: ' . $id . "\n";
