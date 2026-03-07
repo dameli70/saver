@@ -307,6 +307,38 @@ pre{white-space:pre-wrap;word-break:break-word;background:#000;border:1px solid 
   </div>
 
   <div class="card" style="margin-top:14px;">
+    <div class="card-title">Escrow settlements (Saving Rooms)</div>
+    <div class="p">Operational queue for refunds / redistribution after removals (strikes) or approved exits. Settlements are recorded automatically; mark them processed after handling them off-platform.</div>
+
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
+      <label class="chk" style="margin:0;"><input type="checkbox" id="esc-inc"> <span>Include processed</span></label>
+      <button class="btn btn-ghost btn-sm" onclick="loadEscrowSettlements()">↻ Refresh</button>
+    </div>
+
+    <div class="table-wrap">
+      <table class="table" id="esc-table" style="min-width:1200px;">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Room</th>
+            <th>Removed user</th>
+            <th>Policy</th>
+            <th>Total</th>
+            <th>Fee</th>
+            <th>Refund</th>
+            <th>Status</th>
+            <th>Created</th>
+            <th>Processed</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div id="esc-msg" class="msg"></div>
+  </div>
+
+  <div class="card" style="margin-top:14px;">
     <div class="card-title">Disputes (Saving Rooms)</div>
     <div class="p">Type B disputes that reached a review state (or are open). Validated disputes advance the rotation; dismissed disputes apply a false-dispute strike.</div>
 
@@ -372,6 +404,16 @@ pre{white-space:pre-wrap;word-break:break-word;background:#000;border:1px solid 
       <button class="btn btn-ghost btn-sm" onclick="closeDetail()">Close</button>
     </div>
     <pre id="detail-pre"></pre>
+  </div>
+</div>
+
+<div class="modal" id="escrow-modal" onclick="closeEscrowDetail(event)">
+  <div class="sheet">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;">
+      <h3 style="margin:0;">Escrow settlement detail</h3>
+      <button class="btn btn-ghost btn-sm" onclick="closeEscrowDetail()">Close</button>
+    </div>
+    <pre id="escrow-pre"></pre>
   </div>
 </div>
 
@@ -794,6 +836,89 @@ async function loadDestinationAccounts(){
   }catch(e){
     tbody.innerHTML = '<tr><td colspan="7" class="k">Failed to load destination accounts.</td></tr>';
     setMsg('da-msg', e.message||'Failed', false);
+  }
+}
+
+let escrowCache = [];
+
+async function loadEscrowSettlements(){
+  const tbody = document.querySelector('#esc-table tbody');
+  tbody.innerHTML = '<tr><td colspan="11" class="k">Loading…</td></tr>';
+  document.getElementById('esc-msg').className = 'msg';
+
+  try{
+    const includeProcessed = document.getElementById('esc-inc').checked ? 1 : 0;
+    const qs = new URLSearchParams({ action:'escrow_settlements', limit:'200', include_processed: includeProcessed ? '1' : '' });
+    const r = await get('/api/admin.php?' + qs.toString());
+    if(!r.success) throw new Error(r.error||'Failed');
+
+    const rows = r.settlements || [];
+    escrowCache = rows;
+
+    if(!rows.length){
+      tbody.innerHTML = '<tr><td colspan="11" class="k">No escrow settlements.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML='';
+    rows.forEach(s => {
+      const tr = document.createElement('tr');
+      const roomShort = (s.goal_text||'').slice(0,40) + ((s.goal_text||'').length>40?'…':'');
+      const canProcess = (s.status === 'recorded');
+
+      tr.innerHTML = `
+        <td>${s.id}</td>
+        <td title="${esc(s.goal_text||'')}">${esc(roomShort)}<div class="k" style="font-size:10px;">${esc(s.room_id)}</div></td>
+        <td>${esc(s.removed_user_email||('User ' + s.removed_user_id))}</td>
+        <td>${esc(s.policy)}</td>
+        <td>${esc(s.total_contributed||'0.00')}</td>
+        <td>${esc(s.platform_fee_amount||'0.00')}</td>
+        <td>${esc(s.policy==='refund_minus_fee' ? (s.refund_amount||'0.00') : '—')}</td>
+        <td>${esc(s.status||'')}</td>
+        <td>${fmt(s.created_at)}</td>
+        <td>${fmt(s.processed_at)}</td>
+        <td>
+          <button class="btn btn-blue btn-sm" onclick="openEscrowDetail(${s.id})">Detail</button>
+          <button class="btn btn-primary btn-sm" onclick="markEscrowProcessed(${s.id})" ${canProcess?'':'disabled'}>Mark processed</button>
+        </td>
+      `;
+
+      tbody.appendChild(tr);
+    });
+
+  }catch(e){
+    tbody.innerHTML = '<tr><td colspan="11" class="k">Failed to load settlements.</td></tr>';
+    setMsg('esc-msg', e.message||'Failed', false);
+  }
+}
+
+function openEscrowDetail(id){
+  const row = escrowCache.find(x => String(x.id) === String(id));
+  if(!row) return;
+  document.getElementById('escrow-pre').textContent = JSON.stringify(row, null, 2);
+  document.getElementById('escrow-modal').classList.add('show');
+}
+
+function closeEscrowDetail(e){
+  if(e && e.target !== document.getElementById('escrow-modal')) return;
+  document.getElementById('escrow-modal').classList.remove('show');
+}
+
+async function markEscrowProcessed(id){
+  document.getElementById('esc-msg').className = 'msg';
+
+  const ok = confirm('Mark this escrow settlement as processed?');
+  if(!ok) return;
+
+  try{
+    const r = await postCsrf('/api/admin.php', { action:'escrow_settlement_processed', settlement_id: id });
+    if(!r.success) throw new Error(r.error||'Failed');
+
+    setMsg('esc-msg', r.already_processed ? 'Already processed.' : 'Marked processed.', true);
+    await loadEscrowSettlements();
+
+  }catch(e){
+    setMsg('esc-msg', e.message||'Failed', false);
   }
 }
 

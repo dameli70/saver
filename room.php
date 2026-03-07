@@ -538,6 +538,8 @@ function renderRoom(){
           document.getElementById('typeb-window').textContent = `Revealed · expires ${fmt(cur.expires_at)}`;
         } else if(cur.status === 'blocked_dispute'){
           document.getElementById('typeb-window').textContent = 'Blocked (dispute)';
+        } else if(cur.status === 'blocked_debt'){
+          document.getElementById('typeb-window').textContent = 'Blocked (unpaid contribution)';
         } else {
           document.getElementById('typeb-window').textContent = 'Pending votes';
         }
@@ -713,10 +715,12 @@ function addFeedItem(ev){
   else if(ev.event_type === 'strike_logged') line = 'Strike logged';
   else if(ev.event_type === 'participant_removed') line = 'Participant removed';
   else if(ev.event_type === 'escrow_settlement_recorded') line = 'Escrow settlement recorded';
+  else if(ev.event_type === 'escrow_settlement_processed') line = 'Escrow settlement processed';
   else if(ev.event_type === 'invite_created') line = 'Invite created';
   else if(ev.event_type === 'invite_accepted') line = 'Invite accepted';
   else if(ev.event_type === 'invite_declined') line = 'Invite declined';
- 
+  else if(ev.event_type === 'invite_revoked') line = 'Invite revoked';
+  else if(ev.event_type === 'unlock_vote_updated') line = 'Unlock vote updated';
   else if(ev.event_type === 'unlock_revealed') line = 'Unlock revealed';
   else if(ev.event_type === 'unlock_expired') line = 'Unlock expired';
   else if(ev.event_type === 'rotation_queue_created') line = 'Rotation queue created';
@@ -732,15 +736,15 @@ function addFeedItem(ev){
   else if(ev.event_type === 'dispute_validated') line = 'Dispute validated';
   else if(ev.event_type === 'dispute_dismissed') line = 'Dispute dismissed';
   else if(ev.event_type === 'rotation_unblocked') line = 'Rotation unblocked';
-  else if(ev.event_type === 'room_closed') line = 'Room closed';
   else if(ev.event_type === 'underfilled_alerted') line = 'Underfilled alert sent';
-  else if(ev.event_type === 'underfilled_resolved') line = 'Underfilled resolved';
+  else if(ev.event_type === 'underfilled_resolved') line = 'Underfilled room resolved';
   else if(ev.event_type === 'room_auto_cancelled_underfilled') line = 'Room auto-cancelled (underfilled)';
   else if(ev.event_type === 'room_cancelled_by_maker') line = 'Room cancelled by maker';
   else if(ev.event_type === 'exit_requested') line = 'Exit request opened';
   else if(ev.event_type === 'exit_vote_updated') line = 'Exit request vote updated';
   else if(ev.event_type === 'exit_approved') line = 'Exit request approved';
   else if(ev.event_type === 'exit_cancelled') line = 'Exit request cancelled';
+  else if(ev.event_type === 'room_closed') line = 'Room closed';
   else line = ev.event_type;
 
   const extra = payload && Object.keys(payload).length ? ' — ' + esc(JSON.stringify(payload)) : '';

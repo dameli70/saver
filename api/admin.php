@@ -325,6 +325,70 @@ if ($method === 'GET') {
         jsonResponse(['success' => true, 'disputes' => $rows]);
     }
 
+    // ── ESCROW SETTLEMENTS (saving rooms) ───────────────────
+    if ($action === 'escrow_settlements') {
+        $db = getDB();
+
+        $limit  = intParam($_GET['limit'] ?? 200, 200);
+        $limit  = max(1, min(500, $limit));
+
+        $includeProcessed = !empty($_GET['include_processed']);
+
+        $where = $includeProcessed ? '' : "WHERE s.status = 'recorded'";
+
+        $sql = "SELECT
+                    s.id,
+                    s.room_id,
+                    r.goal_text,
+                    r.escrow_policy,
+                    r.maker_user_id,
+                    mu.email AS maker_email,
+                    s.removed_user_id,
+                    ru.email AS removed_user_email,
+                    s.policy,
+                    s.reason,
+                    s.fee_rate,
+                    s.total_contributed,
+                    s.platform_fee_amount,
+                    s.refund_amount,
+                    s.redistribution_json,
+                    s.status,
+                    s.created_at,
+                    s.processed_at
+                FROM saving_room_escrow_settlements s
+                JOIN saving_rooms r ON r.id = s.room_id
+                JOIN users ru ON ru.id = s.removed_user_id
+                LEFT JOIN users mu ON mu.id = r.maker_user_id
+                {$where}
+                ORDER BY s.created_at DESC
+                LIMIT {$limit}";
+
+        $rows = [];
+        foreach ($db->query($sql)->fetchAll() as $r) {
+            $rows[] = [
+                'id' => (int)$r['id'],
+                'room_id' => (string)$r['room_id'],
+                'goal_text' => $r['goal_text'],
+                'maker_user_id' => (int)$r['maker_user_id'],
+                'maker_email' => $r['maker_email'],
+                'removed_user_id' => (int)$r['removed_user_id'],
+                'removed_user_email' => $r['removed_user_email'],
+                'policy' => $r['policy'],
+                'reason' => $r['reason'] ?? null,
+                'fee_rate' => isset($r['fee_rate']) ? (string)$r['fee_rate'] : null,
+                'total_contributed' => (string)$r['total_contributed'],
+                'platform_fee_amount' => (string)$r['platform_fee_amount'],
+                'refund_amount' => (string)$r['refund_amount'],
+                'redistribution' => $r['redistribution_json'] ? json_decode((string)$r['redistribution_json'], true) : null,
+                'status' => $r['status'],
+                'created_at' => $r['created_at'],
+                'processed_at' => $r['processed_at'],
+            ];
+        }
+
+        jsonResponse(['success' => true, 'settlements' => $rows]);
+    }
+
     // ── AUDIT LOG ────────────────────────────────────────────
     if ($action === 'audit') {
         $db = getDB();
@@ -650,6 +714,79 @@ if ($method === 'POST') {
            ->execute([$roomId, $accountId]);
 
         auditLog('admin_room_assign_account', null, getCurrentUserId());
+        jsonResponse(['success' => true]);
+    }
+
+    // ── ESCROW SETTLEMENTS: MARK PROCESSED (saving rooms) ───
+    if ($action === 'escrow_settlement_processed') {
+        requireStrongAuth();
+
+        $settlementId = intParam($body['settlement_id'] ?? 0, 0);
+        if ($settlementId < 1) jsonResponse(['error' => 'settlement_id required'], 400);
+
+        $db = getDB();
+
+        $st = $db->prepare("SELECT s.id, s.room_id, s.removed_user_id, s.policy, s.status,
+                                   r.maker_user_id
+                            FROM saving_room_escrow_settlements s
+                            JOIN saving_rooms r ON r.id = s.room_id
+                            WHERE s.id = ?");
+        $st->execute([$settlementId]);
+        $row = $st->fetch();
+
+        if (!$row) jsonResponse(['error' => 'Settlement not found'], 404);
+
+        if ((string)$row['status'] === 'processed') {
+            jsonResponse(['success' => true, 'already_processed' => 1]);
+        }
+
+        $db->beginTransaction();
+
+        $upd = $db->prepare("UPDATE saving_room_escrow_settlements
+                             SET status='processed', processed_at=NOW()
+                             WHERE id = ? AND status='recorded'");
+        $upd->execute([$settlementId]);
+
+        if ($upd->rowCount() < 1) {
+            $db->rollBack();
+            jsonResponse(['error' => 'Settlement is not in a processable state'], 409);
+        }
+
+        roomActivity($db, (string)$row['room_id'], 'escrow_settlement_processed', ['settlement_id' => $settlementId]);
+
+        $db->commit();
+
+        $removedUserId = (int)$row['removed_user_id'];
+        $makerId = (int)$row['maker_user_id'];
+        $policy = (string)$row['policy'];
+
+        notifyOnceAdmin(
+            $db,
+            $removedUserId,
+            'escrow_settlement_processed_user',
+            'important',
+            'Escrow settlement processed',
+            'Your escrow settlement has been processed according to the room policy.',
+            ['room_id' => (string)$row['room_id'], 'settlement_id' => $settlementId, 'policy' => $policy],
+            'escrow_settlement',
+            (string)$settlementId
+        );
+
+        if ($makerId > 0) {
+            notifyOnceAdmin(
+                $db,
+                $makerId,
+                'escrow_settlement_processed_maker',
+                'informational',
+                'Escrow settlement processed',
+                'An escrow settlement in your room was marked as processed.',
+                ['room_id' => (string)$row['room_id'], 'settlement_id' => $settlementId, 'policy' => $policy],
+                'escrow_settlement',
+                (string)$settlementId
+            );
+        }
+
+        auditLog('admin_escrow_settlement_processed', null, getCurrentUserId());
         jsonResponse(['success' => true]);
     }
 
