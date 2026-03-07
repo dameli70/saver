@@ -1,12 +1,8 @@
-<?php
-require_once __DIR__ . '/includes/install_guard.php';
-requireInstalledForPage();
-
-require_once __DIR__ . '/includes/helpers.php';
-startSecureSession();
-
-if (!isLoggedIn()) {
-    header('Location: login.php');
+async function loadRoom(){
+  document.getElementById('room-msg').className='msg';
+  try{
+    const res = await get('/api/rooms.php?action=room_detail&room_id=' + encodeURIComponent(ROOM_ID));
+Location: login.php');
     exit;
 }
 if (!isEmailVerified()) {
@@ -254,6 +250,31 @@ body{background:var(--bg);color:var(--text);font-family:var(--mono);min-height:1
       <div id="underfill-msg" class="msg"></div>
     </div>
 
+    <div class="card" id="escrow-card" style="display:none;grid-column:1/-1;">
+      <div class="card-title">Escrow settlements (maker)</div>
+      <div class="p">Accounting entries recorded when participants are removed after two missed contributions.</div>
+
+      <div id="escrow-empty" class="k" style="display:none;">No escrow settlements.</div>
+
+      <div class="table-wrap" id="escrow-table-wrap" style="display:none;">
+        <table class="table" id="escrow-table">
+          <thead>
+            <tr>
+              <th>Removed user</th>
+              <th>Policy</th>
+              <th>Total contributed</th>
+              <th>Fee</th>
+              <th>Refund</th>
+              <th>Status</th>
+              <th>Created</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div id="escrow-msg" class="msg"></div>
+    </div>
+
     <div class="card" id="maker-card" style="display:none;grid-column:1/-1;">
       <div class="card-title">Join requests (maker)</div>
       <div class="p">Review pending requests. You can see the applicant’s trust level and strikes summary.</div>
@@ -271,27 +292,6 @@ body{background:var(--bg);color:var(--text);font-family:var(--mono);min-height:1
           <tbody></tbody>
         </table>
       </div>
-
-      <div class="hr" style="border-top:1px solid var(--b1);margin:16px 0;"></div>
-      <div class="card-title" style="margin-bottom:10px;">Escrow settlements</div>
-      <div class="p" style="margin-top:-6px;">Records created when participants are removed for missed contributions.</div>
-      <div id="escrow-empty" class="k" style="display:none;">No escrow settlements.</div>
-      <div class="table-wrap" id="escrow-table-wrap" style="display:none;">
-        <table class="table" id="escrow-table">
-          <thead>
-            <tr>
-              <th>User</th>
-              <th>Policy</th>
-              <th>Total</th>
-              <th>Refund</th>
-              <th>Status</th>
-              <th>Created</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </div>
-
       <div id="maker-msg" class="msg"></div>
     </div>
 
@@ -444,11 +444,13 @@ function renderRoom(){
 
   if(r.is_maker){
     document.getElementById('maker-card').style.display='block';
+    document.getElementById('escrow-card').style.display='block';
     loadJoinRequests();
     loadUnderfillDecision();
     renderEscrowSettlements(r.escrow_settlements||[]);
   } else {
     document.getElementById('maker-card').style.display='none';
+    document.getElementById('escrow-card').style.display='none';
   }
 }
 
@@ -458,11 +460,13 @@ async function loadRoom(){
     const res = await get('/api/rooms.php?action=room_detail&room_id=' + encodeURIComponent(ROOM_ID));
     if(!res.success) throw new Error(res.error||'Failed');
     roomCache = res.room;
+    roomCache.escrow_settlements = res.escrow_settlements || [];
     renderRoom();
   }catch(e){
     setMsg('room-msg', e.message||'Failed', false);
   }
 }
+
 
 async function pollFeed(){
   const msg = document.getElementById('feed-msg');
@@ -661,11 +665,15 @@ function renderEscrowSettlements(rows){
 
   rows.forEach(r => {
     const tr=document.createElement('tr');
+
+    const fee = (r.platform_fee_amount || '0.00');
     const refund = (r.policy === 'refund_minus_fee') ? (r.refund_amount || '0.00') : '—';
+
     tr.innerHTML = `
       <td>${esc(r.email||('User ' + r.removed_user_id))}</td>
       <td>${esc(r.policy)}</td>
       <td>${esc(r.total_contributed||'0.00')}</td>
+      <td>${esc(fee)}</td>
       <td>${esc(refund)}</td>
       <td>${esc(r.status||'')}</td>
       <td>${esc(fmt(r.created_at))}</td>

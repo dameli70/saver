@@ -115,7 +115,7 @@ function countApprovedParticipants(string $roomId): int {
 
 function roomExistsAndJoinable(string $roomId): array {
     $db = getDB();
-    $stmt = $db->prepare("SELECT id, maker_user_id, room_state, lobby_state, visibility, required_trust_level, max_participants, min_participants, start_at, reveal_at, periodicity, participation_amount, saving_type, goal_text, purpose_category, privacy_mode
+    $stmt = $db->prepare("SELECT id, maker_user_id, room_state, lobby_state, visibility, required_trust_level, max_participants, min_participants, start_at, reveal_at, periodicity, participation_amount, saving_type, goal_text, purpose_category, privacy_mode, escrow_policy, extensions_used
                           FROM saving_rooms WHERE id = ?");
     $stmt->execute([$roomId]);
     $room = $stmt->fetch();
@@ -421,6 +421,20 @@ if ($action === 'room_detail') {
         }
     }
 
+    $isMaker = ((int)$room['maker_user_id'] === $userId) || isAdmin($userId);
+
+    $settlements = [];
+    if ($isMaker) {
+        $st = $db->prepare("SELECT s.removed_user_id, u.email, s.policy, s.total_contributed, s.platform_fee_amount, s.refund_amount, s.redistribution_json, s.status, s.created_at
+                            FROM saving_room_escrow_settlements s
+                            JOIN users u ON u.id = s.removed_user_id
+                            WHERE s.room_id = ?
+                            ORDER BY s.created_at DESC
+                            LIMIT 200");
+        $st->execute([$roomId]);
+        $settlements = $st->fetchAll();
+    }
+
     jsonResponse([
         'success' => true,
         'room' => [
@@ -455,12 +469,9 @@ if ($action === 'room_detail') {
                 'grace_ends_at' => $activeCycle['grace_ends_at'],
                 'status' => $activeCycle['status'],
             ] : null,
-            'unlock' => $unlock,
-            'rotation' => $rotation,
-            'destination_account' => $destinationAccount,
-            'escrow_settlements' => $escrowSettlements,
         ],
         'participants' => $participants,
+        'escrow_settlements' => $settlements,
     ]);
 }
 

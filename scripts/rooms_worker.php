@@ -268,37 +268,39 @@ foreach ($roomsToLock as $r) {
 $roomsToStart = $db->query("SELECT id, participation_amount, saving_type FROM saving_rooms WHERE room_state='lobby' AND start_at <= NOW() LIMIT 500")->fetchAll();
 foreach ($roomsToStart as $r) {
     $roomId = (string)$r['id'];
-    $amount = (string)$r['participation_amount'];
-    $savingType = (string)$r['saving_type'];
+
+    $roomStmt = $db->prepare("SELECT id, start_at, periodicity, participation_amount, maker_user_id FROM saving_rooms WHERE id = ?");
+    $roomStmt->execute([$roomId]);
+    $room = $roomStmt->fetch();
 
     $db->prepare("UPDATE saving_rooms SET room_state='active', lobby_state='locked', updated_at=NOW() WHERE id = ? AND room_state='lobby'")
        ->execute([$roomId]);
 
+    // Promote approved participants to active
     $db->prepare("UPDATE saving_room_participants SET status='active' WHERE room_id = ? AND status='approved'")
        ->execute([$roomId]);
 
+    // Create first contribution cycle due at the scheduled start date (cycle_index=1)
+    // Grace window ends 48 hours after due.
     $db->prepare("INSERT IGNORE INTO saving_room_contribution_cycles (room_id, cycle_index, due_at, grace_ends_at, status)
-                  VALUES (?, 1, NOW(), (NOW() + INTERVAL 48 HOUR), 'open')")
-       ->execute([$roomId]);
+                  VALUES (?, 1, ?, DATE_ADD(?, INTERVAL 48 HOUR), 'open')")
+       ->execute([$roomId, $room['start_at'], $room['start_at']]);
 
+    // Ensure each active participant has a contribution row for cycle 1
     $cycleIdStmt = $db->prepare("SELECT id FROM saving_room_contribution_cycles WHERE room_id = ? AND cycle_index = 1");
     $cycleIdStmt->execute([$roomId]);
     $cycleId = (int)$cycleIdStmt->fetchColumn();
 
     if ($cycleId > 0) {
-        $parts = $db->prepare("SELECT user_id FROM saving_room_participants WHERE room_id = ? AND status='active'");
+        $parts = $db->prepare("SELECT user_id FROM saving_room_participants WHERE room_id = ? AND status = 'active'");
         $parts->execute([$roomId]);
+        $amount = (string)$room['participation_amount'];
         foreach ($parts->fetchAll() as $p) {
             ensureContributionRow($db, $roomId, (int)$p['user_id'], $cycleId, $amount);
         }
     }
 
     activityLog($db, $roomId, 'room_started', []);
-
-    if ($savingType === 'B') {
-        initTypeBRotation($db, $roomId);
-    }
-
     logLine("Room started: {$roomId}");
 }
 
@@ -360,6 +362,11 @@ foreach ($cycles as $c) {
         ensureContributionRow($db, $roomId, $uid, $cycleId, (string)$c['participation_amount']);
 
         if ($dueIn > 0 && $dueIn <= 24 * 3600) {
+            $st = $db->prepare("SELECT status FROM saving_room_contributions WHERE cycle_id = ? AND user_id = ?");
+            $st->execute([$cycleId, $uid]);
+            $cur = (string)$st->fetchColumn();
+            if (in_array($cur, ['paid','paid_in_grace'], true)) continue;
+
             notifyOnce(
                 $db,
                 $uid,
