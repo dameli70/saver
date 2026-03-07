@@ -397,18 +397,21 @@ function parseUtcDateTime(string $v): DateTimeImmutable {
 }
 
 // Parse user-supplied datetimes where the client is expected to send ISO-8601
-// (recommended: toISOString()).
+// including an explicit timezone (recommended: Date.toISOString()).
 function parseClientDateTimeUtc(string $v): DateTimeImmutable {
     $v = trim($v);
     if ($v === '') {
         throw new RuntimeException('Date/time required');
     }
 
-    // If a datetime-local value was sent (no timezone), treat it as UTC.
-    if (preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/', $v)) {
-        $v .= ':00Z';
-    } else if (preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/', $v)) {
-        $v .= 'Z';
+    // Reject timezone-less inputs (e.g. <input type="datetime-local"> values).
+    // The server cannot reliably infer the user's timezone.
+    if (preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/', $v) || preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/', $v)) {
+        throw new RuntimeException('Timezone required (send ISO-8601 with Z or offset)');
+    }
+
+    if (!preg_match('/(Z|[+\-]\d{2}:\d{2})$/', $v)) {
+        throw new RuntimeException('Timezone required (send ISO-8601 with Z or offset)');
     }
 
     $dt = new DateTimeImmutable($v);

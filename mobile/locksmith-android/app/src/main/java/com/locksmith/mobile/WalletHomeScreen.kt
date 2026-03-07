@@ -23,6 +23,7 @@ import java.security.SecureRandom
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 private const val VAULT_CHECK_PLAIN = "LOCKSMITH_VAULT_CHECK_v1"
@@ -417,10 +418,23 @@ fun WalletHomeScreen(
 
                                 callWithTotpRetry(
                                     call = { cb ->
+                                        val unlockAtIso = try {
+                                            val v = unlockAt.trim()
+                                            if (v.endsWith("Z") || Regex(".*[+\\-]\\d{2}:\\d{2}$").matches(v)) {
+                                                v
+                                            } else {
+                                                val fmtLocal = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+                                                val ldt = LocalDateTime.parse(v, fmtLocal)
+                                                ldt.atZone(ZoneId.systemDefault()).toInstant().toString()
+                                            }
+                                        } catch (_: Throwable) {
+                                            ""
+                                        }
+
                                         api.walletCreate(
                                             carrierId = carrier.id,
                                             label = label,
-                                            unlockAt = unlockAt,
+                                            unlockAt = unlockAtIso,
                                             cipher = enc,
                                             kdfSalt = salt,
                                             kdfIterations = iters,
