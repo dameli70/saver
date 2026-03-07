@@ -103,6 +103,16 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9998;o
 .app-body{max-width:680px;margin:0 auto;padding:22px 16px;}
 @media(min-width:600px){.app-body{padding:30px 24px;}}
 
+/* ── VIEW SWITCHER ── */
+.viewbar{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 16px 0;}
+.viewbtn{background:transparent;border:1px solid var(--b2);color:var(--muted);
+  font-family:var(--mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;
+  padding:10px 12px;cursor:pointer;transition:all .15s;min-height:40px;}
+.viewbtn:hover{border-color:var(--text);color:var(--text);}
+.viewbtn.sel{border-color:var(--accent);color:var(--accent);background:rgba(232,255,71,.06);}
+.view{display:none;}
+.view.show{display:block;}
+
 /* ── SECURITY BANNER ── */
 .sec-banner{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
   background:rgba(255,170,0,.06);border:1px solid rgba(255,170,0,.22);
@@ -159,7 +169,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
 .lc-meta span{color:var(--text);}
 .lc-hint{font-size:11px;color:var(--muted);font-style:italic;margin-bottom:10px;
   padding:6px 10px;border-left:2px solid var(--b2);}
-.lc-countdown{font-size:12px;color:var(--accent);margin-bottom:10px;letter-spacing:1px;}
+.lc-countdown{font-size:12px;color:var(--accent);margin-bottom:10px;letter-spacing:1px;cursor:pointer;user-select:none;}
 .lc-actions{display:flex;gap:8px;flex-wrap:wrap;}
 .lc-autosave-note{font-size:10px;color:var(--blue);letter-spacing:.4px;
   padding:6px 10px;border:1px solid rgba(71,184,255,.15);background:rgba(71,184,255,.05);margin-bottom:8px;line-height:1.5;}
@@ -229,16 +239,25 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
     </div>
     <?php endif; ?>
 
-    
-    <div class="card">
-      <div class="card-title"><div class="dot"></div>Strong security</div>
-      <div style="font-size:12px;color:var(--muted);line-height:1.7;">
-        Vault passphrases never leave your browser. Revealing codes and committing vault rotation requires <strong style="color:var(--accent)">TOTP or a passkey</strong>.
-        Set this up in <a href="account.php" style="color:var(--text);">Account</a>.
+    <div class="viewbar" role="tablist" aria-label="Dashboard sections">
+      <button class="viewbtn sel" type="button" data-view="generate">Generate</button>
+      <button class="viewbtn" type="button" data-view="codes">My Codes</button>
+      <button class="viewbtn" type="button" data-view="vault">Vault Settings</button>
+      <button class="viewbtn" type="button" data-view="security">Security</button>
+    </div>
+
+    <div class="view" data-view="security">
+      <div class="card">
+        <div class="card-title"><div class="dot"></div>Strong security</div>
+        <div style="font-size:12px;color:var(--muted);line-height:1.7;">
+          Vault passphrases never leave your browser. Revealing codes and committing vault rotation requires <strong style="color:var(--accent)">TOTP or a passkey</strong>.
+          Set this up in <a href="account.php" style="color:var(--text);">Account</a>.
+        </div>
       </div>
     </div>
 
-    <div class="card" id="vault-unlock-card" style="display:none">
+    <div class="view show" data-view="generate">
+      <div class="card" id="vault-unlock-card" style="display:none">
       <div class="card-title"><div class="dot" style="background:var(--orange)"></div><span style="color:var(--orange)">Vault</span></div>
       <div style="font-size:12px;color:var(--muted);line-height:1.7;margin-bottom:14px;">
         Your vault passphrase is used to derive encryption keys in your browser. It is never sent to the server.
@@ -300,15 +319,19 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
         <span id="g-txt">Generate &amp; Lock</span>
       </button>
     </div>
+    </div>
 
-    <div class="sec-header" id="codes">
+    <div class="view" data-view="codes">
+      <div class="sec-header" id="codes">
       <div class="card-title" style="margin-bottom:0"><div class="dot"></div>My Codes</div>
       <button class="btn btn-ghost btn-sm" onclick="loadLocks()">↻</button>
     </div>
     <div id="locks-wrap">
       <div class="empty"><div class="empty-icon">🔒</div><h3>No codes yet</h3><p>Create your first code above.</p></div>
     </div>
+    </div>
 
+    <div class="view" data-view="vault">
     <div class="card" id="vault-settings">
       <div class="card-title"><div class="dot"></div>Vault Settings</div>
       <p style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.6;">
@@ -329,6 +352,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
         <span id="rot-txt">Rotate vault passphrase</span>
       </button>
     </div>
+    </div>
 
   </div>
 </div>
@@ -336,12 +360,12 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
 <!-- confirm overlay -->
 <div id="confirm-overlay" onclick="closeConfirm(event)">
   <div class="confirm-sheet">
-    <div class="confirm-title">Did you save the code?</div>
+    <div class="confirm-title">Did you use the code?</div>
     <div class="confirm-sub" id="cs-sub">Code was copied to your clipboard.</div>
     <div class="msg msg-warn" id="autosave-bar">Auto-saved. Code stored but not time-locked until you confirm.</div>
 
     <div class="confirm-btns" id="confirm-btns">
-      <button class="btn btn-green" onclick="doConfirm('confirm')">✓ Yes, I saved it</button>
+      <button class="btn btn-green" onclick="doConfirm('confirm')">✓ Yes, I used it</button>
       <button class="btn btn-red" onclick="doConfirm('reject')">✗ No, discard</button>
     </div>
     <div id="confirm-done" style="display:none;margin-top:12px;font-size:12px;color:var(--muted);line-height:1.6;"><div id="confirm-done-msg"></div></div>
@@ -373,6 +397,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
 
     <button class="btn btn-primary" id="rv-btn" onclick="doReveal()"><span id="rv-btn-txt">Decrypt &amp; Reveal</span></button>
     <button class="btn btn-ghost" id="rv-copy-btn" onclick="copyRevealed()" style="display:none;margin-top:10px;">Copy</button>
+    <button class="btn btn-ghost" id="rv-done-btn" onclick="doneRevealed()" style="display:none;margin-top:10px;">Done (wipe clipboard)</button>
     <div id="rv-zk-note" style="display:none;margin-top:10px;font-size:10px;color:var(--muted);letter-spacing:1px;line-height:1.6;">
       Zero-knowledge: only your browser decrypted this value.
     </div>
@@ -411,6 +436,86 @@ async function postCsrf(url,body){
 // ─────────────────────────────────────────────────
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function toast(msg,type='ok'){const t=document.createElement('div');t.className=`toast ${type}`;t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),3200);} 
+
+function parseUtcDateTime(v){
+  const s = String(v || '').trim();
+  if(!s) return new Date('');
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(s)) {
+    return new Date(s.replace(' ', 'T') + 'Z');
+  }
+  return new Date(s);
+}
+
+async function wipeClipboard(){
+  try{
+    await navigator.clipboard.writeText('');
+    return true;
+  }catch{
+    return false;
+  }
+}
+
+let currentView = null;
+function setView(v){
+  currentView = v;
+  document.querySelectorAll('.view').forEach(el => {
+    el.classList.toggle('show', el.getAttribute('data-view') === v);
+  });
+  document.querySelectorAll('.viewbtn').forEach(b => {
+    b.classList.toggle('sel', b.getAttribute('data-view') === v);
+  });
+  try{ localStorage.setItem('dash_view', v); }catch{}
+}
+
+function initViews(){
+  document.querySelectorAll('.viewbtn').forEach(b => {
+    b.addEventListener('click', () => setView(b.getAttribute('data-view')));
+  });
+
+  const fromHash = (location.hash === '#codes') ? 'codes' : null;
+  const stored = (() => { try { return localStorage.getItem('dash_view'); } catch { return null; } })();
+  setView(fromHash || stored || 'generate');
+}
+
+let countdownItems = [];
+let countdownInterval = null;
+
+function resetCountdowns(){
+  countdownItems = [];
+}
+
+function formatRemaining(ms){
+  if (!Number.isFinite(ms)) return '?';
+  const s = Math.max(0, Math.floor(ms / 1000));
+  const d = Math.floor(s / 86400);
+  const h = Math.floor((s % 86400) / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const ss = s % 60;
+  if (d > 0) return `${d}d ${h}h ${m}m`;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m ${ss}s`;
+}
+
+function updateCountdowns(){
+  const now = Date.now();
+  countdownItems.forEach(it => {
+    const ms = it.targetMs - now;
+    if (Number.isFinite(ms) && ms <= 0) {
+      it.el.textContent = '🔓 Unlocked — refresh';
+      return;
+    }
+    if (it.mode === 'until') {
+      it.el.textContent = `⏱ Sealed until ${it.untilText}`;
+    } else {
+      it.el.textContent = `⏱ ${formatRemaining(ms)} remaining`;
+    }
+  });
+}
+
+function ensureCountdownInterval(){
+  if (countdownInterval) return;
+  countdownInterval = setInterval(updateCountdowns, 1000);
+}
 
 function bytesToB64(bytes){return btoa(String.fromCharCode(...bytes));}
 function b64ToBytes(b64){return Uint8Array.from(atob(b64), c => c.charCodeAt(0));}
@@ -600,6 +705,8 @@ async function loadVaultSetup(){
 //  INIT
 // ─────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
+  initViews();
+
   const d = new Date(); d.setDate(d.getDate()+1); d.setSeconds(0,0);
   document.getElementById('g-date').value = d.toISOString().slice(0,16);
 
@@ -841,6 +948,11 @@ function closeConfirm(e){
 async function doConfirm(action){
   if(!pendingLock)return;
 
+  if (action === 'confirm') {
+    const ok = await wipeClipboard();
+    if (ok) toast('Clipboard cleared', 'ok');
+  }
+
   const r=await postCsrf('/api/confirm.php',{lock_id:pendingLock.lock_id,action});
   document.getElementById('confirm-btns').style.display='none';
   document.getElementById('confirm-done').style.display='block';
@@ -879,8 +991,11 @@ async function loadLocks(){
       wrap.innerHTML='<div class="empty"><div class="empty-icon">🔒</div><h3>No codes yet</h3><p>Create your first code above.</p></div>';
       return;
     }
+    resetCountdowns();
     wrap.innerHTML='<div class="locks-grid" id="locks-grid"></div>';
     r.locks.forEach(l=>document.getElementById('locks-grid').appendChild(buildCard(l)));
+    updateCountdowns();
+    ensureCountdownInterval();
   }catch{
     wrap.innerHTML='<div class="empty"><p>Failed to load.</p></div>';
   }
@@ -892,7 +1007,11 @@ function buildCard(lock){
   el.className=`lock-card st-${st}`;
 
   const badges={locked:'🔒 Locked',unlocked:'🔓 Unlocked',pending:'⏳ Pending',auto_saved:'💾 Auto-saved',rejected:'✗ Void'};
-  const rd=new Date(lock.reveal_date).toLocaleDateString('en-US',{year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+
+  const revealDt = parseUtcDateTime(lock.reveal_date);
+  const rd = isNaN(revealDt.getTime())
+    ? String(lock.reveal_date || '')
+    : revealDt.toLocaleString('en-US', {year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
 
   const top=document.createElement('div');
   top.className='lc-top';
@@ -923,11 +1042,32 @@ function buildCard(lock){
     el.appendChild(note);
   }
 
-  if(st==='locked'&&lock.time_remaining){
-    const t=lock.time_remaining;
+  if(st==='locked'){
     const countdown=document.createElement('div');
     countdown.className='lc-countdown';
-    countdown.textContent=`⏱ ${t.days}d ${t.hours}h ${t.minutes}m remaining`;
+    countdown.title='Click to toggle time remaining / reveal date';
+    countdown.tabIndex = 0;
+
+    const it = {
+      el: countdown,
+      targetMs: revealDt.getTime(),
+      untilText: rd,
+      mode: 'remaining',
+    };
+
+    countdown.addEventListener('click', () => {
+      it.mode = (it.mode === 'remaining') ? 'until' : 'remaining';
+      updateCountdowns();
+    });
+    countdown.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        it.mode = (it.mode === 'remaining') ? 'until' : 'remaining';
+        updateCountdowns();
+      }
+    });
+
+    countdownItems.push(it);
     el.appendChild(countdown);
   }
 
@@ -994,6 +1134,7 @@ function openReveal(lockId, label, hint){
   document.getElementById('rv-vault').value=vaultPhraseSession||'';
   document.getElementById('rv-pwd').style.display='none';
   document.getElementById('rv-copy-btn').style.display='none';
+  document.getElementById('rv-done-btn').style.display='none';
   document.getElementById('rv-zk-note').style.display='none';
   document.getElementById('rv-btn').style.display='block';
   document.getElementById('rv-btn-txt').textContent='Decrypt & Reveal';
@@ -1027,6 +1168,7 @@ async function doReveal(){
     document.getElementById('rv-pwd').textContent=plain;
     document.getElementById('rv-pwd').style.display='block';
     document.getElementById('rv-copy-btn').style.display='block';
+    document.getElementById('rv-done-btn').style.display='block';
     document.getElementById('rv-zk-note').style.display='block';
     document.getElementById('rv-btn').style.display='none';
 
@@ -1060,6 +1202,13 @@ async function copyRevealed(){
   }catch{
     toast('Select the text manually','err');
   }
+}
+
+async function doneRevealed(){
+  const ok = await wipeClipboard();
+  closeReveal();
+  if (ok) toast('Clipboard cleared', 'ok');
+  else toast('Could not clear clipboard', 'warn');
 }
 
 // ─────────────────────────────────────────────────

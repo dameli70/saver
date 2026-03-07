@@ -598,7 +598,6 @@ if ($method === 'POST') {
 
     // ── DESTINATION ACCOUNTS: CREATE ────────────────────────
     if ($action === 'destination_account_create') {
-        requireStrongAuth();
 
         $accountType = (string)($body['account_type'] ?? '');
         $unlockCode = (string)($body['unlock_code'] ?? '');
@@ -656,7 +655,6 @@ if ($method === 'POST') {
 
     // ── DESTINATION ACCOUNTS: ROTATE UNLOCK CODE ─────────────
     if ($action === 'destination_account_rotate') {
-        requireStrongAuth();
 
         $accountId = intParam($body['account_id'] ?? 0, 0);
         $unlockCode = (string)($body['unlock_code'] ?? '');
@@ -678,7 +676,6 @@ if ($method === 'POST') {
 
     // ── DESTINATION ACCOUNTS: TOGGLE ACTIVE ─────────────────
     if ($action === 'destination_account_set_active') {
-        requireStrongAuth();
 
         $accountId = intParam($body['account_id'] ?? 0, 0);
         $isActive = !empty($body['is_active']) ? 1 : 0;

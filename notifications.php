@@ -150,12 +150,14 @@ function setMsg(text, ok){
   el.textContent = text;
 }
 
+function apiUrl(url){return url.startsWith('/') ? url.slice(1) : url;}
+
 async function get(url){
-  const r = await fetch(url, { credentials:'same-origin' });
+  const r = await fetch(apiUrl(url), { credentials:'same-origin' });
   return r.json();
 }
 async function post(url, body){
-  const r = await fetch(url, {
+  const r = await fetch(apiUrl(url), {
     method:'POST',
     credentials:'same-origin',
     headers:{'Content-Type':'application/json','X-CSRF-Token':CSRF},
