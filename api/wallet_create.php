@@ -84,7 +84,7 @@ $db->prepare("\
     $walletId,
     (int)$userId,
     $carrierId,
-    $label !== '' ? sanitize($label) : null,
+    $label !== '' ? $label : null,
     $unlockDt->format('Y-m-d H:i:s'),
     $cipherBlob,
     $iv,

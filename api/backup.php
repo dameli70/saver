@@ -21,6 +21,12 @@ function exportPayload(int $userId): array {
     $stmt->execute([$userId]);
     $locks = $stmt->fetchAll();
 
+    foreach ($locks as &$lock) {
+        $lock['label'] = normalizeDisplayText($lock['label'] ?? null);
+        $lock['hint'] = normalizeDisplayText($lock['hint'] ?? null);
+    }
+    unset($lock);
+
     return [
         'app' => defined('APP_NAME') ? APP_NAME : 'LOCKSMITH',
         'export_version' => 2,
@@ -75,7 +81,8 @@ function importPayload(int $userId, array $payload): int {
                 $lockId = generateUUID();
             }
 
-            $label = sanitize((string)($lock['label'] ?? 'Imported Code'));
+            $label = normalizeDisplayText(trim((string)($lock['label'] ?? 'Imported Code')));
+
             $cipher = (string)($lock['cipher_blob'] ?? '');
             $iv = (string)($lock['iv'] ?? '');
             $tag = (string)($lock['auth_tag'] ?? '');
@@ -106,7 +113,7 @@ function importPayload(int $userId, array $payload): int {
             $validStatuses = ['pending','confirmed','rejected','auto_saved'];
             if (!in_array($status, $validStatuses, true)) $status = 'pending';
 
-            $hintVal = ($hint !== null && $hint !== '') ? sanitize($hint) : null;
+            $hintVal = ($hint !== null && $hint !== '') ? normalizeDisplayText($hint) : null;
 
             $params = [
                 $lockId, $userId, $label,

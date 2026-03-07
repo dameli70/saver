@@ -70,8 +70,8 @@ auditLog('reveal', $lockId);
 
 jsonResponse([
     'success'            => true,
-    'label'              => $lock['label'],
-    'hint'               => $lock['hint'],
+    'label'              => normalizeDisplayText($lock['label'] ?? null),
+    'hint'               => normalizeDisplayText($lock['hint'] ?? null),
     'cipher_blob'        => $lock['cipher_blob'],
     'iv'                 => $lock['iv'],
     'auth_tag'           => $lock['auth_tag'],

@@ -35,6 +35,9 @@ $locks = $stmt->fetchAll();
 
 $now = new DateTime('now', new DateTimeZone('UTC'));
 foreach ($locks as &$lock) {
+    $lock['label'] = normalizeDisplayText($lock['label'] ?? null);
+    $lock['hint'] = normalizeDisplayText($lock['hint'] ?? null);
+
     if ($lock['display_status'] === 'locked') {
         $r    = new DateTime($lock['reveal_date'], new DateTimeZone('UTC'));
         $diff = $now->diff($r);

@@ -66,7 +66,9 @@ if ($action === 'register') {
     if ($hasAdminCol) {
         $db->beginTransaction();
 
-        $admins = (int)$db->query("SELECT COUNT(*) FROM users WHERE is_admin = 1")->fetchColumn();
+        // Bootstrap: only the very first user in a fresh install becomes admin.
+        // Do not auto-promote admins later if all admins are removed.
+        $users = (int)$db->query("SELECT COUNT(*) FROM users")->fetchColumn();
 
         $db->prepare("
             INSERT INTO users (email, login_hash, vault_verifier, vault_verifier_salt)
@@ -75,7 +77,7 @@ if ($action === 'register') {
 
         $userId = (int)$db->lastInsertId();
 
-        if ($admins === 0) {
+        if ($users === 0) {
             $db->prepare("UPDATE users SET is_admin = 1 WHERE id = ?")->execute([$userId]);
             $isAdmin = 1;
         }
@@ -179,13 +181,7 @@ if ($action === 'login') {
 
     $verified = !empty($user['email_verified_at']);
 
-    if ($hasAdminCol) {
-        $admins = (int)$db->query("SELECT COUNT(*) FROM users WHERE is_admin = 1")->fetchColumn();
-        if ($admins === 0) {
-            $db->prepare("UPDATE users SET is_admin = 1 WHERE id = ?")->execute([(int)$user['id']]);
-            $user['is_admin'] = 1;
-        }
-    }
+    
 
     // If the user has opted into passkey-only login, block password login.
     if (!empty($user['require_webauthn']) && userHasPasskeys((int)$user['id'])) {

@@ -66,6 +66,8 @@ $_SESSION['user_id'] = (int)$u['id'];
 $_SESSION['email'] = $u['email'];
 $_SESSION['email_verified'] = 1;
 
+registerCurrentSession((int)$u['id']);
+
 auditLog('email_verified', null, (int)$u['id']);
 
 header('Location: dashboard.php');

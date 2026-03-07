@@ -371,6 +371,21 @@ function sanitize(string $s): string {
     return htmlspecialchars(trim($s), ENT_QUOTES, 'UTF-8');
 }
 
+// Historically some fields were escaped before storage (escape-on-write).
+// Normalize those legacy values so they render correctly.
+function normalizeDisplayText(?string $s): ?string {
+    if ($s === null) return null;
+    $s = (string)$s;
+    if ($s === '') return '';
+
+    if (!preg_match('/&(?:[a-zA-Z]+|#\d+|#x[0-9A-Fa-f]+);/', $s)) {
+        return $s;
+    }
+
+    $decoded = html_entity_decode($s, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    return $decoded;
+}
+
 function jsonResponse(array $data, int $status = 200): never {
     http_response_code($status);
     header('Content-Type: application/json; charset=utf-8');
