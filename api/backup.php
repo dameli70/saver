@@ -207,7 +207,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             auditLog('backup_import');
             jsonResponse(['success' => true, 'imported' => $n]);
         } catch (Throwable $e) {
-            jsonResponse(['error' => $e->getMessage()], 400);
+            $msg = (APP_ENV === 'development') ? $e->getMessage() : 'Import failed';
+            jsonResponse(['error' => $msg], 400);
         }
     }
 
@@ -250,7 +251,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 auditLog('backup_cloud_restore');
                 jsonResponse(['success' => true, 'imported' => $n]);
             } catch (Throwable $e) {
-                jsonResponse(['error' => $e->getMessage()], 400);
+                $msg = (APP_ENV === 'development') ? $e->getMessage() : 'Import failed';
+                jsonResponse(['error' => $msg], 400);
             }
         } catch (PDOException $e) {
             jsonResponse(['error' => 'Cloud backups are not available (missing backups table). Apply migrations in config/migrations/.'], 500);
