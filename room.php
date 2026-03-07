@@ -812,8 +812,55 @@ async function reviewJoin(requestId, decision){
   }
 }
 
-loadRoom().then(()=>pollFeed());
-setInterval(pollFeed, 4000);
+let feedPollTimer = null;
+let feedEs = null;
+
+function startPollingFeed(){
+  if(feedEs){
+    try{feedEs.close();}catch{}
+    feedEs = null;
+  }
+  if(feedPollTimer) clearInterval(feedPollTimer);
+  pollFeed();
+  feedPollTimer = setInterval(pollFeed, 4000);
+}
+
+function startSseFeed(){
+  if(!window.EventSource){
+    startPollingFeed();
+    return;
+  }
+
+  if(feedPollTimer){
+    clearInterval(feedPollTimer);
+    feedPollTimer = null;
+  }
+
+  const url = apiUrl('/api/rooms_stream.php?room_id=' + encodeURIComponent(ROOM_ID) + '&since_id=' + encodeURIComponent(lastEventId));
+  feedEs = new EventSource(url);
+
+  feedEs.addEventListener('activity', (ev) => {
+    try{
+      const data = JSON.parse(ev.data);
+      addFeedItem(data);
+      lastEventId = data.id;
+    }catch{
+      // ignore parse errors
+    }
+  });
+
+  feedEs.onerror = () => {
+    // If SSE is blocked/unavailable, fall back to polling.
+    try{feedEs.close();}catch{}
+    feedEs = null;
+    startPollingFeed();
+  };
+}
+
+loadRoom().then(async ()=>{
+  await pollFeed();
+  startSseFeed();
+});
 </script>
 </body>
 </html>
