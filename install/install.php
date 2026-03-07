@@ -7,7 +7,8 @@
 //    php install/install.php --non-interactive --init-db=1 \
 //      --db-host=localhost --db-name=locksmith --db-user=root --db-pass='' \
 //      --app-env=development --app-name=LOCKSMITH --mail-from=no-reply@localhost \
-//      --email-verify-ttl-hours=24
+//      --email-verify-ttl-hours=24 \
+//      --admin-email=admin@example.com --admin-password='change-me'
 // ============================================================
 
 if (PHP_SAPI !== 'cli') {
@@ -21,8 +22,8 @@ if ($root === false) {
     exit(1);
 }
 
-$configPath   = $root . '/config/database.php';
-$schemaPath   = $root . '/config/schema.sql';
+$configPath    = $root . '/config/database.php';
+$schemaPath    = $root . '/config/schema.sql';
 $migrationsDir = $root . '/config/migrations';
 
 function usage(): void {
@@ -53,6 +54,9 @@ Options:
 
   --init-db=1                     Create tables by running config/schema.sql
   --apply-migrations=1            Apply SQL files in config/migrations (safe to re-run)
+
+  --admin-email=EMAIL             Create initial super admin (email-verified)
+  --admin-password=PASS           Initial super admin login password
 
 TXT;
     fwrite(STDOUT, $msg);
@@ -107,6 +111,46 @@ function requireExt(string $ext): void {
 
 function phpSingleQuoted(string $value): string {
     return "'" . str_replace(["\\", "'"], ["\\\\", "\\'"], $value) . "'";
+}
+
+function argon2idHash(string $password): string {
+    return password_hash($password, PASSWORD_ARGON2ID, [
+        'memory_cost' => 65536,
+        'time_cost'   => 4,
+        'threads'     => 2,
+    ]);
+}
+
+function ensureIsAdminColumn(PDO $pdo): bool {
+    $stmt = $pdo->query("SELECT 1 FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'users' AND column_name = 'is_admin' LIMIT 1");
+    return (bool)$stmt->fetchColumn();
+}
+
+function createSuperAdmin(PDO $pdo, string $email, string $loginPassword): void {
+    if (!ensureIsAdminColumn($pdo)) {
+        throw new RuntimeException('Cannot create admin user: users.is_admin column is missing.');
+    }
+
+    $admins = (int)$pdo->query("SELECT COUNT(*) FROM users WHERE is_admin = 1")->fetchColumn();
+    if ($admins > 0) return;
+
+    $email = strtolower(trim($email));
+    $exists = $pdo->prepare('SELECT id FROM users WHERE email = ?');
+    $exists->execute([$email]);
+    if ($exists->fetch()) {
+        throw new RuntimeException('Admin email already exists. Choose a different email.');
+    }
+
+    $loginHash = argon2idHash($loginPassword);
+
+    // Vault passphrase is never provided to the server.
+    // Legacy schema still requires verifier fields; store non-usable placeholders.
+    $vaultVerifierSalt = bin2hex(random_bytes(32));
+    $vaultVerifier     = argon2idHash(bin2hex(random_bytes(32)) . $vaultVerifierSalt);
+
+    $pdo->prepare("INSERT INTO users (email, login_hash, vault_verifier, vault_verifier_salt, is_admin, email_verified_at)
+                  VALUES (?, ?, ?, ?, 1, NOW())")
+        ->execute([$email, $loginHash, $vaultVerifier, $vaultVerifierSalt]);
 }
 
 function updateConfigFile(string $path, array $vals, bool $force): void {
@@ -313,6 +357,28 @@ if (!ctype_digit((string)$ttl) || (int)$ttl < 1 || (int)$ttl > 168) {
 }
 $vals['email_verify_ttl_hours'] = (int)$ttl;
 
+$adminEmail = $get('admin-email', null);
+$adminPass = $get('admin-password', null);
+
+if (!$nonInteractive) {
+    if ($adminEmail === '') $adminEmail = prompt('ADMIN EMAIL', '');
+    if ($adminPass === '') $adminPass = prompt('ADMIN PASSWORD', '');
+    $adminPass2 = prompt('CONFIRM ADMIN PASSWORD', '');
+    if ($adminPass !== $adminPass2) {
+        fwrite(STDERR, "Admin passwords do not match.\n");
+        exit(1);
+    }
+}
+
+if (!filter_var($adminEmail, FILTER_VALIDATE_EMAIL)) {
+    fwrite(STDERR, "Invalid --admin-email (must be a valid email).\n");
+    exit(1);
+}
+if (strlen($adminPass) < 8) {
+    fwrite(STDERR, "Invalid --admin-password (must be at least 8 characters).\n");
+    exit(1);
+}
+
 $vals['smtp_host'] = $get('smtp-host', '');
 $vals['smtp_port'] = 587;
 $vals['smtp_user'] = '';
@@ -361,11 +427,11 @@ if (!$nonInteractive) {
 fwrite(STDOUT, "Validating MySQL credentials...\n");
 
 try {
-    // Always validate credentials against the server first (catches wrong user/pass)
     $serverPdo = connectPdoServer($vals['db_host'], $vals['db_charset'], $vals['db_user'], $vals['db_pass']);
 
+    $dbPdo = null;
+
     if ($initDb || $applyMigrations) {
-        // Create DB if possible. If privileges are missing, the next step will fail clearly.
         $dbName = $vals['db_name'];
         $quotedDb = '`' . str_replace('`', '``', $dbName) . '`';
         $serverPdo->exec("CREATE DATABASE IF NOT EXISTS {$quotedDb} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
@@ -398,9 +464,11 @@ try {
             }
         }
     } else {
-        // No schema work requested, but still verify the database is reachable.
-        connectPdoDb($vals['db_host'], $vals['db_name'], $vals['db_charset'], $vals['db_user'], $vals['db_pass']);
+        $dbPdo = connectPdoDb($vals['db_host'], $vals['db_name'], $vals['db_charset'], $vals['db_user'], $vals['db_pass']);
     }
+
+    createSuperAdmin($dbPdo, $adminEmail, $adminPass);
+    fwrite(STDOUT, "Super admin ensured: {$adminEmail}\n");
 
 } catch (Throwable $e) {
     fwrite(STDERR, "\nERROR: " . $e->getMessage() . "\n");

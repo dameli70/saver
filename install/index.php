@@ -175,6 +175,52 @@ if (isAppInstalled()) {
 $errors = [];
 $okMsg  = '';
 
+function argon2idHash(string $password): string {
+    return password_hash($password, PASSWORD_ARGON2ID, [
+        'memory_cost' => 65536,
+        'time_cost'   => 4,
+        'threads'     => 2,
+    ]);
+}
+
+function ensureIsAdminColumn(PDO $pdo): bool {
+    try {
+        $stmt = $pdo->query("SELECT 1 FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'users' AND column_name = 'is_admin' LIMIT 1");
+        return (bool)$stmt->fetchColumn();
+    } catch (Throwable) {
+        return false;
+    }
+}
+
+function createSuperAdmin(PDO $pdo, string $email, string $loginPassword): void {
+    if (!ensureIsAdminColumn($pdo)) {
+        throw new RuntimeException('Cannot create admin user: users.is_admin column is missing.');
+    }
+
+    $admins = (int)$pdo->query("SELECT COUNT(*) FROM users WHERE is_admin = 1")->fetchColumn();
+    if ($admins > 0) {
+        return;
+    }
+
+    $email = strtolower(trim($email));
+    $exists = $pdo->prepare('SELECT id FROM users WHERE email = ?');
+    $exists->execute([$email]);
+    if ($exists->fetch()) {
+        throw new RuntimeException('Admin email already exists. Choose a different email, or promote an existing user from the admin UI.');
+    }
+
+    $loginHash = argon2idHash($loginPassword);
+
+    // Vault passphrase is never provided to the server.
+    // Legacy schema still requires verifier fields; store non-usable placeholders.
+    $vaultVerifierSalt = bin2hex(random_bytes(32));
+    $vaultVerifier     = argon2idHash(bin2hex(random_bytes(32)) . $vaultVerifierSalt);
+
+    $pdo->prepare("INSERT INTO users (email, login_hash, vault_verifier, vault_verifier_salt, is_admin, email_verified_at)
+                  VALUES (?, ?, ?, ?, 1, NOW())")
+        ->execute([$email, $loginHash, $vaultVerifier, $vaultVerifierSalt]);
+}
+
 $vals = [
     'db_host' => 'localhost',
     'db_name' => 'locksmith',
@@ -185,6 +231,8 @@ $vals = [
     'app_name' => 'LOCKSMITH',
     'mail_from' => 'no-reply@localhost',
     'email_verify_ttl_hours' => 24,
+
+    'admin_email' => '',
 
     'smtp_host' => '',
     'smtp_port' => 587,
@@ -211,6 +259,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $vals['mail_from'] = trim((string)($_POST['mail_from'] ?? 'no-reply@localhost'));
     $vals['email_verify_ttl_hours'] = (int)($_POST['email_verify_ttl_hours'] ?? 24);
 
+    $vals['admin_email'] = trim((string)($_POST['admin_email'] ?? ''));
+    $adminPass = (string)($_POST['admin_password'] ?? '');
+    $adminPass2 = (string)($_POST['admin_password2'] ?? '');
+
     $vals['smtp_host'] = trim((string)($_POST['smtp_host'] ?? ''));
     $vals['smtp_port'] = (int)($_POST['smtp_port'] ?? 587);
     $vals['smtp_user'] = trim((string)($_POST['smtp_user'] ?? ''));
@@ -228,6 +280,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($vals['app_name'] === '') $errors[] = 'APP_NAME is required.';
     if (!filter_var($vals['mail_from'], FILTER_VALIDATE_EMAIL)) $errors[] = 'MAIL_FROM must be a valid email.';
     if ($vals['email_verify_ttl_hours'] < 1 || $vals['email_verify_ttl_hours'] > 168) $errors[] = 'Email verification TTL must be 1–168 hours.';
+
+    if (!filter_var($vals['admin_email'], FILTER_VALIDATE_EMAIL)) $errors[] = 'Super admin email must be a valid email.';
+    if (strlen($adminPass) < 8) $errors[] = 'Super admin login password must be at least 8 characters.';
+    if ($adminPass !== $adminPass2) $errors[] = 'Super admin passwords do not match.';
 
     if ($vals['smtp_host'] !== '') {
         if ($vals['smtp_port'] < 1 || $vals['smtp_port'] > 65535) $errors[] = 'SMTP_PORT must be 1–65535.';
@@ -266,7 +322,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 if ($vals['apply_migrations'] && is_dir($migrationsDir)) {
                     ensureMigrationsTable($dbPdo);
-                    $files = array_values(array_filter(scandir($migrationsDir) ?: [], fn($f) => preg_match('/\\.sql$/i', $f)));
+                    $files = array_values(array_filter(scandir($migrationsDir) ?: [], fn($f) => preg_match('/\.sql$/i', $f)));
                     sort($files, SORT_NATURAL);
                     foreach ($files as $f) {
                         if (migrationApplied($dbPdo, $f)) continue;
@@ -274,9 +330,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         markMigrationApplied($dbPdo, $f);
                     }
                 }
+
+                // Create the initial admin user (email verified) for a fresh install.
+                createSuperAdmin($dbPdo, $vals['admin_email'], $adminPass);
+
             } else {
                 // No schema work requested, but still verify the DB itself is reachable.
-                connectPdoDb($vals['db_host'], $vals['db_name'], $vals['db_charset'], $vals['db_user'], $vals['db_pass']);
+                $dbPdo = connectPdoDb($vals['db_host'], $vals['db_name'], $vals['db_charset'], $vals['db_user'], $vals['db_pass']);
+                createSuperAdmin($dbPdo, $vals['admin_email'], $adminPass);
             }
 
             $vals['app_hmac_secret'] = bin2hex(random_bytes(32));
@@ -407,6 +468,17 @@ hr{border:none;border-top:1px solid var(--b1);margin:16px 0;}
           <div class="field"><label>APP_NAME</label><input name="app_name" value="<?= htmlspecialchars($vals['app_name']) ?>" required></div>
           <div class="field"><label>MAIL_FROM</label><input name="mail_from" value="<?= htmlspecialchars($vals['mail_from']) ?>" required></div>
           <div class="field"><label>Email verification TTL (hours)</label><input name="email_verify_ttl_hours" type="number" min="1" max="168" value="<?= (int)$vals['email_verify_ttl_hours'] ?>" required></div>
+
+          <hr>
+          <h3 style="font-family:var(--display);font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--accent);margin-bottom:12px;">Super Admin</h3>
+
+          <div class="field"><label>Admin Email</label><input name="admin_email" value="<?= htmlspecialchars($vals['admin_email']) ?>" required></div>
+          <div class="field"><label>Admin Login Password</label><input type="password" name="admin_password" value="" required></div>
+          <div class="field"><label>Confirm Admin Password</label><input type="password" name="admin_password2" value="" required></div>
+
+          <div class="note">
+            This creates the initial admin user (marked email-verified) so you can access <code>admin.php</code> immediately.
+          </div>
 
           <hr>
           <h3 style="font-family:var(--display);font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--accent);margin-bottom:12px;">Mail (SMTP optional)</h3>
