@@ -209,6 +209,8 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
     <div class="topbar-r">
       <span class="user-pill"><?= htmlspecialchars($userEmail) ?></span>
       <?php if ($isAdmin): ?><a class="btn btn-ghost btn-sm" href="admin.php">Admin</a><?php endif; ?>
+      <a class="btn btn-ghost btn-sm" href="rooms.php">Rooms</a>
+      <a class="btn btn-ghost btn-sm" href="notifications.php">Notifications</a>
       <a class="btn btn-ghost btn-sm" href="backup.php">Backup</a>
       <a class="btn btn-ghost btn-sm" href="account.php">Account</a>
       <a class="btn btn-ghost btn-sm" href="logout.php">Logout</a>

@@ -116,6 +116,8 @@ code{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);pad
     <div class="nav-r">
       <?php if ($verified): ?>
         <a class="btn btn-ghost" href="dashboard.php">Dashboard</a>
+        <a class="btn btn-ghost" href="rooms.php">Rooms</a>
+        <a class="btn btn-ghost" href="notifications.php">Notifications</a>
         <a class="btn btn-ghost" href="backup.php">Backups</a>
         <?php if ($isAdmin): ?>
           <a class="btn btn-ghost" href="admin.php">Admin</a>
@@ -162,6 +164,58 @@ code{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);pad
       </div>
       <?php endif; ?>
     </div>
+
+    <?php if ($verified): ?>
+    <div class="card" id="trust-card">
+      <div class="row">
+        <div>
+          <div class="k">Trust Passport</div>
+          <div class="v">Your platform trust level and reveal history</div>
+        </div>
+        <div class="badge wait" id="trust-level-badge">⏳</div>
+      </div>
+
+      <div class="small" style="margin-top:12px;">
+        Your level determines which saving rooms you can join. Strikes within a six-month window can trigger restrictions or level regression.
+      </div>
+
+      <div class="hr"></div>
+
+      <div style="display:grid;grid-template-columns:1fr;gap:10px;">
+        <div class="item" style="align-items:center;">
+          <div>
+            <div class="k">Strikes (last 6 months)</div>
+            <div class="v" id="trust-strikes">—</div>
+          </div>
+          <div>
+            <div class="k">Restricted period</div>
+            <div class="v" id="trust-restricted">—</div>
+          </div>
+        </div>
+
+        <div class="item" style="align-items:center;">
+          <div>
+            <div class="k">Progress</div>
+            <div class="v" id="trust-next">—</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="hr"></div>
+
+      <div class="k">Completed reveals</div>
+      <div class="small" style="margin-top:6px;">Shown as sealed vaults. A completed reveal means you stayed from start to unlock without removal or flags.</div>
+      <div id="trust-completed" style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;"></div>
+
+      <div class="hr"></div>
+
+      <div class="k">Active rooms</div>
+      <div class="small" style="margin-top:6px;">Shown as open vaults with countdowns.</div>
+      <div id="trust-active" class="list"></div>
+
+      <div id="trust-msg" class="msg msg-err"></div>
+    </div>
+    <?php endif; ?>
 
     <div class="card" id="vault-passphrase-card">
       <div class="row">
@@ -383,6 +437,107 @@ btn.addEventListener('click', async ()=>{
   async function postCsrf(url, body){
     const r=await fetch(url,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRF-Token':CSRF},body:JSON.stringify(body)});
     return r.json();
+  }
+
+  async function getJson(url){
+    const r=await fetch(url,{credentials:'same-origin'});
+    return r.json();
+  }
+
+  // ── TRUST PASSPORT ────────────────────────────
+  async function loadTrustPassport(){
+    if(!VERIFIED) return;
+
+    const badge = document.getElementById('trust-level-badge');
+    const strikes = document.getElementById('trust-strikes');
+    const restricted = document.getElementById('trust-restricted');
+    const next = document.getElementById('trust-next');
+    const completed = document.getElementById('trust-completed');
+    const active = document.getElementById('trust-active');
+    const msg = document.getElementById('trust-msg');
+
+    if(!badge || !strikes || !restricted || !next || !completed || !active) return;
+
+    msg.classList.remove('show');
+    badge.textContent = '⏳';
+    badge.className = 'badge wait';
+
+    try{
+      const j = await getJson('api/trust.php?action=passport');
+      if(!j.success) throw new Error(j.error||'Failed to load trust passport');
+
+      const t = j.trust || {};
+      const level = parseInt(t.level||'1',10) || 1;
+      badge.textContent = 'LEVEL ' + level;
+      badge.className = 'badge ' + (level >= 2 ? 'ok' : 'wait');
+
+      strikes.textContent = String(t.strike_count_6m ?? '0');
+      restricted.textContent = t.restricted_until ? ('Until ' + String(t.restricted_until)) : '—';
+      next.textContent = String(t.next_level_hint || '—');
+
+      const cr = j.completed_reveals || [];
+      completed.innerHTML = '';
+      if(!cr.length){
+        const d = document.createElement('div');
+        d.className = 'small';
+        d.textContent = 'No completed reveals yet.';
+        completed.appendChild(d);
+      } else {
+        cr.forEach(x => {
+          const b = document.createElement('div');
+          b.className = 'badge ok';
+          b.style.borderColor = 'rgba(255,255,255,.13)';
+          b.style.background = 'rgba(0,0,0,.2)';
+          b.style.color = 'var(--text)';
+          b.textContent = '🔒 ' + (x.duration_days ? (String(x.duration_days) + 'd') : 'sealed');
+          b.title = 'Unlocked at ' + (x.unlocked_at || '');
+          completed.appendChild(b);
+        });
+      }
+
+      const ar = j.active_rooms || [];
+      active.innerHTML = '';
+      if(!ar.length){
+        const d = document.createElement('div');
+        d.className = 'small';
+        d.textContent = 'No active rooms.';
+        active.appendChild(d);
+      } else {
+        ar.forEach(r => {
+          const it = document.createElement('div');
+          it.className = 'item';
+
+          const now = Date.now();
+          const startAt = r.start_at ? new Date(r.start_at).getTime() : null;
+          const revealAt = r.reveal_at ? new Date(r.reveal_at).getTime() : null;
+
+          let cd = '';
+          if(r.room_state === 'lobby' && startAt){
+            const ms = Math.max(0, startAt - now);
+            cd = 'Starts in ' + Math.ceil(ms/1000/60) + ' min';
+          } else if(r.room_state === 'active' && revealAt){
+            const ms = Math.max(0, revealAt - now);
+            cd = 'Reveal in ' + Math.ceil(ms/1000/60) + ' min';
+          }
+
+          it.innerHTML = `
+            <div>
+              <div class="k">Open vault</div>
+              <div class="v">${String(r.goal_text||r.id||'Room')}</div>
+              <div class="small">${String(cd||'')}</div>
+            </div>
+            <div>
+              <a class="btn btn-ghost btn-sm" href="room.php?id=${encodeURIComponent(r.id)}">Open</a>
+            </div>
+          `;
+          active.appendChild(it);
+        });
+      }
+
+    }catch(e){
+      msg.textContent = (e && e.message) ? e.message : 'Failed to load trust passport';
+      msg.classList.add('show');
+    }
   }
 
   function bytesToB64(bytes){return btoa(String.fromCharCode(...bytes));}
@@ -867,6 +1022,7 @@ btn.addEventListener('click', async ()=>{
     loadPasskeys();
   }
 
+  loadTrustPassport();
   loadSessions();
 })();
 </script>
