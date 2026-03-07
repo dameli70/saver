@@ -185,6 +185,48 @@ body{background:var(--bg);color:var(--text);font-family:var(--mono);min-height:1
         <div id="unlock-msg" class="msg"></div>
       </div>
 
+      <div id="typeb-block" style="display:none; margin-top:12px;">
+        <div class="hr" style="border-top:1px solid var(--b1);margin:16px 0;"></div>
+        <div class="card-title" style="margin-bottom:10px;">Rotation (Type B)</div>
+        <div class="p" style="margin-bottom:10px;">Each turn requires maker approval + 50% participant approval. If approved, only the current turn user can reveal the unlock code for 72 hours.</div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div>
+            <div class="k">Current turn</div>
+            <div class="v" id="typeb-turn">—</div>
+          </div>
+          <div>
+            <div class="k">Consensus</div>
+            <div class="v" id="typeb-consensus">—</div>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
+          <div>
+            <div class="k">Window</div>
+            <div class="v" id="typeb-window">—</div>
+          </div>
+          <div>
+            <div class="k">Maker vote</div>
+            <div class="v" id="typeb-maker">—</div>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
+          <button class="btn btn-blue btn-sm" onclick="typeBVote('approve')">Approve</button>
+          <button class="btn btn-red btn-sm" onclick="typeBVote('reject')">Reject</button>
+          <button class="btn btn-primary btn-sm" id="typeb-reveal-btn" onclick="typeBReveal()" style="display:none;">Reveal code</button>
+        </div>
+
+        <div id="typeb-code-wrap" style="display:none;margin-top:12px;">
+          <div class="k">Unlock code (auto-clears)</div>
+          <input id="typeb-code" readonly style="margin-top:6px;width:100%;background:var(--s2);border:1px solid var(--b1);color:var(--text);font-family:var(--mono);font-size:14px;padding:12px;outline:none;">
+          <div class="small" id="typeb-code-exp" style="margin-top:6px;"></div>
+        </div>
+
+        <div id="typeb-msg" class="msg"></div>
+      </div>
+
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
         <button class="btn btn-primary btn-sm" id="join-btn" onclick="requestJoin()" style="display:none;">Request to join</button>
         <a class="btn btn-ghost btn-sm" href="rooms.php">Back to discovery</a>
@@ -359,6 +401,47 @@ function renderRoom(){
     }
   }
 
+  const typeb = document.getElementById('typeb-block');
+  if(typeb){
+    const isTypeB = (r.saving_type === 'B');
+    const canSeeB = isTypeB && r.my_status && (r.my_status === 'active' || r.my_status === 'approved');
+    typeb.style.display = canSeeB ? 'block' : 'none';
+
+    if(canSeeB){
+      const cur = r.rotation ? r.rotation.current : null;
+      const approvals = (r.rotation && r.rotation.votes) ? (r.rotation.votes.approvals||0) : 0;
+      const required = (r.rotation && r.rotation.votes) ? (r.rotation.votes.required||0) : 0;
+      const eligible = (r.rotation && r.rotation.votes) ? (r.rotation.votes.eligible||0) : 0;
+      const myVote = (r.rotation && r.rotation.my_vote) ? r.rotation.my_vote : 'none';
+      const makerVote = (r.rotation && r.rotation.maker_vote) ? r.rotation.maker_vote : 'none';
+
+      if(cur){
+        document.getElementById('typeb-turn').textContent = `#${cur.rotation_index} · ${cur.turn_user_email || 'user'}`;
+        document.getElementById('typeb-consensus').textContent = `${approvals}/${required} required (you: ${myVote} · eligible ${eligible})`;
+
+        if(cur.status === 'revealed'){
+          document.getElementById('typeb-window').textContent = `Revealed · expires ${fmt(cur.expires_at)}`;
+        } else if(cur.status === 'blocked_dispute'){
+          document.getElementById('typeb-window').textContent = 'Blocked (dispute)';
+        } else {
+          document.getElementById('typeb-window').textContent = 'Pending votes';
+        }
+
+        document.getElementById('typeb-maker').textContent = makerVote;
+
+        const canRevealB = (r.room_state === 'active' && r.my_status === 'active' && cur.status === 'revealed' && (cur.is_turn_user === 1));
+        document.getElementById('typeb-reveal-btn').style.display = canRevealB ? 'inline-flex' : 'none';
+
+      } else {
+        document.getElementById('typeb-turn').textContent = '—';
+        document.getElementById('typeb-consensus').textContent = '—';
+        document.getElementById('typeb-window').textContent = '—';
+        document.getElementById('typeb-maker').textContent = '—';
+        document.getElementById('typeb-reveal-btn').style.display = 'none';
+      }
+    }
+  }
+
   if(r.is_maker){
     document.getElementById('maker-card').style.display='block';
     loadJoinRequests();
@@ -422,6 +505,12 @@ function addFeedItem(ev){
   else if(ev.event_type === 'unlock_vote_updated') line = 'Unlock vote updated';
   else if(ev.event_type === 'unlock_revealed') line = 'Unlock revealed';
   else if(ev.event_type === 'unlock_expired') line = 'Unlock expired';
+  else if(ev.event_type === 'rotation_queue_created') line = 'Rotation queue created';
+  else if(ev.event_type === 'rotation_vote_updated') line = 'Rotation vote updated';
+  else if(ev.event_type === 'typeB_turn_revealed') line = 'Type B turn revealed';
+  else if(ev.event_type === 'typeB_turn_expired') line = 'Type B turn expired';
+  else if(ev.event_type === 'typeB_turn_advanced') line = 'Type B turn advanced';
+  else if(ev.event_type === 'rotation_blocked_dispute') line = 'Rotation blocked (dispute)';
   else if(ev.event_type === 'room_closed') line = 'Room closed';
   else if(ev.event_type === 'underfilled_alerted') line = 'Underfilled alert sent';
   else if(ev.event_type === 'underfilled_resolved') line = 'Underfilled resolved';
@@ -509,6 +598,44 @@ async function unlockReveal(){
 
   }catch(e){
     setMsg('unlock-msg', e.message||'Failed', false);
+  }
+}
+
+async function typeBVote(vote){
+  try{
+    const res = await postCsrf('/api/rooms.php', {action:'typeB_vote', room_id: ROOM_ID, vote});
+    if(!res.success) throw new Error(res.error||'Failed');
+    setMsg('typeb-msg','Saved.', true);
+    await loadRoom();
+  }catch(e){
+    setMsg('typeb-msg', e.message||'Failed', false);
+  }
+}
+
+async function typeBReveal(){
+  try{
+    const res = await postCsrf('/api/rooms.php', {action:'typeB_reveal', room_id: ROOM_ID});
+    if(!res.success) throw new Error(res.error||'Failed');
+
+    const wrap = document.getElementById('typeb-code-wrap');
+    const input = document.getElementById('typeb-code');
+    const exp = document.getElementById('typeb-code-exp');
+
+    wrap.style.display='block';
+    input.value = String(res.code||'');
+    exp.textContent = `Expires at ${fmt(res.expires_at)}`;
+
+    if (unlockClearTimer) clearTimeout(unlockClearTimer);
+    unlockClearTimer = setTimeout(()=>{
+      input.value='';
+      wrap.style.display='none';
+    }, 30000);
+
+    setMsg('typeb-msg','Code revealed. It will auto-clear in 30 seconds.', true);
+    await pollFeed();
+
+  }catch(e){
+    setMsg('typeb-msg', e.message||'Failed', false);
   }
 }
 

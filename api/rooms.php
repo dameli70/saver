@@ -355,6 +355,69 @@ if ($action === 'room_detail') {
         ];
     }
 
+    $rotation = null;
+    if ($room['saving_type'] === 'B' && in_array($myStatus, ['active','approved'], true)) {
+        $win = $db->prepare("SELECT w.id, w.user_id, w.rotation_index, w.status, w.revealed_at, w.expires_at, w.dispute_window_ends_at,
+                                    u.email AS turn_user_email
+                             FROM saving_room_rotation_windows w
+                             JOIN users u ON u.id = w.user_id
+                             WHERE w.room_id = ?
+                               AND w.status IN ('pending_votes','revealed','blocked_dispute','blocked_debt')
+                             ORDER BY w.rotation_index DESC
+                             LIMIT 1");
+        $win->execute([$roomId]);
+        $w = $win->fetch();
+
+        if ($w) {
+            $eligibleStmt = $db->prepare("SELECT COUNT(*) FROM saving_room_participants WHERE room_id = ? AND status = 'active'");
+            $eligibleStmt->execute([$roomId]);
+            $eligible = (int)$eligibleStmt->fetchColumn();
+    $required = (int)ceil(max(0, $eligible - 1) * 0.5);
+
+    $approvalsStmt = $db->prepare("SELECT COUNT(*) FROM saving_room_unlock_votes
+                                   WHERE room_id = ?
+                                     AND scope = 'typeB_turn_unlock'
+                                     AND target_rotation_index = ?
+                                     AND vote = 'approve'
+                                     AND user_id <> ?");
+    $approvalsStmt->execute([$roomId, $rotationIndex, (int)$room['maker_user_id']]);
+    $approvals = (int)$approvalsStmt->fetchColumn();
+
+            $myVoteStmt = $db->prepare("SELECT vote FROM saving_room_unlock_votes
+                                        WHERE room_id = ? AND user_id = ?
+                                          AND scope='typeB_turn_unlock'
+                                          AND target_rotation_index = ?");
+            $myVoteStmt->execute([$roomId, $userId, (int)$w['rotation_index']]);
+            $myVote = $myVoteStmt->fetchColumn();
+
+            $makerVoteStmt = $db->prepare("SELECT vote FROM saving_room_unlock_votes
+                                           WHERE room_id = ? AND user_id = ?
+                                             AND scope='typeB_turn_unlock'
+                                             AND target_rotation_index = ?");
+            $makerVoteStmt->execute([$roomId, (int)$room['maker_user_id'], (int)$w['rotation_index']]);
+            $makerVote = $makerVoteStmt->fetchColumn();
+
+            $rotation = [
+                'current' => [
+                    'rotation_index' => (int)$w['rotation_index'],
+                    'status' => $w['status'],
+                    'revealed_at' => $w['revealed_at'],
+                    'expires_at' => $w['expires_at'],
+                    'dispute_window_ends_at' => $w['dispute_window_ends_at'],
+                    'turn_user_email' => $w['turn_user_email'],
+                    'is_turn_user' => ((int)$w['user_id'] === $userId) ? 1 : 0,
+                ],
+                'votes' => [
+                    'approvals' => $approvals,
+                    'required' => $required,
+                    'eligible' => $eligible,
+                ],
+                'my_vote' => $myVote ?: null,
+                'maker_vote' => $makerVote ?: null,
+            ];
+        }
+    }
+
     jsonResponse([
         'success' => true,
         'room' => [
@@ -390,6 +453,7 @@ if ($action === 'room_detail') {
                 'status' => $activeCycle['status'],
             ] : null,
             'unlock' => $unlock,
+            'rotation' => $rotation,
             'destination_account' => $destinationAccount,
             'escrow_settlements' => $escrowSettlements,
         ],
@@ -1006,6 +1070,149 @@ if ($action === 'typeA_reveal') {
         'code' => $unlockCode,
         'revealed_at' => $event['revealed_at'],
         'expires_at' => $event['expires_at'],
+    ]);
+}
+
+// ── TYPE B: TURN VOTE (50% maker gate + 50% participant gate)
+if ($action === 'typeB_vote') {
+    requireLogin();
+    requireVerifiedEmail();
+    requireCsrf();
+
+    $userId = (int)getCurrentUserId();
+    $roomId = (string)($body['room_id'] ?? '');
+    $vote = (string)($body['vote'] ?? '');
+
+    if ($roomId === '' || strlen($roomId) !== 36) jsonResponse(['error' => 'Invalid room_id'], 400);
+    if (!in_array($vote, ['approve','reject'], true)) jsonResponse(['error' => 'Invalid vote'], 400);
+
+    $db = getDB();
+
+    $roomStmt = $db->prepare('SELECT saving_type, room_state, maker_user_id FROM saving_rooms WHERE id = ?');
+    $roomStmt->execute([$roomId]);
+    $room = $roomStmt->fetch();
+    if (!$room) jsonResponse(['error' => 'Room not found'], 404);
+
+    if ($room['saving_type'] !== 'B') jsonResponse(['error' => 'Not a Type B room'], 400);
+    if ($room['room_state'] !== 'active') jsonResponse(['error' => 'Room is not active'], 403);
+
+    $mem = $db->prepare('SELECT status FROM saving_room_participants WHERE room_id = ? AND user_id = ?');
+    $mem->execute([$roomId, $userId]);
+    $st = (string)$mem->fetchColumn();
+    if ($st !== 'active') jsonResponse(['error' => 'Not an active participant'], 403);
+
+    $winStmt = $db->prepare("SELECT rotation_index, status
+                             FROM saving_room_rotation_windows
+                             WHERE room_id = ?
+                               AND status IN ('pending_votes','revealed','blocked_dispute','blocked_debt')
+                             ORDER BY rotation_index DESC
+                             LIMIT 1");
+    $winStmt->execute([$roomId]);
+    $w = $winStmt->fetch();
+    if (!$w) jsonResponse(['error' => 'Rotation window not initialized'], 500);
+
+    $rotationIndex = (int)$w['rotation_index'];
+    if ($w['status'] !== 'pending_votes') {
+        jsonResponse(['error' => 'Voting is closed for the current rotation window'], 403);
+    }
+
+    $db->prepare("INSERT INTO saving_room_unlock_votes (room_id, user_id, scope, target_rotation_index, vote)
+                  VALUES (?, ?, 'typeB_turn_unlock', ?, ?)
+                  ON DUPLICATE KEY UPDATE vote=VALUES(vote), updated_at=NOW()")
+       ->execute([$roomId, $userId, $rotationIndex, $vote]);
+
+    $eligibleStmt = $db->prepare("SELECT COUNT(*) FROM saving_room_participants WHERE room_id = ? AND status = 'active'");
+    $eligibleStmt->execute([$roomId]);
+    $eligible = (int)$eligibleStmt->fetchColumn();
+    $required = (int)ceil(max(0, $eligible - 1) * 0.5);
+
+    $approvalsStmt = $db->prepare("SELECT COUNT(*) FROM saving_room_unlock_votes
+                                   WHERE room_id = ?
+                                     AND scope = 'typeB_turn_unlock'
+                                     AND target_rotation_index = ?
+                                     AND vote = 'approve'
+                                     AND user_id <> ?");
+    $approvalsStmt->execute([$roomId, $rotationIndex, (int)$room['maker_user_id']]);
+    $approvals = (int)$approvalsStmt->fetchColumn();
+
+    $makerVoteStmt = $db->prepare("SELECT vote FROM saving_room_unlock_votes
+                                   WHERE room_id = ? AND user_id = ?
+                                     AND scope='typeB_turn_unlock'
+                                     AND target_rotation_index = ?");
+    $makerVoteStmt->execute([$roomId, (int)$room['maker_user_id'], $rotationIndex]);
+    $makerVote = $makerVoteStmt->fetchColumn();
+
+    activityLog($roomId, 'rotation_vote_updated', [
+        'rotation_index' => $rotationIndex,
+        'approvals' => $approvals,
+        'required' => $required,
+        'eligible' => $eligible,
+        'maker_vote' => $makerVote ?: null,
+    ]);
+
+    auditLog('room_typeB_vote');
+    jsonResponse(['success' => true]);
+}
+
+// ── TYPE B: REVEAL TURN UNLOCK CODE (turn user only)
+if ($action === 'typeB_reveal') {
+    requireLogin();
+    requireVerifiedEmail();
+    requireCsrf();
+    requireStrongAuth();
+
+    $userId = (int)getCurrentUserId();
+    $roomId = (string)($body['room_id'] ?? '');
+    if ($roomId === '' || strlen($roomId) !== 36) jsonResponse(['error' => 'Invalid room_id'], 400);
+
+    $db = getDB();
+
+    $roomStmt = $db->prepare('SELECT saving_type, room_state FROM saving_rooms WHERE id = ?');
+    $roomStmt->execute([$roomId]);
+    $room = $roomStmt->fetch();
+    if (!$room) jsonResponse(['error' => 'Room not found'], 404);
+
+    if ($room['saving_type'] !== 'B') jsonResponse(['error' => 'Not a Type B room'], 400);
+    if ($room['room_state'] !== 'active') jsonResponse(['error' => 'Room is not active'], 403);
+
+    $winStmt = $db->prepare("SELECT user_id, rotation_index, status, revealed_at, expires_at
+                             FROM saving_room_rotation_windows
+                             WHERE room_id = ?
+                               AND status = 'revealed'
+                             ORDER BY rotation_index DESC
+                             LIMIT 1");
+    $winStmt->execute([$roomId]);
+    $w = $winStmt->fetch();
+    if (!$w) jsonResponse(['error' => 'No revealed rotation window'], 403);
+
+    if ((int)$w['user_id'] !== $userId) {
+        jsonResponse(['error' => 'Only the current turn user can reveal the code'], 403);
+    }
+
+    $expTs = strtotime((string)$w['expires_at']);
+    if ($expTs && time() >= $expTs) {
+        jsonResponse(['error' => 'Unlock window has expired'], 403);
+    }
+
+    $acctStmt = $db->prepare("SELECT a.unlock_code_enc
+                              FROM saving_room_accounts ra
+                              JOIN platform_destination_accounts a ON a.id = ra.account_id
+                              WHERE ra.room_id = ?
+                              LIMIT 1");
+    $acctStmt->execute([$roomId]);
+    $enc = $acctStmt->fetchColumn();
+    if (!$enc) jsonResponse(['error' => 'Destination account is not configured for this room'], 500);
+
+    $unlockCode = decryptFromDb((string)$enc);
+
+    auditLog('room_typeB_reveal');
+
+    jsonResponse([
+        'success' => true,
+        'code' => $unlockCode,
+        'rotation_index' => (int)$w['rotation_index'],
+        'revealed_at' => $w['revealed_at'],
+        'expires_at' => $w['expires_at'],
     ]);
 }
 

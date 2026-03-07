@@ -100,13 +100,19 @@ function applyStrike(PDO $db, int $userId, string $strikeType, string $roomId = 
     $db->prepare('INSERT INTO user_strikes (user_id, room_id, cycle_id, strike_type) VALUES (?, ?, ?, ?)')
        ->execute([(int)$userId, $roomId, $cycleId, $strikeType]);
 
-    // Level regression rule: 3+ strikes in 6 months -> demote one level
     ensureTrustRow($db, $userId);
 
-    $t = $db->prepare('SELECT trust_level FROM user_trust WHERE user_id = ?');
+    $t = $db->prepare('SELECT trust_level, last_level_change_at FROM user_trust WHERE user_id = ?');
     $t->execute([(int)$userId]);
-    $lvl = (int)$t->fetchColumn();
+    $row = $t->fetch();
+
+    $lvl = (int)($row['trust_level'] ?? 1);
     if ($lvl < 1) $lvl = 1;
+
+    $lastChangeTs = null;
+    if (!empty($row['last_level_change_at'])) {
+        $lastChangeTs = strtotime((string)$row['last_level_change_at']);
+    }
 
     $count = strikes6m($db, $userId);
     if ($count >= 3) {
@@ -117,11 +123,62 @@ function applyStrike(PDO $db, int $userId, string $strikeType, string $roomId = 
                       ON DUPLICATE KEY UPDATE restricted_until = GREATEST(restricted_until, VALUES(restricted_until)), reason='strikes_6m', updated_at=NOW()")
            ->execute([(int)$userId, $until]);
 
-        // Trust level regression (one level per new strike beyond the threshold)
-        if ($lvl > 1) {
+        // Level regression: demote once per rolling 6-month window.
+        $sixMonthsAgo = time() - (183 * 86400);
+        if ($lvl > 1 && (!$lastChangeTs || $lastChangeTs < $sixMonthsAgo)) {
             $db->prepare('UPDATE user_trust SET trust_level = ?, last_level_change_at = NOW() WHERE user_id = ?')
                ->execute([max(1, $lvl - 1), (int)$userId]);
         }
+    }
+}
+
+function shuffleSecure(array &$arr): void {
+    $n = count($arr);
+    for ($i = $n - 1; $i > 0; $i--) {
+        $j = random_int(0, $i);
+        $tmp = $arr[$i];
+        $arr[$i] = $arr[$j];
+        $arr[$j] = $tmp;
+    }
+}
+
+function updateTrustAfterCompletion(PDO $db, int $userId): void {
+    ensureTrustRow($db, $userId);
+
+    $cnt = $db->prepare('SELECT COUNT(*) FROM user_completed_reveals WHERE user_id = ?');
+    $cnt->execute([(int)$userId]);
+    $completed = (int)$cnt->fetchColumn();
+
+    $db->prepare('UPDATE user_trust SET completed_reveals_count = ? WHERE user_id = ?')
+       ->execute([$completed, (int)$userId]);
+
+    $countsStmt = $db->prepare('SELECT
+                                    SUM(CASE WHEN duration_days >= 30 THEN 1 ELSE 0 END) AS month_ok,
+                                    SUM(CASE WHEN duration_days >= 21 THEN 1 ELSE 0 END) AS wk3_ok
+                                FROM user_completed_reveals
+                                WHERE user_id = ?');
+    $countsStmt->execute([(int)$userId]);
+    $counts = $countsStmt->fetch();
+
+    $monthOk = (int)($counts['month_ok'] ?? 0);
+    $wk3Ok = (int)($counts['wk3_ok'] ?? 0);
+
+    $t = $db->prepare('SELECT trust_level FROM user_trust WHERE user_id = ?');
+    $t->execute([(int)$userId]);
+    $lvl = (int)$t->fetchColumn();
+    if ($lvl < 1) $lvl = 1;
+
+    $newLvl = $lvl;
+    if ($newLvl < 2 && $monthOk >= 2) {
+        $newLvl = 2;
+    }
+    if ($newLvl < 3 && $newLvl >= 2 && $wk3Ok >= 4) {
+        $newLvl = 3;
+    }
+
+    if ($newLvl !== $lvl) {
+        $db->prepare('UPDATE user_trust SET trust_level = ?, last_level_change_at = NOW() WHERE user_id = ?')
+           ->execute([$newLvl, (int)$userId]);
     }
 }
 
@@ -149,6 +206,31 @@ foreach ($roomsToStart as $r) {
     if (!empty($room['saving_type']) && $room['saving_type'] === 'A') {
         $db->prepare("INSERT IGNORE INTO saving_room_unlock_events (room_id, status, created_at) VALUES (?, 'pending', NOW())")
            ->execute([$roomId]);
+    }
+
+    // Create Type B rotation order + first window
+    if (!empty($room['saving_type']) && $room['saving_type'] === 'B') {
+        $parts = $db->prepare("SELECT user_id FROM saving_room_participants WHERE room_id = ? AND status = 'active' ORDER BY joined_at ASC");
+        $parts->execute([$roomId]);
+        $ids = array_map(fn($x) => (int)$x['user_id'], $parts->fetchAll());
+
+        if (count($ids) >= 2) {
+            shuffleSecure($ids);
+
+            $pos = 1;
+            foreach ($ids as $uid) {
+                $st = ($pos === 1) ? 'active_window' : 'queued';
+                $db->prepare("INSERT IGNORE INTO saving_room_rotation_queue (room_id, user_id, position, status) VALUES (?, ?, ?, ?)")
+                   ->execute([$roomId, $uid, $pos, $st]);
+                $pos++;
+            }
+
+            $firstUserId = (int)$ids[0];
+            $db->prepare("INSERT IGNORE INTO saving_room_rotation_windows (room_id, user_id, rotation_index, status) VALUES (?, ?, 1, 'pending_votes')")
+               ->execute([$roomId, $firstUserId]);
+
+            activityLog($db, $roomId, 'rotation_queue_created', ['rotation_index' => 1]);
+        }
     }
 
     // Create first contribution cycle due at start time (cycle_index=1)
@@ -589,6 +671,211 @@ foreach ($typeAExpired as $x) {
                 'account',
                 (string)$accountId
             );
+        }
+    }
+}
+
+// ───────────────────────────────────────────────────────────
+//  2e) Type B rotation windows
+// ───────────────────────────────────────────────────────────
+$typeBWindows = $db->query("SELECT w.id, w.room_id, w.user_id, w.rotation_index, w.status, w.revealed_at, w.expires_at,
+                                   r.maker_user_id, r.privacy_mode
+                            FROM saving_room_rotation_windows w
+                            JOIN saving_rooms r ON r.id = w.room_id
+                            WHERE r.saving_type = 'B'
+                              AND r.room_state = 'active'
+                              AND w.status IN ('pending_votes','revealed','blocked_dispute')
+                            ORDER BY w.created_at ASC
+                            LIMIT 500")->fetchAll();
+
+foreach ($typeBWindows as $w) {
+    $winId = (int)$w['id'];
+    $roomId = (string)$w['room_id'];
+    $turnUserId = (int)$w['user_id'];
+    $rotationIndex = (int)$w['rotation_index'];
+    $st = (string)$w['status'];
+
+    if (in_array($st, ['blocked_dispute','blocked_debt'], true)) {
+        continue;
+    }
+
+    $disp = $db->prepare("SELECT status FROM saving_room_disputes
+                          WHERE room_id = ? AND rotation_index = ?
+                            AND status IN ('open','threshold_met','escalated_admin')
+                          LIMIT 1");
+    $disp->execute([$roomId, $rotationIndex]);
+    $dispStatus = $disp->fetchColumn();
+
+    if ($dispStatus) {
+        $db->prepare("UPDATE saving_room_rotation_windows SET status='blocked_dispute' WHERE id = ?")
+           ->execute([$winId]);
+        activityLog($db, $roomId, 'rotation_blocked_dispute', ['rotation_index' => $rotationIndex]);
+        continue;
+    }
+
+    if ($st === 'pending_votes') {
+        $eligibleStmt = $db->prepare("SELECT COUNT(*) FROM saving_room_participants WHERE room_id = ? AND status = 'active'");
+        $eligibleStmt->execute([$roomId]);
+        $eligible = (int)$eligibleStmt->fetchColumn();
+        if ($eligible < 1) continue;
+
+        $need = (int)ceil(max(0, $eligible - 1) * 0.5);
+        if ($need < 0) $need = 0;
+
+        $approvalsStmt = $db->prepare("SELECT COUNT(*) FROM saving_room_unlock_votes
+                                       WHERE room_id = ?
+                                         AND scope = 'typeB_turn_unlock'
+                                         AND target_rotation_index = ?
+                                         AND vote = 'approve'
+                                         AND user_id <> ?");
+        $approvalsStmt->execute([$roomId, $rotationIndex, (int)$w['maker_user_id']]);
+        $approvals = (int)$approvalsStmt->fetchColumn();
+
+        $makerVoteStmt = $db->prepare("SELECT vote FROM saving_room_unlock_votes
+                                       WHERE room_id = ?
+                                         AND user_id = ?
+                                         AND scope = 'typeB_turn_unlock'
+                                         AND target_rotation_index = ?");
+        $makerVoteStmt->execute([$roomId, (int)$w['maker_user_id'], $rotationIndex]);
+        $makerVote = (string)$makerVoteStmt->fetchColumn();
+
+        if ($makerVote === 'approve' && $approvals >= $need) {
+            $expires = (new DateTimeImmutable('now'))->modify('+72 hours')->format('Y-m-d H:i:s');
+
+            $db->prepare("UPDATE saving_room_rotation_windows
+                          SET status='revealed', revealed_at=NOW(), expires_at=?, dispute_window_ends_at=?
+                          WHERE id = ? AND status='pending_votes'")
+               ->execute([$expires, $expires, $winId]);
+
+            activityLog($db, $roomId, 'typeB_turn_revealed', ['rotation_index' => $rotationIndex, 'expires_at' => $expires]);
+
+            notifyOnce(
+                $db,
+                $turnUserId,
+                'typeB_turn_revealed',
+                'critical',
+                'Your turn unlock window is open',
+                'The destination account unlock code is available to you for 72 hours. Keep it secure and do not share it.',
+                ['room_id' => $roomId, 'rotation_index' => $rotationIndex, 'expires_at' => $expires],
+                'rotation',
+                $roomId . ':' . $rotationIndex
+            );
+
+            $parts = $db->prepare("SELECT user_id FROM saving_room_participants WHERE room_id = ? AND status = 'active'");
+            $parts->execute([$roomId]);
+            foreach ($parts->fetchAll() as $p) {
+                $uid = (int)$p['user_id'];
+                if ($uid === $turnUserId) continue;
+                notifyOnce(
+                    $db,
+                    $uid,
+                    'typeB_turn_opened',
+                    'informational',
+                    'Rotation unlock window opened',
+                    'A participant rotation window has opened in one of your Type B rooms.',
+                    ['room_id' => $roomId, 'rotation_index' => $rotationIndex, 'expires_at' => $expires],
+                    'rotation',
+                    $roomId . ':' . $rotationIndex
+                );
+            }
+        }
+    }
+
+    if ($st === 'revealed') {
+        if (empty($w['expires_at'])) continue;
+        $expTs = strtotime((string)$w['expires_at']);
+        if ($expTs && time() >= $expTs) {
+            $db->beginTransaction();
+
+            $db->prepare("UPDATE saving_room_rotation_windows SET status='expired' WHERE id = ? AND status='revealed'")
+               ->execute([$winId]);
+
+            activityLog($db, $roomId, 'typeB_turn_expired', ['rotation_index' => $rotationIndex]);
+
+            $db->prepare("UPDATE saving_room_rotation_queue SET status='completed' WHERE room_id = ? AND user_id = ?")
+               ->execute([$roomId, $turnUserId]);
+
+            $next = $db->prepare("SELECT user_id, position FROM saving_room_rotation_queue
+                                  WHERE room_id = ? AND status = 'queued'
+                                  ORDER BY position ASC
+                                  LIMIT 1");
+            $next->execute([$roomId]);
+            $nextRow = $next->fetch();
+
+            if ($nextRow) {
+                $nextUserId = (int)$nextRow['user_id'];
+                $nextIndex = $rotationIndex + 1;
+
+                $db->prepare("UPDATE saving_room_rotation_queue SET status='active_window' WHERE room_id = ? AND user_id = ?")
+                   ->execute([$roomId, $nextUserId]);
+
+                $db->prepare("INSERT IGNORE INTO saving_room_rotation_windows (room_id, user_id, rotation_index, status)
+                              VALUES (?, ?, ?, 'pending_votes')")
+                   ->execute([$roomId, $nextUserId, $nextIndex]);
+
+                activityLog($db, $roomId, 'typeB_turn_advanced', ['rotation_index' => $nextIndex]);
+
+                $db->commit();
+
+            } else {
+                $roomStmt = $db->prepare("SELECT id, start_at FROM saving_rooms WHERE id = ?");
+                $roomStmt->execute([$roomId]);
+                $room = $roomStmt->fetch();
+
+                $unlockedAt = date('Y-m-d H:i:s');
+                $startedAt = $room ? (string)$room['start_at'] : $unlockedAt;
+
+                $dur = 0;
+                $stTs = strtotime($startedAt);
+                $unTs = strtotime($unlockedAt);
+                if ($stTs && $unTs && $unTs >= $stTs) {
+                    $dur = (int)floor(($unTs - $stTs) / 86400);
+                }
+
+                $db->prepare("UPDATE saving_rooms SET room_state='closed', updated_at=NOW() WHERE id = ? AND room_state='active'")
+                   ->execute([$roomId]);
+
+                $db->prepare("UPDATE saving_room_participants SET status='completed', completed_at=NOW() WHERE room_id = ? AND status='active'")
+                   ->execute([$roomId]);
+
+                activityLog($db, $roomId, 'room_closed', ['reason' => 'rotation_complete']);
+
+                $parts = $db->prepare("SELECT user_id FROM saving_room_participants WHERE room_id = ? AND status = 'completed'");
+                $parts->execute([$roomId]);
+
+                foreach ($parts->fetchAll() as $p) {
+                    $uid = (int)$p['user_id'];
+                    $qualified = ($dur >= 21) ? 1 : 0;
+                    $db->prepare("INSERT IGNORE INTO user_completed_reveals (user_id, room_id, started_at, unlocked_at, duration_days, qualified_for_level)
+                                  VALUES (?, ?, ?, ?, ?, ?)")
+                       ->execute([$uid, $roomId, $startedAt, $unlockedAt, $dur, $qualified]);
+                    updateTrustAfterCompletion($db, $uid);
+                }
+
+                $db->commit();
+
+                $acctStmt = $db->prepare("SELECT account_id FROM saving_room_accounts WHERE room_id = ? LIMIT 1");
+                $acctStmt->execute([$roomId]);
+                $accountId = $acctStmt->fetchColumn();
+
+                if ($accountId) {
+                    $admins = $db->query("SELECT id FROM users WHERE is_admin = 1")->fetchAll();
+                    foreach ($admins as $a) {
+                        $aid = (int)$a['id'];
+                        notifyOnce(
+                            $db,
+                            $aid,
+                            'destination_account_rotation_required',
+                            'critical',
+                            'Destination account unlock code rotation required',
+                            'A Type B rotation has completed. Rotate the destination account unlock code now.',
+                            ['account_id' => (int)$accountId, 'room_id' => $roomId],
+                            'account',
+                            (string)$accountId
+                        );
+                    }
+                }
+            }
         }
     }
 }
