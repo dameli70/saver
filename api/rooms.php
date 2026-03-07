@@ -400,6 +400,40 @@ if ($action === 'room_detail') {
             $makerVoteStmt->execute([$roomId, (int)$room['maker_user_id'], (int)$w['rotation_index']]);
             $makerVote = $makerVoteStmt->fetchColumn();
 
+            $dispute = null;
+            $disp = $db->prepare("SELECT d.id, d.status, d.reason, d.threshold_count_required, d.created_at, d.updated_at,
+                                         u.email AS raised_by_email
+                                  FROM saving_room_disputes d
+                                  JOIN users u ON u.id = d.raised_by_user_id
+                                  WHERE d.room_id = ?
+                                    AND d.rotation_index = ?
+                                    AND d.status IN ('open','threshold_met','escalated_admin')
+                                  ORDER BY d.created_at DESC
+                                  LIMIT 1");
+            $disp->execute([$roomId, $rotationIndex]);
+            $d = $disp->fetch();
+            if ($d) {
+                $ackStmt = $db->prepare('SELECT COUNT(*) FROM saving_room_dispute_ack WHERE dispute_id = ?');
+                $ackStmt->execute([(int)$d['id']]);
+                $ackCount = (int)$ackStmt->fetchColumn();
+
+                $myAckStmt = $db->prepare('SELECT 1 FROM saving_room_dispute_ack WHERE dispute_id = ? AND user_id = ? LIMIT 1');
+                $myAckStmt->execute([(int)$d['id'], $userId]);
+                $myAck = (bool)$myAckStmt->fetchColumn();
+
+                $dispute = [
+                    'id' => (int)$d['id'],
+                    'status' => $d['status'],
+                    'reason' => $d['reason'],
+                    'raised_by_email' => $d['raised_by_email'],
+                    'threshold_required' => (int)$d['threshold_count_required'],
+                    'ack_count' => $ackCount,
+                    'my_ack' => $myAck ? 1 : 0,
+                    'created_at' => $d['created_at'],
+                    'updated_at' => $d['updated_at'],
+                ];
+            }
+
             $rotation = [
                 'current' => [
                     'rotation_index' => (int)$w['rotation_index'],
@@ -417,6 +451,7 @@ if ($action === 'room_detail') {
                 ],
                 'my_vote' => $myVote ?: null,
                 'maker_vote' => $makerVote ?: null,
+                'dispute' => $dispute,
             ];
         }
     }
@@ -1228,6 +1263,256 @@ if ($action === 'typeB_reveal') {
         'revealed_at' => $w['revealed_at'],
         'expires_at' => $w['expires_at'],
     ]);
+}
+
+// ── TYPE B: RAISE DISPUTE (24h window after reveal)
+if ($action === 'typeB_raise_dispute') {
+    requireLogin();
+    requireVerifiedEmail();
+    requireCsrf();
+
+    $userId = (int)getCurrentUserId();
+    $roomId = (string)($body['room_id'] ?? '');
+    $reason = trim((string)($body['reason'] ?? ''));
+
+    if ($roomId === '' || strlen($roomId) !== 36) jsonResponse(['error' => 'Invalid room_id'], 400);
+    if (strlen($reason) > 500) jsonResponse(['error' => 'Reason too long'], 400);
+
+    $db = getDB();
+
+    $roomStmt = $db->prepare('SELECT saving_type, room_state, maker_user_id FROM saving_rooms WHERE id = ?');
+    $roomStmt->execute([$roomId]);
+    $room = $roomStmt->fetch();
+    if (!$room) jsonResponse(['error' => 'Room not found'], 404);
+
+    if ($room['saving_type'] !== 'B') jsonResponse(['error' => 'Not a Type B room'], 400);
+    if ($room['room_state'] !== 'active') jsonResponse(['error' => 'Room is not active'], 403);
+
+    $mem = $db->prepare('SELECT status FROM saving_room_participants WHERE room_id = ? AND user_id = ?');
+    $mem->execute([$roomId, $userId]);
+    $st = (string)$mem->fetchColumn();
+    if ($st !== 'active') jsonResponse(['error' => 'Not an active participant'], 403);
+
+    $winStmt = $db->prepare("SELECT id, rotation_index, status, dispute_window_ends_at
+                             FROM saving_room_rotation_windows
+                             WHERE room_id = ?
+                               AND status IN ('revealed','blocked_dispute')
+                             ORDER BY rotation_index DESC
+                             LIMIT 1");
+    $winStmt->execute([$roomId]);
+    $w = $winStmt->fetch();
+    if (!$w) jsonResponse(['error' => 'No revealed rotation window'], 403);
+
+    $rotationIndex = (int)$w['rotation_index'];
+
+    $ends = (string)($w['dispute_window_ends_at'] ?? '');
+    if ($ends === '' || time() >= strtotime($ends)) {
+        jsonResponse(['error' => 'Dispute window has ended'], 403);
+    }
+
+    $existing = $db->prepare("SELECT id, status FROM saving_room_disputes
+                              WHERE room_id = ? AND rotation_index = ?
+                                AND status IN ('open','threshold_met','escalated_admin')
+                              ORDER BY created_at DESC
+                              LIMIT 1");
+    $existing->execute([$roomId, $rotationIndex]);
+    $ex = $existing->fetch();
+    if ($ex) {
+        jsonResponse(['success' => true, 'dispute_id' => (int)$ex['id'], 'status' => $ex['status']]);
+    }
+
+    $eligibleStmt = $db->prepare("SELECT COUNT(*) FROM saving_room_participants WHERE room_id = ? AND status = 'active'");
+    $eligibleStmt->execute([$roomId]);
+    $eligible = (int)$eligibleStmt->fetchColumn();
+    $required = (int)max(1, ceil($eligible * 0.5));
+
+    $db->beginTransaction();
+
+    $db->prepare("INSERT INTO saving_room_disputes
+                    (room_id, rotation_index, raised_by_user_id, reason, status, threshold_count_required, created_at, updated_at)
+                  VALUES
+                    (?, ?, ?, ?, 'open', ?, NOW(), NOW())")
+       ->execute([$roomId, $rotationIndex, $userId, ($reason === '' ? null : $reason), $required]);
+
+    $disputeId = (int)$db->lastInsertId();
+
+    $db->prepare('INSERT IGNORE INTO saving_room_dispute_ack (dispute_id, user_id) VALUES (?, ?)')
+       ->execute([$disputeId, $userId]);
+
+    $ackStmt = $db->prepare('SELECT COUNT(*) FROM saving_room_dispute_ack WHERE dispute_id = ?');
+    $ackStmt->execute([$disputeId]);
+    $ackCount = (int)$ackStmt->fetchColumn();
+
+    activityLog($roomId, 'dispute_raised', ['rotation_index' => $rotationIndex, 'ack_count' => $ackCount, 'required' => $required]);
+
+    $escalated = false;
+    if ($ackCount >= $required) {
+        $escalated = true;
+
+        $db->prepare("UPDATE saving_room_disputes SET status='escalated_admin', updated_at=NOW() WHERE id = ?")
+           ->execute([$disputeId]);
+
+        $db->prepare("UPDATE saving_room_rotation_windows SET status='blocked_dispute' WHERE room_id = ? AND rotation_index = ? AND status = 'revealed'")
+           ->execute([$roomId, $rotationIndex]);
+
+        activityLog($roomId, 'rotation_blocked_dispute', ['rotation_index' => $rotationIndex]);
+    }
+
+    $db->commit();
+
+    $makerId = (int)$room['maker_user_id'];
+    if ($makerId > 0) {
+        notifyOnceApi(
+            $makerId,
+            'typeB_dispute_raised',
+            'important',
+            'Dispute raised (Type B)',
+            'A dispute was raised for the current Type B rotation turn. Participants can acknowledge it within the dispute window.',
+            ['room_id' => $roomId, 'rotation_index' => $rotationIndex, 'dispute_id' => $disputeId],
+            'dispute',
+            (string)$disputeId
+        );
+    }
+
+    if ($escalated) {
+        $admins = $db->query("SELECT id FROM users WHERE is_admin = 1")->fetchAll();
+        foreach ($admins as $a) {
+            $aid = (int)$a['id'];
+            notifyOnceApi(
+                $aid,
+                'typeB_dispute_escalated',
+                'critical',
+                'Type B dispute requires review',
+                'A Type B rotation dispute has reached the acknowledgment threshold and requires admin review.',
+                ['room_id' => $roomId, 'rotation_index' => $rotationIndex, 'dispute_id' => $disputeId],
+                'dispute',
+                (string)$disputeId
+            );
+        }
+    }
+
+    auditLog('room_typeB_dispute_raise');
+
+    jsonResponse([
+        'success' => true,
+        'dispute' => [
+            'id' => $disputeId,
+            'status' => ($ackCount >= $required) ? 'escalated_admin' : 'open',
+            'reason' => ($reason === '' ? null : $reason),
+            'threshold_required' => $required,
+            'ack_count' => $ackCount,
+            'my_ack' => 1,
+        ],
+    ]);
+}
+
+// ── TYPE B: ACKNOWLEDGE DISPUTE
+if ($action === 'typeB_ack_dispute') {
+    requireLogin();
+    requireVerifiedEmail();
+    requireCsrf();
+
+    $userId = (int)getCurrentUserId();
+    $roomId = (string)($body['room_id'] ?? '');
+    $disputeId = (int)($body['dispute_id'] ?? 0);
+
+    if ($roomId === '' || strlen($roomId) !== 36) jsonResponse(['error' => 'Invalid room_id'], 400);
+    if ($disputeId <= 0) jsonResponse(['error' => 'dispute_id required'], 400);
+
+    $db = getDB();
+
+    $roomStmt = $db->prepare('SELECT saving_type, room_state, maker_user_id FROM saving_rooms WHERE id = ?');
+    $roomStmt->execute([$roomId]);
+    $room = $roomStmt->fetch();
+    if (!$room) jsonResponse(['error' => 'Room not found'], 404);
+
+    if ($room['saving_type'] !== 'B') jsonResponse(['error' => 'Not a Type B room'], 400);
+    if ($room['room_state'] !== 'active') jsonResponse(['error' => 'Room is not active'], 403);
+
+    $mem = $db->prepare('SELECT status FROM saving_room_participants WHERE room_id = ? AND user_id = ?');
+    $mem->execute([$roomId, $userId]);
+    $st = (string)$mem->fetchColumn();
+    if ($st !== 'active') jsonResponse(['error' => 'Not an active participant'], 403);
+
+    $disp = $db->prepare('SELECT id, room_id, rotation_index, status, threshold_count_required FROM saving_room_disputes WHERE id = ?');
+    $disp->execute([$disputeId]);
+    $d = $disp->fetch();
+    if (!$d) jsonResponse(['error' => 'Dispute not found'], 404);
+    if ((string)$d['room_id'] !== $roomId) jsonResponse(['error' => 'Dispute does not belong to room'], 403);
+
+    if (!in_array((string)$d['status'], ['open','threshold_met','escalated_admin'], true)) {
+        jsonResponse(['error' => 'Dispute is not open'], 409);
+    }
+
+    $rotationIndex = (int)$d['rotation_index'];
+
+    $winStmt = $db->prepare('SELECT dispute_window_ends_at FROM saving_room_rotation_windows WHERE room_id = ? AND rotation_index = ? LIMIT 1');
+    $winStmt->execute([$roomId, $rotationIndex]);
+    $ends = (string)$winStmt->fetchColumn();
+    if ($ends === '' || time() >= strtotime($ends)) {
+        jsonResponse(['error' => 'Dispute window has ended'], 403);
+    }
+
+    $db->beginTransaction();
+
+    $db->prepare('INSERT IGNORE INTO saving_room_dispute_ack (dispute_id, user_id) VALUES (?, ?)')
+       ->execute([$disputeId, $userId]);
+
+    $ackStmt = $db->prepare('SELECT COUNT(*) FROM saving_room_dispute_ack WHERE dispute_id = ?');
+    $ackStmt->execute([$disputeId]);
+    $ackCount = (int)$ackStmt->fetchColumn();
+
+    activityLog($roomId, 'dispute_ack_updated', ['rotation_index' => $rotationIndex, 'ack_count' => $ackCount, 'required' => (int)$d['threshold_count_required']]);
+
+    $escalated = false;
+    if ($ackCount >= (int)$d['threshold_count_required']) {
+        $escalated = true;
+
+        $db->prepare("UPDATE saving_room_disputes SET status='escalated_admin', updated_at=NOW() WHERE id = ? AND status <> 'escalated_admin'")
+           ->execute([$disputeId]);
+
+        $db->prepare("UPDATE saving_room_rotation_windows SET status='blocked_dispute' WHERE room_id = ? AND rotation_index = ? AND status = 'revealed'")
+           ->execute([$roomId, $rotationIndex]);
+
+        activityLog($roomId, 'rotation_blocked_dispute', ['rotation_index' => $rotationIndex]);
+    }
+
+    $db->commit();
+
+    if ($escalated) {
+        $admins = $db->query("SELECT id FROM users WHERE is_admin = 1")->fetchAll();
+        foreach ($admins as $a) {
+            $aid = (int)$a['id'];
+            notifyOnceApi(
+                $aid,
+                'typeB_dispute_escalated',
+                'critical',
+                'Type B dispute requires review',
+                'A Type B rotation dispute has reached the acknowledgment threshold and requires admin review.',
+                ['room_id' => $roomId, 'rotation_index' => $rotationIndex, 'dispute_id' => $disputeId],
+                'dispute',
+                (string)$disputeId
+            );
+        }
+
+        $makerId = (int)$room['maker_user_id'];
+        if ($makerId > 0) {
+            notifyOnceApi(
+                $makerId,
+                'typeB_dispute_escalated_maker',
+                'critical',
+                'Dispute escalated (Type B)',
+                'A Type B dispute has reached the acknowledgment threshold and the rotation is now blocked pending admin review.',
+                ['room_id' => $roomId, 'rotation_index' => $rotationIndex, 'dispute_id' => $disputeId],
+                'dispute',
+                (string)$disputeId
+            );
+        }
+    }
+
+    auditLog('room_typeB_dispute_ack');
+
+    jsonResponse(['success' => true, 'ack_count' => $ackCount]);
 }
 
 // ── CONTRIBUTION: CONFIRM (server-side acknowledgement)

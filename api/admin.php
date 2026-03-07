@@ -31,6 +31,114 @@ function hasColumn(PDO $db, string $table, string $column): bool {
     return (bool)$stmt->fetchColumn();
 }
 
+function roomActivity(PDO $db, string $roomId, string $eventType, array $payload): void {
+    $db->prepare('INSERT INTO saving_room_activity (room_id, event_type, public_payload_json) VALUES (?, ?, ?)')
+       ->execute([$roomId, $eventType, json_encode($payload, JSON_UNESCAPED_UNICODE)]);
+}
+
+function notifyOnceAdmin(PDO $db, int $userId, string $eventKey, string $tier, string $title, string $body, array $data = [], string $refType = null, string $refId = null, string $channelMask = ''): void {
+    if ($channelMask === '') {
+        if ($tier === 'critical') $channelMask = 'push,inapp,email';
+        else if ($tier === 'important') $channelMask = 'push,inapp';
+        else $channelMask = 'inapp';
+    }
+
+    $db->prepare('INSERT IGNORE INTO notification_events (user_id, event_key, ref_type, ref_id) VALUES (?, ?, ?, ?)')
+       ->execute([$userId, $eventKey, $refType, $refId]);
+
+    if ($db->lastInsertId() === '0') return;
+
+    $db->prepare('INSERT INTO notifications (user_id, tier, channel_mask, title, body, data_json) VALUES (?, ?, ?, ?, ?, ?)')
+       ->execute([$userId, $tier, $channelMask, $title, $body, $data ? json_encode($data, JSON_UNESCAPED_UNICODE) : null]);
+}
+
+function ensureTrustRow(PDO $db, int $userId): void {
+    $db->prepare('INSERT IGNORE INTO user_trust (user_id, trust_level, completed_reveals_count) VALUES (?, 1, 0)')
+       ->execute([(int)$userId]);
+}
+
+function strikes6m(PDO $db, int $userId): int {
+    $s = $db->prepare("SELECT COUNT(*) FROM user_strikes WHERE user_id = ? AND created_at >= (NOW() - INTERVAL 6 MONTH)");
+    $s->execute([(int)$userId]);
+    return (int)$s->fetchColumn();
+}
+
+function applyStrikeDb(PDO $db, int $userId, string $strikeType, ?string $roomId = null): void {
+    $db->prepare('INSERT INTO user_strikes (user_id, room_id, cycle_id, strike_type) VALUES (?, ?, NULL, ?)')
+       ->execute([(int)$userId, $roomId, $strikeType]);
+
+    ensureTrustRow($db, $userId);
+
+    $t = $db->prepare('SELECT trust_level, last_level_change_at FROM user_trust WHERE user_id = ?');
+    $t->execute([(int)$userId]);
+    $row = $t->fetch();
+    $lvl = (int)($row['trust_level'] ?? 1);
+    $last = $row['last_level_change_at'] ? strtotime((string)$row['last_level_change_at']) : null;
+
+    $count = strikes6m($db, $userId);
+    if ($count >= 3) {
+        $until = (new DateTimeImmutable('now'))->modify('+30 days')->format('Y-m-d H:i:s');
+        $db->prepare("INSERT INTO user_restrictions (user_id, restricted_until, reason, updated_at)
+                      VALUES (?, ?, 'strikes_6m', NOW())
+                      ON DUPLICATE KEY UPDATE restricted_until = GREATEST(restricted_until, VALUES(restricted_until)), reason='strikes_6m', updated_at=NOW()")
+           ->execute([(int)$userId, $until]);
+
+        $sixMonthsAgo = time() - (183 * 86400);
+        if ($lvl > 1 && (!$last || $last < $sixMonthsAgo)) {
+            $db->prepare('UPDATE user_trust SET trust_level = ?, last_level_change_at = NOW() WHERE user_id = ?')
+               ->execute([max(1, $lvl - 1), (int)$userId]);
+        }
+    }
+}
+
+function advanceTypeBWindow(PDO $db, string $roomId, int $rotationIndex): void {
+    $nextIndex = $rotationIndex + 1;
+    $guard = 0;
+    $nextUserId = null;
+
+    while ($guard < 80) {
+        $guard++;
+
+        $next = $db->prepare("SELECT user_id FROM saving_room_rotation_queue WHERE room_id = ? AND status='queued' ORDER BY position ASC LIMIT 1");
+        $next->execute([$roomId]);
+        $candidate = $next->fetchColumn();
+
+        if (!$candidate) {
+            $db->prepare("UPDATE saving_room_rotation_queue SET status='queued' WHERE room_id = ? AND status='completed'")
+               ->execute([$roomId]);
+
+            $next->execute([$roomId]);
+            $candidate = $next->fetchColumn();
+            if (!$candidate) break;
+        }
+
+        $candId = (int)$candidate;
+        $st = $db->prepare('SELECT status FROM saving_room_participants WHERE room_id = ? AND user_id = ?');
+        $st->execute([$roomId, $candId]);
+        $pStatus = (string)$st->fetchColumn();
+
+        if ($pStatus !== 'active') {
+            $db->prepare("UPDATE saving_room_rotation_queue SET status='skipped_removed' WHERE room_id = ? AND user_id = ?")
+               ->execute([$roomId, $candId]);
+            continue;
+        }
+
+        $nextUserId = $candId;
+        break;
+    }
+
+    if ($nextUserId !== null) {
+        $db->prepare("INSERT IGNORE INTO saving_room_rotation_windows (room_id, user_id, rotation_index, status)
+                      VALUES (?, ?, ?, 'pending_votes')")
+           ->execute([$roomId, (int)$nextUserId, $nextIndex]);
+
+        $db->prepare("UPDATE saving_room_rotation_queue SET status='active_window' WHERE room_id = ? AND user_id = ?")
+           ->execute([$roomId, (int)$nextUserId]);
+
+        roomActivity($db, $roomId, 'typeB_turn_advanced', ['rotation_index' => $nextIndex]);
+    }
+}
+
 if ($method === 'GET') {
     $action = $_GET['action'] ?? '';
 
@@ -181,6 +289,40 @@ if ($method === 'GET') {
                             ORDER BY r.created_at DESC
                             LIMIT {$limit}")->fetchAll();
         jsonResponse(['success' => true, 'rooms' => $rows]);
+    }
+
+    // ── DISPUTES (saving rooms) ─────────────────────────────
+    if ($action === 'disputes') {
+        $db = getDB();
+
+        $limit  = intParam($_GET['limit'] ?? 200, 200);
+        $limit  = max(1, min(500, $limit));
+
+        $includeResolved = !empty($_GET['include_resolved']);
+
+        $where = $includeResolved ? '' : "WHERE d.status IN ('open','threshold_met','escalated_admin')";
+
+        $sql = "SELECT
+                    d.id,
+                    d.room_id,
+                    d.rotation_index,
+                    d.status,
+                    d.reason,
+                    d.threshold_count_required,
+                    d.created_at,
+                    d.updated_at,
+                    r.goal_text,
+                    u.email AS raised_by_email,
+                    (SELECT COUNT(*) FROM saving_room_dispute_ack a WHERE a.dispute_id = d.id) AS ack_count
+                FROM saving_room_disputes d
+                JOIN saving_rooms r ON r.id = d.room_id
+                JOIN users u ON u.id = d.raised_by_user_id
+                {$where}
+                ORDER BY d.created_at DESC
+                LIMIT {$limit}";
+
+        $rows = $db->query($sql)->fetchAll();
+        jsonResponse(['success' => true, 'disputes' => $rows]);
     }
 
     // ── AUDIT LOG ────────────────────────────────────────────
@@ -508,6 +650,140 @@ if ($method === 'POST') {
            ->execute([$roomId, $accountId]);
 
         auditLog('admin_room_assign_account', null, getCurrentUserId());
+        jsonResponse(['success' => true]);
+    }
+
+    // ── DISPUTES: RESOLVE (saving rooms) ─────────────────────
+    if ($action === 'dispute_resolve') {
+        requireStrongAuth();
+
+        $disputeId = intParam($body['dispute_id'] ?? 0, 0);
+        $decision = (string)($body['decision'] ?? '');
+
+        if ($disputeId < 1) jsonResponse(['error' => 'dispute_id required'], 400);
+        if (!in_array($decision, ['validated','dismissed'], true)) jsonResponse(['error' => 'Invalid decision'], 400);
+
+        $db = getDB();
+
+        $dispStmt = $db->prepare('SELECT id, room_id, rotation_index, raised_by_user_id, status FROM saving_room_disputes WHERE id = ?');
+        $dispStmt->execute([$disputeId]);
+        $d = $dispStmt->fetch();
+        if (!$d) jsonResponse(['error' => 'Dispute not found'], 404);
+
+        $curStatus = (string)$d['status'];
+        if (in_array($curStatus, ['validated','dismissed'], true)) {
+            jsonResponse(['error' => 'Dispute already resolved'], 409);
+        }
+
+        $roomId = (string)$d['room_id'];
+        $rotationIndex = (int)$d['rotation_index'];
+
+        $makerStmt = $db->prepare('SELECT maker_user_id FROM saving_rooms WHERE id = ?');
+        $makerStmt->execute([$roomId]);
+        $makerId = (int)$makerStmt->fetchColumn();
+
+        $winStmt = $db->prepare('SELECT id, user_id, status, expires_at FROM saving_room_rotation_windows WHERE room_id = ? AND rotation_index = ? LIMIT 1');
+        $winStmt->execute([$roomId, $rotationIndex]);
+        $w = $winStmt->fetch();
+        if (!$w) jsonResponse(['error' => 'Rotation window not found'], 404);
+
+        $turnUserId = (int)$w['user_id'];
+        $expTs = strtotime((string)($w['expires_at'] ?? ''));
+        $isExpired = ($expTs && time() >= $expTs);
+
+        $db->beginTransaction();
+
+        if ($decision === 'validated') {
+            $db->prepare("UPDATE saving_room_disputes
+                          SET status='validated', admin_decision_at=NOW(), admin_decision_by=?, updated_at=NOW()
+                          WHERE id = ?")
+               ->execute([getCurrentUserId(), $disputeId]);
+
+            applyStrikeDb($db, $turnUserId, 'abandonment', $roomId);
+
+            $db->prepare("UPDATE saving_room_rotation_windows
+                          SET status='expired', expires_at=COALESCE(expires_at, NOW())
+                          WHERE room_id = ? AND rotation_index = ? AND status IN ('revealed','blocked_dispute','pending_votes')")
+               ->execute([$roomId, $rotationIndex]);
+
+            $db->prepare("UPDATE saving_room_rotation_queue SET status='completed' WHERE room_id = ? AND user_id = ? AND status='active_window'")
+               ->execute([$roomId, $turnUserId]);
+
+            roomActivity($db, $roomId, 'dispute_validated', ['rotation_index' => $rotationIndex, 'dispute_id' => $disputeId]);
+
+            advanceTypeBWindow($db, $roomId, $rotationIndex);
+
+        } else {
+            $db->prepare("UPDATE saving_room_disputes
+                          SET status='dismissed', admin_decision_at=NOW(), admin_decision_by=?, updated_at=NOW()
+                          WHERE id = ?")
+               ->execute([getCurrentUserId(), $disputeId]);
+
+            applyStrikeDb($db, (int)$d['raised_by_user_id'], 'false_dispute', $roomId);
+
+            roomActivity($db, $roomId, 'dispute_dismissed', ['rotation_index' => $rotationIndex, 'dispute_id' => $disputeId]);
+
+            if ((string)$w['status'] === 'blocked_dispute' && !$isExpired) {
+                $db->prepare("UPDATE saving_room_rotation_windows SET status='revealed' WHERE id = ? AND status='blocked_dispute'")
+                   ->execute([(int)$w['id']]);
+
+                roomActivity($db, $roomId, 'rotation_unblocked', ['rotation_index' => $rotationIndex]);
+
+            } else if ($isExpired) {
+                $db->prepare("UPDATE saving_room_rotation_windows SET status='expired' WHERE id = ? AND status IN ('revealed','blocked_dispute')")
+                   ->execute([(int)$w['id']]);
+
+                $db->prepare("UPDATE saving_room_rotation_queue SET status='completed' WHERE room_id = ? AND user_id = ? AND status='active_window'")
+                   ->execute([$roomId, $turnUserId]);
+
+                roomActivity($db, $roomId, 'typeB_turn_expired', ['rotation_index' => $rotationIndex]);
+
+                advanceTypeBWindow($db, $roomId, $rotationIndex);
+            }
+        }
+
+        $db->commit();
+
+        // Notifications after commit (best-effort)
+        if ($makerId > 0) {
+            notifyOnceAdmin(
+                $db,
+                $makerId,
+                'typeB_dispute_resolved',
+                'important',
+                'Dispute resolved',
+                'A Type B dispute has been resolved by an admin.',
+                ['room_id' => $roomId, 'rotation_index' => $rotationIndex, 'decision' => $decision, 'dispute_id' => $disputeId],
+                'dispute',
+                (string)$disputeId
+            );
+        }
+
+        notifyOnceAdmin(
+            $db,
+            (int)$d['raised_by_user_id'],
+            'typeB_dispute_resolved_raiser',
+            'important',
+            'Dispute resolved',
+            ($decision === 'validated') ? 'Your dispute was validated. The rotation was adjusted.' : 'Your dispute was dismissed and a false-dispute strike was applied.',
+            ['room_id' => $roomId, 'rotation_index' => $rotationIndex, 'decision' => $decision, 'dispute_id' => $disputeId],
+            'dispute',
+            (string)$disputeId
+        );
+
+        notifyOnceAdmin(
+            $db,
+            $turnUserId,
+            'typeB_dispute_resolved_turn',
+            'critical',
+            'Dispute resolved',
+            ($decision === 'validated') ? 'A dispute was validated for your turn. Admin action was applied.' : 'A dispute affecting your turn was dismissed.',
+            ['room_id' => $roomId, 'rotation_index' => $rotationIndex, 'decision' => $decision, 'dispute_id' => $disputeId],
+            'dispute',
+            (string)$disputeId
+        );
+
+        auditLog('admin_dispute_resolve', null, getCurrentUserId());
         jsonResponse(['success' => true]);
     }
 

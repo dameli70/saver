@@ -220,6 +220,26 @@ body{background:var(--bg);color:var(--text);font-family:var(--mono);min-height:1
           <div class="small" id="typeb-code-exp" style="margin-top:6px;"></div>
         </div>
 
+        <div id="typeb-dispute-wrap" style="display:none;margin-top:12px;">
+          <div class="hr" style="border-top:1px solid var(--b1);margin:16px 0;"></div>
+          <div class="k">Dispute (Type B)</div>
+          <div class="v" id="typeb-dispute-meta">—</div>
+
+          <div id="typeb-dispute-form" style="display:none;margin-top:10px;">
+            <div class="k">Reason (optional)</div>
+            <input id="typeb-dispute-reason" placeholder="e.g. I believe the turn user is not eligible / suspicious activity" style="margin-top:6px;width:100%;background:var(--s2);border:1px solid var(--b1);color:var(--text);font-family:var(--mono);font-size:14px;padding:12px;outline:none;">
+            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">
+              <button class="btn btn-red btn-sm" onclick="typeBRaiseDispute()">Raise dispute</button>
+            </div>
+          </div>
+
+          <div id="typeb-dispute-actions" style="display:none;margin-top:10px;">
+            <button class="btn btn-blue btn-sm" id="typeb-dispute-ack-btn" onclick="typeBAckDispute()">Acknowledge dispute</button>
+          </div>
+
+          <div id="typeb-dispute-msg" class="msg"></div>
+        </div>
+
         <div id="typeb-msg" class="msg"></div>
       </div>
 
@@ -432,12 +452,50 @@ function renderRoom(){
         const canRevealB = (r.room_state === 'active' && r.my_status === 'active' && cur.status === 'revealed' && (cur.is_turn_user === 1));
         document.getElementById('typeb-reveal-btn').style.display = canRevealB ? 'inline-flex' : 'none';
 
+        const dispWrap = document.getElementById('typeb-dispute-wrap');
+        if(dispWrap){
+          const meta = document.getElementById('typeb-dispute-meta');
+          const form = document.getElementById('typeb-dispute-form');
+          const actions = document.getElementById('typeb-dispute-actions');
+          const ackBtn = document.getElementById('typeb-dispute-ack-btn');
+
+          const endsAt = cur.dispute_window_ends_at ? new Date(cur.dispute_window_ends_at).getTime() : 0;
+          const within = endsAt && Date.now() < endsAt;
+          const dispute = (r.rotation && r.rotation.dispute) ? r.rotation.dispute : null;
+
+          const showDispute = (cur.status === 'revealed' || cur.status === 'blocked_dispute');
+          dispWrap.style.display = showDispute ? 'block' : 'none';
+
+          if(showDispute){
+            if(dispute){
+              const who = dispute.raised_by_email || 'participant';
+              const windowTxt = within ? ('window ends ' + fmt(cur.dispute_window_ends_at)) : ('window ended ' + fmt(cur.dispute_window_ends_at));
+              meta.textContent = `${dispute.status} · ${dispute.ack_count}/${dispute.threshold_required} acknowledgements · raised by ${who} · ${windowTxt}`;
+
+              form.style.display = 'none';
+
+              const canAck = within && (r.my_status === 'active') && !dispute.my_ack && (dispute.status !== 'validated' && dispute.status !== 'dismissed');
+              actions.style.display = canAck ? 'block' : 'none';
+
+              if(ackBtn){
+                ackBtn.disabled = !canAck;
+              }
+            } else {
+              meta.textContent = within ? ('No dispute · window ends ' + fmt(cur.dispute_window_ends_at)) : ('No dispute · window ended ' + fmt(cur.dispute_window_ends_at));
+              actions.style.display = 'none';
+              form.style.display = (within && r.my_status === 'active') ? 'block' : 'none';
+            }
+          }
+        }
+
       } else {
         document.getElementById('typeb-turn').textContent = '—';
         document.getElementById('typeb-consensus').textContent = '—';
         document.getElementById('typeb-window').textContent = '—';
         document.getElementById('typeb-maker').textContent = '—';
         document.getElementById('typeb-reveal-btn').style.display = 'none';
+        const dispWrap = document.getElementById('typeb-dispute-wrap');
+        if(dispWrap) dispWrap.style.display = 'none';
       }
     }
   }
@@ -515,6 +573,11 @@ function addFeedItem(ev){
   else if(ev.event_type === 'typeB_turn_expired') line = 'Type B turn expired';
   else if(ev.event_type === 'typeB_turn_advanced') line = 'Type B turn advanced';
   else if(ev.event_type === 'rotation_blocked_dispute') line = 'Rotation blocked (dispute)';
+  else if(ev.event_type === 'dispute_raised') line = 'Dispute raised';
+  else if(ev.event_type === 'dispute_ack_updated') line = 'Dispute acknowledgment updated';
+  else if(ev.event_type === 'dispute_validated') line = 'Dispute validated';
+  else if(ev.event_type === 'dispute_dismissed') line = 'Dispute dismissed';
+  else if(ev.event_type === 'rotation_unblocked') line = 'Rotation unblocked';
   else if(ev.event_type === 'room_closed') line = 'Room closed';
   else if(ev.event_type === 'underfilled_alerted') line = 'Underfilled alert sent';
   else if(ev.event_type === 'underfilled_resolved') line = 'Underfilled resolved';
@@ -640,6 +703,49 @@ async function typeBReveal(){
 
   }catch(e){
     setMsg('typeb-msg', e.message||'Failed', false);
+  }
+}
+
+async function typeBRaiseDispute(){
+  const msgId = 'typeb-dispute-msg';
+  document.getElementById(msgId).className='msg';
+
+  const reason = (document.getElementById('typeb-dispute-reason')||{}).value || '';
+
+  try{
+    const res = await postCsrf('/api/rooms.php', {action:'typeB_raise_dispute', room_id: ROOM_ID, reason});
+    if(!res.success) throw new Error(res.error||'Failed');
+
+    setMsg(msgId,'Dispute raised.', true);
+    await loadRoom();
+    await pollFeed();
+
+  }catch(e){
+    setMsg(msgId, e.message||'Failed', false);
+  }
+}
+
+async function typeBAckDispute(){
+  const msgId = 'typeb-dispute-msg';
+  document.getElementById(msgId).className='msg';
+
+  const r = roomCache;
+  const dispute = (r && r.rotation) ? r.rotation.dispute : null;
+  if(!dispute){
+    setMsg(msgId,'No dispute to acknowledge.', false);
+    return;
+  }
+
+  try{
+    const res = await postCsrf('/api/rooms.php', {action:'typeB_ack_dispute', room_id: ROOM_ID, dispute_id: dispute.id});
+    if(!res.success) throw new Error(res.error||'Failed');
+
+    setMsg(msgId,'Acknowledged.', true);
+    await loadRoom();
+    await pollFeed();
+
+  }catch(e){
+    setMsg(msgId, e.message||'Failed', false);
   }
 }
 

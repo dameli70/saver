@@ -306,6 +306,35 @@ pre{white-space:pre-wrap;word-break:break-word;background:#000;border:1px solid 
   </div>
 
   <div class="card" style="margin-top:14px;">
+    <div class="card-title">Disputes (Saving Rooms)</div>
+    <div class="p">Type B disputes that reached a review state (or are open). Validated disputes advance the rotation; dismissed disputes apply a false-dispute strike.</div>
+
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
+      <label class="chk" style="margin:0;"><input type="checkbox" id="disp-inc"> <span>Include resolved</span></label>
+      <button class="btn btn-ghost btn-sm" onclick="loadDisputes()">↻ Refresh</button>
+    </div>
+
+    <div class="table-wrap">
+      <table class="table" id="disp-table" style="min-width:1100px;">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Room</th>
+            <th>Rotation</th>
+            <th>Status</th>
+            <th>Acks</th>
+            <th>Raised by</th>
+            <th>Created</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div id="disp-msg" class="msg"></div>
+  </div>
+
+  <div class="card" style="margin-top:14px;">
     <div class="card-title">Audit log</div>
 
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
@@ -767,6 +796,70 @@ async function loadDestinationAccounts(){
   }
 }
 
+async function loadDisputes(){
+  const tbody = document.querySelector('#disp-table tbody');
+  tbody.innerHTML = '<tr><td colspan="8" class="k">Loading…</td></tr>';
+  document.getElementById('disp-msg').className = 'msg';
+
+  try{
+    const includeResolved = document.getElementById('disp-inc').checked ? 1 : 0;
+    const qs = new URLSearchParams({ action:'disputes', limit:'200', include_resolved: includeResolved ? '1' : '' });
+    const r = await get('/api/admin.php?' + qs.toString());
+    if(!r.success) throw new Error(r.error||'Failed');
+
+    const rows = r.disputes || [];
+    if(!rows.length){
+      tbody.innerHTML = '<tr><td colspan="8" class="k">No disputes.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML='';
+    rows.forEach(d => {
+      const tr = document.createElement('tr');
+      const roomShort = (d.goal_text||'').slice(0,40) + ((d.goal_text||'').length>40?'…':'');
+      const acks = `${d.ack_count||0}/${d.threshold_count_required||0}`;
+
+      const canResolve = (d.status === 'open' || d.status === 'threshold_met' || d.status === 'escalated_admin');
+
+      tr.innerHTML = `
+        <td>${d.id}</td>
+        <td title="${esc(d.goal_text||'')}">${esc(roomShort)}<div class="k" style="font-size:10px;">${esc(d.room_id)}</div></td>
+        <td>#${esc(d.rotation_index)}</td>
+        <td>${esc(d.status)}</td>
+        <td>${esc(acks)}</td>
+        <td>${esc(d.raised_by_email||'')}</td>
+        <td>${fmt(d.created_at)}</td>
+        <td>
+          <button class="btn btn-blue btn-sm" onclick="resolveDispute(${d.id}, 'validated')" ${canResolve?'':'disabled'}>Validate</button>
+          <button class="btn btn-red btn-sm" onclick="resolveDispute(${d.id}, 'dismissed')" ${canResolve?'':'disabled'}>Dismiss</button>
+        </td>
+      `;
+
+      tbody.appendChild(tr);
+    });
+
+  }catch(e){
+    tbody.innerHTML = '<tr><td colspan="8" class="k">Failed to load disputes.</td></tr>';
+    setMsg('disp-msg', e.message||'Failed', false);
+  }
+}
+
+async function resolveDispute(disputeId, decision){
+  document.getElementById('disp-msg').className = 'msg';
+
+  const ok = confirm(decision === 'validated' ? 'Validate this dispute? This will strike the turn user and advance the rotation.' : 'Dismiss this dispute? This will strike the raiser as a false dispute.');
+  if(!ok) return;
+
+  try{
+    const r = await postCsrf('/api/admin.php', { action:'dispute_resolve', dispute_id: disputeId, decision });
+    if(!r.success) throw new Error(r.error||'Failed');
+    setMsg('disp-msg','Saved.', true);
+    await loadDisputes();
+  }catch(e){
+    setMsg('disp-msg', e.message||'Failed', false);
+  }
+}
+
 async function createDestinationAccount(){
   document.getElementById('da-msg').className = 'msg';
 
@@ -878,6 +971,7 @@ loadUsers();
 loadCodes();
 loadCarriers();
 loadDestinationAccounts();
+loadDisputes();
 loadAudit();
 </script>
 </body>
