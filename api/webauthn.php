@@ -114,7 +114,14 @@ if (!$userId) jsonResponse(['error' => 'Unauthorized'], 401);
 if ($action === 'list') {
     $stmt = $db->prepare('SELECT id, label, created_at, last_used_at FROM webauthn_credentials WHERE user_id = ? ORDER BY created_at DESC');
     $stmt->execute([(int)$userId]);
-    jsonResponse(['success' => true, 'passkeys' => $stmt->fetchAll()]);
+    $rows = $stmt->fetchAll();
+
+    foreach ($rows as &$r) {
+        $r['label'] = normalizeDisplayText($r['label'] ?? null);
+    }
+    unset($r);
+
+    jsonResponse(['success' => true, 'passkeys' => $rows]);
 }
 
 if ($action === 'register_begin') {
@@ -169,7 +176,7 @@ if ($action === 'register_finish') {
     $challenge = loadChallenge('register');
 
     $label = isset($body['label']) ? trim((string)$body['label']) : '';
-    $label = $label !== '' ? sanitize($label) : null;
+    $label = $label !== '' ? $label : null;
 
     $rawId = (string)($body['rawId'] ?? '');
     $resp = $body['response'] ?? null;

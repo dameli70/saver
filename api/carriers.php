@@ -27,6 +27,12 @@ try {
 
     $rows = $db->query("SELECT id, name, country, pin_type, pin_length, ussd_change_pin_template, ussd_balance_template FROM carriers WHERE is_active = 1 ORDER BY name ASC")->fetchAll();
 
+    foreach ($rows as &$r) {
+        $r['name'] = normalizeDisplayText($r['name'] ?? null);
+        $r['country'] = normalizeDisplayText($r['country'] ?? null);
+    }
+    unset($r);
+
     jsonResponse(['success' => true, 'carriers' => $rows]);
 } catch (Throwable $e) {
     jsonResponse(['error' => 'Failed to load carriers'], 500);

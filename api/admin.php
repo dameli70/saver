@@ -231,7 +231,14 @@ if ($method === 'GET') {
         $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
         $stmt->execute();
 
-        jsonResponse(['success' => true, 'codes' => $stmt->fetchAll(), 'limit' => $limit, 'offset' => $offset]);
+        $rows = $stmt->fetchAll();
+        foreach ($rows as &$r) {
+            $r['label'] = normalizeDisplayText($r['label'] ?? null);
+            $r['hint'] = normalizeDisplayText($r['hint'] ?? null);
+        }
+        unset($r);
+
+        jsonResponse(['success' => true, 'codes' => $rows, 'limit' => $limit, 'offset' => $offset]);
     }
 
     // ── CODE DETAIL ──────────────────────────────────────────
@@ -252,6 +259,9 @@ if ($method === 'GET') {
         $row = $stmt->fetch();
         if (!$row) jsonResponse(['error' => 'Code not found'], 404);
 
+        $row['label'] = normalizeDisplayText($row['label'] ?? null);
+        $row['hint'] = normalizeDisplayText($row['hint'] ?? null);
+
         jsonResponse(['success' => true, 'code' => $row]);
     }
 
@@ -262,6 +272,11 @@ if ($method === 'GET') {
         if (!$has) jsonResponse(['error' => 'Carriers are not available. Apply migrations in config/migrations/.'], 500);
 
         $rows = $db->query("SELECT id, name, country, pin_type, pin_length, ussd_change_pin_template, ussd_balance_template, is_active, created_at, updated_at FROM carriers ORDER BY name ASC")->fetchAll();
+        foreach ($rows as &$r) {
+            $r['name'] = normalizeDisplayText($r['name'] ?? null);
+            $r['country'] = normalizeDisplayText($r['country'] ?? null);
+        }
+        unset($r);
         jsonResponse(['success' => true, 'carriers' => $rows]);
     }
 
@@ -945,8 +960,8 @@ if ($method === 'POST') {
         $db->prepare("INSERT INTO carriers (name, country, pin_type, pin_length, ussd_change_pin_template, ussd_balance_template, is_active, created_at, updated_at)
                       VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NULL)")
            ->execute([
-               sanitize($name),
-               $country !== '' ? sanitize($country) : null,
+               $name,
+               $country !== '' ? $country : null,
                $pinType,
                $pinLen,
                $ussdChange,
@@ -988,14 +1003,14 @@ if ($method === 'POST') {
                           is_active = COALESCE(?, is_active), updated_at = NOW()
                       WHERE id = ?")
            ->execute([
-               sanitize($name),
-               $country !== '' ? sanitize($country) : null,
+               $name,
+               $country !== '' ? $country : null,
                $pinType,
                $pinLen,
                $ussdChange,
                $ussdBalance,
                $isActive,
-               $carrierId,
+               $carrierId          $carrierId,
            ]);
 
         auditLog('admin_carrier_update', null, getCurrentUserId());

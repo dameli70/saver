@@ -165,6 +165,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             $stmt = $db->prepare('SELECT id, label, created_at, LENGTH(backup_blob) AS bytes FROM backups WHERE user_id = ? ORDER BY created_at DESC');
             $stmt->execute([(int)$userId]);
             $rows = $stmt->fetchAll();
+            foreach ($rows as &$r) {
+                $r['label'] = normalizeDisplayText($r['label'] ?? null);
+            }
+            unset($r);
             jsonResponse(['success' => true, 'backups' => $rows]);
         } catch (PDOException $e) {
             jsonResponse(['error' => 'Cloud backups are not available (missing backups table). Apply migrations in config/migrations/.'], 500);
@@ -183,6 +187,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             $row = $stmt->fetch();
             if (!$row) jsonResponse(['error' => 'Not found'], 404);
 
+            $row['label'] = normalizeDisplayText($row['label'] ?? null);
             jsonResponse(['success' => true, 'backup' => $row]);
         } catch (PDOException $e) {
             jsonResponse(['error' => 'Cloud backups are not available (missing backups table). Apply migrations in config/migrations/.'], 500);
@@ -215,7 +220,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'cloud_save') {
         $label = isset($body['label']) ? trim((string)$body['label']) : '';
-        $label = $label !== '' ? sanitize($label) : null;
+        $label = $label !== '' ? $label : null;
 
         $export = exportPayload((int)$userId);
         $blob = json_encode($export, JSON_UNESCAPED_UNICODE);
