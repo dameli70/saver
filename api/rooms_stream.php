@@ -42,8 +42,18 @@ $myStatus = $myStmt->fetchColumn();
 $vis = (string)$room['visibility'];
 
 if ($vis === 'private' && !$myStatus && !isAdmin($userId)) {
-    http_response_code(403);
-    exit;
+    $inv = $db->prepare("SELECT 1 FROM saving_room_invites
+                         WHERE room_id = ?
+                           AND invite_mode='private_user'
+                           AND invited_user_id = ?
+                           AND status='active'
+                           AND (expires_at IS NULL OR expires_at > NOW())
+                         LIMIT 1");
+    $inv->execute([$roomId, $userId]);
+    if (!$inv->fetchColumn()) {
+        http_response_code(403);
+        exit;
+    }
 }
 
 if ($vis === 'public') {

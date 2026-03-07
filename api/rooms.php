@@ -123,6 +123,10 @@ function roomExistsAndJoinable(string $roomId): array {
     return $room;
 }
 
+function hashInviteToken(string $token): string {
+    return hash('sha256', $token);
+}
+
 // ── DISCOVERY (public rooms only; filtered by trust level) ───
 if ($action === 'discover') {
     requireLogin();
@@ -243,7 +247,7 @@ if ($action === 'room_detail') {
 
     $db = getDB();
 
-    // Viewer must be eligible to even view public/unlisted; private requires membership or invitation (not yet implemented)
+    // Viewer must be eligible to view public rooms; private requires membership or an active invitation.
     $vis = (string)$room['visibility'];
     if ($vis === 'public') {
         requireEligibleForRoom($userId, (int)$room['required_trust_level']);
@@ -253,8 +257,29 @@ if ($action === 'room_detail') {
     $myStmt->execute([$roomId, $userId]);
     $myStatus = $myStmt->fetchColumn();
 
+    $myInvite = null;
     if ($vis === 'private' && !$myStatus && !isAdmin($userId)) {
-        jsonResponse(['error' => 'Room is private'], 403);
+        $inv = $db->prepare("SELECT i.id, i.status, i.expires_at, i.created_at
+                             FROM saving_room_invites i
+                             WHERE i.room_id = ?
+                               AND i.invite_mode = 'private_user'
+                               AND i.invited_user_id = ?
+                               AND i.status = 'active'
+                               AND (i.expires_at IS NULL OR i.expires_at > NOW())
+                             ORDER BY i.created_at DESC
+                             LIMIT 1");
+        $inv->execute([$roomId, $userId]);
+        $row = $inv->fetch();
+        if (!$row) {
+            jsonResponse(['error' => 'Room is private'], 403);
+        }
+
+        $myInvite = [
+            'id' => (int)$row['id'],
+            'status' => $row['status'],
+            'expires_at' => $row['expires_at'],
+            'created_at' => $row['created_at'],
+        ];
     }
 
     $approvedCount = countApprovedParticipants($roomId);
@@ -478,6 +503,7 @@ if ($action === 'room_detail') {
             'purpose_category' => $room['purpose_category'],
             'saving_type' => $room['saving_type'],
             'visibility' => $room['visibility'],
+            'my_invite' => $myInvite,
             'required_trust_level' => (int)$room['required_trust_level'],
             'participation_amount' => (string)$room['participation_amount'],
             'periodicity' => $room['periodicity'],
@@ -529,7 +555,17 @@ if ($action === 'activity') {
     $myStatus = $myStmt->fetchColumn();
 
     if ($vis === 'private' && !$myStatus && !isAdmin($userId)) {
-        jsonResponse(['error' => 'Room is private'], 403);
+        $inv = $db->prepare("SELECT 1 FROM saving_room_invites
+                             WHERE room_id = ?
+                               AND invite_mode='private_user'
+                               AND invited_user_id = ?
+                               AND status='active'
+                               AND (expires_at IS NULL OR expires_at > NOW())
+                             LIMIT 1");
+        $inv->execute([$roomId, $userId]);
+        if (!$inv->fetchColumn()) {
+            jsonResponse(['error' => 'Room is private'], 403);
+        }
     }
 
     if ($vis === 'public') {
@@ -677,6 +713,10 @@ if ($action === 'request_join') {
 
     $room = roomExistsAndJoinable($roomId);
 
+    if ((string)$room['visibility'] === 'private') {
+        jsonResponse(['error' => 'This room is private and requires an invite.'], 403);
+    }
+
     if ($room['room_state'] !== 'lobby' || $room['lobby_state'] !== 'open') {
         jsonResponse(['error' => 'Room is not accepting join requests'], 403);
     }
@@ -728,6 +768,238 @@ if ($action === 'request_join') {
     $db->commit();
 
     auditLog('room_join_request');
+    jsonResponse(['success' => true]);
+}
+
+// ── MAKER: INVITE USER (private rooms) ─────────────────────
+if ($action === 'invite_user') {
+    requireLogin();
+    requireVerifiedEmail();
+    requireCsrf();
+
+    $userId = (int)getCurrentUserId();
+    $roomId = (string)($body['room_id'] ?? '');
+    $email  = strtolower(trim((string)($body['email'] ?? '')));
+
+    if ($roomId === '' || strlen($roomId) !== 36) jsonResponse(['error' => 'Invalid room_id'], 400);
+    if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) jsonResponse(['error' => 'Valid email required'], 400);
+
+    requireRoomMaker($roomId, $userId);
+
+    $room = roomExistsAndJoinable($roomId);
+    if ((string)$room['visibility'] !== 'private') {
+        jsonResponse(['error' => 'Invites are only required for private rooms.'], 400);
+    }
+
+    if ($room['room_state'] !== 'lobby' || $room['lobby_state'] !== 'open') {
+        jsonResponse(['error' => 'Room is not accepting invites right now'], 403);
+    }
+
+    $approvedCount = countApprovedParticipants($roomId);
+    if ($approvedCount >= (int)$room['max_participants']) {
+        jsonResponse(['error' => 'Room is full'], 403);
+    }
+
+    $db = getDB();
+
+    $u = $db->prepare('SELECT id FROM users WHERE email = ? LIMIT 1');
+    $u->execute([$email]);
+    $invitedUserId = (int)$u->fetchColumn();
+    if ($invitedUserId < 1) jsonResponse(['error' => 'No user found with that email'], 404);
+    if ($invitedUserId === $userId) jsonResponse(['error' => 'You cannot invite yourself'], 400);
+
+    $expiresAt = (string)$room['start_at'];
+
+    $db->beginTransaction();
+
+    $db->prepare("UPDATE saving_room_invites
+                  SET status='revoked', responded_at=NOW()
+                  WHERE room_id = ?
+                    AND invite_mode = 'private_user'
+                    AND invited_user_id = ?
+                    AND status = 'active'")
+       ->execute([$roomId, $invitedUserId]);
+
+    $db->prepare("INSERT INTO saving_room_invites (room_id, invite_mode, invited_user_id, status, expires_at)
+                  VALUES (?, 'private_user', ?, 'active', ?)")
+       ->execute([$roomId, $invitedUserId, $expiresAt]);
+
+    $inviteId = (int)$db->lastInsertId();
+
+    activityLog($roomId, 'invite_created', ['mode' => 'private_user']);
+
+    notifyOnceApi(
+        $invitedUserId,
+        'room_invited',
+        'important',
+        'You have been invited to a private saving room',
+        'Open the room to accept or decline the invite.',
+        ['room_id' => $roomId, 'invite_id' => $inviteId],
+        'room',
+        $roomId
+    );
+
+    $db->commit();
+
+    auditLog('room_invite_user');
+    jsonResponse(['success' => true, 'invite_id' => $inviteId]);
+}
+
+// ── USER: RESPOND TO INVITE ────────────────────────────────
+if ($action === 'respond_invite') {
+    requireLogin();
+    requireVerifiedEmail();
+    requireCsrf();
+
+    $userId   = (int)getCurrentUserId();
+    $inviteId = (int)($body['invite_id'] ?? 0);
+    $decision = (string)($body['decision'] ?? '');
+
+    if ($inviteId < 1) jsonResponse(['error' => 'invite_id required'], 400);
+    if (!in_array($decision, ['accept','decline'], true)) jsonResponse(['error' => 'Invalid decision'], 400);
+
+    $db = getDB();
+
+    $stmt = $db->prepare("SELECT i.id, i.room_id, i.invite_mode, i.invited_user_id, i.status, i.expires_at,
+                                 r.visibility, r.room_state, r.lobby_state, r.required_trust_level, r.max_participants, r.maker_user_id
+                          FROM saving_room_invites i
+                          JOIN saving_rooms r ON r.id = i.room_id
+                          WHERE i.id = ?
+                          LIMIT 1");
+    $stmt->execute([$inviteId]);
+    $inv = $stmt->fetch();
+
+    if (!$inv) jsonResponse(['error' => 'Invite not found'], 404);
+    if ((string)$inv['invite_mode'] !== 'private_user') jsonResponse(['error' => 'Invalid invite mode'], 400);
+    if ((int)$inv['invited_user_id'] !== $userId) jsonResponse(['error' => 'Not your invite'], 403);
+    if ((string)$inv['status'] !== 'active') jsonResponse(['error' => 'Invite is not active'], 409);
+    if (!empty($inv['expires_at']) && strtotime((string)$inv['expires_at']) <= time()) {
+        $db->prepare("UPDATE saving_room_invites SET status='expired', responded_at=NOW() WHERE id = ? AND status='active'")
+           ->execute([$inviteId]);
+        jsonResponse(['error' => 'Invite has expired'], 403);
+    }
+
+    $roomId = (string)$inv['room_id'];
+    $makerId = (int)$inv['maker_user_id'];
+
+    if ($decision === 'decline') {
+        $db->prepare("UPDATE saving_room_invites SET status='declined', responded_at=NOW() WHERE id = ? AND status='active'")
+           ->execute([$inviteId]);
+        activityLog($roomId, 'invite_declined', []);
+
+        if ($makerId > 0) {
+            notifyOnceApi(
+                $makerId,
+                'room_invite_declined',
+                'important',
+                'Room invite declined',
+                'A user declined your invite to a private room.',
+                ['room_id' => $roomId, 'invite_id' => $inviteId],
+                'room',
+                $roomId
+            );
+        }
+
+        auditLog('room_invite_decline');
+        jsonResponse(['success' => true]);
+    }
+
+    if ((string)$inv['visibility'] !== 'private') {
+        jsonResponse(['error' => 'This room is not private'], 400);
+    }
+    if ((string)$inv['room_state'] !== 'lobby' || (string)$inv['lobby_state'] !== 'open') {
+        jsonResponse(['error' => 'Room is not accepting invites right now'], 403);
+    }
+
+    requireEligibleForRoom($userId, (int)$inv['required_trust_level']);
+
+    $approvedCount = countApprovedParticipants($roomId);
+    if ($approvedCount >= (int)$inv['max_participants']) {
+        jsonResponse(['error' => 'Room is full'], 403);
+    }
+
+    $db->beginTransaction();
+
+    $db->prepare("UPDATE saving_room_invites SET status='accepted', responded_at=NOW() WHERE id = ? AND status='active'")
+       ->execute([$inviteId]);
+
+    $db->prepare("INSERT INTO saving_room_participants (room_id, user_id, status, approved_at)
+                  VALUES (?, ?, 'approved', NOW())
+                  ON DUPLICATE KEY UPDATE status='approved', approved_at=NOW()")
+       ->execute([$roomId, $userId]);
+
+    activityLog($roomId, 'invite_accepted', []);
+
+    if ($makerId > 0) {
+        notifyOnceApi(
+            $makerId,
+            'room_invite_accepted',
+            'important',
+            'Room invite accepted',
+            'A user accepted your invite to a private room.',
+            ['room_id' => $roomId, 'invite_id' => $inviteId],
+            'room',
+            $roomId
+        );
+    }
+
+    $db->commit();
+
+    auditLog('room_invite_accept');
+    jsonResponse(['success' => true]);
+}
+
+// ── MAKER: LIST INVITES (private rooms) ─────────────────────
+if ($action === 'maker_invites') {
+    requireLogin();
+    requireVerifiedEmail();
+
+    $userId = (int)getCurrentUserId();
+    $roomId = (string)($_GET['room_id'] ?? '');
+    if ($roomId === '' || strlen($roomId) !== 36) jsonResponse(['error' => 'Invalid room_id'], 400);
+
+    requireRoomMaker($roomId, $userId);
+
+    $db = getDB();
+
+    $stmt = $db->prepare("SELECT i.id, i.status, i.expires_at, i.created_at,
+                                 u.email
+                          FROM saving_room_invites i
+                          JOIN users u ON u.id = i.invited_user_id
+                          WHERE i.room_id = ?
+                            AND i.invite_mode = 'private_user'
+                          ORDER BY i.created_at DESC
+                          LIMIT 200");
+    $stmt->execute([$roomId]);
+
+    jsonResponse(['success' => true, 'invites' => $stmt->fetchAll()]);
+}
+
+// ── MAKER: REVOKE INVITE ───────────────────────────────────
+if ($action === 'revoke_invite') {
+    requireLogin();
+    requireVerifiedEmail();
+    requireCsrf();
+
+    $userId = (int)getCurrentUserId();
+    $inviteId = (int)($body['invite_id'] ?? 0);
+    if ($inviteId < 1) jsonResponse(['error' => 'invite_id required'], 400);
+
+    $db = getDB();
+
+    $st = $db->prepare("SELECT id, room_id FROM saving_room_invites WHERE id = ? LIMIT 1");
+    $st->execute([$inviteId]);
+    $inv = $st->fetch();
+    if (!$inv) jsonResponse(['error' => 'Invite not found'], 404);
+
+    requireRoomMaker((string)$inv['room_id'], $userId);
+
+    $db->prepare("UPDATE saving_room_invites SET status='revoked', responded_at=NOW() WHERE id = ? AND status='active'")
+       ->execute([$inviteId]);
+
+    activityLog((string)$inv['room_id'], 'invite_revoked', []);
+
+    auditLog('room_invite_revoke');
     jsonResponse(['success' => true]);
 }
 

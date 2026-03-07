@@ -243,6 +243,17 @@ body{background:var(--bg);color:var(--text);font-family:var(--mono);min-height:1
         <div id="typeb-msg" class="msg"></div>
       </div>
 
+      <div id="invite-block" style="display:none; margin-top:12px;">
+        <div class="hr" style="border-top:1px solid var(--b1);margin:16px 0;"></div>
+        <div class="card-title" style="margin-bottom:10px;">Invitation</div>
+        <div class="p" style="margin-bottom:10px;">You were invited to this private room. Accepting will add you as an approved participant.</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          <button class="btn btn-blue btn-sm" onclick="respondInvite('accept')">Accept invite</button>
+          <button class="btn btn-red btn-sm" onclick="respondInvite('decline')">Decline</button>
+        </div>
+        <div id="invite-msg" class="msg"></div>
+      </div>
+
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
         <button class="btn btn-primary btn-sm" id="join-btn" onclick="requestJoin()" style="display:none;">Request to join</button>
         <a class="btn btn-ghost btn-sm" href="rooms.php">Back to discovery</a>
@@ -293,6 +304,33 @@ body{background:var(--bg);color:var(--text);font-family:var(--mono);min-height:1
         </table>
       </div>
       <div id="escrow-msg" class="msg"></div>
+    </div>
+
+    <div class="card" id="invites-card" style="display:none;grid-column:1/-1;">
+      <div class="card-title">Invites (maker)</div>
+      <div class="p">Private rooms require invites. Invite by email; invited users can accept from the room page.</div>
+
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;align-items:center;">
+        <input id="invite-email" placeholder="user@example.com" style="flex:1;min-width:220px;background:var(--s2);border:1px solid var(--b1);color:var(--text);font-family:var(--mono);font-size:14px;padding:12px;outline:none;">
+        <button class="btn btn-blue btn-sm" onclick="sendInvite()">Send invite</button>
+      </div>
+
+      <div class="table-wrap" id="invites-table-wrap" style="margin-top:12px;display:none;">
+        <table class="table" id="invites-table">
+          <thead>
+            <tr>
+              <th>Email</th>
+              <th>Status</th>
+              <th>Expires</th>
+              <th>Created</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div id="invites-empty" class="k" style="display:none;margin-top:10px;">No invites.</div>
+      <div id="invites-msg" class="msg"></div>
     </div>
 
     <div class="card" id="maker-card" style="display:none;grid-column:1/-1;">
@@ -378,6 +416,12 @@ function renderRoom(){
   const joinBtn = document.getElementById('join-btn');
   const canJoin = (!r.my_status || r.my_status === 'declined') && r.room_state === 'lobby' && r.lobby_state === 'open' && r.visibility !== 'private';
   joinBtn.style.display = canJoin ? 'inline-flex' : 'none';
+
+  const inv = document.getElementById('invite-block');
+  if(inv){
+    const showInvite = (!r.my_status && r.my_invite && r.visibility === 'private' && r.room_state === 'lobby' && r.lobby_state === 'open');
+    inv.style.display = showInvite ? 'block' : 'none';
+  }
 
   const contrib = document.getElementById('contrib-block');
   if(contrib){
@@ -564,7 +608,10 @@ function addFeedItem(ev){
   else if(ev.event_type === 'strike_logged') line = 'Strike logged';
   else if(ev.event_type === 'participant_removed') line = 'Participant removed';
   else if(ev.event_type === 'escrow_settlement_recorded') line = 'Escrow settlement recorded';
-  else if(ev.event_type === 'unlock_vote_updated') line = 'Unlock vote updated';
+  else if(ev.event_type === 'invite_created') line = 'Invite created';
+  else if(ev.event_type === 'invite_accepted') line = 'Invite accepted';
+  else if(ev.event_type === 'invite_declined') line = 'Invite declined';
+ 
   else if(ev.event_type === 'unlock_revealed') line = 'Unlock revealed';
   else if(ev.event_type === 'unlock_expired') line = 'Unlock expired';
   else if(ev.event_type === 'rotation_queue_created') line = 'Rotation queue created';
@@ -606,6 +653,100 @@ async function requestJoin(){
     setMsg('room-msg', e.message||'Failed', false);
   }finally{
     btn.disabled=false;
+  }
+}
+
+async function respondInvite(decision){
+  const r = roomCache;
+  if(!r || !r.my_invite){
+    setMsg('invite-msg','No active invite.', false);
+    return;
+  }
+
+  try{
+    const res = await postCsrf('/api/rooms.php', {action:'respond_invite', invite_id: r.my_invite.id, decision});
+    if(!res.success) throw new Error(res.error||'Failed');
+    setMsg('invite-msg', decision === 'accept' ? 'Invite accepted.' : 'Invite declined.', true);
+    await loadRoom();
+  }catch(e){
+    setMsg('invite-msg', e.message||'Failed', false);
+  }
+}
+
+let invitesLoadedAt = 0;
+async function loadInvites(force=false){
+  const now = Date.now();
+  if(!force && (now - invitesLoadedAt) < 1500) return;
+  invitesLoadedAt = now;
+
+  const wrap = document.getElementById('invites-table-wrap');
+  const empty = document.getElementById('invites-empty');
+  const tbody = document.querySelector('#invites-table tbody');
+
+  if(wrap) wrap.style.display='none';
+  if(empty) empty.style.display='none';
+  if(tbody) tbody.innerHTML='';
+
+  try{
+    const res = await get('/api/rooms.php?action=maker_invites&room_id=' + encodeURIComponent(ROOM_ID));
+    if(!res.success) throw new Error(res.error||'Failed');
+
+    const rows = res.invites || [];
+    if(!rows.length){
+      if(empty) empty.style.display='block';
+      return;
+    }
+
+    if(wrap) wrap.style.display='block';
+
+    rows.forEach(x => {
+      const tr=document.createElement('tr');
+      const revokeBtn = (x.status === 'active') ? `<button class="btn btn-red btn-sm" onclick="revokeInvite(${x.id})">Revoke</button>` : '';
+      tr.innerHTML = `
+        <td>${esc(x.email)}</td>
+        <td>${esc(x.status)}</td>
+        <td>${x.expires_at ? esc(fmt(x.expires_at)) : '—'}</td>
+        <td>${esc(fmt(x.created_at))}</td>
+        <td>${revokeBtn}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+  }catch(e){
+    setMsg('invites-msg', e.message||'Failed', false);
+  }
+}
+
+async function sendInvite(){
+  const input = document.getElementById('invite-email');
+  const email = (input ? input.value : '').trim();
+  if(!email){
+    setMsg('invites-msg','Email required.', false);
+    return;
+  }
+
+  try{
+    const res = await postCsrf('/api/rooms.php', {action:'invite_user', room_id: ROOM_ID, email});
+    if(!res.success) throw new Error(res.error||'Failed');
+    if(input) input.value='';
+    setMsg('invites-msg','Invite sent.', true);
+    await loadInvites(true);
+  }catch(e){
+    setMsg('invites-msg', e.message||'Failed', false);
+  }
+}
+
+async function revokeInvite(inviteId){
+  const ok = confirm('Revoke this invite?');
+  if(!ok) return;
+
+  try{
+    const res = await postCsrf('/api/rooms.php', {action:'revoke_invite', invite_id: inviteId});
+    if(!res.success) throw new Error(res.error||'Failed');
+    setMsg('invites-msg','Invite revoked.', true);
+    await loadInvites(true);
+  }catch(e){
+    setMsg('invites-msg', e.message||'Failed', false);
   }
 }
 
