@@ -1236,9 +1236,8 @@ loadUsers();
 loadCodes();
 loadCarriers();
 loadDestinationAccounts();
-loadRoomAccounts();
+loadEscrowSettlements();
 loadDisputes();
-loadSettlements();
 loadAudit();
 </script>
 </body>

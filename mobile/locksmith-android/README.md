@@ -11,6 +11,10 @@ This is the Android companion app for LOCKSMITH (Option A): it can execute USSD 
 Apply migrations (includes carriers + wallet_locks):
 - `config/migrations/009_wallet_locks.sql`
 
+Optional:
+- `config/migrations/018_default_carriers.sql` (starter carrier rows, inserted inactive)
+- `config/migrations/019_carrier_wallet_flow_options.sql` (web wallet flow options; safe to skip for Android-only use)
+
 ## App configuration
 The app lets you set a **Base URL** (example):
 - `https://example.com/locksmith`

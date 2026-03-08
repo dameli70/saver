@@ -55,6 +55,7 @@ Pages:
 - `account.php` — account + email verification status, resend link
 - `verify.php` — handles verification token
 - `dashboard.php` — authenticated, email-verified app UI
+- `create_code.php` — create a new time-locked code (and wallet PIN locks)
 - `backup.php` — local export/import + cloud backups
 - `admin.php` — super admin dashboard (requires admin)
 - `logout.php` — destroys session
@@ -69,7 +70,12 @@ API:
 - `api/reveal.php` — time-gated retrieval of ciphertext blobs (browser decrypts)
 - `api/delete.php` — delete a code
 - `api/backup.php` — local export/import + cloud backups
-- `api/admin.php` — super admin data endpoints (users + codes)
+- `api/carriers.php` — list mobile money carrier templates
+- `api/wallet_create.php` — create a new time-locked wallet PIN record
+- `api/wallet_locks.php` — list wallet locks (metadata)
+- `api/wallet_confirm.php` — confirm wallet PIN setup
+- `api/wallet_fail.php` — discard wallet PIN setup
+- `api/admin.php` — super admin data endpoints (users + codes + carriers)
 
 ## Security Model (high level)
 - **Zero plaintext storage**: the server never stores plaintext codes.

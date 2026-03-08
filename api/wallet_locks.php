@@ -28,7 +28,7 @@ if (!$hasSetup) {
     jsonResponse(['error' => 'Wallet locks are not available (missing setup columns). Apply migrations in config/migrations/.'], 500);
 }
 
-$stmt = $db->prepare("\
+$stmt = $db->prepare("
     SELECT
         w.id,
         w.label,
@@ -44,30 +44,30 @@ $stmt = $db->prepare("\
         CASE
             WHEN w.is_active = 1 AND w.setup_status = 'pending' THEN 'setup_pending'
             WHEN w.is_active = 1 AND w.setup_status = 'failed'  THEN 'setup_failed'
-            WHEN w.is_active = 1 AND w.setup_status = 'active' AND w.unlock_at <= NOW() THEN 'unlocked'
+            WHEN w.is_active = 1 AND w.setup_status = 'active' AND w.unlock_at <= UTC_TIMESTAMP() THEN 'unlocked'
             WHEN w.is_active = 1 AND w.setup_status = 'active'                          THEN 'locked'
             ELSE 'inactive'
         END AS display_status
     FROM wallet_locks w
     JOIN carriers c ON c.id = w.carrier_id
     WHERE w.user_id = ? AND w.is_active = 1
-    ORDER BY w.created_at DESC\
+    ORDER BY w.created_at DESC
 ");
 $stmt->execute([(int)$userId]);
 $rows = $stmt->fetchAll();
 
-$now = new DateTime();
+$nowUtc = new DateTimeImmutable('now', new DateTimeZone('UTC'));
 foreach ($rows as &$row) {
     $row['label'] = normalizeDisplayText($row['label'] ?? null);
 
     if ($row['display_status'] === 'locked') {
-        $r    = new DateTime($row['unlock_at']);
-        $diff = $now->diff($r);
+        $r    = new DateTimeImmutable((string)$row['unlock_at'], new DateTimeZone('UTC'));
+        $diff = $nowUtc->diff($r);
         $row['time_remaining'] = [
             'days' => (int)$diff->days,
             'hours' => (int)$diff->h,
             'minutes' => (int)$diff->i,
-            'total_seconds' => max(0, $r->getTimestamp() - $now->getTimestamp()),
+            'total_seconds' => max(0, $r->getTimestamp() - $nowUtc->getTimestamp()),
         ];
     } else {
         $row['time_remaining'] = null;

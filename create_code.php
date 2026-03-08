@@ -704,17 +704,25 @@ function openConfirmSheetWallet(opts){
   document.getElementById('confirm-done').style.display='none';
   document.getElementById('autosave-bar').style.display='none';
   document.getElementById('confirm-overlay').classList.add('show');
+
+  // Basic accessibility: move focus into the dialog.
+  setTimeout(() => {
+    const y = document.getElementById('confirm-yes-btn');
+    if(y) y.focus();
+  }, 50);
 }
 
 function closeConfirm(e){
   if(e&&e.target!==document.getElementById('confirm-overlay'))return;
-  document.getElementById('confirm-overlay').classList.remove('show');
 
-  // For normal code creation, keep pendingLock in memory so auto-save can still run.
+  // In wallet mode, avoid letting users dismiss the sheet while the clipboard
+  // may still contain sensitive material.
   if(confirmMode === 'wallet'){
-    pendingWallet=null;
-    confirmMode='lock';
+    toast('Please confirm or discard to finish wallet setup (this will clear your clipboard).', 'err');
+    return;
   }
+
+  document.getElementById('confirm-overlay').classList.remove('show');
 
   const wa = document.getElementById('confirm-wallet-actions');
   if(wa) wa.style.display='none';
@@ -813,9 +821,16 @@ function normalizeWalletAction(action){
 }
 
 function getCarrierWalletPolicy(carrier){
-  const allowOpenDialer = (carrier && (carrier.wallet_allow_open_dialer ?? carrier.walletAllowOpenDialer)) ?? true;
+  // Server-provided policy (if migration 019 is applied) or safe defaults.
+  let allowOpenDialer = (carrier && (carrier.wallet_allow_open_dialer ?? carrier.walletAllowOpenDialer)) ?? true;
   const allowCopyUssd = (carrier && (carrier.wallet_allow_copy_ussd ?? carrier.walletAllowCopyUssd)) ?? true;
   const def = normalizeWalletAction((carrier && (carrier.wallet_default_action ?? carrier.walletDefaultAction)) ?? walletAction);
+
+  // Safety/UI consistency: if the template embeds {new_pin}, "open dialer" would either
+  // leak the new PIN into the dialer prefill or fail our validation. Hide/disable it.
+  const tpl = String((carrier && (carrier.ussd_change_pin_template ?? carrier.ussdChangePinTemplate)) ?? '');
+  if (tpl.includes('{new_pin}')) allowOpenDialer = false;
+
   return {
     allowOpenDialer: !!allowOpenDialer,
     allowCopyUssd: !!allowCopyUssd,
@@ -1068,8 +1083,18 @@ async function doWalletSetup(){
   try{
     const tpl = String(carrier.ussd_change_pin_template || carrier.ussdChangePinTemplate || '');
     if(!tpl.trim()) throw new Error('This template is not configured yet. Ask an admin to set the USSD code.');
-    if(!tpl.includes('{old_pin}') || !tpl.includes('{new_pin}')){
-      throw new Error('This template is misconfigured: it must include {old_pin} and {new_pin}.');
+
+    // Template validation depends on flow:
+    // - copy_ussd: must embed both old and new PIN
+    // - open_dialer: should NOT embed the new PIN (it will be copied separately)
+    if(action === 'copy_ussd'){
+      if(!tpl.includes('{old_pin}') || !tpl.includes('{new_pin}')){
+        throw new Error('This template is misconfigured for “Copy USSD”: it must include {old_pin} and {new_pin}.');
+      }
+    } else {
+      if(tpl.includes('{new_pin}')){
+        throw new Error('This template is misconfigured for “Send to phone app”: it must NOT include {new_pin}. Use “Copy USSD” instead, or ask an admin to provide an interactive USSD template that prompts for the new PIN.');
+      }
     }
 
     const newPin = genPassword((carrier.pin_type || carrier.pinType || 'numeric'), requiredLen);
@@ -1100,17 +1125,19 @@ async function doWalletSetup(){
     if(!walletLockId) throw new Error('Invalid response');
 
     // Build USSD command locally (never send PINs to server)
-    const ussd = tpl
+    const ussdDial = tpl.replace(/\{old_pin\}/g, oldPin);
+    const ussdFull = tpl
       .replace(/\{old_pin\}/g, oldPin)
       .replace(/\{new_pin\}/g, newPin);
-    const telUri = buildTelUriFromUssd(ussd);
+
+    const telUri = buildTelUriFromUssd((action === 'open_dialer') ? ussdDial : ussdFull);
 
     try{
       if(action === 'open_dialer'){
         // For "Send to phone app": copy only the new PIN
         await navigator.clipboard.writeText(newPin);
       } else {
-        await navigator.clipboard.writeText(ussd);
+        await navigator.clipboard.writeText(ussdFull);
       }
     }catch{
       // We cannot display the PIN, so we must abort if clipboard isn't available.
@@ -1209,6 +1236,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   syncWalletPrimaryButtonText();
 
   checkVaultUnlock();
+
+  // Usability: initial focus to speed up unlock on desktop/mobile.
+  if(!vaultPhraseSession){
+    const vp = document.getElementById('vp-input');
+    if(vp) vp.focus();
+  }
 });
 </script>
 </body>

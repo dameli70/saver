@@ -34,11 +34,11 @@ if (!$hasSetup) {
     jsonResponse(['error' => 'Wallet locks are not available (missing setup columns). Apply migrations in config/migrations/.'], 500);
 }
 
-$stmt = $db->prepare("\
+$stmt = $db->prepare("
     SELECT id, user_id, unlock_at, setup_status, cipher_blob, iv, auth_tag, kdf_salt, kdf_iterations, revealed_at
     FROM wallet_locks
     WHERE id = ? AND user_id = ? AND is_active = 1
-    LIMIT 1\
+    LIMIT 1
 ");
 $stmt->execute([$walletId, (int)$userId]);
 $row = $stmt->fetch();
@@ -48,8 +48,9 @@ if (($row['setup_status'] ?? '') !== 'active') {
     jsonResponse(['error' => 'Wallet lock setup is not complete'], 409);
 }
 
-$unlockDt = new DateTime($row['unlock_at']);
-if ($unlockDt > new DateTime()) {
+$unlockDt = (new DateTimeImmutable((string)$row['unlock_at'], new DateTimeZone('UTC')))->setTimezone(new DateTimeZone('UTC'));
+$nowUtc   = new DateTimeImmutable('now', new DateTimeZone('UTC'));
+if ($unlockDt > $nowUtc) {
     jsonResponse(['error' => 'Not yet unlocked'], 403);
 }
 
