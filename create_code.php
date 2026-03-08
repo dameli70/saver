@@ -151,6 +151,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
       <a class="btn btn-ghost btn-sm" href="rooms.php">Rooms</a>
       <a class="btn btn-ghost btn-sm" href="notifications.php">Notifications</a>
       <a class="btn btn-ghost btn-sm" href="backup.php">Backup</a>
+      <a class="btn btn-ghost btn-sm" href="vault_settings.php">Vault</a>
       <a class="btn btn-ghost btn-sm" href="account.php">Account</a>
       <?php if ($isAdmin): ?><a class="btn btn-ghost btn-sm" href="admin.php">Admin</a><?php endif; ?>
       <a class="btn btn-ghost btn-sm" href="logout.php">Logout</a>

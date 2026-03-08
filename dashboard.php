@@ -213,6 +213,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
       <a class="btn btn-ghost btn-sm" href="rooms.php">Rooms</a>
       <a class="btn btn-ghost btn-sm" href="notifications.php">Notifications</a>
       <a class="btn btn-ghost btn-sm" href="backup.php">Backup</a>
+      <a class="btn btn-ghost btn-sm" href="vault_settings.php">Vault</a>
       <a class="btn btn-ghost btn-sm" href="account.php">Account</a>
       <?php if ($isAdmin): ?><a class="btn btn-ghost btn-sm" href="admin.php">Admin</a><?php endif; ?>
       <a class="btn btn-ghost btn-sm" href="logout.php">Logout</a>
@@ -239,6 +240,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
         <a class="btn btn-ghost" href="rooms.php" style="width:auto;">Rooms</a>
         <a class="btn btn-ghost" href="notifications.php" style="width:auto;">Notifications</a>
         <a class="btn btn-ghost" href="backup.php" style="width:auto;">Backup</a>
+        <a class="btn btn-ghost" href="vault_settings.php" style="width:auto;">Vault</a>
       </div>
       <div style="margin-top:12px;font-size:12px;color:var(--muted);line-height:1.7;">
         The vault passphrase never leaves your browser. Code creation and reveal are now separated into dedicated pages.
