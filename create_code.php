@@ -45,6 +45,10 @@ header("Permissions-Policy: clipboard-write=(self)");
   min-height:44px;display:flex;align-items:center;justify-content:center;}
 .type-opt:hover{border-color:var(--b2);color:var(--text);}
 .type-opt.sel{border-color:var(--accent);color:var(--accent);background:rgba(232,255,71,.06);}
+.type-opt:disabled{opacity:.45;cursor:not-allowed;}
+.type-opt:disabled:hover{border-color:var(--b1);color:var(--muted);}
+
+#wallet-action-grid{grid-template-columns:repeat(2,1fr);}
 
 .slider-row{display:flex;align-items:center;gap:14px;}
 .slider-val{font-family:var(--display);font-size:26px;font-weight:900;color:var(--accent);min-width:40px;text-align:right;}
@@ -97,7 +101,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
     <div class="card" id="vault-unlock-card" style="display:none">
       <div class="card-title"><div class="dot" style="background:var(--orange)"></div><span style="color:var(--orange)">Vault</span></div>
       <div style="font-size:12px;color:var(--muted);line-height:1.7;margin-bottom:14px;">
-        Your vault passphrase is used to derive encryption keys in your browser. It is never sent to the server.
+        Your vault passphrase is used to derive encryption keys in your browser. It is never sent to the server. Code creation is hidden until your vault is unlocked.
       </div>
 
       <div id="vp-setup-note" class="msg msg-warn"></div>
@@ -114,7 +118,56 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
       <button class="btn btn-primary" id="vp-btn" onclick="unlockVault()"><span id="vp-txt">Unlock Vault</span></button>
     </div>
 
-    <div class="card" id="gen-card">
+    <div class="card" id="create-mode-card" style="display:none">
+      <div class="card-title"><div class="dot"></div>Create mode</div>
+      <div class="type-grid" id="mode-grid">
+        <button class="type-opt sel" data-mode="scratch" type="button">From scratch</button>
+        <button class="type-opt" data-mode="wallet" type="button">Mobile money wallet</button>
+      </div>
+    </div>
+
+    <div class="card" id="wallet-card" style="display:none">
+      <div class="card-title"><div class="dot" style="background:var(--blue)"></div>Mobile Money Wallet</div>
+      <div style="font-size:12px;color:var(--muted);line-height:1.7;margin-bottom:14px;">
+        Use a carrier template to change your wallet PIN via USSD, then store the new PIN encrypted and time-locked.
+      </div>
+
+      <div class="field"><label>Template</label>
+        <select id="w-carrier"></select>
+      </div>
+
+      <div class="field"><label>Label <span style="color:var(--muted);font-size:10px;">(optional)</span></label>
+        <input id="w-label" type="text" placeholder="e.g. Moov Money wallet" maxlength="120">
+      </div>
+
+      <div class="field"><label>Your current wallet PIN</label>
+        <input id="w-oldpin" type="password" inputmode="numeric" autocomplete="off" placeholder="4-digit PIN">
+      </div>
+
+      <div class="field"><label>Wallet setup action</label>
+        <div class="type-grid" id="wallet-action-grid">
+          <button class="type-opt" data-action="open_dialer" type="button">Send to phone app</button>
+          <button class="type-opt" data-action="copy_ussd" type="button">Copy USSD</button>
+        </div>
+      </div>
+
+      <div class="field"><label>Reveal Date &amp; Time</label>
+        <input type="datetime-local" id="w-date">
+      </div>
+
+      <div id="w-err" class="msg msg-err"></div>
+
+      <button class="btn btn-primary" id="w-btn" onclick="doWalletSetup()" style="margin-top:10px;">
+        <span id="w-txt">Generate &amp; Copy USSD</span>
+      </button>
+
+      <div class="hr" style="border-top:1px solid var(--b1);margin:16px 0;"></div>
+      <div class="card-title" style="margin-bottom:10px;">Pending wallet setups</div>
+      <div id="wallet-pending-msg" class="msg"></div>
+      <div id="wallet-pending-wrap" style="display:flex;flex-direction:column;gap:10px;"></div>
+    </div>
+
+    <div class="card" id="gen-card" style="display:none">
       <div class="card-title"><div class="dot"></div>Create a Code</div>
 
       <div class="field"><label>Label</label>
@@ -166,14 +219,19 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
 <!-- confirm overlay -->
 <div id="confirm-overlay" onclick="closeConfirm(event)">
   <div class="confirm-sheet">
-    <div class="confirm-title">Did you save the code?</div>
+    <div class="confirm-title" id="confirm-title">Did you save the code?</div>
     <div class="confirm-sub" id="cs-sub">Code was copied to your clipboard.</div>
     <div class="msg msg-warn" id="autosave-bar" style="display:none">Auto-saved. Code stored but not time-locked until you confirm.</div>
 
     <div class="confirm-btns" id="confirm-btns">
-      <button class="btn btn-green" onclick="doConfirm('confirm')">✓ Yes, I saved it</button>
-      <button class="btn btn-red" onclick="doConfirm('reject')">✗ No, discard</button>
+      <button class="btn btn-green" id="confirm-yes-btn" onclick="doConfirm('confirm')">✓ Yes, I saved it</button>
+      <button class="btn btn-red" id="confirm-no-btn" onclick="doConfirm('reject')">✗ No, discard</button>
     </div>
+
+    <div id="confirm-wallet-actions" style="display:none;margin-top:10px;">
+      <a class="btn btn-ghost btn-sm" id="confirm-open-dialer-again" href="#" onclick="openDialerAgain(event)">Open dialer again</a>
+    </div>
+
     <div id="confirm-done" style="display:none;margin-top:12px;font-size:12px;color:var(--muted);line-height:1.6;"><div id="confirm-done-msg"></div></div>
   </div>
 </div>
@@ -190,12 +248,111 @@ let vaultCheckInitialized = false;
 let vaultCheck = null;
 
 let pendingLock = null;
+let pendingWallet = null;
+let confirmMode = 'lock';
+
+let createMode = (localStorage.getItem('create_mode') || 'scratch');
+let carriers = [];
+let walletAction = (localStorage.getItem('wallet_action') || 'copy_ussd');
 
 function apiUrl(url){return url.startsWith('/') ? url.slice(1) : url;}
 async function get(url){const r=await fetch(apiUrl(url),{credentials:'same-origin'});return r.json();}
 async function postCsrf(url,body){
   const r=await fetch(apiUrl(url),{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRF-Token':CSRF},body:JSON.stringify(body)});
   return r.json();
+}
+
+function b64uToBuf(b64url){
+  const b64 = String(b64url||'').replace(/-/g,'+').replace(/_/g,'/');
+  const pad = b64.length % 4 ? '='.repeat(4 - (b64.length % 4)) : '';
+  const bin = atob(b64 + pad);
+  const bytes = new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
+  return bytes.buffer;
+}
+function bufToB64u(buf){
+  const bytes = new Uint8Array(buf);
+  let s='';
+  for(let i=0;i<bytes.length;i++) s+=String.fromCharCode(bytes[i]);
+  return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+
+async function ensureReauth(methods){
+  if(methods && methods.passkey && window.PublicKeyCredential){
+    try{
+      const begin = await postCsrf('api/webauthn.php', {action:'reauth_begin'});
+      if(begin.success){
+        const pk = begin.publicKey || {};
+        const allow = (pk.allowCredentials||[]).map(c => ({type:c.type, id: b64uToBuf(c.id)}));
+        const cred = await navigator.credentials.get({publicKey:{
+          challenge: b64uToBuf(pk.challenge),
+          rpId: pk.rpId,
+          timeout: pk.timeout||60000,
+          userVerification: pk.userVerification||'required',
+          allowCredentials: allow,
+        }});
+        const a = cred.response;
+        const fin = await postCsrf('api/webauthn.php', {
+          action:'reauth_finish',
+          rawId: bufToB64u(cred.rawId),
+          response:{
+            clientDataJSON: bufToB64u(a.clientDataJSON),
+            authenticatorData: bufToB64u(a.authenticatorData),
+            signature: bufToB64u(a.signature),
+            userHandle: a.userHandle ? bufToB64u(a.userHandle) : null,
+          }
+        });
+        if(fin.success) return true;
+      }
+    }catch{}
+  }
+
+  if(methods && methods.totp){
+    const code = prompt('Enter your 6-digit authenticator code');
+    if(!code) return false;
+    const r = await postCsrf('api/totp.php', {action:'reauth', code});
+    return !!r.success;
+  }
+
+  toast('Enable TOTP or add a passkey in Account', 'warn');
+  return false;
+}
+
+async function postCsrfWithReauth(url, body){
+  let r = await postCsrf(url, body);
+  if(!r.success && (r.error_code==='reauth_required' || r.error_code==='security_setup_required')){
+    const ok = await ensureReauth(r.methods||{});
+    if(!ok) return r;
+    r = await postCsrf(url, body);
+  }
+  return r;
+}
+
+async function wipeClipboard(){
+  try{ await navigator.clipboard.writeText(''); }catch{}
+}
+
+function buildTelUriFromUssd(ussd){
+  const clean = String(ussd||'').trim().replace(/\s+/g,'');
+  return 'tel:' + clean.replace(/#/g, '%23');
+}
+
+function attemptOpenDialer(telUri){
+  if(!telUri) return;
+  const a = document.createElement('a');
+  a.href = telUri;
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+function openDialerAgain(e){
+  if(e) e.preventDefault();
+  if(pendingWallet && pendingWallet.tel_uri){
+    attemptOpenDialer(pendingWallet.tel_uri);
+  }
+  return false;
 }
 
 function toast(msg,type='ok'){const t=document.createElement('div');t.className=`toast ${type}`;t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),3200);} 
@@ -335,21 +492,7 @@ async function loadVaultSetup(){
 
     if(vp2Field) vp2Field.style.display = 'none';
     if(btnTxt) btnTxt.textContent = 'Unlock Vault';
-
   }catch{}
-}
-
-function checkVaultUnlock() {
-  const genBtn = document.getElementById('g-btn');
-
-  if (!vaultPhraseSession) {
-    document.getElementById('vault-unlock-card').style.display = 'block';
-    if(genBtn) genBtn.disabled = true;
-    return;
-  }
-
-  document.getElementById('vault-unlock-card').style.display = 'none';
-  if(genBtn) genBtn.disabled = false;
 }
 
 async function unlockVault() {
@@ -415,6 +558,11 @@ async function unlockVault() {
     toast(setMode ? 'Vault passphrase set and unlocked' : 'Vault unlocked — passphrase held in memory only', 'ok');
     await loadVaultSetup();
     checkVaultUnlock();
+
+    setTimeout(() => {
+      const first = (createMode === 'wallet') ? document.getElementById('w-oldpin') : document.getElementById('g-label');
+      if (first) first.focus();
+    }, 150);
 
   } catch (e) {
     if (e && e.name === 'OperationError') errEl.textContent = 'Incorrect vault passphrase or tampered data';
@@ -506,9 +654,16 @@ async function doGenerate(){
 }
 
 function openConfirmSheet(lockId, label){
+  confirmMode = 'lock';
+  document.getElementById('confirm-title').textContent = 'Did you save the code?';
   document.getElementById('cs-sub').textContent=`"${label}" — blind-copied to clipboard.`;
+  document.getElementById('confirm-yes-btn').textContent='✓ Yes, I saved it';
+  document.getElementById('confirm-no-btn').textContent='✗ No, discard';
   document.getElementById('confirm-btns').style.display='grid';
   document.getElementById('confirm-done').style.display='none';
+
+  const wa = document.getElementById('confirm-wallet-actions');
+  if(wa) wa.style.display='none';
 
   const bar = document.getElementById('autosave-bar');
   bar.style.display='none';
@@ -516,38 +671,512 @@ function openConfirmSheet(lockId, label){
   document.getElementById('confirm-overlay').classList.add('show');
 
   setTimeout(async ()=>{
-    if(!pendingLock) return;
+    if(!pendingLock || confirmMode !== 'lock' || pendingLock.lock_id !== lockId) return;
     await postCsrf('api/confirm.php',{lock_id:lockId,action:'auto_save'});
     bar.style.display='block';
   }, 120000);
 }
 
+function openConfirmSheetWallet(opts){
+  const carrierName = (opts && opts.carrierName) ? opts.carrierName : 'Wallet';
+  const action = normalizeWalletAction(opts && opts.action);
+  const telUri = (opts && opts.telUri) ? String(opts.telUri) : '';
+
+  confirmMode = 'wallet';
+  document.getElementById('confirm-title').textContent = 'Did you complete the USSD PIN change?';
+
+  const wa = document.getElementById('confirm-wallet-actions');
+  const dialAgain = document.getElementById('confirm-open-dialer-again');
+
+  if(action === 'open_dialer'){
+    document.getElementById('cs-sub').textContent = `${carrierName} — new PIN blind-copied to clipboard. Your dialer should open with the USSD command. Finish the change, then confirm here.`;
+    if(dialAgain) dialAgain.href = telUri || '#';
+    if(wa) wa.style.display = 'block';
+  } else {
+    document.getElementById('cs-sub').textContent = `${carrierName} — USSD command copied to your clipboard. Paste it into your phone dialer, finish the change, then confirm here.`;
+    if(dialAgain) dialAgain.href = '#';
+    if(wa) wa.style.display = 'none';
+  }
+
+  document.getElementById('confirm-yes-btn').textContent='✓ Yes, I entered it';
+  document.getElementById('confirm-no-btn').textContent='✗ No, discard';
+  document.getElementById('confirm-btns').style.display='grid';
+  document.getElementById('confirm-done').style.display='none';
+  document.getElementById('autosave-bar').style.display='none';
+  document.getElementById('confirm-overlay').classList.add('show');
+
+  // Basic accessibility: move focus into the dialog.
+  setTimeout(() => {
+    const y = document.getElementById('confirm-yes-btn');
+    if(y) y.focus();
+  }, 50);
+}
+
 function closeConfirm(e){
   if(e&&e.target!==document.getElementById('confirm-overlay'))return;
+
+  // In wallet mode, avoid letting users dismiss the sheet while the clipboard
+  // may still contain sensitive material.
+  if(confirmMode === 'wallet'){
+    toast('Please confirm or discard to finish wallet setup (this will clear your clipboard).', 'err');
+    return;
+  }
+
   document.getElementById('confirm-overlay').classList.remove('show');
-  pendingLock=null;
+
+  const wa = document.getElementById('confirm-wallet-actions');
+  if(wa) wa.style.display='none';
 }
 
 async function doConfirm(action){
-  if(!pendingLock)return;
-
-  const r=await postCsrf('api/confirm.php',{lock_id:pendingLock.lock_id,action});
-  document.getElementById('confirm-btns').style.display='none';
-  document.getElementById('confirm-done').style.display='block';
+  const btns = document.getElementById('confirm-btns');
+  const done = document.getElementById('confirm-done');
   const msg=document.getElementById('confirm-done-msg');
 
-  if(action==='confirm'){
-    msg.textContent='✓ Lock activated.';
-  } else if(action==='reject'){
-    msg.textContent='✗ Discarded.';
+  btns.style.display='none';
+  done.style.display='block';
+
+  try{
+    if(confirmMode === 'wallet'){
+      if(!pendingWallet) throw new Error('No pending wallet setup');
+      const walletLockId = pendingWallet.wallet_lock_id;
+
+      if(action === 'confirm'){
+        const r = await postCsrfWithReauth('api/wallet_confirm.php', {wallet_lock_id: walletLockId});
+        if(!r.success) throw new Error(r.error || 'Failed to confirm');
+        msg.textContent='✓ Wallet PIN locked and time-gated.';
+      } else {
+        const r = await postCsrfWithReauth('api/wallet_fail.php', {wallet_lock_id: walletLockId});
+        if(!r.success) throw new Error(r.error || 'Failed to discard');
+        msg.textContent='✗ Discarded.';
+      }
+
+      await wipeClipboard();
+      pendingWallet = null;
+
+      const wa = document.getElementById('confirm-wallet-actions');
+      if(wa) wa.style.display='none';
+
+      await loadWalletPending(true);
+      return;
+    }
+
+    if(!pendingLock) throw new Error('No pending lock');
+    const r=await postCsrf('api/confirm.php',{lock_id:pendingLock.lock_id,action});
+    if(!r.success) throw new Error(r.error||'Failed');
+
+    if(action==='confirm') msg.textContent='✓ Lock activated.';
+    else msg.textContent='✗ Discarded.';
+
+    await wipeClipboard();
+    pendingLock=null;
+
+  }catch(e){
+    msg.textContent = e.message || 'Failed';
+  }
+}
+
+function setCreateMode(mode){
+  createMode = (mode === 'wallet') ? 'wallet' : 'scratch';
+  localStorage.setItem('create_mode', createMode);
+
+  document.querySelectorAll('#mode-grid .type-opt').forEach(b => {
+    b.classList.toggle('sel', b.dataset.mode === createMode);
+  });
+
+  const genCard = document.getElementById('gen-card');
+  const walletCard = document.getElementById('wallet-card');
+  if (genCard) genCard.style.display = (createMode === 'scratch') ? 'block' : 'none';
+  if (walletCard) walletCard.style.display = (createMode === 'wallet') ? 'block' : 'none';
+}
+
+function checkVaultUnlock() {
+  const vaultCard = document.getElementById('vault-unlock-card');
+  const modeCard = document.getElementById('create-mode-card');
+  const genBtn = document.getElementById('g-btn');
+  const wBtn = document.getElementById('w-btn');
+  const genCard = document.getElementById('gen-card');
+  const walletCard = document.getElementById('wallet-card');
+
+  if (!vaultPhraseSession) {
+    if (vaultCard) vaultCard.style.display = 'block';
+    if (modeCard) modeCard.style.display = 'none';
+    if (genCard) genCard.style.display = 'none';
+    if (walletCard) walletCard.style.display = 'none';
+    if (genBtn) genBtn.disabled = true;
+    if (wBtn) wBtn.disabled = true;
+    return;
   }
 
-  pendingLock=null;
+  if (vaultCard) vaultCard.style.display = 'none';
+  if (modeCard) modeCard.style.display = 'block';
+  if (genBtn) genBtn.disabled = false;
+  if (wBtn) wBtn.disabled = false;
+
+  setCreateMode(createMode);
+}
+
+function normalizeWalletAction(action){
+  return (action === 'open_dialer' || action === 'copy_ussd') ? action : 'copy_ussd';
+}
+
+function getCarrierWalletPolicy(carrier){
+  // Server-provided policy (if migration 019 is applied) or safe defaults.
+  let allowOpenDialer = (carrier && (carrier.wallet_allow_open_dialer ?? carrier.walletAllowOpenDialer)) ?? true;
+  const allowCopyUssd = (carrier && (carrier.wallet_allow_copy_ussd ?? carrier.walletAllowCopyUssd)) ?? true;
+  const def = normalizeWalletAction((carrier && (carrier.wallet_default_action ?? carrier.walletDefaultAction)) ?? walletAction);
+
+  // Safety/UI consistency: if the template embeds {new_pin}, "open dialer" would either
+  // leak the new PIN into the dialer prefill or fail our validation. Hide/disable it.
+  const tpl = String((carrier && (carrier.ussd_change_pin_template ?? carrier.ussdChangePinTemplate)) ?? '');
+  if (tpl.includes('{new_pin}')) allowOpenDialer = false;
+
+  return {
+    allowOpenDialer: !!allowOpenDialer,
+    allowCopyUssd: !!allowCopyUssd,
+    defaultAction: def,
+  };
+}
+
+function syncWalletPrimaryButtonText(){
+  const txt = document.getElementById('w-txt');
+  if(!txt) return;
+  txt.textContent = (walletAction === 'open_dialer') ? 'Generate & Send to phone app' : 'Generate & Copy USSD';
+}
+
+function setWalletAction(action){
+  walletAction = normalizeWalletAction(action);
+  localStorage.setItem('wallet_action', walletAction);
+
+  const grid = document.getElementById('wallet-action-grid');
+  if(grid){
+    grid.querySelectorAll('.type-opt').forEach(b => {
+      b.classList.toggle('sel', b.dataset.action === walletAction);
+    });
+  }
+
+  syncWalletPrimaryButtonText();
+}
+
+function applyWalletActionPolicy(carrier, preferCarrierDefault=false){
+  const grid = document.getElementById('wallet-action-grid');
+  const btn = document.getElementById('w-btn');
+  if(!grid) return;
+
+  const policy = getCarrierWalletPolicy(carrier);
+  const openBtn = grid.querySelector('[data-action="open_dialer"]');
+  const copyBtn = grid.querySelector('[data-action="copy_ussd"]');
+
+  if(openBtn){
+    openBtn.disabled = !policy.allowOpenDialer;
+    openBtn.style.display = policy.allowOpenDialer ? '' : 'none';
+  }
+  if(copyBtn){
+    copyBtn.disabled = !policy.allowCopyUssd;
+    copyBtn.style.display = policy.allowCopyUssd ? '' : 'none';
+  }
+
+  const allowed = [];
+  if(policy.allowOpenDialer) allowed.push('open_dialer');
+  if(policy.allowCopyUssd) allowed.push('copy_ussd');
+
+  if(!allowed.length){
+    if(btn) btn.disabled = true;
+    setWalletAction('copy_ussd');
+    return;
+  }
+
+  let next = normalizeWalletAction(walletAction);
+  if(preferCarrierDefault && allowed.includes(policy.defaultAction)){
+    next = policy.defaultAction;
+  }
+  if(!allowed.includes(next)){
+    next = allowed.includes(policy.defaultAction) ? policy.defaultAction : allowed[0];
+  }
+
+  if(btn && vaultPhraseSession) btn.disabled = false;
+  setWalletAction(next);
+}
+
+async function loadCarriersForWallet(){
+  const sel = document.getElementById('w-carrier');
+  const errEl = document.getElementById('w-err');
+  if(errEl) errEl.classList.remove('show');
+
+  if(!sel) return;
+  sel.innerHTML = '<option value="">Loading…</option>';
+
+  try{
+    const r = await get('api/carriers.php');
+    if(!r.success){
+      sel.innerHTML = '<option value="">No templates available</option>';
+      if(errEl){ errEl.textContent = r.error || 'Failed to load templates'; errEl.classList.add('show'); }
+      carriers = [];
+      return;
+    }
+
+    carriers = r.carriers || [];
+    if(!carriers.length){
+      sel.innerHTML = '<option value="">No templates available</option>';
+      return;
+    }
+
+    sel.innerHTML = '<option value="">Select a template…</option>';
+    carriers.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = String(c.id);
+      opt.textContent = c.name + (c.country ? ` (${c.country})` : '');
+      sel.appendChild(opt);
+    });
+
+  }catch(e){
+    sel.innerHTML = '<option value="">No templates available</option>';
+    if(errEl){ errEl.textContent = e.message || 'Failed to load templates'; errEl.classList.add('show'); }
+    carriers = [];
+  }
+}
+
+function renderWalletPending(list){
+  const wrap = document.getElementById('wallet-pending-wrap');
+  const msg = document.getElementById('wallet-pending-msg');
+  if(msg){ msg.className='msg'; msg.textContent=''; }
+  if(!wrap) return;
+
+  wrap.innerHTML = '';
+  if(!list.length){
+    wrap.innerHTML = '<div style="font-size:12px;color:var(--muted);">No pending setups.</div>';
+    return;
+  }
+
+  list.forEach(w => {
+    const el = document.createElement('div');
+    el.style.border = '1px solid var(--b1)';
+    el.style.background = 'var(--s1)';
+    el.style.padding = '12px 14px';
+    el.style.display = 'flex';
+    el.style.flexDirection = 'column';
+    el.style.gap = '10px';
+
+    const title = document.createElement('div');
+    title.style.fontFamily = 'var(--display)';
+    title.style.fontSize = '13px';
+    title.style.fontWeight = '700';
+    title.textContent = (w.label || w.carrier_name || 'Wallet') + ' · ' + (w.display_status || 'setup_pending');
+
+    const meta = document.createElement('div');
+    meta.style.fontSize = '11px';
+    meta.style.color = 'var(--muted)';
+    meta.textContent = `Unlock at: ${w.unlock_at} · Carrier: ${w.carrier_name}`;
+
+    const actions = document.createElement('div');
+    actions.style.display = 'flex';
+    actions.style.gap = '8px';
+    actions.style.flexWrap = 'wrap';
+
+    const btnOk = document.createElement('button');
+    btnOk.className = 'btn btn-green btn-sm';
+    btnOk.type = 'button';
+    btnOk.textContent = 'Confirm setup';
+    btnOk.onclick = async () => {
+      try{
+        const r = await postCsrfWithReauth('api/wallet_confirm.php', {wallet_lock_id: w.id});
+        if(!r.success) throw new Error(r.error||'Failed');
+        await wipeClipboard();
+        toast('Setup confirmed', 'ok');
+        await loadWalletPending(true);
+      }catch(e){
+        toast(e.message||'Failed', 'err');
+      }
+    };
+
+    const btnFail = document.createElement('button');
+    btnFail.className = 'btn btn-red btn-sm';
+    btnFail.type = 'button';
+    btnFail.textContent = 'Mark failed';
+    btnFail.onclick = async () => {
+      const ok = confirm('Mark this setup as failed?');
+      if(!ok) return;
+      try{
+        const r = await postCsrfWithReauth('api/wallet_fail.php', {wallet_lock_id: w.id});
+        if(!r.success) throw new Error(r.error||'Failed');
+        await wipeClipboard();
+        toast('Marked failed', 'ok');
+        await loadWalletPending(true);
+      }catch(e){
+        toast(e.message||'Failed', 'err');
+      }
+    };
+
+    actions.appendChild(btnOk);
+    actions.appendChild(btnFail);
+
+    el.appendChild(title);
+    el.appendChild(meta);
+    el.appendChild(actions);
+    wrap.appendChild(el);
+  });
+}
+
+async function loadWalletPending(force=false){
+  const msg = document.getElementById('wallet-pending-msg');
+  if(msg){ msg.className='msg'; msg.textContent=''; }
+
+  try{
+    const r = await get('api/wallet_locks.php');
+    if(!r.success) throw new Error(r.error||'Failed to load wallet locks');
+
+    const rows = r.wallet_locks || [];
+    const pending = rows.filter(x => x.display_status === 'setup_pending' || x.setup_status === 'pending');
+    renderWalletPending(pending);
+
+  }catch(e){
+    const wrap = document.getElementById('wallet-pending-wrap');
+    if(wrap) wrap.innerHTML = '<div style="font-size:12px;color:var(--muted);">Failed to load.</div>';
+    if(msg){ msg.className='msg msg-err show'; msg.textContent = e.message||'Failed'; }
+  }
+}
+
+async function doWalletSetup(){
+  const errEl=document.getElementById('w-err');
+  errEl.classList.remove('show');
+
+  if(!vaultPhraseSession){toast('Enter your vault passphrase first','err');return;}
+
+  const carrierId = parseInt((document.getElementById('w-carrier')||{}).value || '0', 10);
+  const carrier = carriers.find(c => parseInt(c.id,10) === carrierId);
+
+  const label = (document.getElementById('w-label')||{}).value?.trim() || '';
+  const oldPin = (document.getElementById('w-oldpin')||{}).value?.trim() || '';
+  const revealDate = (document.getElementById('w-date')||{}).value || '';
+
+  if(!carrier){ errEl.textContent='Select a template'; errEl.classList.add('show'); return; }
+  if(!revealDate){ errEl.textContent='Reveal date required'; errEl.classList.add('show'); return; }
+
+  const requiredLen = parseInt((carrier.pin_length ?? carrier.pinLength ?? '4'), 10) || 4;
+  if(!/^[0-9]+$/.test(oldPin) || oldPin.length !== requiredLen){
+    errEl.textContent = `Current PIN must be ${requiredLen} digits`;
+    errEl.classList.add('show');
+    return;
+  }
+
+  const policy = getCarrierWalletPolicy(carrier);
+  const allowed = [];
+  if(policy.allowOpenDialer) allowed.push('open_dialer');
+  if(policy.allowCopyUssd) allowed.push('copy_ussd');
+
+  if(!allowed.length){
+    errEl.textContent = 'Wallet setup actions are disabled for this template.';
+    errEl.classList.add('show');
+    return;
+  }
+
+  let action = normalizeWalletAction(walletAction);
+  if(!allowed.includes(action)){
+    action = allowed.includes(policy.defaultAction) ? policy.defaultAction : allowed[0];
+  }
+
+  const btn=document.getElementById('w-btn');
+  const txt=document.getElementById('w-txt');
+  btn.disabled=true;
+  txt.innerHTML='<span class="spin light"></span> Sealing…';
+
+  try{
+    const tpl = String(carrier.ussd_change_pin_template || carrier.ussdChangePinTemplate || '');
+    if(!tpl.trim()) throw new Error('This template is not configured yet. Ask an admin to set the USSD code.');
+
+    // Template validation depends on flow:
+    // - copy_ussd: must embed both old and new PIN
+    // - open_dialer: should NOT embed the new PIN (it will be copied separately)
+    if(action === 'copy_ussd'){
+      if(!tpl.includes('{old_pin}') || !tpl.includes('{new_pin}')){
+        throw new Error('This template is misconfigured for “Copy USSD”: it must include {old_pin} and {new_pin}.');
+      }
+    } else {
+      if(tpl.includes('{new_pin}')){
+        throw new Error('This template is misconfigured for “Send to phone app”: it must NOT include {new_pin}. Use “Copy USSD” instead, or ask an admin to provide an interactive USSD template that prompts for the new PIN.');
+      }
+    }
+
+    const newPin = genPassword((carrier.pin_type || carrier.pinType || 'numeric'), requiredLen);
+
+    const saltResp = await get('api/salt.php');
+    if(!saltResp.success) throw new Error(saltResp.error||'Failed to get KDF salt');
+
+    const kdf_salt = saltResp.kdf_salt;
+    const kdf_iterations = saltResp.kdf_iterations;
+
+    const key = await deriveKey(vaultPhraseSession, kdf_salt, kdf_iterations);
+    const enc = await aesEncrypt(newPin, key);
+
+    const createRes = await postCsrfWithReauth('api/wallet_create.php', {
+      carrier_id: carrierId,
+      label,
+      unlock_at: new Date(revealDate).toISOString(),
+      cipher_blob: enc.cipher_blob,
+      iv: enc.iv,
+      auth_tag: enc.auth_tag,
+      kdf_salt,
+      kdf_iterations,
+    });
+
+    if(!createRes.success) throw new Error(createRes.error || 'Failed to create wallet lock');
+
+    const walletLockId = createRes.wallet_lock_id;
+    if(!walletLockId) throw new Error('Invalid response');
+
+    // Build USSD command locally (never send PINs to server)
+    const ussdDial = tpl.replace(/\{old_pin\}/g, oldPin);
+    const ussdFull = tpl
+      .replace(/\{old_pin\}/g, oldPin)
+      .replace(/\{new_pin\}/g, newPin);
+
+    const telUri = buildTelUriFromUssd((action === 'open_dialer') ? ussdDial : ussdFull);
+
+    try{
+      if(action === 'open_dialer'){
+        // For "Send to phone app": copy only the new PIN
+        await navigator.clipboard.writeText(newPin);
+      } else {
+        await navigator.clipboard.writeText(ussdFull);
+      }
+    }catch{
+      // We cannot display the PIN, so we must abort if clipboard isn't available.
+      await postCsrfWithReauth('api/wallet_fail.php', {wallet_lock_id: walletLockId});
+      throw new Error('Clipboard write blocked. Use HTTPS and allow clipboard access.');
+    }
+
+    if(action === 'open_dialer'){
+      attemptOpenDialer(telUri);
+    }
+
+    pendingWallet = {
+      wallet_lock_id: walletLockId,
+      carrier_name: carrier.name || 'Wallet',
+      unlock_at: createRes.unlock_at || '',
+      action,
+      tel_uri: telUri,
+    };
+    openConfirmSheetWallet({carrierName: carrier.name || 'Wallet', action, telUri});
+
+    document.getElementById('w-label').value='';
+    document.getElementById('w-oldpin').value='';
+
+    await loadWalletPending(true);
+
+  }catch(e){
+    errEl.textContent=e.message||'Failed';
+    errEl.classList.add('show');
+  }finally{
+    syncWalletPrimaryButtonText();
+    btn.disabled=false;
+  }
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
   const d = new Date(); d.setDate(d.getDate()+1); d.setSeconds(0,0);
   document.getElementById('g-date').value = d.toISOString().slice(0,16);
+  const wDate = document.getElementById('w-date');
+  if(wDate) wDate.value = d.toISOString().slice(0,16);
 
   document.querySelectorAll('#type-grid .type-opt').forEach(b => {
     b.addEventListener('click', () => {
@@ -555,6 +1184,42 @@ document.addEventListener('DOMContentLoaded', async () => {
       b.classList.add('sel');
     });
   });
+
+  document.querySelectorAll('#mode-grid .type-opt').forEach(b => {
+    b.addEventListener('click', () => {
+      setCreateMode(b.dataset.mode);
+      setTimeout(() => {
+        const first = (createMode === 'wallet') ? document.getElementById('w-oldpin') : document.getElementById('g-label');
+        if(first) first.focus();
+      }, 50);
+    });
+  });
+
+  const wag = document.getElementById('wallet-action-grid');
+  if(wag){
+    wag.querySelectorAll('.type-opt').forEach(b => {
+      b.addEventListener('click', () => {
+        if(b.disabled) return;
+        setWalletAction(b.dataset.action);
+      });
+    });
+  }
+  setWalletAction(walletAction);
+
+  const wCarrierSel = document.getElementById('w-carrier');
+  if(wCarrierSel){
+    wCarrierSel.addEventListener('change', () => {
+      const carrierId = parseInt(wCarrierSel.value || '0', 10);
+      const carrier = carriers.find(c => parseInt(c.id,10) === carrierId);
+      applyWalletActionPolicy(carrier, true);
+
+      if(carrier){
+        const requiredLen = parseInt((carrier.pin_length ?? carrier.pinLength ?? '4'), 10) || 4;
+        const inp = document.getElementById('w-oldpin');
+        if(inp) inp.placeholder = `${requiredLen}-digit PIN`;
+      }
+    });
+  }
 
   document.getElementById('vp-input').addEventListener('keydown', e => { if(e.key==='Enter') unlockVault(); });
   const vp2 = document.getElementById('vp-input2');
@@ -564,7 +1229,19 @@ document.addEventListener('DOMContentLoaded', async () => {
   vaultSlotSession = ([1,2].includes(storedSlot) ? storedSlot : 1);
 
   await loadVaultSetup();
+  await loadCarriersForWallet();
+  await loadWalletPending(true);
+
+  applyWalletActionPolicy(null, false);
+  syncWalletPrimaryButtonText();
+
   checkVaultUnlock();
+
+  // Usability: initial focus to speed up unlock on desktop/mobile.
+  if(!vaultPhraseSession){
+    const vp = document.getElementById('vp-input');
+    if(vp) vp.focus();
+  }
 });
 </script>
 </body>

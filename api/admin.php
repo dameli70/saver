@@ -260,7 +260,28 @@ if ($method === 'GET') {
         $has = (bool)$db->query("SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'carriers' LIMIT 1")->fetchColumn();
         if (!$has) jsonResponse(['error' => 'Carriers are not available. Apply migrations in config/migrations/.'], 500);
 
-        $rows = $db->query("SELECT id, name, country, pin_type, pin_length, ussd_change_pin_template, ussd_balance_template, is_active, created_at, updated_at FROM carriers ORDER BY name ASC")->fetchAll();
+        $hasWalletCols = hasColumn($db, 'carriers', 'wallet_default_action')
+            && hasColumn($db, 'carriers', 'wallet_allow_open_dialer')
+            && hasColumn($db, 'carriers', 'wallet_allow_copy_ussd');
+
+        if ($hasWalletCols) {
+            $rows = $db->query("SELECT id, name, country, pin_type, pin_length, ussd_change_pin_template, ussd_balance_template, wallet_allow_open_dialer, wallet_allow_copy_ussd, wallet_default_action, is_active, created_at, updated_at FROM carriers ORDER BY name ASC")->fetchAll();
+            foreach ($rows as &$r) {
+                $r['wallet_allow_open_dialer'] = (int)$r['wallet_allow_open_dialer'];
+                $r['wallet_allow_copy_ussd'] = (int)$r['wallet_allow_copy_ussd'];
+                $r['wallet_default_action'] = (string)$r['wallet_default_action'];
+            }
+            unset($r);
+        } else {
+            $rows = $db->query("SELECT id, name, country, pin_type, pin_length, ussd_change_pin_template, ussd_balance_template, is_active, created_at, updated_at FROM carriers ORDER BY name ASC")->fetchAll();
+            foreach ($rows as &$r) {
+                $r['wallet_allow_open_dialer'] = 1;
+                $r['wallet_allow_copy_ussd'] = 1;
+                $r['wallet_default_action'] = 'open_dialer';
+            }
+            unset($r);
+        }
+
         jsonResponse(['success' => true, 'carriers' => $rows]);
     }
 
@@ -934,6 +955,12 @@ if ($method === 'POST') {
         $ussdBalance = trim((string)($body['ussd_balance_template'] ?? ''));
         $isActive = !empty($body['is_active']) ? 1 : 0;
 
+        // Optional wallet flow options (migration 019)
+        $walletAllowOpenDialer = array_key_exists('wallet_allow_open_dialer', $body) ? (!empty($body['wallet_allow_open_dialer']) ? 1 : 0) : null;
+        $walletAllowCopyUssd   = array_key_exists('wallet_allow_copy_ussd', $body) ? (!empty($body['wallet_allow_copy_ussd']) ? 1 : 0) : null;
+        $walletDefaultAction   = array_key_exists('wallet_default_action', $body) ? (string)$body['wallet_default_action'] : null;
+        $walletFieldsProvided  = ($walletAllowOpenDialer !== null) || ($walletAllowCopyUssd !== null) || ($walletDefaultAction !== null);
+
         if ($name === '') jsonResponse(['error' => 'name required'], 400);
         if (!in_array($pinType, ['numeric','alphanumeric'], true)) jsonResponse(['error' => 'Invalid pin_type'], 400);
         if ($pinLen < 3 || $pinLen > 12) jsonResponse(['error' => 'pin_length must be 3–12'], 400);
@@ -944,17 +971,52 @@ if ($method === 'POST') {
         $has = (bool)$db->query("SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'carriers' LIMIT 1")->fetchColumn();
         if (!$has) jsonResponse(['error' => 'Carriers are not available. Apply migrations in config/migrations/.'], 500);
 
-        $db->prepare("INSERT INTO carriers (name, country, pin_type, pin_length, ussd_change_pin_template, ussd_balance_template, is_active, created_at, updated_at)
-                      VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NULL)")
-           ->execute([
-               sanitize($name),
-               $country !== '' ? sanitize($country) : null,
-               $pinType,
-               $pinLen,
-               $ussdChange,
-               $ussdBalance,
-               $isActive,
-           ]);
+        $hasWalletCols = hasColumn($db, 'carriers', 'wallet_default_action')
+            && hasColumn($db, 'carriers', 'wallet_allow_open_dialer')
+            && hasColumn($db, 'carriers', 'wallet_allow_copy_ussd');
+
+        if ($walletFieldsProvided) {
+            if (!$hasWalletCols) {
+                jsonResponse(['error' => 'Wallet flow options are not available. Apply migration 019_carrier_wallet_flow_options.sql.'], 500);
+            }
+            if ($walletAllowOpenDialer === null || $walletAllowCopyUssd === null || $walletDefaultAction === null) {
+                jsonResponse(['error' => 'wallet_allow_open_dialer, wallet_allow_copy_ussd, and wallet_default_action must be set together'], 400);
+            }
+
+            if (!in_array($walletDefaultAction, ['open_dialer', 'copy_ussd'], true)) jsonResponse(['error' => 'Invalid wallet_default_action'], 400);
+            if ($walletAllowOpenDialer !== 1 && $walletAllowCopyUssd !== 1) jsonResponse(['error' => 'At least one wallet action must be allowed'], 400);
+            if ($walletDefaultAction === 'open_dialer' && $walletAllowOpenDialer !== 1) jsonResponse(['error' => 'wallet_allow_open_dialer must be true when wallet_default_action is open_dialer'], 400);
+            if ($walletDefaultAction === 'copy_ussd' && $walletAllowCopyUssd !== 1) jsonResponse(['error' => 'wallet_allow_copy_ussd must be true when wallet_default_action is copy_ussd'], 400);
+        }
+
+        if ($hasWalletCols) {
+            $db->prepare("INSERT INTO carriers (name, country, pin_type, pin_length, ussd_change_pin_template, ussd_balance_template, wallet_allow_open_dialer, wallet_allow_copy_ussd, wallet_default_action, is_active, created_at, updated_at)
+                          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NULL)")
+               ->execute([
+                   sanitize($name),
+                   $country !== '' ? sanitize($country) : null,
+                   $pinType,
+                   $pinLen,
+                   $ussdChange,
+                   $ussdBalance,
+                   $walletFieldsProvided ? $walletAllowOpenDialer : 1,
+                   $walletFieldsProvided ? $walletAllowCopyUssd : 1,
+                   $walletFieldsProvided ? $walletDefaultAction : 'open_dialer',
+                   $isActive,
+               ]);
+        } else {
+            $db->prepare("INSERT INTO carriers (name, country, pin_type, pin_length, ussd_change_pin_template, ussd_balance_template, is_active, created_at, updated_at)
+                          VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NULL)")
+               ->execute([
+                   sanitize($name),
+                   $country !== '' ? sanitize($country) : null,
+                   $pinType,
+                   $pinLen,
+                   $ussdChange,
+                   $ussdBalance,
+                   $isActive,
+               ]);
+        }
 
         $carrierId = (int)$db->lastInsertId();
         auditLog('admin_carrier_create', null, getCurrentUserId());
@@ -974,6 +1036,12 @@ if ($method === 'POST') {
         $ussdBalance = trim((string)($body['ussd_balance_template'] ?? ''));
         $isActive = isset($body['is_active']) ? (!empty($body['is_active']) ? 1 : 0) : null;
 
+        // Optional wallet flow options (migration 019)
+        $walletAllowOpenDialer = array_key_exists('wallet_allow_open_dialer', $body) ? (!empty($body['wallet_allow_open_dialer']) ? 1 : 0) : null;
+        $walletAllowCopyUssd   = array_key_exists('wallet_allow_copy_ussd', $body) ? (!empty($body['wallet_allow_copy_ussd']) ? 1 : 0) : null;
+        $walletDefaultAction   = array_key_exists('wallet_default_action', $body) ? (string)$body['wallet_default_action'] : null;
+        $walletFieldsProvided  = ($walletAllowOpenDialer !== null) || ($walletAllowCopyUssd !== null) || ($walletDefaultAction !== null);
+
         if ($name === '') jsonResponse(['error' => 'name required'], 400);
         if (!in_array($pinType, ['numeric','alphanumeric'], true)) jsonResponse(['error' => 'Invalid pin_type'], 400);
         if ($pinLen < 3 || $pinLen > 12) jsonResponse(['error' => 'pin_length must be 3–12'], 400);
@@ -984,21 +1052,64 @@ if ($method === 'POST') {
         $has = (bool)$db->query("SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'carriers' LIMIT 1")->fetchColumn();
         if (!$has) jsonResponse(['error' => 'Carriers are not available. Apply migrations in config/migrations/.'], 500);
 
-        $db->prepare("UPDATE carriers
-                      SET name = ?, country = ?, pin_type = ?, pin_length = ?,
-                          ussd_change_pin_template = ?, ussd_balance_template = ?,
-                          is_active = COALESCE(?, is_active), updated_at = NOW()
-                      WHERE id = ?")
-           ->execute([
-               sanitize($name),
-               $country !== '' ? sanitize($country) : null,
-               $pinType,
-               $pinLen,
-               $ussdChange,
-               $ussdBalance,
-               $isActive,
-               $carrierId,
-           ]);
+        $hasWalletCols = hasColumn($db, 'carriers', 'wallet_default_action')
+            && hasColumn($db, 'carriers', 'wallet_allow_open_dialer')
+            && hasColumn($db, 'carriers', 'wallet_allow_copy_ussd');
+
+        if ($walletFieldsProvided) {
+            if (!$hasWalletCols) {
+                jsonResponse(['error' => 'Wallet flow options are not available. Apply migration 019_carrier_wallet_flow_options.sql.'], 500);
+            }
+            if ($walletAllowOpenDialer === null || $walletAllowCopyUssd === null || $walletDefaultAction === null) {
+                jsonResponse(['error' => 'wallet_allow_open_dialer, wallet_allow_copy_ussd, and wallet_default_action must be set together'], 400);
+            }
+
+            if (!in_array($walletDefaultAction, ['open_dialer', 'copy_ussd'], true)) jsonResponse(['error' => 'Invalid wallet_default_action'], 400);
+            if ($walletAllowOpenDialer !== 1 && $walletAllowCopyUssd !== 1) jsonResponse(['error' => 'At least one wallet action must be allowed'], 400);
+            if ($walletDefaultAction === 'open_dialer' && $walletAllowOpenDialer !== 1) jsonResponse(['error' => 'wallet_allow_open_dialer must be true when wallet_default_action is open_dialer'], 400);
+            if ($walletDefaultAction === 'copy_ussd' && $walletAllowCopyUssd !== 1) jsonResponse(['error' => 'wallet_allow_copy_ussd must be true when wallet_default_action is copy_ussd'], 400);
+        }
+
+        if ($hasWalletCols) {
+            $db->prepare("UPDATE carriers
+                          SET name = ?, country = ?, pin_type = ?, pin_length = ?,
+                              ussd_change_pin_template = ?, ussd_balance_template = ?,
+                              wallet_allow_open_dialer = COALESCE(?, wallet_allow_open_dialer),
+                              wallet_allow_copy_ussd = COALESCE(?, wallet_allow_copy_ussd),
+                              wallet_default_action = COALESCE(?, wallet_default_action),
+                              is_active = COALESCE(?, is_active),
+                              updated_at = NOW()
+                          WHERE id = ?")
+               ->execute([
+                   sanitize($name),
+                   $country !== '' ? sanitize($country) : null,
+                   $pinType,
+                   $pinLen,
+                   $ussdChange,
+                   $ussdBalance,
+                   $walletFieldsProvided ? $walletAllowOpenDialer : null,
+                   $walletFieldsProvided ? $walletAllowCopyUssd : null,
+                   $walletFieldsProvided ? $walletDefaultAction : null,
+                   $isActive,
+                   $carrierId,
+               ]);
+        } else {
+            $db->prepare("UPDATE carriers
+                          SET name = ?, country = ?, pin_type = ?, pin_length = ?,
+                              ussd_change_pin_template = ?, ussd_balance_template = ?,
+                              is_active = COALESCE(?, is_active), updated_at = NOW()
+                          WHERE id = ?")
+               ->execute([
+                   sanitize($name),
+                   $country !== '' ? sanitize($country) : null,
+                   $pinType,
+                   $pinLen,
+                   $ussdChange,
+                   $ussdBalance,
+                   $isActive,
+                   $carrierId,
+               ]);
+        }
 
         auditLog('admin_carrier_update', null, getCurrentUserId());
         jsonResponse(['success' => true]);

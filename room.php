@@ -400,6 +400,156 @@ function setMsg(id, text, ok){
 function fmt(ts){
   try{return new Date(ts).toLocaleString();}catch{return String(ts||'');}
 }
+function prettyVisibility(v){
+  if(v === 'public') return 'Public';
+  if(v === 'unlisted') return 'Unlisted';
+  if(v === 'private') return 'Private';
+  return v ? String(v) : '';
+}
+function prettySavingType(t){
+  if(t === 'A') return 'Type A';
+  if(t === 'B') return 'Type B';
+  return t ? String(t) : '';
+}
+function formatActivityExtra(eventType, payload){
+  if(!payload) return '';
+
+  if(eventType === 'room_created'){
+    const bits = [];
+    if(payload.visibility) bits.push(prettyVisibility(payload.visibility));
+    if(payload.saving_type) bits.push(prettySavingType(payload.saving_type));
+    return bits.join(' · ');
+  }
+
+  if(eventType === 'lobby_locked'){
+    if(payload.reason === 'capacity_reached') return 'Room full';
+    if(payload.reason === 'start_date_reached') return 'Start date reached';
+    if(payload.reason) return 'Reason: ' + String(payload.reason);
+    return '';
+  }
+
+  if(eventType === 'invite_created' || eventType === 'invite_revoked'){
+    if(payload.mode === 'private_user') return 'Private invite';
+    if(payload.mode === 'unlisted_link') return 'Unlisted link';
+    if(payload.mode) return String(payload.mode);
+    return '';
+  }
+
+  if(eventType === 'unlock_vote_updated'){
+    const a = payload.approvals;
+    const e = payload.eligible;
+    if(typeof a === 'number' && typeof e === 'number') return `Approvals ${a}/${e}`;
+    return '';
+  }
+
+  if(eventType === 'unlock_revealed' || eventType === 'unlock_expired'){
+    if(payload.expires_at) return 'Expires ' + fmt(payload.expires_at);
+    return '';
+  }
+
+  if(eventType === 'rotation_queue_created'){
+    if(payload.rotation_index) return 'Turn #' + String(payload.rotation_index);
+    return '';
+  }
+
+  if(eventType === 'rotation_vote_updated'){
+    const bits = [];
+    if(payload.rotation_index) bits.push('Turn #' + String(payload.rotation_index));
+    if(typeof payload.approvals === 'number' && typeof payload.required === 'number') bits.push(`Approvals ${payload.approvals}/${payload.required}`);
+    if(payload.maker_vote) bits.push('Maker ' + String(payload.maker_vote));
+    return bits.join(' · ');
+  }
+
+  if(eventType === 'typeB_turn_revealed'){
+    const bits = [];
+    if(payload.rotation_index) bits.push('Turn #' + String(payload.rotation_index));
+    if(payload.expires_at) bits.push('Expires ' + fmt(payload.expires_at));
+    return bits.join(' · ');
+  }
+
+  if(eventType === 'typeB_turn_expired' || eventType === 'typeB_turn_advanced' || eventType === 'rotation_blocked_dispute' || eventType === 'rotation_blocked_debt' || eventType === 'rotation_unblocked_debt'){
+    if(payload.rotation_index) return 'Turn #' + String(payload.rotation_index);
+    return '';
+  }
+
+  if(eventType === 'grace_window_started'){
+    if(payload.cycle_index) return 'Cycle #' + String(payload.cycle_index);
+    if(payload.cycle_id) return 'Cycle ' + String(payload.cycle_id);
+    return '';
+  }
+
+  if(eventType === 'contribution_confirmed'){
+    const bits = [];
+    if(payload.cycle_id) bits.push('Cycle ' + String(payload.cycle_id));
+    if(payload.amount) bits.push('Amount ' + String(payload.amount));
+    return bits.join(' · ');
+  }
+
+  if(eventType === 'strike_logged'){
+    if(payload.cycle_id) return 'Cycle ' + String(payload.cycle_id);
+    return '';
+  }
+
+  if(eventType === 'participant_removed'){
+    if(payload.reason === 'two_missed_contributions') return 'Two missed contributions';
+    if(payload.reason) return 'Reason: ' + String(payload.reason);
+    return '';
+  }
+
+  if(eventType === 'escrow_settlement_recorded'){
+    if(payload.policy) return 'Policy: ' + String(payload.policy);
+    return '';
+  }
+
+  if(eventType === 'underfilled_alerted'){
+    const bits = [];
+    if(typeof payload.approved_count !== 'undefined' && typeof payload.min_participants !== 'undefined'){
+      bits.push(`Approved ${payload.approved_count}/${payload.min_participants}`);
+    }
+    if(payload.decision_deadline_at) bits.push('Decision by ' + fmt(payload.decision_deadline_at));
+    return bits.join(' · ');
+  }
+
+  if(eventType === 'underfilled_resolved'){
+    if(payload.action === 'extend_start') return 'Start date extended';
+    if(payload.action === 'lower_min'){
+      if(payload.new_min_participants) return 'Minimum lowered to ' + String(payload.new_min_participants);
+      return 'Minimum lowered';
+    }
+    if(payload.action) return String(payload.action);
+    return '';
+  }
+
+  if(eventType === 'room_auto_cancelled_underfilled' || eventType === 'room_cancelled_by_maker' || eventType === 'room_closed'){
+    if(payload.reason) return 'Reason: ' + String(payload.reason);
+    return '';
+  }
+
+  if(eventType === 'exit_requested' || eventType === 'exit_vote_updated' || eventType === 'exit_approved' || eventType === 'exit_cancelled'){
+    const bits = [];
+    if(payload.exit_request_id) bits.push('Request #' + String(payload.exit_request_id));
+    if(typeof payload.approvals === 'number' && typeof payload.required === 'number') bits.push(`Approvals ${payload.approvals}/${payload.required}`);
+    if(payload.maker_vote) bits.push('Maker ' + String(payload.maker_vote));
+    return bits.join(' · ');
+  }
+
+  if(eventType === 'dispute_raised' || eventType === 'dispute_ack_updated'){
+    const bits = [];
+    if(payload.rotation_index) bits.push('Turn #' + String(payload.rotation_index));
+    if(typeof payload.ack_count === 'number' && typeof payload.required === 'number') bits.push(`Ack ${payload.ack_count}/${payload.required}`);
+    return bits.join(' · ');
+  }
+
+  // Fallback: show primitive key/value pairs (avoid dumping raw JSON).
+  const bits = [];
+  Object.keys(payload).forEach(k => {
+    const v = payload[k];
+    if(v === null || typeof v === 'undefined') return;
+    if(typeof v === 'object') return;
+    bits.push(k.replace(/_/g,' ') + ': ' + String(v));
+  });
+  return bits.join(' · ');
+}
 function destSummary(a){
   if(!a) return '—';
   if(a.account_type === 'mobile_money'){
@@ -720,7 +870,8 @@ function addFeedItem(ev){
   else if(ev.event_type === 'room_closed') line = 'Room closed';
   else line = ev.event_type;
 
-  const extra = payload && Object.keys(payload).length ? ' — ' + esc(JSON.stringify(payload)) : '';
+  const extraTxt = formatActivityExtra(ev.event_type, payload);
+  const extra = extraTxt ? ' — ' + esc(extraTxt) : '';
   el.innerHTML = `<div>${esc(line)}${extra}</div><div class="feed-meta">${esc(fmt(ev.created_at))}</div>`;
 
   feed.appendChild(el);

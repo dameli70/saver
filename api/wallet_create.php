@@ -27,7 +27,8 @@ $cipherBlob = trim((string)($body['cipher_blob'] ?? ''));
 $iv         = trim((string)($body['iv'] ?? ''));
 $authTag    = trim((string)($body['auth_tag'] ?? ''));
 $kdfSalt    = trim((string)($body['kdf_salt'] ?? ''));
-$kdfIters   = (int)($body['kdf_iterations'] ?? PBKDF2_ITERATIONS);
+// kdf_iterations is controlled server-side to prevent security downgrade.
+$kdfIters   = PBKDF2_ITERATIONS;
 
 if ($carrierId < 1) jsonResponse(['error' => 'carrier_id required'], 400);
 if ($unlockAt === '') jsonResponse(['error' => 'unlock_at required'], 400);
@@ -38,8 +39,11 @@ if ($authTag === '') jsonResponse(['error' => 'auth_tag missing'], 400);
 if ($kdfSalt === '') jsonResponse(['error' => 'kdf_salt missing'], 400);
 
 try {
-    $unlockDt = new DateTime($unlockAt);
-    if ($unlockDt <= new DateTime()) jsonResponse(['error' => 'Unlock time must be future'], 400);
+    // Normalize unlock time to UTC to avoid timezone ambiguity across client/PHP/MySQL.
+    // Accepts ISO-8601 (recommended) or legacy "Y-m-d H:i:s" strings.
+    $unlockDt = (new DateTimeImmutable($unlockAt, new DateTimeZone('UTC')))->setTimezone(new DateTimeZone('UTC'));
+    $nowUtc   = new DateTimeImmutable('now', new DateTimeZone('UTC'));
+    if ($unlockDt <= $nowUtc) jsonResponse(['error' => 'Unlock time must be future'], 400);
 } catch (Exception) {
     jsonResponse(['error' => 'Invalid unlock time'], 400);
 }
@@ -61,13 +65,29 @@ if (!$hasWallet) {
     jsonResponse(['error' => 'Wallet locks are not available. Apply migrations in config/migrations/.'], 500);
 }
 
-// Verify salt was legitimately issued by this server for this user/session
-$sessionKey = 'pending_salt_' . $userId;
-$issuedSalt = $_SESSION[$sessionKey] ?? null;
-if (!$issuedSalt || !hash_equals($issuedSalt, $kdfSalt)) {
+// Verify salt was legitimately issued by this server for this user/session.
+// Support multiple pending salts (e.g., multiple tabs generating in parallel).
+$listKey   = 'pending_salts_' . (int)$userId;
+$singleKey = 'pending_salt_' . (int)$userId;
+
+$pending = [];
+if (!empty($_SESSION[$listKey]) && is_array($_SESSION[$listKey])) {
+    $pending = array_values(array_filter($_SESSION[$listKey], 'is_string'));
+} elseif (!empty($_SESSION[$singleKey]) && is_string($_SESSION[$singleKey])) {
+    // Backward-compatible: older installs stored a single pending salt.
+    $pending = [$_SESSION[$singleKey]];
+}
+
+$idx = array_search($kdfSalt, $pending, true);
+if ($idx === false) {
     jsonResponse(['error' => 'Invalid or expired KDF salt — request a new one'], 400);
 }
-unset($_SESSION[$sessionKey]);
+
+// One-time use: remove the used salt.
+unset($pending[$idx]);
+$pending = array_values($pending);
+$_SESSION[$listKey] = $pending;
+unset($_SESSION[$singleKey]);
 
 $stmt = $db->prepare('SELECT id FROM carriers WHERE id = ? AND is_active = 1');
 $stmt->execute([$carrierId]);
@@ -75,11 +95,11 @@ if (!$stmt->fetch()) jsonResponse(['error' => 'Carrier not found'], 404);
 
 $walletId = generateUUID();
 
-$db->prepare("\
+$db->prepare("
     INSERT INTO wallet_locks
         (id, user_id, carrier_id, label, unlock_at, cipher_blob, iv, auth_tag, kdf_salt, kdf_iterations)
     VALUES
-        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)\
+        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ")->execute([
     $walletId,
     (int)$userId,
