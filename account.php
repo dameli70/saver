@@ -57,6 +57,7 @@ header("Referrer-Policy: no-referrer");
 <title>Account — LOCKSMITH</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
+<script src="assets/theme.js"></script>
 <link rel="stylesheet" href="assets/base.css">
 <link rel="stylesheet" href="assets/panel.css">
 <link rel="stylesheet" href="assets/panel_components.css">
@@ -103,6 +104,7 @@ code{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);pad
           <a class="btn btn-ghost" href="admin.php">Admin</a>
         <?php endif; ?>
       <?php endif; ?>
+      <button class="btn btn-ghost" type="button" data-theme-toggle></button>
       <a class="btn btn-ghost" href="logout.php">Logout</a>
     </div>
   </div>

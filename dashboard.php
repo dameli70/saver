@@ -39,6 +39,7 @@ header("Permissions-Policy: clipboard-write=(self)");
 <title>LOCKSMITH — Dashboard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
+<script src="assets/theme.js"></script>
 <link rel="stylesheet" href="assets/base.css">
 <link rel="stylesheet" href="assets/app.css">
 <style>
@@ -54,6 +55,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9998;o
     <div class="topbar-logo">LOCK<span>SMITH</span></div>
     <div class="topbar-r">
       <span class="user-pill"><?= htmlspecialchars($userEmail) ?></span>
+      <button class="btn btn-ghost btn-sm" type="button" data-theme-toggle></button>
       <a class="btn btn-ghost btn-sm" href="create_code.php">Create Code</a>
       <a class="btn btn-ghost btn-sm" href="my_codes.php">My Codes</a>
       <a class="btn btn-ghost btn-sm" href="rooms.php">Rooms</a>

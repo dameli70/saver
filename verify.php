@@ -19,9 +19,11 @@ function page(string $title, string $msg, bool $ok = false): void {
     echo "<!doctype html><html lang=\"en\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1,viewport-fit=cover\">";
     echo "<title>" . htmlspecialchars($title) . " — LOCKSMITH</title>";
     echo "<link rel=\"preconnect\" href=\"https://fonts.googleapis.com\"><link href=\"https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap\" rel=\"stylesheet\">";
+    echo "<script src=\"assets/theme.js\"></script>";
     echo "<link rel=\"stylesheet\" href=\"assets/base.css\">";
     echo "<link rel=\"stylesheet\" href=\"assets/auth.css\">";
     echo "</head><body>";
+    echo "<button class=\"theme-toggle\" type=\"button\" data-theme-toggle></button>";
     echo "<div class=\"box\"><div class=\"logo\">LOCK<span>SMITH</span></div><div class=\"{$msgClass}\">{$msg}</div><a class=\"btn btn-primary\" href=\"login.php\">Continue</a></div></body></html>";
 }
 

@@ -27,6 +27,7 @@ header("Referrer-Policy: no-referrer");
 <title>Login — LOCKSMITH</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
+<script src="assets/theme.js"></script>
 <link rel="stylesheet" href="assets/base.css">
 <link rel="stylesheet" href="assets/auth.css">
 <style>
@@ -34,6 +35,7 @@ header("Referrer-Policy: no-referrer");
 </style>
 </head>
 <body>
+  <button class="theme-toggle" type="button" data-theme-toggle></button>
   <div class="box">
     <div class="logo">LOCK<span>SMITH</span></div>
     <div class="sub">// Login</div>

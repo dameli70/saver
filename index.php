@@ -23,6 +23,7 @@ header("Referrer-Policy: no-referrer");
 <title>LOCKSMITH — Time-Locked Codes</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
+<script src="assets/theme.js"></script>
 <link rel="stylesheet" href="assets/base.css">
 <link rel="stylesheet" href="assets/panel.css">
 <style>
@@ -67,6 +68,7 @@ a{color:inherit;}
   <div class="nav">
     <a class="logo" href="index.php">LOCK<span>SMITH</span></a>
     <div class="nav-r">
+      <button class="btn btn-ghost" type="button" data-theme-toggle></button>
       <?php if ($loggedIn): ?>
         <span class="pill"><?= htmlspecialchars($userEmail) ?></span>
         <?php if ($verified): ?>

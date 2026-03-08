@@ -40,6 +40,7 @@ header("Referrer-Policy: no-referrer");
 <title>Room — LOCKSMITH</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
+<script src="assets/theme.js"></script>
 <link rel="stylesheet" href="assets/base.css">
 <link rel="stylesheet" href="assets/panel.css">
 <link rel="stylesheet" href="assets/panel_components.css">
@@ -77,6 +78,7 @@ header("Referrer-Policy: no-referrer");
   <a class="logo" href="index.php">LOCK<span>SMITH</span></a>
   <div class="nav-r">
     <span class="pill"><?= htmlspecialchars($userEmail) ?></span>
+    <button class="btn btn-ghost btn-sm" type="button" data-theme-toggle></button>
     <?php if ($isAdmin): ?><a class="btn btn-ghost btn-sm" href="admin.php">Admin</a><?php endif; ?>
     <a class="btn btn-ghost btn-sm" href="dashboard.php">Dashboard</a>
     <a class="btn btn-ghost btn-sm" href="create_code.php">Create Code</a>

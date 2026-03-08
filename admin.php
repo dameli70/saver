@@ -36,6 +36,7 @@ header("Referrer-Policy: no-referrer");
 <title>Admin — LOCKSMITH</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
+<script src="assets/theme.js"></script>
 <link rel="stylesheet" href="assets/base.css">
 <link rel="stylesheet" href="assets/panel.css">
 <link rel="stylesheet" href="assets/panel_components.css">
@@ -73,6 +74,7 @@ pre{white-space:pre-wrap;word-break:break-word;background:#000;border:1px solid 
   <div class="nav-r">
     <span class="badge">SUPER ADMIN</span>
     <span class="pill"><?= htmlspecialchars($userEmail) ?></span>
+    <button class="btn btn-ghost btn-sm" type="button" data-theme-toggle></button>
     <a class="btn btn-ghost btn-sm" href="dashboard.php">Dashboard</a>
     <a class="btn btn-ghost btn-sm" href="notifications.php">Notifications</a>
     <a class="btn btn-ghost btn-sm" href="account.php">Account</a>
