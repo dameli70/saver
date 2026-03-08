@@ -383,42 +383,23 @@ header("Referrer-Policy: no-referrer");
 <title>Install — LOCKSMITH</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/base.css">
+<link rel="stylesheet" href="../assets/app.css">
 <style>
-:root{
-  --bg:#06070a;--s1:#0d0f14;--s2:#13161d;--s3:#1a1d27;
-  --b1:rgba(255,255,255,.07);--b2:rgba(255,255,255,.13);
-  --accent:#e8ff47;--red:#ff4757;--green:#47ffb0;--orange:#ffaa00;
-  --text:#dde1ec;--muted:#525970;
-  --mono:'DM Mono',monospace;--display:'Unbounded',sans-serif;
-  --sat:env(safe-area-inset-top,0px);--sab:env(safe-area-inset-bottom,0px);
-}
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-body{background:var(--bg);color:var(--text);font-family:var(--mono);min-height:100vh;}
-.orb{position:fixed;border-radius:50%;filter:blur(120px);pointer-events:none;z-index:0;}
-.orb1{width:520px;height:520px;background:rgba(232,255,71,.035);top:-170px;right:-120px;}
-.orb2{width:360px;height:360px;background:rgba(71,184,255,.03);bottom:40px;left:-90px;}
+.orb{filter:blur(120px);}
+.orb1{width:520px;height:520px;top:-170px;right:-120px;}
+.orb2{width:360px;height:360px;bottom:40px;left:-90px;}
 .wrap{position:relative;z-index:1;max-width:980px;margin:0 auto;padding:max(24px,var(--sat)) 18px 60px;}
 .logo{font-family:var(--display);font-weight:900;letter-spacing:-1px;font-size:28px;margin-bottom:4px;}
 .logo span{color:var(--accent);} 
 .sub{color:var(--muted);font-size:11px;letter-spacing:2px;text-transform:uppercase;margin-bottom:18px;}
-.card{background:rgba(13,15,20,.9);border:1px solid var(--b1);padding:18px;}
+.card{background:rgba(13,15,20,.9);padding:18px;}
 .grid{display:grid;grid-template-columns:1fr;gap:12px;}
 @media(min-width:840px){.grid{grid-template-columns:1fr 1fr;}}
 .field{margin-bottom:12px;}
-.field label{display:block;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:6px;}
-.field input,.field select{width:100%;background:var(--s2);border:1px solid var(--b1);color:var(--text);
-  font-family:var(--mono);font-size:14px;padding:12px;outline:none;border-radius:0;-webkit-appearance:none;}
-.field input:focus,.field select:focus{border-color:var(--accent);} 
+.field input,.field select{font-size:14px;padding:12px;}
 .note{color:var(--muted);font-size:12px;line-height:1.6;margin-top:10px;}
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;
-  padding:14px 18px;font-family:var(--mono);font-size:11px;letter-spacing:2px;
-  text-transform:uppercase;cursor:pointer;border:none;transition:all .15s;border-radius:0;
-  -webkit-appearance:none;min-height:44px;text-decoration:none;}
-.btn-primary{background:var(--accent);color:#000;font-weight:600;}
-.btn-primary:hover{background:#f0ff60;}
-.msg{padding:12px 14px;font-size:12px;margin-bottom:12px;letter-spacing:.4px;line-height:1.6;}
-.msg-err{background:rgba(255,71,87,.08);border:1px solid rgba(255,71,87,.2);color:var(--red);} 
-.msg-ok{background:rgba(71,255,176,.08);border:1px solid rgba(71,255,176,.2);color:var(--green);} 
+.btn-primary{width:auto;}
 .chk{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:12px;line-height:1.4;}
 .chk input{width:16px;height:16px;}
 hr{border:none;border-top:1px solid var(--b1);margin:16px 0;}
@@ -431,7 +412,7 @@ hr{border:none;border-top:1px solid var(--b1);margin:16px 0;}
   <div class="sub">// Installation</div>
 
   <?php if ($errors): ?>
-    <div class="msg msg-err">
+    <div class="msg msg-err show">
       <strong>Install failed.</strong><br>
       <?php foreach ($errors as $e): ?>
         • <?= htmlspecialchars($e) ?><br>
@@ -440,7 +421,7 @@ hr{border:none;border-top:1px solid var(--b1);margin:16px 0;}
   <?php endif; ?>
 
   <?php if ($okMsg): ?>
-    <div class="msg msg-ok"><?= htmlspecialchars($okMsg) ?></div>
+    <div class="msg msg-ok show"><?= htmlspecialchars($okMsg) ?></div>
   <?php endif; ?>
 
   <form method="post" action="<?= htmlspecialchars($installUrl) ?>">

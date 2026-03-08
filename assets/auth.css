@@ -15,7 +15,7 @@ body{display:flex;align-items:center;justify-content:center;padding:max(40px,var
 
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;
   padding:14px 18px;font-family:var(--mono);font-size:12px;letter-spacing:2px;text-transform:uppercase;
-  cursor:pointer;border:none;transition:all .15s;border-radius:0;-webkit-appearance:none;min-height:48px;}
+  cursor:pointer;border:none;transition:all .15s;border-radius:0;-webkit-appearance:none;min-height:48px;text-decoration:none;}
 .btn-primary{background:var(--accent);color:#000;font-weight:600;}
 .btn-primary:disabled{opacity:.45;pointer-events:none;}
 
@@ -23,6 +23,10 @@ body{display:flex;align-items:center;justify-content:center;padding:max(40px,var
 .msg.show{display:block;}
 .msg-err{background:rgba(255,71,87,.08);border:1px solid rgba(255,71,87,.2);color:var(--red);}
 .msg-ok{background:rgba(71,255,176,.08);border:1px solid rgba(71,255,176,.2);color:var(--green);}
+.msg-warn{background:rgba(255,170,0,.08);border:1px solid rgba(255,170,0,.2);color:var(--orange);}
+.msg-err strong{color:var(--red);}
+.msg-ok strong{color:var(--green);}
+.msg-warn strong{color:var(--orange);}
 
 .links{display:flex;justify-content:space-between;gap:10px;margin-top:14px;font-size:11px;color:var(--muted);}
 .links a{color:var(--text);text-decoration:none;border-bottom:1px solid transparent;}

@@ -14,15 +14,15 @@ header("X-Content-Type-Options: nosniff");
 header("Referrer-Policy: no-referrer");
 
 function page(string $title, string $msg, bool $ok = false): void {
-    $accent = $ok ? '#47ffb0' : '#ffaa00';
-    $border = $ok ? 'rgba(71,255,176,.2)' : 'rgba(255,170,0,.25)';
-    $bg     = $ok ? 'rgba(71,255,176,.06)' : 'rgba(255,170,0,.06)';
+    $msgClass = $ok ? 'msg msg-ok show' : 'msg msg-warn show';
+
     echo "<!doctype html><html lang=\"en\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1,viewport-fit=cover\">";
     echo "<title>" . htmlspecialchars($title) . " — LOCKSMITH</title>";
     echo "<link rel=\"preconnect\" href=\"https://fonts.googleapis.com\"><link href=\"https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap\" rel=\"stylesheet\">";
     echo "<link rel=\"stylesheet\" href=\"assets/base.css\">";
-    echo "<style>body{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:40px 18px;}a{color:inherit;} .box{width:100%;max-width:520px;background:var(--s1);border:1px solid var(--b1);padding:22px;} .logo{font-family:var(--display);font-weight:900;letter-spacing:-1px;font-size:28px;margin-bottom:10px;} .logo span{color:#e8ff47;} .msg{border:1px solid {$border};background:{$bg};padding:14px 16px;color:var(--muted);font-size:12px;line-height:1.7;} .msg strong{color:{$accent};} .btn{display:inline-flex;align-items:center;justify-content:center;padding:12px 18px;font-size:11px;letter-spacing:2px;text-transform:uppercase;border:1px solid rgba(255,255,255,.13);text-decoration:none;margin-top:14px;}</style></head><body>";
-    echo "<div class=\"box\"><div class=\"logo\">LOCK<span>SMITH</span></div><div class=\"msg\">" . $msg . "</div><a class=\"btn\" href=\"login.php\">Continue</a></div></body></html>";
+    echo "<link rel=\"stylesheet\" href=\"assets/auth.css\">";
+    echo "</head><body>";
+    echo "<div class=\"box\"><div class=\"logo\">LOCK<span>SMITH</span></div><div class=\"{$msgClass}\">{$msg}</div><a class=\"btn btn-primary\" href=\"login.php\">Continue</a></div></body></html>";
 }
 
 if (!filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($token) < 10) {
