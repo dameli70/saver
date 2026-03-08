@@ -38,6 +38,7 @@ header("Referrer-Policy: no-referrer");
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/base.css">
 <link rel="stylesheet" href="assets/panel.css">
+<link rel="stylesheet" href="assets/panel_components.css">
 <style>
 .orb{filter:blur(120px);}
 .orb1{width:520px;height:520px;top:-170px;right:-120px;}
@@ -46,18 +47,8 @@ header("Referrer-Policy: no-referrer");
 .pill{font-size:10px;color:var(--muted);letter-spacing:1px;border:1px solid rgba(255,255,255,.13);padding:6px 10px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .badge{font-size:10px;letter-spacing:2px;text-transform:uppercase;border:1px solid rgba(232,255,71,.25);color:var(--accent);padding:6px 10px;}
 
-.wrap{position:relative;z-index:1;max-width:1200px;margin:0 auto;padding:26px 18px 60px;}
-.h{font-family:var(--display);font-weight:900;font-size:18px;letter-spacing:1px;margin-bottom:8px;}
-.p{color:var(--muted);font-size:12px;line-height:1.7;margin-bottom:16px;}
-.grid{display:grid;grid-template-columns:1fr;gap:14px;}
-@media(min-width:980px){.grid{grid-template-columns:1fr 1fr;}}
-.card{background:rgba(13,15,20,.9);border:1px solid var(--b1);padding:18px;}
-.card-title{font-family:var(--display);font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--accent);margin-bottom:14px;}
-.field{margin-bottom:12px;}
-.field label{display:block;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:6px;}
-.field input{width:100%;background:var(--s2);border:1px solid var(--b1);color:var(--text);
-  font-family:var(--mono);font-size:14px;padding:12px;outline:none;border-radius:0;-webkit-appearance:none;}
-.field input:focus{border-color:var(--accent);} 
+.wrap{max-width:1200px;}
+.h{font-size:18px;} 
 .chk{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:12px;line-height:1.4;margin:12px 0;}
 .chk input{width:16px;height:16px;}
  

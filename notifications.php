@@ -35,6 +35,7 @@ header("Permissions-Policy: clipboard-write=(self)");
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/base.css">
 <link rel="stylesheet" href="assets/panel.css">
+<link rel="stylesheet" href="assets/panel_components.css">
 <style>
 body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9998;opacity:.5;
   background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.035'/%3E%3C/svg%3E");}
@@ -48,8 +49,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9998;o
 .wrap{position:relative;z-index:1;max-width:860px;margin:0 auto;padding:22px 16px 40px;}
 .h{font-family:var(--display);font-weight:900;font-size:22px;letter-spacing:-.5px;margin:0 0 8px 0;}
 .p{color:var(--muted);line-height:1.65;margin:0 0 18px 0;font-size:12px;}
-.card{background:rgba(13,15,20,.9);border:1px solid var(--b1);padding:18px;}
-.card-title{font-family:var(--display);font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--accent);margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.card-title{display:flex;align-items:center;justify-content:space-between;gap:10px;}
 
 
 

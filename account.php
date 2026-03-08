@@ -59,11 +59,11 @@ header("Referrer-Policy: no-referrer");
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/base.css">
 <link rel="stylesheet" href="assets/panel.css">
+<link rel="stylesheet" href="assets/panel_components.css">
 <style> 
-.wrap{max-width:760px;margin:0 auto;padding:26px 18px 60px;}
-.h{font-family:var(--display);font-weight:900;font-size:18px;letter-spacing:1px;margin-bottom:8px;}
-.p{color:var(--muted);font-size:12px;line-height:1.7;margin-bottom:16px;}
-.card{background:rgba(13,15,20,.9);border:1px solid var(--b1);padding:18px;margin-bottom:14px;}
+.wrap{max-width:760px;}
+.h{font-size:18px;}
+.card{margin-bottom:14px;}
 .row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
 .k{color:var(--muted);font-size:10px;letter-spacing:2px;text-transform:uppercase;}
 .v{color:var(--text);font-size:12px;letter-spacing:.4px;}
@@ -73,7 +73,7 @@ header("Referrer-Policy: no-referrer");
  
 .dev{margin-top:12px;border:1px dashed rgba(255,170,0,.35);background:rgba(255,170,0,.06);padding:10px 12px;font-size:11px;color:var(--muted);line-height:1.6;display:none;}
 .dev a{color:var(--orange);} 
-.field{margin-top:14px;}
+.field{margin-top:14px;margin-bottom:0;}
 .field label{display:block;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:6px;}
 .field input{width:100%;background:var(--s2);border:1px solid var(--b1);color:var(--text);font-family:var(--mono);
   font-size:15px;padding:14px;outline:none;transition:border-color .2s;border-radius:0;-webkit-appearance:none;}

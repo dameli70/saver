@@ -42,6 +42,7 @@ header("Referrer-Policy: no-referrer");
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/base.css">
 <link rel="stylesheet" href="assets/panel.css">
+<link rel="stylesheet" href="assets/panel_components.css">
 <style>
 .orb{filter:blur(120px);}
 .orb1{width:520px;height:520px;top:-170px;right:-120px;}
@@ -52,13 +53,8 @@ header("Referrer-Policy: no-referrer");
 
 
 
-.wrap{position:relative;z-index:1;max-width:1100px;margin:0 auto;padding:26px 18px 60px;}
-.h{font-family:var(--display);font-weight:900;font-size:18px;letter-spacing:1px;margin-bottom:8px;}
-.p{color:var(--muted);font-size:12px;line-height:1.7;margin-bottom:16px;}
-.grid{display:grid;grid-template-columns:1fr;gap:14px;}
-@media(min-width:980px){.grid{grid-template-columns:1fr 1fr;}}
-.card{background:rgba(13,15,20,.9);border:1px solid var(--b1);padding:18px;}
-.card-title{font-family:var(--display);font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--accent);margin-bottom:14px;}
+.wrap{max-width:1100px;}
+.h{font-size:18px;}
 
 .k{color:var(--muted);} 
 

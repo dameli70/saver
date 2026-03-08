@@ -35,11 +35,11 @@ header("Referrer-Policy: no-referrer");
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/base.css">
 <link rel="stylesheet" href="assets/panel.css">
+<link rel="stylesheet" href="assets/panel_components.css">
 <style> 
 .btn-red{background:rgba(255,71,87,.08);border:1px solid rgba(255,71,87,.2);color:var(--red);} 
-.wrap{max-width:860px;margin:0 auto;padding:26px 18px 60px;}
-.h{font-family:var(--display);font-weight:900;font-size:18px;letter-spacing:1px;margin-bottom:8px;}
-.p{color:var(--muted);font-size:12px;line-height:1.7;margin-bottom:16px;}
+.wrap{max-width:860px;}
+.h{font-size:18px;}
 
 /* ── SECURITY BANNER ── */
 .sec-banner{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
@@ -48,14 +48,10 @@ header("Referrer-Policy: no-referrer");
 .sec-banner-title{font-family:var(--display);font-weight:800;font-size:12px;letter-spacing:1px;color:var(--orange);}
 .sec-banner-sub{font-size:11px;color:var(--muted);line-height:1.6;max-width:620px;}
 
-.card{background:rgba(13,15,20,.9);border:1px solid var(--b1);padding:18px;margin-bottom:14px;}
-.card-title{font-family:var(--display);font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--accent);margin-bottom:12px;}
+.card{margin-bottom:14px;}
+.card-title{margin-bottom:12px;}
 .row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
-.field{margin-bottom:12px;}
-.field label{display:block;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:6px;}
-.field input{width:100%;background:var(--s2);border:1px solid var(--b1);color:var(--text);
-  font-family:var(--mono);font-size:14px;padding:12px;outline:none;border-radius:0;-webkit-appearance:none;}
-.field input:focus{border-color:var(--accent);} 
+ 
 .small{font-size:11px;color:var(--muted);line-height:1.6;}
 
 .list{display:flex;flex-direction:column;gap:10px;}
