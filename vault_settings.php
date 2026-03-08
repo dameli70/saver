@@ -69,7 +69,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--mono);font-size:14
 .msg.show{display:block;}
 .msg-err{background:rgba(255,71,87,.08);border:1px solid rgba(255,71,87,.2);color:var(--red);}
 .msg-ok{background:rgba(71,255,176,.08);border:1px solid rgba(71,255,176,.2);color:var(--green);}
-.msg-warn{background:rgba(255,170,0,.08);border:1px solid rgba(255,170,0,.2);color:var(--orange);}
+
 
 #app{min-height:100vh;position:relative;z-index:1;padding-bottom:max(20px,var(--sab));}
 .topbar{display:flex;align-items:center;justify-content:space-between;

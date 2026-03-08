@@ -63,14 +63,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--mono);font-size:14
 .btn-red{background:rgba(255,71,87,.1);border:1px solid rgba(255,71,87,.3);color:var(--red);}
 .btn-sm{padding:10px 16px;font-size:11px;min-height:40px;}
 
-.spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(0,0,0,.35);border-top-color:#000;border-radius:50%;animation:spin .5s linear infinite;}
-.spin.light{border-color:rgba(255,255,255,.25);border-top-color:var(--accent);}
-@keyframes spin{to{transform:rotate(360deg);}}
-
 .msg{padding:12px 14px;font-size:12px;margin-bottom:12px;display:none;letter-spacing:.4px;line-height:1.6;}
 .msg.show{display:block;}
 .msg-err{background:rgba(255,71,87,.08);border:1px solid rgba(255,71,87,.2);color:var(--red);}
-.msg-warn{background:rgba(255,170,0,.08);border:1px solid rgba(255,170,0,.2);color:var(--orange);}
 
 #app{min-height:100vh;position:relative;z-index:1;padding-bottom:max(20px,var(--sab));}
 .topbar{display:flex;align-items:center;justify-content:space-between;
