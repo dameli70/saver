@@ -41,7 +41,13 @@ body{background:var(--bg);color:var(--text);font-family:var(--mono);font-size:14
 
 .theme-toggle{position:fixed;top:max(14px,var(--sat));right:18px;z-index:2000;
   background:transparent;border:1px solid var(--accent);color:var(--accent);
-  font-family:var(--mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;
-  padding:10px 14px;min-height:38px;cursor:pointer;-webkit-appearance:none;border-radius:0;}
+  font-family:var(--mono);
+  width:40px;height:40px;padding:0;line-height:1;
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;-webkit-appearance:none;border-radius:0;}
 .theme-toggle:hover{border-color:var(--text);color:var(--text);}
 .theme-toggle:active{transform:scale(.98);}
+
+button[data-theme-toggle]{font-size:0;letter-spacing:0;text-transform:none;}
+button[data-theme-toggle]::before{content:'☾';font-size:16px;line-height:1;color:inherit;}
+:root[data-theme="light"] button[data-theme-toggle]::before{content:'☀';}

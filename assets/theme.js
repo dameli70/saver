@@ -35,11 +35,6 @@
     toggle,
   };
 
-  function labelForCurrent(){
-    const cur = root.getAttribute('data-theme') || 'dark';
-    return cur === 'dark' ? 'Dark' : 'Light';
-  }
-
   function toggleLabel(){
     const cur = root.getAttribute('data-theme') || 'dark';
     return cur === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
@@ -47,7 +42,6 @@
 
   function initToggle(el){
     const render = () => {
-      el.textContent = labelForCurrent();
       const lbl = toggleLabel();
       el.setAttribute('aria-label', lbl);
       el.setAttribute('title', lbl);

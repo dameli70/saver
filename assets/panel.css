@@ -16,6 +16,8 @@
 .btn-ghost:hover{border-color:var(--text);} 
 .btn-ghost.btn-theme{border-color:var(--accent);color:var(--accent);} 
 .btn-ghost.btn-theme:hover{border-color:var(--text);color:var(--text);} 
+.btn-theme{padding:0;min-width:42px;width:42px;} 
+.btn-sm.btn-theme{min-width:38px;width:38px;} 
 .btn-red{background:rgba(255,71,87,.1);border:1px solid rgba(255,71,87,.3);color:var(--red);} 
 .btn-red:hover{background:rgba(255,71,87,.18);} 
 .btn-blue{background:rgba(71,184,255,.12);border:1px solid rgba(71,184,255,.25);color:var(--blue);} 
