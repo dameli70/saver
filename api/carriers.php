@@ -50,6 +50,33 @@ try {
         unset($r);
     }
 
+    foreach ($rows as &$r) {
+        $tpl = (string)($r['ussd_change_pin_template'] ?? '');
+        $tplHasOld = str_contains($tpl, '{old_pin}');
+        $tplHasNew = str_contains($tpl, '{new_pin}');
+
+        // Prevent misconfigured DB flags from advertising unsafe actions.
+        $r['wallet_allow_open_dialer'] = (!empty($r['wallet_allow_open_dialer']) && !$tplHasNew) ? 1 : 0;
+        $r['wallet_allow_copy_ussd'] = (!empty($r['wallet_allow_copy_ussd']) && $tplHasOld && $tplHasNew) ? 1 : 0;
+
+        $def = (string)($r['wallet_default_action'] ?? 'open_dialer');
+        if (!in_array($def, ['open_dialer', 'copy_ussd'], true)) {
+            $def = 'open_dialer';
+        }
+
+        $allowed = [];
+        if ($r['wallet_allow_open_dialer'] === 1) $allowed[] = 'open_dialer';
+        if ($r['wallet_allow_copy_ussd'] === 1) $allowed[] = 'copy_ussd';
+
+        if (!in_array($def, $allowed, true)) {
+            if (in_array('copy_ussd', $allowed, true)) $def = 'copy_ussd';
+            else if (in_array('open_dialer', $allowed, true)) $def = 'open_dialer';
+        }
+
+        $r['wallet_default_action'] = $def;
+    }
+    unset($r);
+
     jsonResponse(['success' => true, 'carriers' => $rows]);
 } catch (Throwable $e) {
     jsonResponse(['error' => 'Failed to load carriers'], 500);

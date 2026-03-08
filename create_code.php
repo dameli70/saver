@@ -233,6 +233,10 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
     </div>
 
     <div id="confirm-done" style="display:none;margin-top:12px;font-size:12px;color:var(--muted);line-height:1.6;"><div id="confirm-done-msg"></div></div>
+
+    <div id="confirm-safe-close" style="display:none;margin-top:10px;">
+      <button class="btn btn-ghost btn-sm" id="confirm-safe-close-btn" onclick="safeCloseConfirm()">Close &amp; clear clipboard</button>
+    </div>
   </div>
 </div>
 
@@ -328,8 +332,107 @@ async function postCsrfWithReauth(url, body){
   return r;
 }
 
+const ClipboardManager = (() => {
+  // Different wipe timers by flow.
+  const WIPE_MS = {
+    lock:   120000,
+    wallet: 300000,
+  };
+
+  let wipeTimer = null;
+  let sensitive = false;
+  let sensitiveFlow = null;
+  let hiddenWhileSensitive = false;
+
+  function canWrite(){
+    return !!(navigator.clipboard && navigator.clipboard.writeText);
+  }
+
+  function clearTimer(){
+    if(wipeTimer){
+      clearTimeout(wipeTimer);
+      wipeTimer = null;
+    }
+  }
+
+  function schedule(flow){
+    clearTimer();
+    const ms = WIPE_MS[flow] || WIPE_MS.lock;
+    wipeTimer = setTimeout(() => {
+      // Timer-based wipe is best-effort; do not throw.
+      void wipe('timer');
+    }, ms);
+  }
+
+  async function writeSensitive(text, flow){
+    try{
+      if(!canWrite()) return false;
+      await navigator.clipboard.writeText(String(text||''));
+      sensitive = true;
+      sensitiveFlow = (flow === 'wallet') ? 'wallet' : 'lock';
+      hiddenWhileSensitive = false;
+      schedule(sensitiveFlow);
+      return true;
+    }catch{
+      return false;
+    }
+  }
+
+  async function wipe(reason){
+    clearTimer();
+    sensitive = false;
+    sensitiveFlow = null;
+    hiddenWhileSensitive = false;
+    try{
+      if(!canWrite()) return;
+      await navigator.clipboard.writeText('');
+    }catch{}
+  }
+
+  function wipeBestEffort(reason){
+    if(!sensitive) return;
+
+    // Wallet flow may trigger pagehide/beforeunload when opening a tel: URI.
+    // Do not wipe in that case or we can break the paste/dialer step.
+    if(sensitiveFlow === 'wallet' && (reason === 'pagehide' || reason === 'beforeunload')){
+      return;
+    }
+
+    clearTimer();
+    sensitive = false;
+    sensitiveFlow = null;
+    hiddenWhileSensitive = false;
+    try{
+      if(!canWrite()) return;
+      navigator.clipboard.writeText('').catch(()=>{});
+    }catch{}
+  }
+
+  function onVisibilityChange(){
+    if(!sensitive) return;
+
+    if(document.hidden){
+      hiddenWhileSensitive = true;
+      return;
+    }
+
+    // When returning to the page after being hidden, assume the user has pasted
+    // and wipe quickly to reduce clipboard dwell time. For wallet flow, avoid
+    // wiping on app switching; keep the timer/manual wipe.
+    if(hiddenWhileSensitive && sensitiveFlow !== 'wallet'){
+      void wipe('visibilitychange');
+    }
+  }
+
+  document.addEventListener('visibilitychange', onVisibilityChange);
+  window.addEventListener('pagehide', () => wipeBestEffort('pagehide'));
+  window.addEventListener('beforeunload', () => wipeBestEffort('beforeunload'));
+
+  return {writeSensitive, wipe, wipeBestEffort};
+})();
+
 async function wipeClipboard(){
-  try{ await navigator.clipboard.writeText(''); }catch{}
+  await ClipboardManager.wipe('manual');
 }
 
 function buildTelUriFromUssd(ussd){
@@ -626,8 +729,7 @@ async function doGenerate(){
 
     if(!r.success){throw new Error(r.error||'Generation failed');}
 
-    let copied=false;
-    try{await navigator.clipboard.writeText(plainPwd);copied=true;}catch{}
+    const copied = await ClipboardManager.writeSensitive(plainPwd, 'lock');
     if(copied){
       await postCsrf('api/copied.php',{lock_id:r.lock_id});
     }
@@ -661,6 +763,9 @@ function openConfirmSheet(lockId, label){
   document.getElementById('confirm-no-btn').textContent='✗ No, discard';
   document.getElementById('confirm-btns').style.display='grid';
   document.getElementById('confirm-done').style.display='none';
+
+  const sc = document.getElementById('confirm-safe-close');
+  if(sc) sc.style.display='none';
 
   const wa = document.getElementById('confirm-wallet-actions');
   if(wa) wa.style.display='none';
@@ -702,6 +807,10 @@ function openConfirmSheetWallet(opts){
   document.getElementById('confirm-no-btn').textContent='✗ No, discard';
   document.getElementById('confirm-btns').style.display='grid';
   document.getElementById('confirm-done').style.display='none';
+
+  const sc = document.getElementById('confirm-safe-close');
+  if(sc) sc.style.display='none';
+
   document.getElementById('autosave-bar').style.display='none';
   document.getElementById('confirm-overlay').classList.add('show');
 
@@ -710,6 +819,37 @@ function openConfirmSheetWallet(opts){
     const y = document.getElementById('confirm-yes-btn');
     if(y) y.focus();
   }, 50);
+}
+
+function closeConfirmSheetUi(){
+  document.getElementById('confirm-overlay').classList.remove('show');
+
+  const wa = document.getElementById('confirm-wallet-actions');
+  if(wa) wa.style.display='none';
+
+  const sc = document.getElementById('confirm-safe-close');
+  if(sc) sc.style.display='none';
+
+  const btns = document.getElementById('confirm-btns');
+  if(btns) btns.style.display='grid';
+
+  const done = document.getElementById('confirm-done');
+  if(done) done.style.display='none';
+
+  const msg = document.getElementById('confirm-done-msg');
+  if(msg) msg.textContent = '';
+
+  const y = document.getElementById('confirm-yes-btn');
+  const n = document.getElementById('confirm-no-btn');
+  if(y) y.disabled = false;
+  if(n) n.disabled = false;
+}
+
+async function safeCloseConfirm(){
+  await wipeClipboard();
+  pendingWallet = null;
+  confirmMode = 'lock';
+  closeConfirmSheetUi();
 }
 
 function closeConfirm(e){
@@ -722,19 +862,24 @@ function closeConfirm(e){
     return;
   }
 
-  document.getElementById('confirm-overlay').classList.remove('show');
-
-  const wa = document.getElementById('confirm-wallet-actions');
-  if(wa) wa.style.display='none';
+  closeConfirmSheetUi();
 }
 
 async function doConfirm(action){
   const btns = document.getElementById('confirm-btns');
   const done = document.getElementById('confirm-done');
-  const msg=document.getElementById('confirm-done-msg');
+  const msg = document.getElementById('confirm-done-msg');
+  const safeClose = document.getElementById('confirm-safe-close');
 
-  btns.style.display='none';
-  done.style.display='block';
+  const y = document.getElementById('confirm-yes-btn');
+  const n = document.getElementById('confirm-no-btn');
+  if(y) y.disabled = true;
+  if(n) n.disabled = true;
+
+  if(btns) btns.style.display = 'grid';
+  if(done) done.style.display = 'block';
+  if(safeClose) safeClose.style.display = 'none';
+  if(msg) msg.textContent = 'Working…';
 
   try{
     if(confirmMode === 'wallet'){
@@ -744,11 +889,11 @@ async function doConfirm(action){
       if(action === 'confirm'){
         const r = await postCsrfWithReauth('api/wallet_confirm.php', {wallet_lock_id: walletLockId});
         if(!r.success) throw new Error(r.error || 'Failed to confirm');
-        msg.textContent='✓ Wallet PIN locked and time-gated.';
+        if(msg) msg.textContent = '✓ Wallet PIN locked and time-gated.';
       } else {
         const r = await postCsrfWithReauth('api/wallet_fail.php', {wallet_lock_id: walletLockId});
         if(!r.success) throw new Error(r.error || 'Failed to discard');
-        msg.textContent='✗ Discarded.';
+        if(msg) msg.textContent = '✗ Discarded.';
       }
 
       await wipeClipboard();
@@ -758,11 +903,21 @@ async function doConfirm(action){
       if(wa) wa.style.display='none';
 
       await loadWalletPending(true);
+
+      // Allow dismissal and auto-close.
+      confirmMode = 'lock';
+      if(btns) btns.style.display = 'none';
+      if(y) y.disabled = false;
+      if(n) n.disabled = false;
+
+      setTimeout(() => {
+        closeConfirmSheetUi();
+      }, 900);
       return;
     }
 
     if(!pendingLock) throw new Error('No pending lock');
-    const r=await postCsrf('api/confirm.php',{lock_id:pendingLock.lock_id,action});
+    const r = await postCsrf('api/confirm.php', {lock_id: pendingLock.lock_id, action});
     if(!r.success) throw new Error(r.error||'Failed');
 
     if(action==='confirm') msg.textContent='✓ Lock activated.';
@@ -771,8 +926,19 @@ async function doConfirm(action){
     await wipeClipboard();
     pendingLock=null;
 
+    if(btns) btns.style.display = 'none';
+    if(y) y.disabled = false;
+    if(n) n.disabled = false;
+
   }catch(e){
-    msg.textContent = e.message || 'Failed';
+    if(msg) msg.textContent = e.message || 'Failed';
+    if(y) y.disabled = false;
+    if(n) n.disabled = false;
+    if(btns) btns.style.display = 'grid';
+
+    if(confirmMode === 'wallet' && safeClose){
+      safeClose.style.display = 'block';
+    }
   }
 }
 
@@ -823,13 +989,16 @@ function normalizeWalletAction(action){
 function getCarrierWalletPolicy(carrier){
   // Server-provided policy (if migration 019 is applied) or safe defaults.
   let allowOpenDialer = (carrier && (carrier.wallet_allow_open_dialer ?? carrier.walletAllowOpenDialer)) ?? true;
-  const allowCopyUssd = (carrier && (carrier.wallet_allow_copy_ussd ?? carrier.walletAllowCopyUssd)) ?? true;
+  let allowCopyUssd = (carrier && (carrier.wallet_allow_copy_ussd ?? carrier.walletAllowCopyUssd)) ?? true;
   const def = normalizeWalletAction((carrier && (carrier.wallet_default_action ?? carrier.walletDefaultAction)) ?? walletAction);
 
-  // Safety/UI consistency: if the template embeds {new_pin}, "open dialer" would either
-  // leak the new PIN into the dialer prefill or fail our validation. Hide/disable it.
   const tpl = String((carrier && (carrier.ussd_change_pin_template ?? carrier.ussdChangePinTemplate)) ?? '');
+
+  // Safety/UI consistency:
+  // - if the template embeds {new_pin}, "open dialer" would leak the new PIN into the dialer prefill
+  // - if the template doesn't include both placeholders, "copy USSD" can't work
   if (tpl.includes('{new_pin}')) allowOpenDialer = false;
+  if (!tpl.includes('{old_pin}') || !tpl.includes('{new_pin}')) allowCopyUssd = false;
 
   return {
     allowOpenDialer: !!allowOpenDialer,
@@ -1132,14 +1301,9 @@ async function doWalletSetup(){
 
     const telUri = buildTelUriFromUssd((action === 'open_dialer') ? ussdDial : ussdFull);
 
-    try{
-      if(action === 'open_dialer'){
-        // For "Send to phone app": copy only the new PIN
-        await navigator.clipboard.writeText(newPin);
-      } else {
-        await navigator.clipboard.writeText(ussdFull);
-      }
-    }catch{
+    const clipText = (action === 'open_dialer') ? newPin : ussdFull;
+    const copied = await ClipboardManager.writeSensitive(clipText, 'wallet');
+    if(!copied){
       // We cannot display the PIN, so we must abort if clipboard isn't available.
       await postCsrfWithReauth('api/wallet_fail.php', {wallet_lock_id: walletLockId});
       throw new Error('Clipboard write blocked. Use HTTPS and allow clipboard access.');

@@ -31,6 +31,16 @@ function hasColumn(PDO $db, string $table, string $column): bool {
     return (bool)$stmt->fetchColumn();
 }
 
+function walletPolicyFromTemplate(string $template): array {
+    $hasOld = str_contains($template, '{old_pin}');
+    $hasNew = str_contains($template, '{new_pin}');
+
+    return [
+        'template_allows_open_dialer' => $hasNew ? 0 : 1,
+        'template_allows_copy_ussd' => ($hasOld && $hasNew) ? 1 : 0,
+    ];
+}
+
 function roomActivity(PDO $db, string $roomId, string $eventType, array $payload): void {
     $db->prepare('INSERT INTO saving_room_activity (room_id, event_type, public_payload_json) VALUES (?, ?, ?)')
        ->execute([$roomId, $eventType, json_encode($payload, JSON_UNESCAPED_UNICODE)]);
@@ -281,6 +291,31 @@ if ($method === 'GET') {
             }
             unset($r);
         }
+
+        foreach ($rows as &$r) {
+            $tpl = (string)($r['ussd_change_pin_template'] ?? '');
+            $safe = walletPolicyFromTemplate($tpl);
+
+            $r['wallet_allow_open_dialer'] = (!empty($r['wallet_allow_open_dialer']) && $safe['template_allows_open_dialer']) ? 1 : 0;
+            $r['wallet_allow_copy_ussd'] = (!empty($r['wallet_allow_copy_ussd']) && $safe['template_allows_copy_ussd']) ? 1 : 0;
+
+            $def = (string)($r['wallet_default_action'] ?? 'open_dialer');
+            if (!in_array($def, ['open_dialer', 'copy_ussd'], true)) {
+                $def = 'open_dialer';
+            }
+
+            $allowed = [];
+            if ($r['wallet_allow_open_dialer'] === 1) $allowed[] = 'open_dialer';
+            if ($r['wallet_allow_copy_ussd'] === 1) $allowed[] = 'copy_ussd';
+
+            if (!in_array($def, $allowed, true)) {
+                if (in_array('copy_ussd', $allowed, true)) $def = 'copy_ussd';
+                else if (in_array('open_dialer', $allowed, true)) $def = 'open_dialer';
+            }
+
+            $r['wallet_default_action'] = $def;
+        }
+        unset($r);
 
         jsonResponse(['success' => true, 'carriers' => $rows]);
     }
@@ -990,6 +1025,28 @@ if ($method === 'POST') {
         }
 
         if ($hasWalletCols) {
+            $effAllowOpenDialer = $walletFieldsProvided ? $walletAllowOpenDialer : 1;
+            $effAllowCopyUssd = $walletFieldsProvided ? $walletAllowCopyUssd : 1;
+            $effDefaultAction = $walletFieldsProvided ? $walletDefaultAction : 'open_dialer';
+
+            if ($effAllowCopyUssd === 1 && (!str_contains($ussdChange, '{old_pin}') || !str_contains($ussdChange, '{new_pin}'))) {
+                jsonResponse(['error' => 'wallet_allow_copy_ussd is enabled but ussd_change_pin_template must include both {old_pin} and {new_pin}.'], 400);
+            }
+            if ($effAllowOpenDialer === 1 && str_contains($ussdChange, '{new_pin}')) {
+                jsonResponse(['error' => 'wallet_allow_open_dialer is enabled but ussd_change_pin_template must NOT include {new_pin}. Disable “Send to phone app”, or use an interactive USSD template that prompts for the new PIN.'], 400);
+            }
+            if ($effAllowOpenDialer !== 1 && $effAllowCopyUssd !== 1) {
+                jsonResponse(['error' => 'At least one wallet action must be allowed'], 400);
+            }
+            if ($effDefaultAction === 'open_dialer' && $effAllowOpenDialer !== 1) {
+                jsonResponse(['error' => 'wallet_default_action is open_dialer but wallet_allow_open_dialer is disabled'], 400);
+            }
+            if ($effDefaultAction === 'copy_ussd' && $effAllowCopyUssd !== 1) {
+                jsonResponse(['error' => 'wallet_default_action is copy_ussd but wallet_allow_copy_ussd is disabled'], 400);
+            }
+        }
+
+        if ($hasWalletCols) {
             $db->prepare("INSERT INTO carriers (name, country, pin_type, pin_length, ussd_change_pin_template, ussd_balance_template, wallet_allow_open_dialer, wallet_allow_copy_ussd, wallet_default_action, is_active, created_at, updated_at)
                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NULL)")
                ->execute([
@@ -1071,6 +1128,41 @@ if ($method === 'POST') {
         }
 
         if ($hasWalletCols) {
+            $effAllowOpenDialer = null;
+            $effAllowCopyUssd = null;
+            $effDefaultAction = null;
+
+            if ($walletFieldsProvided) {
+                $effAllowOpenDialer = $walletAllowOpenDialer;
+                $effAllowCopyUssd = $walletAllowCopyUssd;
+                $effDefaultAction = $walletDefaultAction;
+            } else {
+                $cur = $db->prepare('SELECT wallet_allow_open_dialer, wallet_allow_copy_ussd, wallet_default_action FROM carriers WHERE id = ? LIMIT 1');
+                $cur->execute([$carrierId]);
+                $row = $cur->fetch();
+                if (!$row) jsonResponse(['error' => 'Carrier not found'], 404);
+
+                $effAllowOpenDialer = (int)$row['wallet_allow_open_dialer'];
+                $effAllowCopyUssd = (int)$row['wallet_allow_copy_ussd'];
+                $effDefaultAction = (string)$row['wallet_default_action'];
+            }
+
+            if ($effAllowCopyUssd === 1 && (!str_contains($ussdChange, '{old_pin}') || !str_contains($ussdChange, '{new_pin}'))) {
+                jsonResponse(['error' => 'wallet_allow_copy_ussd is enabled but ussd_change_pin_template must include both {old_pin} and {new_pin}.'], 400);
+            }
+            if ($effAllowOpenDialer === 1 && str_contains($ussdChange, '{new_pin}')) {
+                jsonResponse(['error' => 'wallet_allow_open_dialer is enabled but ussd_change_pin_template must NOT include {new_pin}. Disable “Send to phone app”, or use an interactive USSD template that prompts for the new PIN.'], 400);
+            }
+            if ($effAllowOpenDialer !== 1 && $effAllowCopyUssd !== 1) {
+                jsonResponse(['error' => 'At least one wallet action must be allowed'], 400);
+            }
+            if ($effDefaultAction === 'open_dialer' && $effAllowOpenDialer !== 1) {
+                jsonResponse(['error' => 'wallet_default_action is open_dialer but wallet_allow_open_dialer is disabled'], 400);
+            }
+            if ($effDefaultAction === 'copy_ussd' && $effAllowCopyUssd !== 1) {
+                jsonResponse(['error' => 'wallet_default_action is copy_ussd but wallet_allow_copy_ussd is disabled'], 400);
+            }
+
             $db->prepare("UPDATE carriers
                           SET name = ?, country = ?, pin_type = ?, pin_length = ?,
                               ussd_change_pin_template = ?, ussd_balance_template = ?,

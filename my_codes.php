@@ -175,6 +175,85 @@ async function postCsrf(url,body){
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function toast(msg,type='ok'){const t=document.createElement('div');t.className=`toast ${type}`;t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),3200);} 
 
+const ClipboardManager = (() => {
+  const WIPE_MS = 120000;
+
+  let wipeTimer = null;
+  let sensitive = false;
+  let hiddenWhileSensitive = false;
+
+  function canWrite(){
+    return !!(navigator.clipboard && navigator.clipboard.writeText);
+  }
+
+  function clearTimer(){
+    if(wipeTimer){
+      clearTimeout(wipeTimer);
+      wipeTimer = null;
+    }
+  }
+
+  function schedule(){
+    clearTimer();
+    wipeTimer = setTimeout(() => {
+      void wipe('timer');
+    }, WIPE_MS);
+  }
+
+  async function writeSensitive(text, flow){
+    try{
+      if(!canWrite()) return false;
+      await navigator.clipboard.writeText(String(text||''));
+      sensitive = true;
+      hiddenWhileSensitive = false;
+      schedule();
+      return true;
+    }catch{
+      return false;
+    }
+  }
+
+  async function wipe(reason){
+    clearTimer();
+    sensitive = false;
+    hiddenWhileSensitive = false;
+    try{
+      if(!canWrite()) return;
+      await navigator.clipboard.writeText('');
+    }catch{}
+  }
+
+  function wipeBestEffort(reason){
+    if(!sensitive) return;
+    clearTimer();
+    sensitive = false;
+    hiddenWhileSensitive = false;
+    try{
+      if(!canWrite()) return;
+      navigator.clipboard.writeText('').catch(()=>{});
+    }catch{}
+  }
+
+  function onVisibilityChange(){
+    if(!sensitive) return;
+
+    if(document.hidden){
+      hiddenWhileSensitive = true;
+      return;
+    }
+
+    if(hiddenWhileSensitive){
+      void wipe('visibilitychange');
+    }
+  }
+
+  document.addEventListener('visibilitychange', onVisibilityChange);
+  window.addEventListener('pagehide', () => wipeBestEffort('pagehide'));
+  window.addEventListener('beforeunload', () => wipeBestEffort('beforeunload'));
+
+  return {writeSensitive, wipe, wipeBestEffort};
+})();
+
 function bytesToB64(bytes){return btoa(String.fromCharCode(...bytes));}
 function b64ToBytes(b64){return Uint8Array.from(atob(b64), c => c.charCodeAt(0));}
 
@@ -449,14 +528,16 @@ function closeReveal(e){
 
 async function copyRevealed(){
   if(!revealedPwd || !currentRevealLockId) return;
-  try{
-    await navigator.clipboard.writeText(revealedPwd);
-    await postCsrf('api/copied.php',{lock_id:currentRevealLockId});
-    toast('Copied!','ok');
-    loadLocks();
-  }catch{
-    toast('Select the text manually','err');
+
+  const copied = await ClipboardManager.writeSensitive(revealedPwd, 'lock');
+  if(!copied){
+    toast('Clipboard write blocked. Use HTTPS and allow clipboard access, or tap and hold to copy manually.', 'err');
+    return;
   }
+
+  try{ await postCsrf('api/copied.php',{lock_id:currentRevealLockId}); }catch{}
+  toast('Copied to clipboard (auto-clears soon).','ok');
+  loadLocks();
 }
 
 async function reConfirm(id){
