@@ -54,6 +54,9 @@ Options:
   --init-db=1                     Create tables by running config/schema.sql
   --apply-migrations=1            Apply SQL files in config/migrations (safe to re-run)
 
+  --admin-email=EMAIL             Create initial Super Admin user (required on fresh install)
+  --admin-pass=PASS               Initial Super Admin login password (min 8 chars)
+
 TXT;
     fwrite(STDOUT, $msg);
 }
@@ -256,6 +259,57 @@ function applySqlFile(PDO $pdo, string $path, bool $ignoreDuplicates): void {
     }
 }
 
+function hashLoginPasswordInstaller(string $password): string {
+    return password_hash($password, PASSWORD_ARGON2ID, [
+        'memory_cost' => 65536,
+        'time_cost'   => 4,
+        'threads'     => 2,
+    ]);
+}
+
+function hashVaultVerifierInstaller(string $passphrase): string {
+    return password_hash($passphrase, PASSWORD_ARGON2ID, [
+        'memory_cost' => 65536,
+        'time_cost'   => 4,
+        'threads'     => 2,
+    ]);
+}
+
+function createInitialAdmin(PDO $pdo, string $email, string $loginPwd): void {
+    $email = strtolower(trim($email));
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        throw new RuntimeException('Admin email must be a valid email address.');
+    }
+    if (strlen($loginPwd) < 8) {
+        throw new RuntimeException('Admin login password must be at least 8 characters.');
+    }
+
+    $hasAdminCol = false;
+    try {
+        $stmt = $pdo->query("SELECT 1 FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'users' AND column_name = 'is_admin' LIMIT 1");
+        $hasAdminCol = (bool)$stmt->fetchColumn();
+    } catch (Throwable) {
+        $hasAdminCol = false;
+    }
+
+    if (!$hasAdminCol) {
+        throw new RuntimeException("Your schema does not include users.is_admin. Re-run the installer with schema initialization enabled.");
+    }
+
+    $users = (int)$pdo->query('SELECT COUNT(*) FROM users')->fetchColumn();
+    if ($users !== 0) {
+        throw new RuntimeException('Users already exist. Refusing to create an initial super admin.');
+    }
+
+    $loginHash = hashLoginPasswordInstaller($loginPwd);
+
+    $vaultVerifierSalt = bin2hex(random_bytes(32));
+    $vaultVerifier     = hashVaultVerifierInstaller(bin2hex(random_bytes(32)) . $vaultVerifierSalt);
+
+    $pdo->prepare("INSERT INTO users (email, login_hash, vault_verifier, vault_verifier_salt, is_admin, email_verified_at) VALUES (?, ?, ?, ?, 1, NOW())")
+        ->execute([$email, $loginHash, $vaultVerifier, $vaultVerifierSalt]);
+}
+
 $args = parseArgs($argv);
 if (!empty($args['help'])) {
     usage();
@@ -344,10 +398,10 @@ if ($vals['smtp_host'] !== '') {
         fwrite(STDERR, "Invalid --smtp-verify-peer (0|1).\n");
         exit(1);
     }
-    $vals['smtp_verify_peer'] = (int)$smtpVerify;
-}
+    $vals['smtp_verify_peer'] = </old_code><new_code>$vals['app_hmac_secret'] = bin2hex(random_bytes(32));
 
-$vals['app_hmac_secret'] = bin2hex(random_bytes(32));
+$adminEmail = $get('admin-email', null);
+$adminPass  = $get('admin-pass', null);
 
 $initDb = (($args['init-db'] ?? '') === '1');
 $applyMigrations = (($args['apply-migrations'] ?? '') === '1');
@@ -359,6 +413,8 @@ if (!$nonInteractive) {
 
 // ── Validate DB credentials (do not write config on failure) ─
 fwrite(STDOUT, "Validating MySQL credentials...\n");
+
+$dbPdo = null;
 
 try {
     // Always validate credentials against the server first (catches wrong user/pass)
@@ -399,8 +455,14 @@ try {
         }
     } else {
         // No schema work requested, but still verify the database is reachable.
-        connectPdoDb($vals['db_host'], $vals['db_name'], $vals['db_charset'], $vals['db_user'], $vals['db_pass']);
+        $dbPdo = connectPdoDb($vals['db_host'], $vals['db_name'], $vals['db_charset'], $vals['db_user'], $vals['db_pass']);
     }
+
+    if (!$dbPdo) {
+        throw new RuntimeException('Database connection failed.');
+    }
+
+    createInitialAdmin($dbPdo, $adminEmail, $adminPass);
 
 } catch (Throwable $e) {
     fwrite(STDERR, "\nERROR: " . $e->getMessage() . "\n");
