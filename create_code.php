@@ -114,7 +114,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
       <button class="btn btn-primary" id="vp-btn" onclick="unlockVault()"><span id="vp-txt">Unlock Vault</span></button>
     </div>
 
-    <div class="card" id="gen-card">
+    <div class="card" id="gen-card" style="display:none">
       <div class="card-title"><div class="dot"></div>Create a Code</div>
 
       <div class="field"><label>Label</label>
@@ -334,22 +334,19 @@ async function loadVaultSetup(){
     }
 
     if(vp2Field) vp2Field.style.display = 'none';
-    if(btnTxt) btnTxt.textContent = 'Unlock Vault';
-
-  }catch{}
-}
-
-function checkVaultUnlock() {
+    if(btnTxt) btnTxt.textContent = 'Unlock Va</old_code><new_code>function checkVaultUnlock() {
   const genBtn = document.getElementById('g-btn');
+  const genCard = document.getElementById('gen-card');
 
   if (!vaultPhraseSession) {
     document.getElementById('vault-unlock-card').style.display = 'block';
+    if(genCard) genCard.style.display = 'none';
     if(genBtn) genBtn.disabled = true;
     return;
   }
 
   document.getElementById('vault-unlock-card').style.display = 'none';
-  if(genBtn) genBtn.disabled = false;
+  if(genCard) genCard.style.display = 'block';lse;
 }
 
 async function unlockVault() {

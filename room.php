@@ -720,8 +720,69 @@ function addFeedItem(ev){
   else if(ev.event_type === 'room_closed') line = 'Room closed';
   else line = ev.event_type;
 
-  const extra = payload && Object.keys(payload).length ? ' — ' + esc(JSON.stringify(payload)) : '';
-  el.innerHTML = `<div>${esc(line)}${extra}</div><div class="feed-meta">${esc(fmt(ev.created_at))}</div>`;
+  let extra = '';
+  if(payload && typeof payload === 'object'){
+    const clean = (v) => String(v||'').replace(/_/g,' ');
+
+    if(ev.event_type === 'lobby_locked' && payload.reason){
+      if(payload.reason === 'capacity_reached') extra = ' · Capacity reached';
+      else if(payload.reason === 'start_date_reached') extra = ' · Start date reached';
+      else extra = ' · ' + clean(payload.reason);
+
+    } else if(ev.event_type === 'unlock_vote_updated'){
+      if(typeof payload.approvals !== 'undefined' && typeof payload.eligible !== 'undefined'){
+        extra = ` · Approvals ${payload.approvals}/${payload.eligible}`;
+      }
+
+    } else if(ev.event_type === 'unlock_revealed' && payload.expires_at){
+      extra = ' · Expires ' + fmt(payload.expires_at);
+
+    } else if(ev.event_type === 'unlock_expired' && payload.expires_at){
+      extra = ' · Expired ' + fmt(payload.expires_at);
+
+    } else if(ev.event_type === 'rotation_vote_updated'){
+      if(payload.rotation_index) extra += ` · Turn #${payload.rotation_index}`;
+      if(typeof payload.approvals !== 'undefined' && typeof payload.required !== 'undefined'){
+        extra += ` · Approvals ${payload.approvals}/${payload.required}`;
+      }
+      if(payload.maker_vote) extra += ' · Maker ' + clean(payload.maker_vote);
+
+    } else if(ev.event_type === 'typeB_turn_revealed'){
+      if(payload.rotation_index) extra += ` · Turn #${payload.rotation_index}`;
+      if(payload.expires_at) extra += ' · Expires ' + fmt(payload.expires_at);
+
+    } else if(ev.event_type === 'typeB_turn_expired'){
+      if(payload.rotation_index) extra += ` · Turn #${payload.rotation_index}`;
+
+    } else if(ev.event_type === 'typeB_turn_advanced'){
+      if(payload.rotation_index) extra += ` · Turn #${payload.rotation_index}`;
+
+    } else if(ev.event_type === 'rotation_blocked_dispute' || ev.event_type === 'rotation_blocked_debt' || ev.event_type === 'rotation_unblocked_debt'){
+      if(payload.rotation_index) extra += ` · Turn #${payload.rotation_index}`;
+
+    } else if(ev.event_type === 'dispute_raised' || ev.event_type === 'dispute_ack_updated'){
+      if(payload.rotation_index) extra += ` · Turn #${payload.rotation_index}`;
+      if(typeof payload.ack_count !== 'undefined' && typeof payload.required !== 'undefined'){
+        extra += ` · Acknowledgements ${payload.ack_count}/${payload.required}`;
+      }
+
+    } else if(ev.event_type === 'exit_vote_updated'){
+      if(typeof payload.approvals !== 'undefined' && typeof payload.required !== 'undefined'){
+        extra += ` · Approvals ${payload.approvals}/${payload.required}`;
+      }
+      if(payload.maker_vote) extra += ' · Maker ' + clean(payload.maker_vote);
+
+    } else if(ev.event_type === 'underfilled_resolved' && payload.action){
+      if(payload.action === 'extend_start') extra = ' · Start date extended';
+      else if(payload.action === 'lower_min' && payload.new_min_participants) extra = ' · Minimum lowered to ' + payload.new_min_participants;
+      else extra = ' · ' + clean(payload.action);
+
+    } else if((ev.event_type === 'room_cancelled_by_maker' || ev.event_type === 'room_auto_cancelled_underfilled') && payload.reason){
+      extra = ' · ' + clean(payload.reason);
+    }
+  }
+
+  el.innerHTML = `<div>${esc(line)}${esc(extra)}</div><div class="feed-meta">${esc(fmt(ev.created_at))}</div>`;
 
   feed.appendChild(el);
   feed.scrollTop = feed.scrollHeight;
