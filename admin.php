@@ -171,7 +171,7 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--code-bg);border:
   <div class="card" style="margin-top:14px;">
     <div class="card-title">Carriers (Mobile Money)</div>
 
-    <div class="p">Define carrier PIN policy and USSD templates. Placeholders: <code>{old_pin}</code>, <code>{new_pin}</code>.</div>
+    <div class="p">Define carrier PIN policy and USSD templates (used by the mobile app and by <em>Create Code → Mobile money wallet</em>). Placeholders: <code>{old_pin}</code>, <code>{new_pin}</code>.</div>
 
     <div style="display:grid;grid-template-columns:1fr;gap:12px;margin-bottom:12px;">
       <div class="field"><label>Name</label><input id="car-name" placeholder="e.g. MTN MoMo"></div>
