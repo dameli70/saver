@@ -95,6 +95,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--mono);min-height:1
     <a class="logo" href="index.php">LOCK<span>SMITH</span></a>
     <div class="nav-r">
       <a class="btn btn-ghost" href="dashboard.php">Dashboard</a>
+      <a class="btn btn-ghost" href="create_code.php">Create Code</a>
+      <a class="btn btn-ghost" href="my_codes.php">My Codes</a>
       <a class="btn btn-ghost" href="notifications.php">Notifications</a>
       <a class="btn btn-ghost" href="account.php">Account</a>
       <?php if ($isAdmin): ?>

@@ -104,6 +104,8 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9998;o
     <span class="pill"><?= htmlspecialchars($userEmail) ?></span>
     <?php if ($isAdmin): ?><a class="btn btn-ghost btn-sm" href="admin.php">Admin</a><?php endif; ?>
     <a class="btn btn-ghost btn-sm" href="dashboard.php">Dashboard</a>
+    <a class="btn btn-ghost btn-sm" href="create_code.php">Create Code</a>
+    <a class="btn btn-ghost btn-sm" href="my_codes.php">My Codes</a>
     <a class="btn btn-ghost btn-sm" href="rooms.php">Rooms</a>
     <a class="btn btn-ghost btn-sm" href="account.php">Account</a>
     <a class="btn btn-ghost btn-sm" href="logout.php">Logout</a>

@@ -116,6 +116,8 @@ code{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);pad
     <div class="nav-r">
       <?php if ($verified): ?>
         <a class="btn btn-ghost" href="dashboard.php">Dashboard</a>
+        <a class="btn btn-ghost" href="create_code.php">Create Code</a>
+        <a class="btn btn-ghost" href="my_codes.php">My Codes</a>
         <a class="btn btn-ghost" href="rooms.php">Rooms</a>
         <a class="btn btn-ghost" href="notifications.php">Notifications</a>
         <a class="btn btn-ghost" href="backup.php">Backups</a>
