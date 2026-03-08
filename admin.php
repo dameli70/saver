@@ -52,6 +52,14 @@ header("Referrer-Policy: no-referrer");
 .h{font-size:18px;} 
 .chk{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:12px;line-height:1.4;margin:12px 0;}
 .chk input{width:16px;height:16px;}
+
+.wallet-box{border:1px solid var(--b1);background:var(--s2);padding:12px;border-radius:12px;}
+.wallet-title{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:8px;}
+.wallet-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+.wallet-pill{font-size:10px;border:1px solid var(--b2);padding:4px 8px;border-radius:999px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;}
+.wallet-pill.on{border-color:rgba(232,255,71,.25);color:var(--accent);}
+.wallet-pill.off{opacity:.55;}
+.wallet-pill.default{border-color:var(--b2);color:var(--text);}
  
 .table-wrap{overflow:auto;border:1px solid var(--b1);background:var(--s1);}
 .table{width:100%;border-collapse:collapse;min-width:980px;}
@@ -180,6 +188,24 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--code-bg);border:
       <div class="field"><label>PIN length</label><input id="car-pin-len" placeholder="e.g. 4" value="4"></div>
       <div class="field"><label>USSD: Change PIN template</label><input id="car-ussd-change" placeholder="e.g. *170*00*{old_pin}*{new_pin}#"></div>
       <div class="field"><label>USSD: Balance template</label><input id="car-ussd-balance" placeholder="e.g. *170#"></div>
+
+      <div class="wallet-box">
+        <div class="wallet-title">Wallet flow options</div>
+        <div class="p" style="margin:0 0 10px 0;">Controls what the wallet flow can do when it generates a USSD for this carrier.</div>
+
+        <label class="chk" style="margin:0 0 8px 0;"><input type="checkbox" id="car-wallet-open-dialer" checked> <span><strong>Send to phone app (tel:)</strong> — opens the dialer with the USSD pre-filled.</span></label>
+        <label class="chk" style="margin:0 0 10px 0;"><input type="checkbox" id="car-wallet-copy-ussd" checked> <span><strong>Copy USSD</strong> — copies the USSD to clipboard for manual dialing.</span></label>
+
+        <div class="field" style="margin:0;">
+          <label>Default wallet action</label>
+          <select id="car-wallet-default">
+            <option value="open_dialer">Send to phone app (tel:)</option>
+            <option value="copy_ussd">Copy USSD</option>
+          </select>
+          <div class="k" style="margin-top:6px;font-size:11px;">Used as the primary action in the wallet flow.</div>
+        </div>
+      </div>
+
       <label class="chk" style="margin:0;"><input type="checkbox" id="car-active" checked> <span>Active</span></label>
       <button class="btn btn-primary" onclick="createCarrier()">Add carrier</button>
       <div id="car-msg" class="msg"></div>
@@ -190,7 +216,7 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--code-bg);border:
     </div>
 
     <div class="table-wrap">
-      <table class="table" id="carriers-table" style="min-width:1100px;">
+      <table class="table" id="carriers-table" style="min-width:1250px;">
         <thead>
           <tr>
             <th>ID</th>
@@ -198,6 +224,7 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--code-bg);border:
             <th>Country</th>
             <th>PIN</th>
             <th>Active</th>
+            <th>Wallet</th>
             <th>Balance USSD</th>
             <th>Change PIN USSD</th>
             <th>Actions</th>
@@ -398,6 +425,24 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--code-bg);border:
     <div class="field"><label>PIN length</label><input id="car-edit-pin-len"></div>
     <div class="field"><label>USSD: Change PIN template</label><input id="car-edit-ussd-change"></div>
     <div class="field"><label>USSD: Balance template</label><input id="car-edit-ussd-balance"></div>
+
+    <div class="wallet-box" style="margin:12px 0;">
+      <div class="wallet-title">Wallet flow options</div>
+      <div class="p" style="margin:0 0 10px 0;">Controls what the wallet flow can do when it generates a USSD for this carrier.</div>
+
+      <label class="chk" style="margin:0 0 8px 0;"><input type="checkbox" id="car-edit-wallet-open-dialer"> <span><strong>Send to phone app (tel:)</strong> — opens the dialer with the USSD pre-filled.</span></label>
+      <label class="chk" style="margin:0 0 10px 0;"><input type="checkbox" id="car-edit-wallet-copy-ussd"> <span><strong>Copy USSD</strong> — copies the USSD to clipboard for manual dialing.</span></label>
+
+      <div class="field" style="margin:0;">
+        <label>Default wallet action</label>
+        <select id="car-edit-wallet-default">
+          <option value="open_dialer">Send to phone app (tel:)</option>
+          <option value="copy_ussd">Copy USSD</option>
+        </select>
+        <div class="k" style="margin-top:6px;font-size:11px;">Used as the primary action in the wallet flow.</div>
+      </div>
+    </div>
+
     <label class="chk" style="margin:0;"><input type="checkbox" id="car-edit-active"> <span>Active</span></label>
 
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;">
@@ -438,6 +483,96 @@ function setMsg(id, text, ok){
   if(!el) return;
   el.className = 'msg ' + (ok ? 'msg-ok' : 'msg-err') + ' show';
   el.textContent = text;
+}
+
+function walletEls(prefix){
+  return {
+    allowOpen: document.getElementById(prefix + '-wallet-open-dialer'),
+    allowCopy: document.getElementById(prefix + '-wallet-copy-ussd'),
+    def: document.getElementById(prefix + '-wallet-default'),
+  };
+}
+
+function syncWalletDefaultSelect(prefix){
+  const els = walletEls(prefix);
+  if(!els.allowOpen || !els.allowCopy || !els.def) return;
+
+  const allowOpen = !!els.allowOpen.checked;
+  const allowCopy = !!els.allowCopy.checked;
+
+  const optOpen = els.def.querySelector('option[value="open_dialer"]');
+  const optCopy = els.def.querySelector('option[value="copy_ussd"]');
+  if(optOpen) optOpen.disabled = !allowOpen;
+  if(optCopy) optCopy.disabled = !allowCopy;
+
+  const cur = els.def.value;
+  const curAllowed = (cur === 'open_dialer' && allowOpen) || (cur === 'copy_ussd' && allowCopy);
+  if(!curAllowed){
+    if(allowOpen) els.def.value = 'open_dialer';
+    else if(allowCopy) els.def.value = 'copy_ussd';
+  }
+}
+
+function readWalletConfig(prefix){
+  const els = walletEls(prefix);
+  const wallet_allow_open_dialer = els.allowOpen && els.allowOpen.checked ? 1 : 0;
+  const wallet_allow_copy_ussd = els.allowCopy && els.allowCopy.checked ? 1 : 0;
+  const wallet_default_action = (els.def && els.def.value) ? els.def.value : 'open_dialer';
+  return { wallet_allow_open_dialer, wallet_allow_copy_ussd, wallet_default_action };
+}
+
+function validateWalletConfig(cfg){
+  if(!cfg.wallet_allow_open_dialer && !cfg.wallet_allow_copy_ussd){
+    return 'Select at least one wallet action (Send to phone app / Copy USSD).';
+  }
+  if(cfg.wallet_default_action === 'open_dialer' && !cfg.wallet_allow_open_dialer){
+    return 'Default wallet action is set to “Send to phone app”, but that action is disabled.';
+  }
+  if(cfg.wallet_default_action === 'copy_ussd' && !cfg.wallet_allow_copy_ussd){
+    return 'Default wallet action is set to “Copy USSD”, but that action is disabled.';
+  }
+  return '';
+}
+
+function initCarrierWalletUi(){
+  ['car','car-edit'].forEach(prefix => {
+    const els = walletEls(prefix);
+    if(!els.allowOpen || !els.allowCopy || !els.def) return;
+
+    els.allowOpen.addEventListener('change', () => syncWalletDefaultSelect(prefix));
+    els.allowCopy.addEventListener('change', () => syncWalletDefaultSelect(prefix));
+    syncWalletDefaultSelect(prefix);
+  });
+}
+
+function normalizeCarrierWallet(c){
+  const allowOpen = (c && c.wallet_allow_open_dialer !== undefined && c.wallet_allow_open_dialer !== null)
+    ? (c.wallet_allow_open_dialer ? 1 : 0)
+    : 1;
+
+  const allowCopy = (c && c.wallet_allow_copy_ussd !== undefined && c.wallet_allow_copy_ussd !== null)
+    ? (c.wallet_allow_copy_ussd ? 1 : 0)
+    : 1;
+
+  let def = (c && c.wallet_default_action) ? String(c.wallet_default_action) : 'open_dialer';
+  if(def !== 'open_dialer' && def !== 'copy_ussd'){
+    def = 'open_dialer';
+  }
+
+  return { wallet_allow_open_dialer: allowOpen, wallet_allow_copy_ussd: allowCopy, wallet_default_action: def };
+}
+
+function carrierWalletCellHtml(c){
+  const w = normalizeCarrierWallet(c);
+  const defLabel = (w.wallet_default_action === 'copy_ussd') ? 'copy' : 'tel';
+
+  return `
+    <div class="wallet-row">
+      <span class="wallet-pill ${w.wallet_allow_open_dialer ? 'on' : 'off'}">tel</span>
+      <span class="wallet-pill ${w.wallet_allow_copy_ussd ? 'on' : 'off'}">copy</span>
+      <span class="wallet-pill default">default: ${esc(defLabel)}</span>
+    </div>
+  `;
 }
 
 let usersCache = [];
@@ -624,7 +759,7 @@ function closeDetail(e){
 
 async function loadCarriers(){
   const tbody = document.querySelector('#carriers-table tbody');
-  tbody.innerHTML = '<tr><td colspan="8" class="k">Loading…</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="9" class="k">Loading…</td></tr>';
 
   try{
     const r = await get('/api/admin.php?action=carriers');
@@ -632,7 +767,7 @@ async function loadCarriers(){
     carriersCache = r.carriers || [];
 
     if(!carriersCache.length){
-      tbody.innerHTML = '<tr><td colspan="8" class="k">No carriers.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="9" class="k">No carriers.</td></tr>';
       return;
     }
 
@@ -646,6 +781,7 @@ async function loadCarriers(){
         <td>${esc(c.country||'')}</td>
         <td>${esc(pin)}</td>
         <td>${c.is_active ? '✓' : '—'}</td>
+        <td>${carrierWalletCellHtml(c)}</td>
         <td>${esc(c.ussd_balance_template||'')}</td>
         <td>${esc(c.ussd_change_pin_template||'')}</td>
         <td>
@@ -657,7 +793,7 @@ async function loadCarriers(){
     });
 
   }catch(e){
-    tbody.innerHTML = '<tr><td colspan="8" class="k">Failed to load carriers.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" class="k">Failed to load carriers.</td></tr>';
     setMsg('carriers-msg', e.message||'Failed', false);
   }
 }
@@ -671,7 +807,15 @@ async function createCarrier(){
   const ussdBalance = document.getElementById('car-ussd-balance').value.trim();
   const isActive = document.getElementById('car-active').checked ? 1 : 0;
 
+  syncWalletDefaultSelect('car');
+  const walletCfg = readWalletConfig('car');
+  const walletErr = validateWalletConfig(walletCfg);
+
   document.getElementById('car-msg').className = 'msg';
+  if(walletErr){
+    setMsg('car-msg', walletErr, false);
+    return;
+  }
 
   try{
     const r = await postCsrf('/api/admin.php', {
@@ -683,6 +827,9 @@ async function createCarrier(){
       ussd_change_pin_template: ussdChange,
       ussd_balance_template: ussdBalance,
       is_active: isActive,
+      wallet_allow_open_dialer: walletCfg.wallet_allow_open_dialer,
+      wallet_allow_copy_ussd: walletCfg.wallet_allow_copy_ussd,
+      wallet_default_action: walletCfg.wallet_default_action,
     });
     if(!r.success) throw new Error(r.error||'Failed');
 
@@ -691,6 +838,11 @@ async function createCarrier(){
     document.getElementById('car-country').value='';
     document.getElementById('car-ussd-change').value='';
     document.getElementById('car-ussd-balance').value='';
+
+    document.getElementById('car-wallet-open-dialer').checked = true;
+    document.getElementById('car-wallet-copy-ussd').checked = true;
+    document.getElementById('car-wallet-default').value = 'open_dialer';
+    syncWalletDefaultSelect('car');
 
     loadCarriers();
 
@@ -710,6 +862,13 @@ function openCarrierEdit(id){
   document.getElementById('car-edit-pin-len').value = c.pin_length || 4;
   document.getElementById('car-edit-ussd-change').value = c.ussd_change_pin_template || '';
   document.getElementById('car-edit-ussd-balance').value = c.ussd_balance_template || '';
+
+  const w = normalizeCarrierWallet(c);
+  document.getElementById('car-edit-wallet-open-dialer').checked = !!w.wallet_allow_open_dialer;
+  document.getElementById('car-edit-wallet-copy-ussd').checked = !!w.wallet_allow_copy_ussd;
+  document.getElementById('car-edit-wallet-default').value = w.wallet_default_action;
+  syncWalletDefaultSelect('car-edit');
+
   document.getElementById('car-edit-active').checked = !!c.is_active;
 
   document.getElementById('car-edit-msg').className = 'msg';
@@ -731,7 +890,15 @@ async function saveCarrierEdit(){
   const ussdBalance = document.getElementById('car-edit-ussd-balance').value.trim();
   const isActive = document.getElementById('car-edit-active').checked ? 1 : 0;
 
+  syncWalletDefaultSelect('car-edit');
+  const walletCfg = readWalletConfig('car-edit');
+  const walletErr = validateWalletConfig(walletCfg);
+
   document.getElementById('car-edit-msg').className = 'msg';
+  if(walletErr){
+    setMsg('car-edit-msg', walletErr, false);
+    return;
+  }
 
   try{
     const r = await postCsrf('/api/admin.php', {
@@ -744,6 +911,9 @@ async function saveCarrierEdit(){
       ussd_change_pin_template: ussdChange,
       ussd_balance_template: ussdBalance,
       is_active: isActive,
+      wallet_allow_open_dialer: walletCfg.wallet_allow_open_dialer,
+      wallet_allow_copy_ussd: walletCfg.wallet_allow_copy_ussd,
+      wallet_default_action: walletCfg.wallet_default_action,
     });
     if(!r.success) throw new Error(r.error||'Failed');
     setMsg('car-edit-msg', 'Saved.', true);
@@ -1060,11 +1230,15 @@ async function loadAudit(){
   }
 }
 
+initCarrierWalletUi();
+
 loadUsers();
 loadCodes();
 loadCarriers();
 loadDestinationAccounts();
+loadRoomAccounts();
 loadDisputes();
+loadSettlements();
 loadAudit();
 </script>
 </body>
