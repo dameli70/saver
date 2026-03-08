@@ -19,7 +19,7 @@ $isAdmin   = isAdmin();
 $csrf      = getCsrfToken();
 
 $userId = (int)(getCurrentUserId() ?? 0);
-$showSecurityBanner = !userHasTotp($userId) && !userHasPasskeys($userId);
+$showSecurityBanner = !$isAdmin && !userHasTotp($userId) && !userHasPasskeys($userId);
 
 // Strict security headers
 header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none';");
