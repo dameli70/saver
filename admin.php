@@ -45,7 +45,7 @@ header("Referrer-Policy: no-referrer");
 .orb1{width:520px;height:520px;top:-170px;right:-120px;}
 .orb2{width:360px;height:360px;bottom:40px;left:-90px;}
 
-.pill{font-size:10px;color:var(--muted);letter-spacing:1px;border:1px solid rgba(255,255,255,.13);padding:6px 10px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.pill{font-size:10px;color:var(--muted);letter-spacing:1px;border:1px solid var(--b2);padding:6px 10px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .badge{font-size:10px;letter-spacing:2px;text-transform:uppercase;border:1px solid rgba(232,255,71,.25);color:var(--accent);padding:6px 10px;}
 
 .wrap{max-width:1200px;}
@@ -53,17 +53,17 @@ header("Referrer-Policy: no-referrer");
 .chk{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:12px;line-height:1.4;margin:12px 0;}
 .chk input{width:16px;height:16px;}
  
-.table-wrap{overflow:auto;border:1px solid var(--b1);background:rgba(0,0,0,.2);}
+.table-wrap{overflow:auto;border:1px solid var(--b1);background:var(--s1);}
 .table{width:100%;border-collapse:collapse;min-width:980px;}
-.table th,.table td{padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.06);text-align:left;font-size:12px;white-space:nowrap;}
-.table th{color:var(--muted);font-size:10px;letter-spacing:2px;text-transform:uppercase;background:rgba(0,0,0,.25);}
+.table th,.table td{padding:10px 12px;border-bottom:1px solid var(--b1);text-align:left;font-size:12px;white-space:nowrap;}
+.table th{color:var(--muted);font-size:10px;letter-spacing:2px;text-transform:uppercase;background:var(--s2);}
 .k{color:var(--muted);} 
 hr{border:none;border-top:1px solid var(--b1);margin:16px 0;}
-.modal{position:fixed;inset:0;background:rgba(0,0,0,.92);display:none;align-items:center;justify-content:center;z-index:999;padding:24px;}
+.modal{position:fixed;inset:0;background:var(--overlay-bg);display:none;align-items:center;justify-content:center;z-index:999;padding:24px;}
 .modal.show{display:flex;}
 .sheet{width:100%;max-width:980px;background:var(--s1);border:1px solid var(--b2);padding:18px;max-height:85vh;overflow:auto;}
 .sheet h3{font-family:var(--display);font-size:14px;margin-bottom:10px;}
-pre{white-space:pre-wrap;word-break:break-word;background:#000;border:1px solid rgba(255,255,255,.08);padding:12px;color:rgba(255,255,255,.82);font-size:12px;line-height:1.6;}
+pre{white-space:pre-wrap;word-break:break-word;background:var(--code-bg);border:1px solid var(--b1);padding:12px;color:var(--text);font-size:12px;line-height:1.6;}
 </style>
 </head>
 <body>
@@ -74,7 +74,7 @@ pre{white-space:pre-wrap;word-break:break-word;background:#000;border:1px solid 
   <div class="nav-r">
     <span class="badge">SUPER ADMIN</span>
     <span class="pill"><?= htmlspecialchars($userEmail) ?></span>
-    <button class="btn btn-ghost btn-sm" type="button" data-theme-toggle></button>
+    <button class="btn btn-ghost btn-sm btn-theme" type="button" data-theme-toggle>Theme</button>
     <a class="btn btn-ghost btn-sm" href="dashboard.php">Dashboard</a>
     <a class="btn btn-ghost btn-sm" href="notifications.php">Notifications</a>
     <a class="btn btn-ghost btn-sm" href="account.php">Account</a>

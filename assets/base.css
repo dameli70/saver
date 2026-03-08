@@ -5,17 +5,33 @@
   --text:#dde1ec;--muted:#525970;
   --mono:'DM Mono',monospace;--display:'Unbounded',sans-serif;
   --sat:env(safe-area-inset-top,0px);--sab:env(safe-area-inset-bottom,0px);
+
+  --bar-bg:rgba(6,7,10,.92);
+  --overlay-bg:rgba(0,0,0,.9);
+  --toast-bg:#000;
+  --code-bg:#000;
 }
 :root[data-theme="light"]{
   --bg:#f6f7fb;--s1:#ffffff;--s2:#eef1f7;--s3:#e7ebf3;
   --b1:rgba(12,18,30,.08);--b2:rgba(12,18,30,.14);
   --accent:#d7ff3a;--red:#d72d3d;--blue:#1b6fdc;--green:#0b8f5a;--orange:#b86900;
   --text:#0b1020;--muted:#667086;
+
+  --bar-bg:rgba(246,247,251,.92);
+  --overlay-bg:rgba(246,247,251,.92);
+  --toast-bg:rgba(255,255,255,.94);
+  --code-bg:rgba(11,16,32,.06);
 }
 
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 html{scroll-behavior:smooth;-webkit-tap-highlight-color:transparent;}
 body{background:var(--bg);color:var(--text);font-family:var(--mono);font-size:14px;min-height:100vh;overflow-x:hidden;-webkit-font-smoothing:antialiased;}
+
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px;}
+
+@media(prefers-reduced-motion: reduce){
+  html{scroll-behavior:auto;}
+}
 
 .orb{position:fixed;border-radius:50%;filter:blur(100px);pointer-events:none;z-index:0;}
 .orb1{width:500px;height:500px;background:rgba(232,255,71,.035);top:-150px;right:-100px;}
@@ -24,8 +40,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--mono);font-size:14
 :root[data-theme="light"] .orb2{background:rgba(71,184,255,.08);}
 
 .theme-toggle{position:fixed;top:max(14px,var(--sat));right:18px;z-index:2000;
-  background:transparent;border:1px solid var(--b2);color:var(--text);
+  background:transparent;border:1px solid var(--accent);color:var(--accent);
   font-family:var(--mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;
   padding:10px 14px;min-height:38px;cursor:pointer;-webkit-appearance:none;border-radius:0;}
-.theme-toggle:hover{border-color:var(--text);}
+.theme-toggle:hover{border-color:var(--text);color:var(--text);}
 .theme-toggle:active{transform:scale(.98);}

@@ -55,7 +55,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9998;o
     <div class="topbar-logo">LOCK<span>SMITH</span></div>
     <div class="topbar-r">
       <span class="user-pill"><?= htmlspecialchars($userEmail) ?></span>
-      <button class="btn btn-ghost btn-sm" type="button" data-theme-toggle></button>
+      <button class="btn btn-ghost btn-sm btn-theme" type="button" data-theme-toggle>Theme</button>
       <a class="btn btn-ghost btn-sm" href="create_code.php">Create Code</a>
       <a class="btn btn-ghost btn-sm" href="my_codes.php">My Codes</a>
       <a class="btn btn-ghost btn-sm" href="rooms.php">Rooms</a>

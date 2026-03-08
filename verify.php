@@ -23,7 +23,7 @@ function page(string $title, string $msg, bool $ok = false): void {
     echo "<link rel=\"stylesheet\" href=\"assets/base.css\">";
     echo "<link rel=\"stylesheet\" href=\"assets/auth.css\">";
     echo "</head><body>";
-    echo "<button class=\"theme-toggle\" type=\"button\" data-theme-toggle></button>";
+    echo "<button class=\"theme-toggle\" type=\"button\" data-theme-toggle>Theme</button>";
     echo "<div class=\"box\"><div class=\"logo\">LOCK<span>SMITH</span></div><div class=\"{$msgClass}\">{$msg}</div><a class=\"btn btn-primary\" href=\"login.php\">Continue</a></div></body></html>";
 }
 

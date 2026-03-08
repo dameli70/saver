@@ -37,7 +37,7 @@ header("Referrer-Policy: no-referrer");
 </style>
 </head>
 <body>
-  <button class="theme-toggle" type="button" data-theme-toggle></button>
+  <button class="theme-toggle" type="button" data-theme-toggle>Theme</button>
   <div class="box">
     <div class="logo">LOCK<span>SMITH</span></div>
     <div class="sub">// Password reset</div>

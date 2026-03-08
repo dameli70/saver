@@ -69,7 +69,7 @@ header("Permissions-Policy: clipboard-write=(self)");
 .empty h3{font-family:var(--display);font-size:15px;font-weight:700;color:var(--text);margin-bottom:8px;}
 .empty p{font-size:12px;line-height:1.6;}
 
-#reveal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.9);
+#reveal-overlay{position:fixed;inset:0;background:var(--overlay-bg);
   display:none;align-items:flex-end;justify-content:center;z-index:500;padding:0 0 max(0px,var(--sab)) 0;}
 #reveal-overlay.show{display:flex;}
 .reveal-sheet{background:var(--s1);border:1px solid var(--b2);border-bottom:none;
@@ -84,11 +84,11 @@ header("Permissions-Policy: clipboard-write=(self)");
 .reveal-title{font-family:var(--display);font-size:16px;font-weight:700;margin-bottom:3px;}
 .reveal-sub{font-size:10px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:18px;}
 .reveal-pwd{font-size:clamp(16px,4vw,22px);color:var(--accent);letter-spacing:3px;
-  word-break:break-all;background:#000;padding:16px;border:1px solid rgba(232,255,71,.12);
+  word-break:break-all;background:var(--code-bg);padding:16px;border:1px solid rgba(232,255,71,.12);
   margin-bottom:16px;line-height:1.5;user-select:all;-webkit-user-select:all;display:none;}
 .vault-input-wrap{margin-bottom:16px;}
 .vault-input-wrap label{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:6px;}
-.vault-input-wrap input{width:100%;background:#000;border:1px solid rgba(232,255,71,.2);
+.vault-input-wrap input{width:100%;background:var(--code-bg);border:1px solid rgba(232,255,71,.2);
   color:var(--accent);font-family:var(--mono);font-size:15px;padding:13px;outline:none;
   border-radius:0;-webkit-appearance:none;}
 
@@ -103,7 +103,7 @@ header("Permissions-Policy: clipboard-write=(self)");
     <div class="topbar-logo">LOCK<span>SMITH</span></div>
     <div class="topbar-r">
       <span class="user-pill"><?= htmlspecialchars($userEmail) ?></span>
-      <button class="btn btn-ghost btn-sm" type="button" data-theme-toggle></button>
+      <button class="btn btn-ghost btn-sm btn-theme" type="button" data-theme-toggle>Theme</button>
       <a class="btn btn-ghost btn-sm" href="create_code.php">Create Code</a>
       <a class="btn btn-ghost btn-sm" href="dashboard.php">Dashboard</a>
       <a class="btn btn-ghost btn-sm" href="rooms.php">Rooms</a>

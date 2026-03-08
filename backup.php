@@ -67,7 +67,7 @@ header("Referrer-Policy: no-referrer");
   <div class="nav">
     <a class="logo" href="index.php">LOCK<span>SMITH</span></a>
     <div class="nav-r">
-      <button class="btn btn-ghost" type="button" data-theme-toggle></button>
+      <button class="btn btn-ghost btn-theme" type="button" data-theme-toggle>Theme</button>
       <a class="btn btn-ghost" href="dashboard.php">Dashboard</a>
       <a class="btn btn-ghost" href="create_code.php">Create Code</a>
       <a class="btn btn-ghost" href="my_codes.php">My Codes</a>

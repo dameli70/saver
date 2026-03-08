@@ -57,7 +57,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
 .kdf-bar{height:100%;background:var(--accent);transition:width .1s linear;width:0%;}
 .kdf-label{font-size:10px;color:var(--muted);letter-spacing:1px;text-align:center;}
 
-#confirm-overlay{position:fixed;inset:0;background:rgba(0,0,0,.9);
+#confirm-overlay{position:fixed;inset:0;background:var(--overlay-bg);
   display:none;align-items:flex-end;justify-content:center;z-index:500;padding:0 0 max(0px,var(--sab)) 0;}
 #confirm-overlay.show{display:flex;}
 .confirm-sheet{background:var(--s1);border:1px solid var(--b2);border-bottom:none;
@@ -80,6 +80,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
     <div class="topbar-logo">LOCK<span>SMITH</span></div>
     <div class="topbar-r">
       <span class="user-pill"><?= htmlspecialchars($userEmail) ?></span>
+      <button class="btn btn-ghost btn-sm btn-theme" type="button" data-theme-toggle>Theme</button>
       <a class="btn btn-ghost btn-sm" href="my_codes.php">My Codes</a>
       <a class="btn btn-ghost btn-sm" href="dashboard.php">Dashboard</a>
       <a class="btn btn-ghost btn-sm" href="rooms.php">Rooms</a>

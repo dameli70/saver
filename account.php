@@ -104,7 +104,7 @@ code{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);pad
           <a class="btn btn-ghost" href="admin.php">Admin</a>
         <?php endif; ?>
       <?php endif; ?>
-      <button class="btn btn-ghost" type="button" data-theme-toggle></button>
+      <button class="btn btn-ghost btn-theme" type="button" data-theme-toggle>Theme</button>
       <a class="btn btn-ghost" href="logout.php">Logout</a>
     </div>
   </div>

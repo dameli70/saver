@@ -35,15 +35,22 @@
     toggle,
   };
 
-  function labelForNext(){
+  function labelForCurrent(){
     const cur = root.getAttribute('data-theme') || 'dark';
-    return cur === 'dark' ? 'Light' : 'Dark';
+    return cur === 'dark' ? 'Dark' : 'Light';
+  }
+
+  function toggleLabel(){
+    const cur = root.getAttribute('data-theme') || 'dark';
+    return cur === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
   }
 
   function initToggle(el){
     const render = () => {
-      el.textContent = labelForNext();
-      el.setAttribute('aria-label', 'Toggle theme');
+      el.textContent = labelForCurrent();
+      const lbl = toggleLabel();
+      el.setAttribute('aria-label', lbl);
+      el.setAttribute('title', lbl);
     };
 
     el.addEventListener('click', () => {

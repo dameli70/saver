@@ -68,7 +68,7 @@ a{color:inherit;}
   <div class="nav">
     <a class="logo" href="index.php">LOCK<span>SMITH</span></a>
     <div class="nav-r">
-      <button class="btn btn-ghost" type="button" data-theme-toggle></button>
+      <button class="btn btn-ghost btn-theme" type="button" data-theme-toggle>Theme</button>
       <?php if ($loggedIn): ?>
         <span class="pill"><?= htmlspecialchars($userEmail) ?></span>
         <?php if ($verified): ?>
