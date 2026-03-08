@@ -18,7 +18,7 @@ $isAdmin = isAdmin();
 $csrf    = getCsrfToken();
 
 $userId = (int)(getCurrentUserId() ?? 0);
-$showSecurityBanner = !userHasTotp($userId) && !userHasPasskeys($userId);
+$showSecurityBanner = !$isAdmin && !userHasTotp($userId) && !userHasPasskeys($userId);
 
 header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none';");
 header("X-Frame-Options: DENY");
@@ -33,32 +33,14 @@ header("Referrer-Policy: no-referrer");
 <title>Backups — LOCKSMITH</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
-<style>
-:root{
-  --bg:#06070a;--s1:#0d0f14;--s2:#13161d;--s3:#1a1d27;
-  --b1:rgba(255,255,255,.07);--b2:rgba(255,255,255,.13);
-  --accent:#e8ff47;--red:#ff4757;--green:#47ffb0;--orange:#ffaa00;--text:#dde1ec;--muted:#525970;
-  --mono:'DM Mono',monospace;--display:'Unbounded',sans-serif;
-  --sat:env(safe-area-inset-top,0px);--sab:env(safe-area-inset-bottom,0px);
-}
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-body{background:var(--bg);color:var(--text);font-family:var(--mono);min-height:100vh;overflow-x:hidden;}
-.nav{display:flex;align-items:center;justify-content:space-between;padding:max(16px,var(--sat)) 20px 16px;border-bottom:1px solid var(--b1);background:rgba(6,7,10,.92);backdrop-filter:blur(14px);position:sticky;top:0;}
-.logo{font-family:var(--display);font-weight:900;letter-spacing:-1px;font-size:18px;text-decoration:none;color:var(--text);}
-.logo span{color:var(--accent);} 
-.nav-r{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end;}
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;
-  padding:12px 18px;font-family:var(--mono);font-size:11px;letter-spacing:2px;
-  text-transform:uppercase;cursor:pointer;border:none;transition:all .15s;border-radius:0;
-  -webkit-appearance:none;min-height:42px;text-decoration:none;}
-.btn-primary{background:var(--accent);color:#000;font-weight:600;}
-.btn-primary:disabled{opacity:.45;pointer-events:none;}
-.btn-ghost{background:transparent;border:1px solid var(--b2);color:var(--text);} 
-.btn-ghost:hover{border-color:var(--text);} 
+<script src="assets/theme.js"></script>
+<link rel="stylesheet" href="assets/base.css">
+<link rel="stylesheet" href="assets/panel.css">
+<link rel="stylesheet" href="assets/panel_components.css">
+<style> 
 .btn-red{background:rgba(255,71,87,.08);border:1px solid rgba(255,71,87,.2);color:var(--red);} 
-.wrap{max-width:860px;margin:0 auto;padding:26px 18px 60px;}
-.h{font-family:var(--display);font-weight:900;font-size:18px;letter-spacing:1px;margin-bottom:8px;}
-.p{color:var(--muted);font-size:12px;line-height:1.7;margin-bottom:16px;}
+.wrap{max-width:860px;}
+.h{font-size:18px;}
 
 /* ── SECURITY BANNER ── */
 .sec-banner{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
@@ -67,21 +49,12 @@ body{background:var(--bg);color:var(--text);font-family:var(--mono);min-height:1
 .sec-banner-title{font-family:var(--display);font-weight:800;font-size:12px;letter-spacing:1px;color:var(--orange);}
 .sec-banner-sub{font-size:11px;color:var(--muted);line-height:1.6;max-width:620px;}
 
-.card{background:rgba(13,15,20,.9);border:1px solid var(--b1);padding:18px;margin-bottom:14px;}
-.card-title{font-family:var(--display);font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--accent);margin-bottom:12px;}
+.card{margin-bottom:14px;}
+.card-title{margin-bottom:12px;}
 .row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
-.field{margin-bottom:12px;}
-.field label{display:block;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:6px;}
-.field input{width:100%;background:var(--s2);border:1px solid var(--b1);color:var(--text);
-  font-family:var(--mono);font-size:14px;padding:12px;outline:none;border-radius:0;-webkit-appearance:none;}
-.field input:focus{border-color:var(--accent);} 
+ 
 .small{font-size:11px;color:var(--muted);line-height:1.6;}
-.msg{display:none;margin-top:12px;padding:12px 14px;font-size:12px;line-height:1.6;letter-spacing:.4px;}
-.msg.show{display:block;}
-.msg-err{background:rgba(255,71,87,.08);border:1px solid rgba(255,71,87,.2);color:var(--red);} 
-.msg-ok{background:rgba(71,255,176,.08);border:1px solid rgba(71,255,176,.2);color:var(--green);} 
-.spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(0,0,0,.35);border-top-color:#000;border-radius:50%;animation:spin .5s linear infinite;}
-@keyframes spin{to{transform:rotate(360deg);}}
+
 .list{display:flex;flex-direction:column;gap:10px;}
 .item{border:1px solid var(--b1);background:rgba(19,22,29,.6);padding:14px;}
 .item-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap;}
@@ -94,7 +67,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--mono);min-height:1
   <div class="nav">
     <a class="logo" href="index.php">LOCK<span>SMITH</span></a>
     <div class="nav-r">
+      <button class="btn btn-ghost btn-theme" type="button" data-theme-toggle>Theme</button>
       <a class="btn btn-ghost" href="dashboard.php">Dashboard</a>
+      <a class="btn btn-ghost" href="create_code.php">Create Code</a>
+      <a class="btn btn-ghost" href="my_codes.php">My Codes</a>
       <a class="btn btn-ghost" href="notifications.php">Notifications</a>
       <a class="btn btn-ghost" href="account.php">Account</a>
       <?php if ($isAdmin): ?>

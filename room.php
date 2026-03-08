@@ -40,52 +40,22 @@ header("Referrer-Policy: no-referrer");
 <title>Room — LOCKSMITH</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
+<script src="assets/theme.js"></script>
+<link rel="stylesheet" href="assets/base.css">
+<link rel="stylesheet" href="assets/panel.css">
+<link rel="stylesheet" href="assets/panel_components.css">
 <style>
-:root{
-  --bg:#06070a;--s1:#0d0f14;--s2:#13161d;--s3:#1a1d27;
-  --b1:rgba(255,255,255,.07);--b2:rgba(255,255,255,.13);
-  --accent:#e8ff47;--red:#ff4757;--blue:#47b8ff;--green:#47ffb0;--orange:#ffaa00;
-  --text:#dde1ec;--muted:#525970;
-  --mono:'DM Mono',monospace;--display:'Unbounded',sans-serif;
-  --sat:env(safe-area-inset-top,0px);--sab:env(safe-area-inset-bottom,0px);
-}
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-body{background:var(--bg);color:var(--text);font-family:var(--mono);min-height:100vh;overflow-x:hidden;-webkit-font-smoothing:antialiased;}
-.orb{position:fixed;border-radius:50%;filter:blur(120px);pointer-events:none;z-index:0;}
-.orb1{width:520px;height:520px;background:rgba(232,255,71,.035);top:-170px;right:-120px;}
-.orb2{width:360px;height:360px;background:rgba(71,184,255,.03);bottom:40px;left:-90px;}
+.orb{filter:blur(120px);}
+.orb1{width:520px;height:520px;top:-170px;right:-120px;}
+.orb2{width:360px;height:360px;bottom:40px;left:-90px;}
 
-.nav{position:sticky;top:0;z-index:10;display:flex;align-items:center;justify-content:space-between;
-  padding:max(16px,var(--sat)) 20px 16px;border-bottom:1px solid var(--b1);background:rgba(6,7,10,.92);backdrop-filter:blur(14px);}
-.logo{font-family:var(--display);font-weight:900;letter-spacing:-1px;font-size:18px;text-decoration:none;color:inherit;}
-.logo span{color:var(--accent);} 
-.nav-r{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end;}
 .pill{font-size:10px;color:var(--muted);letter-spacing:1px;border:1px solid rgba(255,255,255,.13);padding:6px 10px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:none;}
 @media(min-width:560px){.pill{display:block;}}
 
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;
-  padding:12px 18px;font-family:var(--mono);font-size:11px;letter-spacing:2px;
-  text-transform:uppercase;cursor:pointer;border:none;transition:all .15s;border-radius:0;
-  -webkit-appearance:none;min-height:42px;text-decoration:none;}
-.btn-primary{background:var(--accent);color:#000;font-weight:600;}
-.btn-ghost{background:transparent;border:1px solid var(--b2);color:var(--text);} 
-.btn-ghost:hover{border-color:var(--text);} 
-.btn-blue{background:rgba(71,184,255,.12);border:1px solid rgba(71,184,255,.25);color:var(--blue);} 
-.btn-red{background:rgba(255,71,87,.1);border:1px solid rgba(255,71,87,.3);color:var(--red);} 
-.btn-sm{padding:10px 14px;min-height:38px;font-size:10px;}
 
-.wrap{position:relative;z-index:1;max-width:1100px;margin:0 auto;padding:26px 18px 60px;}
-.h{font-family:var(--display);font-weight:900;font-size:18px;letter-spacing:1px;margin-bottom:8px;}
-.p{color:var(--muted);font-size:12px;line-height:1.7;margin-bottom:16px;}
-.grid{display:grid;grid-template-columns:1fr;gap:14px;}
-@media(min-width:980px){.grid{grid-template-columns:1fr 1fr;}}
-.card{background:rgba(13,15,20,.9);border:1px solid var(--b1);padding:18px;}
-.card-title{font-family:var(--display);font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--accent);margin-bottom:14px;}
 
-.msg{display:none;margin-top:12px;padding:12px 14px;font-size:12px;line-height:1.6;letter-spacing:.4px;}
-.msg.show{display:block;}
-.msg-err{background:rgba(255,71,87,.08);border:1px solid rgba(255,71,87,.2);color:var(--red);} 
-.msg-ok{background:rgba(71,255,176,.08);border:1px solid rgba(71,255,176,.2);color:var(--green);} 
+.wrap{max-width:1100px;}
+.h{font-size:18px;}
 
 .k{color:var(--muted);} 
 
@@ -108,9 +78,12 @@ body{background:var(--bg);color:var(--text);font-family:var(--mono);min-height:1
   <a class="logo" href="index.php">LOCK<span>SMITH</span></a>
   <div class="nav-r">
     <span class="pill"><?= htmlspecialchars($userEmail) ?></span>
+    <button class="btn btn-ghost btn-sm btn-theme" type="button" data-theme-toggle>Theme</button>
     <?php if ($isAdmin): ?><a class="btn btn-ghost btn-sm" href="admin.php">Admin</a><?php endif; ?>
-    <a class="btn btn-ghost btn-sm" href="rooms.php">Rooms</a>
     <a class="btn btn-ghost btn-sm" href="dashboard.php">Dashboard</a>
+    <a class="btn btn-ghost btn-sm" href="create_code.php">Create Code</a>
+    <a class="btn btn-ghost btn-sm" href="my_codes.php">My Codes</a>
+    <a class="btn btn-ghost btn-sm" href="rooms.php">Rooms</a>
     <a class="btn btn-ghost btn-sm" href="notifications.php">Notifications</a>
     <a class="btn btn-ghost btn-sm" href="logout.php">Logout</a>
   </div>

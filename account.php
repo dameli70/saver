@@ -57,44 +57,24 @@ header("Referrer-Policy: no-referrer");
 <title>Account — LOCKSMITH</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
-<style>
-:root{
-  --bg:#06070a;--s1:#0d0f14;--s2:#13161d;--s3:#1a1d27;
-  --b1:rgba(255,255,255,.07);--b2:rgba(255,255,255,.13);
-  --accent:#e8ff47;--red:#ff4757;--green:#47ffb0;--orange:#ffaa00;--text:#dde1ec;--muted:#525970;
-  --mono:'DM Mono',monospace;--display:'Unbounded',sans-serif;
-  --sat:env(safe-area-inset-top,0px);--sab:env(safe-area-inset-bottom,0px);
-}
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-body{background:var(--bg);color:var(--text);font-family:var(--mono);min-height:100vh;overflow-x:hidden;}
-.nav{display:flex;align-items:center;justify-content:space-between;padding:max(16px,var(--sat)) 20px 16px;border-bottom:1px solid var(--b1);background:rgba(6,7,10,.92);backdrop-filter:blur(14px);position:sticky;top:0;}
-.logo{font-family:var(--display);font-weight:900;letter-spacing:-1px;font-size:18px;text-decoration:none;}
-.logo span{color:var(--accent);} 
-.nav-r{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end;}
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;
-  padding:12px 18px;font-family:var(--mono);font-size:11px;letter-spacing:2px;
-  text-transform:uppercase;cursor:pointer;border:none;transition:all .15s;border-radius:0;
-  -webkit-appearance:none;min-height:42px;text-decoration:none;}
-.btn-primary{background:var(--accent);color:#000;font-weight:600;}
-.btn-ghost{background:transparent;border:1px solid var(--b2);color:var(--text);} 
-.btn-ghost:hover{border-color:var(--text);} 
-.wrap{max-width:760px;margin:0 auto;padding:26px 18px 60px;}
-.h{font-family:var(--display);font-weight:900;font-size:18px;letter-spacing:1px;margin-bottom:8px;}
-.p{color:var(--muted);font-size:12px;line-height:1.7;margin-bottom:16px;}
-.card{background:rgba(13,15,20,.9);border:1px solid var(--b1);padding:18px;margin-bottom:14px;}
+<script src="assets/theme.js"></script>
+<link rel="stylesheet" href="assets/base.css">
+<link rel="stylesheet" href="assets/panel.css">
+<link rel="stylesheet" href="assets/panel_components.css">
+<style> 
+.wrap{max-width:760px;}
+.h{font-size:18px;}
+.card{margin-bottom:14px;}
 .row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
 .k{color:var(--muted);font-size:10px;letter-spacing:2px;text-transform:uppercase;}
 .v{color:var(--text);font-size:12px;letter-spacing:.4px;}
 .badge{display:inline-flex;align-items:center;gap:8px;font-size:10px;letter-spacing:1px;text-transform:uppercase;padding:5px 10px;border:1px solid;}
 .badge.ok{background:rgba(71,255,176,.07);border-color:rgba(71,255,176,.2);color:var(--green);} 
 .badge.wait{background:rgba(255,170,0,.07);border-color:rgba(255,170,0,.2);color:var(--orange);} 
-.msg{display:none;margin-top:12px;padding:12px 14px;font-size:12px;line-height:1.6;letter-spacing:.4px;}
-.msg.show{display:block;}
-.msg-err{background:rgba(255,71,87,.08);border:1px solid rgba(255,71,87,.2);color:var(--red);} 
-.msg-ok{background:rgba(71,255,176,.08);border:1px solid rgba(71,255,176,.2);color:var(--green);} 
+ 
 .dev{margin-top:12px;border:1px dashed rgba(255,170,0,.35);background:rgba(255,170,0,.06);padding:10px 12px;font-size:11px;color:var(--muted);line-height:1.6;display:none;}
 .dev a{color:var(--orange);} 
-.field{margin-top:14px;}
+.field{margin-top:14px;margin-bottom:0;}
 .field label{display:block;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:6px;}
 .field input{width:100%;background:var(--s2);border:1px solid var(--b1);color:var(--text);font-family:var(--mono);
   font-size:15px;padding:14px;outline:none;transition:border-color .2s;border-radius:0;-webkit-appearance:none;}
@@ -106,8 +86,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--mono);min-height:1
 .btn-red{background:rgba(255,71,87,.08);border:1px solid rgba(255,71,87,.2);color:var(--red);} 
 .btn-red:hover{background:rgba(255,71,87,.14);} 
 code{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);padding:2px 6px;}
-.spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(0,0,0,.35);border-top-color:#000;border-radius:50%;animation:spin .5s linear infinite;}
-@keyframes spin{to{transform:rotate(360deg);}}
+
 </style>
 </head>
 <body>
@@ -116,6 +95,8 @@ code{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);pad
     <div class="nav-r">
       <?php if ($verified): ?>
         <a class="btn btn-ghost" href="dashboard.php">Dashboard</a>
+        <a class="btn btn-ghost" href="create_code.php">Create Code</a>
+        <a class="btn btn-ghost" href="my_codes.php">My Codes</a>
         <a class="btn btn-ghost" href="rooms.php">Rooms</a>
         <a class="btn btn-ghost" href="notifications.php">Notifications</a>
         <a class="btn btn-ghost" href="backup.php">Backups</a>
@@ -123,6 +104,7 @@ code{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);pad
           <a class="btn btn-ghost" href="admin.php">Admin</a>
         <?php endif; ?>
       <?php endif; ?>
+      <button class="btn btn-ghost btn-theme" type="button" data-theme-toggle>Theme</button>
       <a class="btn btn-ghost" href="logout.php">Logout</a>
     </div>
   </div>

@@ -33,53 +33,28 @@ header("Permissions-Policy: clipboard-write=(self)");
 <title>LOCKSMITH — Notifications</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
+<script src="assets/theme.js"></script>
+<link rel="stylesheet" href="assets/base.css">
+<link rel="stylesheet" href="assets/panel.css">
+<link rel="stylesheet" href="assets/panel_components.css">
 <style>
-:root{
-  --bg:#06070a;--s1:#0d0f14;--s2:#13161d;--s3:#1a1d27;
-  --b1:rgba(255,255,255,.07);--b2:rgba(255,255,255,.13);
-  --accent:#e8ff47;--red:#ff4757;--blue:#47b8ff;--green:#47ffb0;--orange:#ffaa00;
-  --text:#dde1ec;--muted:#525970;
-  --mono:'DM Mono',monospace;--display:'Unbounded',sans-serif;
-  --sat:env(safe-area-inset-top,0px);--sab:env(safe-area-inset-bottom,0px);
-}
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-body{background:var(--bg);color:var(--text);font-family:var(--mono);font-size:14px;min-height:100vh;overflow-x:hidden;}
 body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9998;opacity:.5;
   background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.035'/%3E%3C/svg%3E");}
-.orb{position:fixed;border-radius:50%;filter:blur(100px);pointer-events:none;z-index:0;}
-.orb1{width:520px;height:520px;background:rgba(232,255,71,.035);top:-160px;right:-110px;}
-.orb2{width:360px;height:360px;background:rgba(71,184,255,.03);bottom:40px;left:-90px;}
+.orb1{width:520px;height:520px;top:-160px;right:-110px;}
+.orb2{width:360px;height:360px;bottom:40px;left:-90px;}
 
-.nav{position:sticky;top:0;z-index:100;background:rgba(6,7,10,.94);backdrop-filter:blur(16px);
-  -webkit-backdrop-filter:blur(16px);border-bottom:1px solid var(--b1);
-  padding:max(14px,var(--sat)) 18px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px;}
-.logo{font-family:var(--display);font-weight:900;letter-spacing:-1px;color:var(--text);text-decoration:none;font-size:18px;}
-.logo span{color:var(--accent);} 
-.nav-r{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end;}
+
 .pill{font-size:10px;color:var(--muted);letter-spacing:1px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:none;}
 @media(min-width:560px){.pill{display:block;}}
 
 .wrap{position:relative;z-index:1;max-width:860px;margin:0 auto;padding:22px 16px 40px;}
 .h{font-family:var(--display);font-weight:900;font-size:22px;letter-spacing:-.5px;margin:0 0 8px 0;}
 .p{color:var(--muted);line-height:1.65;margin:0 0 18px 0;font-size:12px;}
-.card{background:rgba(13,15,20,.9);border:1px solid var(--b1);padding:18px;}
-.card-title{font-family:var(--display);font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--accent);margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.card-title{display:flex;align-items:center;justify-content:space-between;gap:10px;}
 
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;
-  padding:10px 14px;font-family:var(--mono);font-size:11px;letter-spacing:2px;text-transform:uppercase;
-  cursor:pointer;border:none;transition:all .15s;border-radius:0;-webkit-appearance:none;text-decoration:none;}
-.btn-ghost{background:transparent;border:1px solid var(--b2);color:var(--text);} 
-.btn-ghost:hover{border-color:var(--text);} 
-.btn-blue{background:rgba(71,184,255,.10);border:1px solid rgba(71,184,255,.25);color:var(--blue);} 
-.btn-blue:hover{background:rgba(71,184,255,.16);} 
-.btn-primary{background:var(--accent);color:#000;font-weight:500;} 
-.btn-primary:hover{background:#f0ff60;} 
-.btn-sm{padding:8px 12px;font-size:10px;}
 
-.msg{display:none;margin-top:12px;padding:12px 14px;font-size:12px;line-height:1.6;letter-spacing:.4px;}
-.msg.show{display:block;}
-.msg-err{background:rgba(255,71,87,.08);border:1px solid rgba(255,71,87,.2);color:var(--red);} 
-.msg-ok{background:rgba(71,255,176,.08);border:1px solid rgba(71,255,176,.2);color:var(--green);} 
+
+ 
 
 .list{display:flex;flex-direction:column;gap:10px;}
 .item{border:1px solid var(--b1);background:rgba(0,0,0,.22);padding:14px;}
@@ -102,8 +77,11 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9998;o
   <a class="logo" href="index.php">LOCK<span>SMITH</span></a>
   <div class="nav-r">
     <span class="pill"><?= htmlspecialchars($userEmail) ?></span>
+    <button class="btn btn-ghost btn-sm btn-theme" type="button" data-theme-toggle>Theme</button>
     <?php if ($isAdmin): ?><a class="btn btn-ghost btn-sm" href="admin.php">Admin</a><?php endif; ?>
     <a class="btn btn-ghost btn-sm" href="dashboard.php">Dashboard</a>
+    <a class="btn btn-ghost btn-sm" href="create_code.php">Create Code</a>
+    <a class="btn btn-ghost btn-sm" href="my_codes.php">My Codes</a>
     <a class="btn btn-ghost btn-sm" href="rooms.php">Rooms</a>
     <a class="btn btn-ghost btn-sm" href="account.php">Account</a>
     <a class="btn btn-ghost btn-sm" href="logout.php">Logout</a>
@@ -240,7 +218,7 @@ async function load(reset){
   }
 
   try{
-    const url = '/api/notifications.php?action=list&limit=50' + (cursor ? '&before_id=' + encodeURIComponent(cursor) : '');
+    const url = 'api/notifications.php?action=list&limit=50' + (cursor ? '&before_id=' + encodeURIComponent(cursor) : '');
     const r = await get(url);
     if(!r.success) throw new Error(r.error || 'Failed');
     render(r.notifications || [], r.unread_count || 0);
@@ -253,7 +231,7 @@ async function load(reset){
 
 async function markRead(ids){
   try{
-    const r = await post('/api/notifications.php', {action:'mark_read', ids});
+    const r = await post('api/notifications.php', {action:'mark_read', ids});
     if(!r.success) throw new Error(r.error || 'Failed');
     await load(true);
   }catch(e){
@@ -263,7 +241,7 @@ async function markRead(ids){
 
 async function markAllRead(){
   try{
-    const r = await post('/api/notifications.php', {action:'mark_read', all:1});
+    const r = await post('api/notifications.php', {action:'mark_read', all:1});
     if(!r.success) throw new Error(r.error || 'Failed');
     await load(true);
   }catch(e){

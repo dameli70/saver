@@ -8,6 +8,7 @@ Both installers:
 - generate required secrets
 - write `config/database.php`
 - optionally initialize the database schema and apply migrations
+- create the initial **Super Admin** user
 - write `config/installed.flag` so the app can bypass the installer on future requests
 
 ## Run (interactive)
@@ -26,7 +27,8 @@ php install/install.php --non-interactive --init-db=1 --apply-migrations=1 \
   --app-env=development --app-name=LOCKSMITH --mail-from=no-reply@localhost \
   --email-verify-ttl-hours=24 \
   --smtp-host=smtp.example.com --smtp-port=587 --smtp-secure=tls \
-  --smtp-user=user --smtp-pass=pass --smtp-verify-peer=1
+  --smtp-user=user --smtp-pass=pass --smtp-verify-peer=1 \
+  --admin-email=admin@example.com --admin-pass='change_me_please'
 ```
 
 ## Notes

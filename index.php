@@ -23,36 +23,19 @@ header("Referrer-Policy: no-referrer");
 <title>LOCKSMITH — Time-Locked Codes</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
+<script src="assets/theme.js"></script>
+<link rel="stylesheet" href="assets/base.css">
+<link rel="stylesheet" href="assets/panel.css">
 <style>
-:root{
-  --bg:#06070a;--s1:#0d0f14;--s2:#13161d;--s3:#1a1d27;
-  --b1:rgba(255,255,255,.07);--b2:rgba(255,255,255,.13);
-  --accent:#e8ff47;--red:#ff4757;--blue:#47b8ff;--green:#47ffb0;--orange:#ffaa00;
-  --text:#dde1ec;--muted:#525970;
-  --mono:'DM Mono',monospace;--display:'Unbounded',sans-serif;
-  --sat:env(safe-area-inset-top,0px);--sab:env(safe-area-inset-bottom,0px);
-}
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-body{background:var(--bg);color:var(--text);font-family:var(--mono);min-height:100vh;overflow-x:hidden;-webkit-font-smoothing:antialiased;}
 a{color:inherit;}
-.orb{position:fixed;border-radius:50%;filter:blur(120px);pointer-events:none;z-index:0;}
-.orb1{width:520px;height:520px;background:rgba(232,255,71,.035);top:-170px;right:-120px;}
-.orb2{width:360px;height:360px;background:rgba(71,184,255,.03);bottom:40px;left:-90px;}
+.orb{filter:blur(120px);}
+.orb1{width:520px;height:520px;top:-170px;right:-120px;}
+.orb2{width:360px;height:360px;bottom:40px;left:-90px;}
 .wrap{position:relative;z-index:1;}
-.nav{display:flex;align-items:center;justify-content:space-between;padding:max(16px,var(--sat)) 20px 16px;border-bottom:1px solid var(--b1);background:rgba(6,7,10,.92);backdrop-filter:blur(14px);position:sticky;top:0;}
-.logo{font-family:var(--display);font-weight:900;letter-spacing:-1px;font-size:18px;text-decoration:none;}
-.logo span{color:var(--accent);} 
-.nav-r{display:flex;align-items:center;gap:10px;}
+
 .pill{font-size:10px;color:var(--muted);letter-spacing:1px;max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:none;}
 @media(min-width:560px){.pill{display:block;}}
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;
-  padding:12px 18px;font-family:var(--mono);font-size:11px;letter-spacing:2px;
-  text-transform:uppercase;cursor:pointer;border:none;transition:all .15s;border-radius:0;
-  -webkit-appearance:none;min-height:42px;text-decoration:none;}
-.btn-primary{background:var(--accent);color:#000;font-weight:600;}
-.btn-primary:hover{background:#f0ff60;}
-.btn-ghost{background:transparent;border:1px solid var(--b2);color:var(--text);} 
-.btn-ghost:hover{border-color:var(--text);} 
+ 
 .hero{max-width:960px;margin:0 auto;padding:54px 18px 34px;}
 .kicker{display:inline-flex;align-items:center;gap:10px;color:var(--green);font-size:10px;letter-spacing:2px;text-transform:uppercase;
   background:rgba(71,255,176,.06);border:1px solid rgba(71,255,176,.18);padding:6px 12px;margin-bottom:18px;}
@@ -85,10 +68,13 @@ a{color:inherit;}
   <div class="nav">
     <a class="logo" href="index.php">LOCK<span>SMITH</span></a>
     <div class="nav-r">
+      <button class="btn btn-ghost btn-theme" type="button" data-theme-toggle>Theme</button>
       <?php if ($loggedIn): ?>
         <span class="pill"><?= htmlspecialchars($userEmail) ?></span>
         <?php if ($verified): ?>
           <a class="btn btn-ghost" href="dashboard.php">Dashboard</a>
+          <a class="btn btn-ghost" href="create_code.php">Create Code</a>
+          <a class="btn btn-ghost" href="my_codes.php">My Codes</a>
           <?php if ($isAdmin): ?>
             <a class="btn btn-ghost" href="admin.php">Admin</a>
           <?php endif; ?>

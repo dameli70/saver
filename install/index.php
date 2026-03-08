@@ -1,6 +1,58 @@
 <?php
 require_once __DIR__ . '/../includes/install_guard.php';
 
+function hashLoginPasswordInstaller(string $password): string {
+    return password_hash($password, PASSWORD_ARGON2ID, [
+        'memory_cost' => 65536,
+        'time_cost'   => 4,
+        'threads'     => 2,
+    ]);
+}
+
+function hashVaultVerifierInstaller(string $passphrase): string {
+    return password_hash($passphrase, PASSWORD_ARGON2ID, [
+        'memory_cost' => 65536,
+        'time_cost'   => 4,
+        'threads'     => 2,
+    ]);
+}
+
+function createInitialAdmin(PDO $pdo, string $email, string $loginPwd): void {
+    $email = strtolower(trim($email));
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        throw new RuntimeException('Admin email must be a valid email address.');
+    }
+    if (strlen($loginPwd) < 8) {
+        throw new RuntimeException('Admin login password must be at least 8 characters.');
+    }
+
+    $hasAdminCol = false;
+    try {
+        $stmt = $pdo->query("SELECT 1 FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'users' AND column_name = 'is_admin' LIMIT 1");
+        $hasAdminCol = (bool)$stmt->fetchColumn();
+    } catch (Throwable) {
+        $hasAdminCol = false;
+    }
+
+    if (!$hasAdminCol) {
+        throw new RuntimeException("Your schema does not include users.is_admin. Re-run the installer with schema initialization enabled.");
+    }
+
+    $users = (int)$pdo->query('SELECT COUNT(*) FROM users')->fetchColumn();
+    if ($users !== 0) {
+        throw new RuntimeException('Users already exist. Refusing to create an initial super admin.');
+    }
+
+    $loginHash = hashLoginPasswordInstaller($loginPwd);
+
+    // Legacy schema requires verifier fields, but the vault passphrase is browser-only.
+    $vaultVerifierSalt = bin2hex(random_bytes(32));
+    $vaultVerifier     = hashVaultVerifierInstaller(bin2hex(random_bytes(32)) . $vaultVerifierSalt);
+
+    $pdo->prepare("INSERT INTO users (email, login_hash, vault_verifier, vault_verifier_salt, is_admin, email_verified_at) VALUES (?, ?, ?, ?, 1, NOW())")
+        ->execute([$email, $loginHash, $vaultVerifier, $vaultVerifierSalt]);
+}
+
 function startInstallerSession(): void {
     if (session_status() === PHP_SESSION_NONE) {
         ini_set('session.cookie_httponly', 1);
@@ -109,7 +161,7 @@ function connectPdoDb(string $host, string $db, string $charset, string $user, s
 }
 
 function splitSqlStatements(string $sql): array {
-    $lines = preg_split('/\R/', $sql);
+    $lines = preg_split('/\\R/', $sql);
     $buf = [];
     foreach ($lines as $line) {
         $trim = ltrim($line);
@@ -130,8 +182,8 @@ function applySqlFile(PDO $pdo, string $path, bool $ignoreDuplicates): void {
     foreach ($stmts as $stmt) {
         $trim = ltrim($stmt);
         if ($trim === '') continue;
-        if (preg_match('/^CREATE\s+DATABASE/i', $trim)) continue;
-        if (preg_match('/^USE\s+/i', $trim)) continue;
+        if (preg_match('/^CREATE\\s+DATABASE/i', $trim)) continue;
+        if (preg_match('/^USE\\s+/i', $trim)) continue;
 
         try {
             $pdo->exec($stmt);
@@ -195,6 +247,8 @@ $vals = [
 
     'init_db' => 1,
     'apply_migrations' => 1,
+
+    'admin_email' => '',
 ];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -205,6 +259,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $vals['db_user'] = trim((string)($_POST['db_user'] ?? ''));
     $vals['db_pass'] = (string)($_POST['db_pass'] ?? '');
     $vals['db_charset'] = trim((string)($_POST['db_charset'] ?? 'utf8mb4'));
+
+    $vals['admin_email'] = trim((string)($_POST['admin_email'] ?? ''));
+    $adminPass = (string)($_POST['admin_pass'] ?? '');
+    $adminPass2 = (string)($_POST['admin_pass2'] ?? '');
 
     $vals['app_env'] = trim((string)($_POST['app_env'] ?? 'development'));
     $vals['app_name'] = trim((string)($_POST['app_name'] ?? 'LOCKSMITH'));
@@ -224,6 +282,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($vals['db_host'] === '') $errors[] = 'Database host is required.';
     if ($vals['db_name'] === '') $errors[] = 'Database name is required.';
     if ($vals['db_user'] === '') $errors[] = 'Database user is required.';
+
+    if (!filter_var($vals['admin_email'], FILTER_VALIDATE_EMAIL)) $errors[] = 'Admin email must be a valid email address.';
+    if (strlen($adminPass) < 8) $errors[] = 'Admin login password must be at least 8 characters.';
+    if ($adminPass !== $adminPass2) $errors[] = 'Admin passwords do not match.';
+
     if (!in_array($vals['app_env'], ['development', 'production'], true)) $errors[] = 'Invalid APP_ENV.';
     if ($vals['app_name'] === '') $errors[] = 'APP_NAME is required.';
     if (!filter_var($vals['mail_from'], FILTER_VALIDATE_EMAIL)) $errors[] = 'MAIL_FROM must be a valid email.';
@@ -253,6 +316,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Validate DB credentials before writing config/database.php
             $serverPdo = connectPdoServer($vals['db_host'], $vals['db_charset'], $vals['db_user'], $vals['db_pass']);
 
+            $dbPdo = null;
+
             if ($vals['init_db'] || $vals['apply_migrations']) {
                 $dbName = $vals['db_name'];
                 $quotedDb = '`' . str_replace('`', '``', $dbName) . '`';
@@ -276,8 +341,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             } else {
                 // No schema work requested, but still verify the DB itself is reachable.
-                connectPdoDb($vals['db_host'], $vals['db_name'], $vals['db_charset'], $vals['db_user'], $vals['db_pass']);
+                $dbPdo = connectPdoDb($vals['db_host'], $vals['db_name'], $vals['db_charset'], $vals['db_user'], $vals['db_pass']);
             }
+
+            if (!$dbPdo) {
+                throw new RuntimeException('Database connection failed.');
+            }
+
+            createInitialAdmin($dbPdo, $vals['admin_email'], $adminPass);
 
             $vals['app_hmac_secret'] = bin2hex(random_bytes(32));
             updateConfigFile($configPath, $vals);
@@ -288,7 +359,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new RuntimeException('Failed to write config/installed.flag (make config/ writable).');
             }
 
-            header('Location: ' . ($basePath ? $basePath : '') . '/');
+            header('Location: ' . ($basePath ? $basePath : '') . '/login.php');
             exit;
 
         } catch (Throwable $e) {
@@ -312,42 +383,23 @@ header("Referrer-Policy: no-referrer");
 <title>Install — LOCKSMITH</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/base.css">
+<link rel="stylesheet" href="../assets/app.css">
 <style>
-:root{
-  --bg:#06070a;--s1:#0d0f14;--s2:#13161d;--s3:#1a1d27;
-  --b1:rgba(255,255,255,.07);--b2:rgba(255,255,255,.13);
-  --accent:#e8ff47;--red:#ff4757;--green:#47ffb0;--orange:#ffaa00;
-  --text:#dde1ec;--muted:#525970;
-  --mono:'DM Mono',monospace;--display:'Unbounded',sans-serif;
-  --sat:env(safe-area-inset-top,0px);--sab:env(safe-area-inset-bottom,0px);
-}
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-body{background:var(--bg);color:var(--text);font-family:var(--mono);min-height:100vh;}
-.orb{position:fixed;border-radius:50%;filter:blur(120px);pointer-events:none;z-index:0;}
-.orb1{width:520px;height:520px;background:rgba(232,255,71,.035);top:-170px;right:-120px;}
-.orb2{width:360px;height:360px;background:rgba(71,184,255,.03);bottom:40px;left:-90px;}
+.orb{filter:blur(120px);}
+.orb1{width:520px;height:520px;top:-170px;right:-120px;}
+.orb2{width:360px;height:360px;bottom:40px;left:-90px;}
 .wrap{position:relative;z-index:1;max-width:980px;margin:0 auto;padding:max(24px,var(--sat)) 18px 60px;}
 .logo{font-family:var(--display);font-weight:900;letter-spacing:-1px;font-size:28px;margin-bottom:4px;}
 .logo span{color:var(--accent);} 
 .sub{color:var(--muted);font-size:11px;letter-spacing:2px;text-transform:uppercase;margin-bottom:18px;}
-.card{background:rgba(13,15,20,.9);border:1px solid var(--b1);padding:18px;}
+.card{background:rgba(13,15,20,.9);padding:18px;}
 .grid{display:grid;grid-template-columns:1fr;gap:12px;}
 @media(min-width:840px){.grid{grid-template-columns:1fr 1fr;}}
 .field{margin-bottom:12px;}
-.field label{display:block;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:6px;}
-.field input,.field select{width:100%;background:var(--s2);border:1px solid var(--b1);color:var(--text);
-  font-family:var(--mono);font-size:14px;padding:12px;outline:none;border-radius:0;-webkit-appearance:none;}
-.field input:focus,.field select:focus{border-color:var(--accent);} 
+.field input,.field select{font-size:14px;padding:12px;}
 .note{color:var(--muted);font-size:12px;line-height:1.6;margin-top:10px;}
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;
-  padding:14px 18px;font-family:var(--mono);font-size:11px;letter-spacing:2px;
-  text-transform:uppercase;cursor:pointer;border:none;transition:all .15s;border-radius:0;
-  -webkit-appearance:none;min-height:44px;text-decoration:none;}
-.btn-primary{background:var(--accent);color:#000;font-weight:600;}
-.btn-primary:hover{background:#f0ff60;}
-.msg{padding:12px 14px;font-size:12px;margin-bottom:12px;letter-spacing:.4px;line-height:1.6;}
-.msg-err{background:rgba(255,71,87,.08);border:1px solid rgba(255,71,87,.2);color:var(--red);} 
-.msg-ok{background:rgba(71,255,176,.08);border:1px solid rgba(71,255,176,.2);color:var(--green);} 
+.btn-primary{width:auto;}
 .chk{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:12px;line-height:1.4;}
 .chk input{width:16px;height:16px;}
 hr{border:none;border-top:1px solid var(--b1);margin:16px 0;}
@@ -360,7 +412,7 @@ hr{border:none;border-top:1px solid var(--b1);margin:16px 0;}
   <div class="sub">// Installation</div>
 
   <?php if ($errors): ?>
-    <div class="msg msg-err">
+    <div class="msg msg-err show">
       <strong>Install failed.</strong><br>
       <?php foreach ($errors as $e): ?>
         • <?= htmlspecialchars($e) ?><br>
@@ -369,7 +421,7 @@ hr{border:none;border-top:1px solid var(--b1);margin:16px 0;}
   <?php endif; ?>
 
   <?php if ($okMsg): ?>
-    <div class="msg msg-ok"><?= htmlspecialchars($okMsg) ?></div>
+    <div class="msg msg-ok show"><?= htmlspecialchars($okMsg) ?></div>
   <?php endif; ?>
 
   <form method="post" action="<?= htmlspecialchars($installUrl) ?>">
@@ -394,39 +446,48 @@ hr{border:none;border-top:1px solid var(--b1);margin:16px 0;}
         </div>
 
         <div>
+          <h3 style="font-family:var(--display);font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--accent);margin-bottom:12px;">Super Admin</h3>
+
+          <div class="field"><label>Admin email</label><input name="admin_email" value="<?= htmlspecialchars($vals['admin_email']) ?>" required></div>
+          <div class="field"><label>Admin login password</label><input type="password" name="admin_pass" value="" required></div>
+          <div class="field"><label>Confirm admin password</label><input type="password" name="admin_pass2" value="" required></div>
+          <div class="note">This user will be created as <strong>Super Admin</strong> and marked as email-verified.</div>
+
+          <hr>
+
           <h3 style="font-family:var(--display);font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--accent);margin-bottom:12px;">App</h3>
 
           <div class="field">
             <label>APP_ENV</label>
             <select name="app_env">
-              <option value="development" <?= $vals['app_env']==='development'?'selected':'' ?>>development</option>
-              <option value="production" <?= $vals['app_env']==='production'?'selected':'' ?>>production</option>
+              <option value="development" <?= ($vals['app_env'] ?? 'development')==='development'?'selected':'' ?>>development</option>
+              <option value="production" <?= ($vals['app_env'] ?? 'development')==='production'?'selected':'' ?>>production</option>
             </select>
           </div>
 
-          <div class="field"><label>APP_NAME</label><input name="app_name" value="<?= htmlspecialchars($vals['app_name']) ?>" required></div>
-          <div class="field"><label>MAIL_FROM</label><input name="mail_from" value="<?= htmlspecialchars($vals['mail_from']) ?>" required></div>
-          <div class="field"><label>Email verification TTL (hours)</label><input name="email_verify_ttl_hours" type="number" min="1" max="168" value="<?= (int)$vals['email_verify_ttl_hours'] ?>" required></div>
+          <div class="field"><label>APP_NAME</label><input name="app_name" value="<?= htmlspecialchars($vals['app_name'] ?? 'LOCKSMITH') ?>" required></div>
+          <div class="field"><label>MAIL_FROM</label><input name="mail_from" value="<?= htmlspecialchars($vals['mail_from'] ?? 'no-reply@localhost') ?>" required></div>
+          <div class="field"><label>Email verification TTL (hours)</label><input name="email_verify_ttl_hours" type="number" min="1" max="168" value="<?= (int)($vals['email_verify_ttl_hours'] ?? 24) ?>" required></div>
 
           <hr>
           <h3 style="font-family:var(--display);font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--accent);margin-bottom:12px;">Mail (SMTP optional)</h3>
 
-          <div class="field"><label>SMTP Host (optional)</label><input name="smtp_host" value="<?= htmlspecialchars($vals['smtp_host']) ?>" placeholder="smtp.example.com"></div>
-          <div class="field"><label>SMTP Port</label><input name="smtp_port" type="number" min="1" max="65535" value="<?= (int)$vals['smtp_port'] ?>"></div>
+          <div class="field"><label>SMTP Host (optional)</label><input name="smtp_host" value="<?= htmlspecialchars($vals['smtp_host'] ?? '') ?>" placeholder="smtp.example.com"></div>
+          <div class="field"><label>SMTP Port</label><input name="smtp_port" type="number" min="1" max="65535" value="<?= (int)($vals['smtp_port'] ?? 587) ?>"></div>
 
           <div class="field">
             <label>SMTP Secure</label>
             <select name="smtp_secure">
-              <option value="" <?= $vals['smtp_secure']===''?'selected':'' ?>>none</option>
-              <option value="tls" <?= $vals['smtp_secure']==='tls'?'selected':'' ?>>tls (STARTTLS)</option>
-              <option value="ssl" <?= $vals['smtp_secure']==='ssl'?'selected':'' ?>>ssl</option>
+              <option value="" <?= ($vals['smtp_secure'] ?? 'tls')===''?'selected':'' ?>>none</option>
+              <option value="tls" <?= ($vals['smtp_secure'] ?? 'tls')==='tls'?'selected':'' ?>>tls (STARTTLS)</option>
+              <option value="ssl" <?= ($vals['smtp_secure'] ?? 'tls')==='ssl'?'selected':'' ?>>ssl</option>
             </select>
           </div>
 
-          <div class="field"><label>SMTP User</label><input name="smtp_user" value="<?= htmlspecialchars($vals['smtp_user']) ?>"></div>
+          <div class="field"><label>SMTP User</label><input name="smtp_user" value="<?= htmlspecialchars($vals['smtp_user'] ?? '') ?>"></div>
           <div class="field"><label>SMTP Password</label><input type="password" name="smtp_pass" value=""></div>
 
-          <div class="chk"><input type="checkbox" name="smtp_verify_peer" value="1" <?= $vals['smtp_verify_peer'] ? 'checked' : '' ?>> <span>Verify TLS certificate</span></div>
+          <div class="chk"><input type="checkbox" name="smtp_verify_peer" value="1" <?= !empty($vals['smtp_verify_peer']) ? 'checked' : '' ?>> <span>Verify TLS certificate</span></div>
 
           <div class="note">
             This installer will write <code>config/database.php</code> and generate a fresh <code>APP_HMAC_SECRET</code>.
