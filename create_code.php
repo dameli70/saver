@@ -32,22 +32,8 @@ header("Permissions-Policy: clipboard-write=(self)");
 <title>LOCKSMITH — Create Code</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/base.css">
 <style>
-:root{
-  --bg:#06070a;--s1:#0d0f14;--s2:#13161d;--s3:#1a1d27;
-  --b1:rgba(255,255,255,.07);--b2:rgba(255,255,255,.13);
-  --accent:#e8ff47;--red:#ff4757;--blue:#47b8ff;--green:#47ffb0;--orange:#ffaa00;
-  --text:#dde1ec;--muted:#525970;
-  --mono:'DM Mono',monospace;--display:'Unbounded',sans-serif;
-  --sat:env(safe-area-inset-top,0px);--sab:env(safe-area-inset-bottom,0px);
-}
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-html{scroll-behavior:smooth;-webkit-tap-highlight-color:transparent;}
-body{background:var(--bg);color:var(--text);font-family:var(--mono);font-size:14px;
-  min-height:100vh;overflow-x:hidden;-webkit-font-smoothing:antialiased;}
-.orb{position:fixed;border-radius:50%;filter:blur(100px);pointer-events:none;z-index:0;}
-.orb1{width:500px;height:500px;background:rgba(232,255,71,.035);top:-150px;right:-100px;}
-.orb2{width:350px;height:350px;background:rgba(71,184,255,.03);bottom:50px;left:-80px;}
 
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;
   padding:15px 24px;font-family:var(--mono);font-size:12px;letter-spacing:2px;
