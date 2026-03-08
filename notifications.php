@@ -240,7 +240,7 @@ async function load(reset){
   }
 
   try{
-    const url = '/api/notifications.php?action=list&limit=50' + (cursor ? '&before_id=' + encodeURIComponent(cursor) : '');
+    const url = 'api/notifications.php?action=list&limit=50' + (cursor ? '&before_id=' + encodeURIComponent(cursor) : '');
     const r = await get(url);
     if(!r.success) throw new Error(r.error || 'Failed');
     render(r.notifications || [], r.unread_count || 0);
@@ -253,7 +253,7 @@ async function load(reset){
 
 async function markRead(ids){
   try{
-    const r = await post('/api/notifications.php', {action:'mark_read', ids});
+    const r = await post('api/notifications.php', {action:'mark_read', ids});
     if(!r.success) throw new Error(r.error || 'Failed');
     await load(true);
   }catch(e){
@@ -263,7 +263,7 @@ async function markRead(ids){
 
 async function markAllRead(){
   try{
-    const r = await post('/api/notifications.php', {action:'mark_read', all:1});
+    const r = await post('api/notifications.php', {action:'mark_read', all:1});
     if(!r.success) throw new Error(r.error || 'Failed');
     await load(true);
   }catch(e){
