@@ -44,13 +44,13 @@ header("Referrer-Policy: no-referrer");
 <link rel="stylesheet" href="assets/panel.css">
 <style>
 .orb{filter:blur(120px);}
-.orb1{width:520px;height:520px;background:rgba(232,255,71,.035);top:-170px;right:-120px;}
-.orb2{width:360px;height:360px;background:rgba(71,184,255,.03);bottom:40px;left:-90px;}
+.orb1{width:520px;height:520px;top:-170px;right:-120px;}
+.orb2{width:360px;height:360px;bottom:40px;left:-90px;}
 
 .pill{font-size:10px;color:var(--muted);letter-spacing:1px;border:1px solid rgba(255,255,255,.13);padding:6px 10px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:none;}
 @media(min-width:560px){.pill{display:block;}}
 
-.btn-primary:hover{background:#f0ff60;}
+
 
 .wrap{position:relative;z-index:1;max-width:1100px;margin:0 auto;padding:26px 18px 60px;}
 .h{font-family:var(--display);font-weight:900;font-size:18px;letter-spacing:1px;margin-bottom:8px;}
@@ -59,11 +59,6 @@ header("Referrer-Policy: no-referrer");
 @media(min-width:980px){.grid{grid-template-columns:1fr 1fr;}}
 .card{background:rgba(13,15,20,.9);border:1px solid var(--b1);padding:18px;}
 .card-title{font-family:var(--display);font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--accent);margin-bottom:14px;}
-
-.msg{display:none;margin-top:12px;padding:12px 14px;font-size:12px;line-height:1.6;letter-spacing:.4px;}
-.msg.show{display:block;}
-.msg-err{background:rgba(255,71,87,.08);border:1px solid rgba(255,71,87,.2);color:var(--red);} 
-.msg-ok{background:rgba(71,255,176,.08);border:1px solid rgba(71,255,176,.2);color:var(--green);} 
 
 .k{color:var(--muted);} 
 

@@ -28,8 +28,8 @@ header("Referrer-Policy: no-referrer");
 <style>
 a{color:inherit;}
 .orb{filter:blur(120px);}
-.orb1{width:520px;height:520px;background:rgba(232,255,71,.035);top:-170px;right:-120px;}
-.orb2{width:360px;height:360px;background:rgba(71,184,255,.03);bottom:40px;left:-90px;}
+.orb1{width:520px;height:520px;top:-170px;right:-120px;}
+.orb2{width:360px;height:360px;bottom:40px;left:-90px;}
 .wrap{position:relative;z-index:1;}
 
 .pill{font-size:10px;color:var(--muted);letter-spacing:1px;max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:none;}

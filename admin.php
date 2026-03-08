@@ -40,8 +40,8 @@ header("Referrer-Policy: no-referrer");
 <link rel="stylesheet" href="assets/panel.css">
 <style>
 .orb{filter:blur(120px);}
-.orb1{width:520px;height:520px;background:rgba(232,255,71,.035);top:-170px;right:-120px;}
-.orb2{width:360px;height:360px;background:rgba(71,184,255,.03);bottom:40px;left:-90px;}
+.orb1{width:520px;height:520px;top:-170px;right:-120px;}
+.orb2{width:360px;height:360px;bottom:40px;left:-90px;}
 
 .pill{font-size:10px;color:var(--muted);letter-spacing:1px;border:1px solid rgba(255,255,255,.13);padding:6px 10px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .badge{font-size:10px;letter-spacing:2px;text-transform:uppercase;border:1px solid rgba(232,255,71,.25);color:var(--accent);padding:6px 10px;}
@@ -60,10 +60,7 @@ header("Referrer-Policy: no-referrer");
 .field input:focus{border-color:var(--accent);} 
 .chk{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:12px;line-height:1.4;margin:12px 0;}
 .chk input{width:16px;height:16px;}
-.msg{display:none;margin-top:12px;padding:12px 14px;font-size:12px;line-height:1.6;letter-spacing:.4px;}
-.msg.show{display:block;}
-.msg-err{background:rgba(255,71,87,.08);border:1px solid rgba(255,71,87,.2);color:var(--red);} 
-.msg-ok{background:rgba(71,255,176,.08);border:1px solid rgba(71,255,176,.2);color:var(--green);} 
+ 
 .table-wrap{overflow:auto;border:1px solid var(--b1);background:rgba(0,0,0,.2);}
 .table{width:100%;border-collapse:collapse;min-width:980px;}
 .table th,.table td{padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.06);text-align:left;font-size:12px;white-space:nowrap;}

@@ -53,10 +53,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9998;o
 
 
 
-.msg{display:none;margin-top:12px;padding:12px 14px;font-size:12px;line-height:1.6;letter-spacing:.4px;}
-.msg.show{display:block;}
-.msg-err{background:rgba(255,71,87,.08);border:1px solid rgba(255,71,87,.2);color:var(--red);} 
-.msg-ok{background:rgba(71,255,176,.08);border:1px solid rgba(71,255,176,.2);color:var(--green);} 
+ 
 
 .list{display:flex;flex-direction:column;gap:10px;}
 .item{border:1px solid var(--b1);background:rgba(0,0,0,.22);padding:14px;}

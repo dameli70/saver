@@ -57,12 +57,7 @@ header("Referrer-Policy: no-referrer");
   font-family:var(--mono);font-size:14px;padding:12px;outline:none;border-radius:0;-webkit-appearance:none;}
 .field input:focus{border-color:var(--accent);} 
 .small{font-size:11px;color:var(--muted);line-height:1.6;}
-.msg{display:none;margin-top:12px;padding:12px 14px;font-size:12px;line-height:1.6;letter-spacing:.4px;}
-.msg.show{display:block;}
-.msg-err{background:rgba(255,71,87,.08);border:1px solid rgba(255,71,87,.2);color:var(--red);} 
-.msg-ok{background:rgba(71,255,176,.08);border:1px solid rgba(71,255,176,.2);color:var(--green);} 
-.spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(0,0,0,.35);border-top-color:#000;border-radius:50%;animation:spin .5s linear infinite;}
-@keyframes spin{to{transform:rotate(360deg);}}
+
 .list{display:flex;flex-direction:column;gap:10px;}
 .item{border:1px solid var(--b1);background:rgba(19,22,29,.6);padding:14px;}
 .item-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap;}
