@@ -398,7 +398,10 @@ if ($vals['smtp_host'] !== '') {
         fwrite(STDERR, "Invalid --smtp-verify-peer (0|1).\n");
         exit(1);
     }
-    $vals['smtp_verify_peer'] = </old_code><new_code>$vals['app_hmac_secret'] = bin2hex(random_bytes(32));
+    $vals['smtp_verify_peer'] = (int)$smtpVerify;
+}
+
+$vals['app_hmac_secret'] = bin2hex(random_bytes(32));
 
 $adminEmail = $get('admin-email', null);
 $adminPass  = $get('admin-pass', null);

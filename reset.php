@@ -31,30 +31,8 @@ header("Referrer-Policy: no-referrer");
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/base.css">
+<link rel="stylesheet" href="assets/auth.css">
 <style>
-body{display:flex;align-items:center;justify-content:center;padding:max(40px,var(--sat)) 18px max(40px,var(--sab));}
-.box{width:100%;max-width:460px;background:var(--s1);border:1px solid var(--b1);padding:22px 22px 18px;}
-.logo{font-family:var(--display);font-weight:900;letter-spacing:-1px;font-size:28px;margin-bottom:4px;}
-.logo span{color:var(--accent);} 
-.sub{color:var(--muted);font-size:11px;letter-spacing:2px;text-transform:uppercase;margin-bottom:18px;}
-.field{margin-bottom:14px;}
-.field label{display:block;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:6px;}
-.field input{width:100%;background:var(--s2);border:1px solid var(--b1);color:var(--text);font-family:var(--mono);
-  font-size:15px;padding:14px;outline:none;transition:border-color .2s;border-radius:0;-webkit-appearance:none;}
-.field input:focus{border-color:var(--accent);} 
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;
-  padding:14px 18px;font-family:var(--mono);font-size:12px;letter-spacing:2px;text-transform:uppercase;
-  cursor:pointer;border:none;transition:all .15s;border-radius:0;-webkit-appearance:none;min-height:48px;}
-.btn-primary{background:var(--accent);color:#000;font-weight:600;}
-.btn-primary:disabled{opacity:.45;pointer-events:none;}
-.msg{display:none;margin-bottom:12px;padding:12px 14px;font-size:12px;line-height:1.6;letter-spacing:.4px;
-  background:rgba(255,71,87,.08);border:1px solid rgba(255,71,87,.2);color:var(--red);}
-.msg.show{display:block;}
-.links{display:flex;justify-content:space-between;gap:10px;margin-top:14px;font-size:11px;color:var(--muted);} 
-.links a{color:var(--text);text-decoration:none;border-bottom:1px solid transparent;}
-.links a:hover{border-bottom-color:var(--text);} 
-.spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(0,0,0,.35);border-top-color:#000;border-radius:50%;animation:spin .5s linear infinite;}
-@keyframes spin{to{transform:rotate(360deg);}}
 </style>
 </head>
 <body>
@@ -62,7 +40,8 @@ body{display:flex;align-items:center;justify-content:center;padding:max(40px,var
     <div class="logo">LOCK<span>SMITH</span></div>
     <div class="sub">// Choose new login password</div>
 
-    <div id="err" class="msg"></div>
+    <div id="err" class="msg msg-err"></div>
+
 
     <form id="f">
       <input type="hidden" id="email" value="<?= htmlspecialchars($email) ?>">

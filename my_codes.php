@@ -33,45 +33,9 @@ header("Permissions-Policy: clipboard-write=(self)");
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/base.css">
+<link rel="stylesheet" href="assets/app.css">
 <style>
-
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;
-  padding:15px 24px;font-family:var(--mono);font-size:12px;letter-spacing:2px;
-  text-transform:uppercase;cursor:pointer;border:none;transition:all .15s;
-  border-radius:0;-webkit-appearance:none;touch-action:manipulation;min-height:48px;text-decoration:none;}
-.btn-primary{background:var(--accent);color:#000;font-weight:500;}
-.btn-primary:hover{background:#f0ff60;}
-.btn-primary:active{transform:scale(.98);}
-.btn-primary:disabled{opacity:.4;pointer-events:none;}
-.btn-ghost{background:transparent;border:1px solid var(--b2);color:var(--text);}
-.btn-ghost:hover{border-color:var(--text);}
-.btn-green{background:var(--green);color:#000;font-weight:500;}
-.btn-red{background:rgba(255,71,87,.1);border:1px solid rgba(255,71,87,.3);color:var(--red);}
-.btn-sm{padding:10px 16px;font-size:11px;min-height:40px;}
-
-.msg{padding:12px 14px;font-size:12px;margin-bottom:12px;display:none;letter-spacing:.4px;line-height:1.6;}
-.msg.show{display:block;}
-.msg-err{background:rgba(255,71,87,.08);border:1px solid rgba(255,71,87,.2);color:var(--red);}
-
-#app{min-height:100vh;position:relative;z-index:1;padding-bottom:max(20px,var(--sab));}
-.topbar{display:flex;align-items:center;justify-content:space-between;
-  padding:max(14px,var(--sat)) 20px 14px;border-bottom:1px solid var(--b1);
-  position:sticky;top:0;background:rgba(6,7,10,.94);backdrop-filter:blur(16px);
-  -webkit-backdrop-filter:blur(16px);z-index:100;}
-.topbar-logo{font-family:var(--display);font-size:clamp(15px,4vw,19px);font-weight:900;letter-spacing:-1px;}
-.topbar-logo span{color:var(--accent);} 
-.topbar-r{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end;}
-.user-pill{font-size:10px;color:var(--muted);letter-spacing:1px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:none;}
-@media(min-width:560px){.user-pill{display:block;}}
-
-.app-body{max-width:820px;margin:0 auto;padding:22px 16px;}
-@media(min-width:600px){.app-body{padding:30px 24px;}}
-
-.card{background:var(--s1);border:1px solid var(--b1);padding:20px;margin-bottom:16px;position:relative;}
-@media(min-width:600px){.card{padding:24px 28px;}}
-.card-title{font-family:var(--display);font-size:11px;font-weight:700;letter-spacing:2px;
-  text-transform:uppercase;color:var(--accent);margin-bottom:18px;display:flex;align-items:center;gap:8px;}
-.card-title .dot{width:5px;height:5px;background:var(--accent);flex-shrink:0;}
+.app-body{max-width:820px;}
 
 .locks-grid{display:flex;flex-direction:column;gap:12px;}
 .lock-card{background:var(--s1);border:1px solid var(--b1);padding:16px 18px;position:relative;transition:border-color .2s;}
@@ -127,11 +91,7 @@ header("Permissions-Policy: clipboard-write=(self)");
   color:var(--accent);font-family:var(--mono);font-size:15px;padding:13px;outline:none;
   border-radius:0;-webkit-appearance:none;}
 
-.toast{position:fixed;bottom:max(24px,var(--sab));left:50%;transform:translateX(-50%);
-  background:#000;border:1px solid var(--b2);padding:10px 14px;font-size:12px;letter-spacing:.4px;z-index:900;max-width:92vw;}
-.toast.ok{border-color:rgba(71,255,176,.25);color:var(--green);}
-.toast.err{border-color:rgba(255,71,87,.3);color:var(--red);}
-.toast.warn{border-color:rgba(255,170,0,.35);color:var(--orange);}
+
 </style>
 </head>
 <body>
