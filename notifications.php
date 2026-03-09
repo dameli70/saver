@@ -109,8 +109,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9998;o
     <div class="list" id="list" style="margin-top:12px;"></div>
 
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
-      <button class="btn btn-ghost btn-sm" id="more" onclick="loadMore()" style="display:none;"><?php e('common.load_more' ?></);button>
-on>
+      <button class="btn btn-ghost btn-sm" id="more" onclick="loadMore()" style="display:none;"><?php e('common.load_more'); ?></button>
     </div>
 
     <div id="msg" class="msg"></div>
