@@ -95,6 +95,7 @@ header("Permissions-Policy: clipboard-write=(self)");
   </div>
 </div>
 
+<script src="assets/app.js"></script>
 <script>
 const CSRF = <?= json_encode($csrf) ?>;
 const PBKDF2_ITERS = <?= (int)PBKDF2_ITERATIONS ?>;

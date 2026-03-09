@@ -240,6 +240,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
   </div>
 </div>
 
+<script src="assets/app.js"></script>
 <script>
 const CSRF = <?= json_encode($csrf) ?>;
 const PBKDF2_ITERS = <?= (int)PBKDF2_ITERATIONS ?>;

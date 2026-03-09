@@ -491,5 +491,108 @@
     return true;
   };
 
+  function initMobileNav(){
+    const topbar = document.querySelector('.topbar');
+    const nav = topbar ? topbar.querySelector('.topbar-r') : null;
+    if(!topbar || !nav) return;
+
+    // Create menu button once.
+    let btn = topbar.querySelector('.topbar-menu-btn');
+    if(!btn){
+      btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn btn-ghost btn-sm topbar-menu-btn';
+      btn.textContent = 'Menu';
+      btn.setAttribute('aria-label', 'Menu');
+      topbar.appendChild(btn);
+    }
+
+    function getOverlay(){
+      let ov = document.getElementById('ls-nav-overlay');
+      if(ov) return ov;
+
+      ov = document.createElement('div');
+      ov.id = 'ls-nav-overlay';
+      ov.innerHTML = `
+        <div id="ls-nav-panel" role="dialog" aria-modal="true" aria-labelledby="ls-nav-title">
+          <div id="ls-nav-head">
+            <div id="ls-nav-title">Menu</div>
+            <button type="button" id="ls-nav-close" aria-label="${LS.esc(STR.close)}">×</button>
+          </div>
+          <div id="ls-nav-body"></div>
+        </div>
+      `;
+      document.body.appendChild(ov);
+      return ov;
+    }
+
+    function isMobile(){
+      return window.matchMedia && window.matchMedia('(max-width: 720px)').matches;
+    }
+
+    function open(){
+      if(!isMobile()) return;
+      const ov = getOverlay();
+      const body = ov.querySelector('#ls-nav-body');
+      if(!body) return;
+
+      // Move the real nav into the drawer so existing event handlers keep working.
+      if(nav.parentNode !== body) body.appendChild(nav);
+
+      ov.classList.add('show');
+      document.body.style.overflow = 'hidden';
+
+      setTimeout(()=>{
+        const first = nav.querySelector('a,button');
+        if(first && first.focus) first.focus();
+      }, 10);
+    }
+
+    function close(){
+      const ov = document.getElementById('ls-nav-overlay');
+      if(!ov) return;
+
+      // Restore nav to topbar.
+      if(nav.parentNode !== topbar) topbar.insertBefore(nav, btn);
+
+      ov.classList.remove('show');
+      document.body.style.overflow = '';
+      if(btn && btn.focus) btn.focus();
+    }
+
+    btn.addEventListener('click', open);
+
+    document.addEventListener('keydown', (e)=>{
+      const ov = document.getElementById('ls-nav-overlay');
+      if(!ov || !ov.classList.contains('show')) return;
+      if(e.key === 'Escape') close();
+    });
+
+    document.addEventListener('click', (e)=>{
+      const ov = document.getElementById('ls-nav-overlay');
+      if(!ov || !ov.classList.contains('show')) return;
+      if(e.target === ov) close();
+    });
+
+    // Delegate close button.
+    document.addEventListener('click', (e)=>{
+      const t = e.target;
+      if(t && t.id === 'ls-nav-close') close();
+    });
+
+    // On resize to desktop, ensure nav is restored.
+    window.addEventListener('resize', ()=>{
+      if(!isMobile()) close();
+    });
+
+    // If user taps a link in the drawer, close it.
+    nav.addEventListener('click', (e)=>{
+      const a = e.target && e.target.closest ? e.target.closest('a') : null;
+      if(a && a.getAttribute('href')) close();
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', initMobileNav);
+
   window.LS = LS;
 })();
