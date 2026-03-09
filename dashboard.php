@@ -106,16 +106,17 @@ header("Referrer-Policy: no-referrer");
 header("Permissions-Policy: clipboard-write=(self)");
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html <?= htmlLangAttr() ?>>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title><?= htmlspecialchars(APP_NAME) ?> — Dashboard</title>
+<title><?= htmlspecialchars(APP_NAME) ?> — <?= htmlspecialchars(t('page.dashboard')) ?></title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
+<?php emitI18nJsGlobals(); ?>
 <script src="assets/theme.js"></script>
 <script src="assets/app.js"></script>
 <link rel="stylesheet" href="assets/base.css">
@@ -133,18 +134,21 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9998;o
     <div class="topbar-logo"><?= htmlspecialchars(APP_NAME) ?></div>
     <div class="topbar-r">
       <span class="user-pill"><?= htmlspecialchars($userEmail) ?></span>
-      <button class="btn btn-ghost btn-sm btn-theme" type="button" data-theme-toggle>Theme</button>
-      <a class="btn btn-ghost btn-sm" href="index.php#faq">FAQ</a>
-      <a class="btn btn-ghost btn-sm" href="create_code.php">Create Code</a>
-      <a class="btn btn-ghost btn-sm" href="my_codes.php">My Codes</a>
-      <a class="btn btn-ghost btn-sm" href="rooms.php">Rooms</a>
-      <a class="btn btn-ghost btn-sm" href="notifications.php">Notifications</a>
-      <a class="btn btn-ghost btn-sm" href="backup.php">Backup</a>
-      <a class="btn btn-ghost btn-sm" href="vault_settings.php">Vault</a>
-      <a class="btn btn-ghost btn-sm" href="setup.php">Setup</a>
-      <a class="btn btn-ghost btn-sm" href="account.php">Account</a>
-      <?php if ($isAdmin): ?><a class="btn btn-ghost btn-sm" href="admin.php">Admin</a><?php endif; ?>
-      <a class="btn btn-ghost btn-sm" href="logout.php">Logout</a>
+      <button class="btn btn-ghost btn-sm btn-theme" type="button" data-theme-toggle><?php e('common.theme'); ?></button>
+      <?php $curLang = currentLang(); ?>
+      <a class="<?= $curLang === 'fr' ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm' ?>" href="<?= htmlspecialchars(langSwitchUrl('fr')) ?>"><?php e('common.lang_fr'); ?></a>
+      <a class="<?= $curLang === 'en' ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm' ?>" href="<?= htmlspecialchars(langSwitchUrl('en')) ?>"><?php e('common.lang_en'); ?></a>
+      <a class="btn btn-ghost btn-sm" href="index.php#faq"><?php e('common.faq'); ?></a>
+      <a class="btn btn-ghost btn-sm" href="create_code.php"><?php e('nav.create_code'); ?></a>
+      <a class="btn btn-ghost btn-sm" href="my_codes.php"><?php e('nav.my_codes'); ?></a>
+      <a class="btn btn-ghost btn-sm" href="rooms.php"><?php e('nav.rooms'); ?></a>
+      <a class="btn btn-ghost btn-sm" href="notifications.php"><?php e('nav.notifications'); ?></a>
+      <a class="btn btn-ghost btn-sm" href="backup.php"><?php e('nav.backups'); ?></a>
+      <a class="btn btn-ghost btn-sm" href="vault_settings.php"><?php e('nav.vault'); ?></a>
+      <a class="btn btn-ghost btn-sm" href="setup.php"><?php e('nav.setup'); ?></a>
+      <a class="btn btn-ghost btn-sm" href="account.php"><?php e('nav.account'); ?></a>
+      <?php if ($isAdmin): ?><a class="btn btn-ghost btn-sm" href="admin.php"><?php e('nav.admin'); ?></a><?php endif; ?>
+      <a class="btn btn-ghost btn-sm" href="logout.php"><?php e('common.logout'); ?></a>
     </div>
   </div>
 
@@ -260,4 +264,4 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9998;o
 </div>
 
 </body>
-</html>
+</html> 

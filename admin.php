@@ -29,13 +29,14 @@ header("X-Content-Type-Options: nosniff");
 header("Referrer-Policy: no-referrer");
 ?>
 <!doctype html>
-<html lang="en">
+<html <?= htmlLangAttr() ?>>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Admin — <?= htmlspecialchars(APP_NAME) ?></title>
+<title><?= htmlspecialchars(APP_NAME) ?> — <?= htmlspecialchars(t('page.admin')) ?></title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
+<?php emitI18nJsGlobals(); ?>
 <script src="assets/theme.js"></script>
 <script src="assets/app.js"></script>
 <link rel="stylesheet" href="assets/base.css">
@@ -84,17 +85,20 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--code-bg);border:
   <div class="nav-r">
     <span class="badge">SUPER ADMIN</span>
     <span class="pill"><?= htmlspecialchars($userEmail) ?></span>
-    <button class="btn btn-ghost btn-sm btn-theme" type="button" data-theme-toggle>Theme</button>
-    <a class="btn btn-ghost btn-sm" href="dashboard.php">Dashboard</a>
-    <a class="btn btn-ghost btn-sm" href="notifications.php">Notifications</a>
-    <a class="btn btn-ghost btn-sm" href="account.php">Account</a>
-    <a class="btn btn-ghost btn-sm" href="logout.php">Logout</a>
+    <button class="btn btn-ghost btn-sm btn-theme" type="button" data-theme-toggle><?php e('common.theme'); ?></button>
+    <?php $curLang = currentLang(); ?>
+    <a class="<?= $curLang === 'fr' ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm' ?>" href="<?= htmlspecialchars(langSwitchUrl('fr')) ?>"><?php e('common.lang_fr'); ?></a>
+    <a class="<?= $curLang === 'en' ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm' ?>" href="<?= htmlspecialchars(langSwitchUrl('en')) ?>"><?php e('common.lang_en'); ?></a>
+    <a class="btn btn-ghost btn-sm" href="dashboard.php"><?php e('nav.dashboard'); ?></a>
+    <a class="btn btn-ghost btn-sm" href="notifications.php"><?php e('nav.notifications'); ?></a>
+    <a class="btn btn-ghost btn-sm" href="account.php"><?php e('nav.account'); ?></a>
+    <a class="btn btn-ghost btn-sm" href="logout.php"><?php e('common.logout'); ?></a>
   </div>
 </div>
 
 <div class="wrap">
-  <div class="h">Admin Dashboard</div>
-  <div class="p">Manage users and all codes (encrypted blobs + metadata). Decryption is still impossible without a user’s vault passphrase.</div>
+  <div class="h"><?php e('heading.admin'); ?></div>
+  <div class="p"><?php e('admin.intro'); ?></div>
 
   <div class="grid">
     <div class="card">
@@ -113,7 +117,7 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--code-bg);border:
               <th>Codes</th>
               <th>Created</th>
               <th>Last login</th>
-              <th>Actions</th>
+              <th>Actions.</th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -264,7 +268,6 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--code-bg);border:
       <div class="field">
         <label>Bank account name (optional)</label>
         <input id="da-bank-name" placeholder="e.g. <?= htmlspecialchars(APP_NAME) ?> ESCROW">
-KSMITH ESCROW">
       </div>
       <div class="field">
         <label>Bank account number</label>

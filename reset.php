@@ -23,13 +23,14 @@ header("X-Content-Type-Options: nosniff");
 header("Referrer-Policy: no-referrer");
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html <?= htmlLangAttr() ?>>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Choose new password — <?= htmlspecialchars(APP_NAME) ?></title>
+<title><?= htmlspecialchars(APP_NAME) ?> — <?= htmlspecialchars(t('page.reset')) ?></title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
+<?php emitI18nJsGlobals(); ?>
 <script src="assets/theme.js"></script>
 <link rel="stylesheet" href="assets/base.css">
 <link rel="stylesheet" href="assets/auth.css">
@@ -37,10 +38,12 @@ header("Referrer-Policy: no-referrer");
 </style>
 </head>
 <body>
-  <button class="theme-toggle" type="button" data-theme-toggle>Theme</button>
+  <a class="lang-toggle fr<?= currentLang() === 'fr' ? ' active' : '' ?>" href="<?= htmlspecialchars(langSwitchUrl('fr'), ENT_QUOTES, 'UTF-8') ?>"><?php e('common.lang_fr'); ?></a>
+  <a class="lang-toggle en<?= currentLang() === 'en' ? ' active' : '' ?>" href="<?= htmlspecialchars(langSwitchUrl('en'), ENT_QUOTES, 'UTF-8') ?>"><?php e('common.lang_en'); ?></a>
+  <button class="theme-toggle" type="button" data-theme-toggle><?php e('common.theme'); ?></button>
   <div class="box">
     <div class="logo"><?= htmlspecialchars(APP_NAME) ?></div>
-    <div class="sub">// Choose new login password</div>
+    <div class="sub"><?php e('reset.subtitle'); ?></div>
 
     <div id="err" class="msg msg-err"></div>
 
@@ -49,18 +52,19 @@ header("Referrer-Policy: no-referrer");
       <input type="hidden" id="email" value="<?= htmlspecialchars($email) ?>">
       <input type="hidden" id="token" value="<?= htmlspecialchars($token) ?>">
 
-      <div class="field"><label>New login password</label>
+      
+      <div class="field"><label><?php e('reset.new_password'); ?></label>
         <input type="password" id="p1" autocomplete="new-password" placeholder="••••••••" required>
       </div>
-      <div class="field"><label>Confirm new password</label>
+      <div class="field"><label><?php e('reset.confirm_new_password'); ?></label>
         <input type="password" id="p2" autocomplete="new-password" placeholder="••••••••" required>
       </div>
-      <button class="btn btn-primary" id="btn" type="submit"><span id="btn-txt">Reset password</span></button>
+      <button class="btn btn-primary" id="btn" type="submit"><span id="btn-txt"><?php e('page.reset'); ?></span></button>
     </form>
 
     <div class="links">
-      <a href="login.php">Back to login</a>
-      <a href="index.php">Home</a>
+      <a href="login.php"><?php e('reset.back_to_login'); ?></a>
+      <a href="index.php"><?php e('common.home'); ?></a>
     </div>
   </div>
 
@@ -107,4 +111,4 @@ f.addEventListener('submit', async (e)=>{
 });
 </script>
 </body>
-</html>
+</html> 

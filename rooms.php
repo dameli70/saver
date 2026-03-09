@@ -24,13 +24,14 @@ header("X-Content-Type-Options: nosniff");
 header("Referrer-Policy: no-referrer");
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html <?= htmlLangAttr() ?>>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Saving Rooms — <?= htmlspecialchars(APP_NAME) ?></title>
+<title><?= htmlspecialchars(APP_NAME) ?> — <?= htmlspecialchars(t('page.rooms')) ?></title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
+<?php emitI18nJsGlobals(); ?>
 <script src="assets/theme.js"></script>
 <script src="assets/app.js"></script>
 <link rel="stylesheet" href="assets/base.css">
@@ -69,19 +70,22 @@ header("Referrer-Policy: no-referrer");
   <a class="logo" href="index.php"><?= htmlspecialchars(APP_NAME) ?></a>
   <div class="nav-r">
     <span class="pill"><?= htmlspecialchars($userEmail) ?></span>
-    <button class="btn btn-ghost btn-sm btn-theme" type="button" data-theme-toggle>Theme</button>
-    <?php if ($isAdmin): ?><a class="btn btn-ghost btn-sm" href="admin.php">Admin</a><?php endif; ?>
-    <a class="btn btn-ghost btn-sm" href="dashboard.php">Dashboard</a>
-    <a class="btn btn-ghost btn-sm" href="create_code.php">Create Code</a>
-    <a class="btn btn-ghost btn-sm" href="my_codes.php">My Codes</a>
-    <a class="btn btn-ghost btn-sm" href="notifications.php">Notifications</a>
-    <a class="btn btn-ghost btn-sm" href="account.php">Account</a>
-    <a class="btn btn-ghost btn-sm" href="logout.php">Logout</a>
+    <button class="btn btn-ghost btn-sm btn-theme" type="button" data-theme-toggle><?php e('common.theme'); ?></button>
+    <?php $curLang = currentLang(); ?>
+    <a class="<?= $curLang === 'fr' ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm' ?>" href="<?= htmlspecialchars(langSwitchUrl('fr')) ?>"><?php e('common.lang_fr'); ?></a>
+    <a class="<?= $curLang === 'en' ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm' ?>" href="<?= htmlspecialchars(langSwitchUrl('en')) ?>"><?php e('common.lang_en'); ?></a>
+    <?php if ($isAdmin): ?><a class="btn btn-ghost btn-sm" href="admin.php"><?php e('nav.admin'); ?></a><?php endif; ?>
+    <a class="btn btn-ghost btn-sm" href="dashboard.php"><?php e('nav.dashboard'); ?></a>
+    <a class="btn btn-ghost btn-sm" href="create_code.php"><?php e('nav.create_code'); ?></a>
+    <a class="btn btn-ghost btn-sm" href="my_codes.php"><?php e('nav.my_codes'); ?></a>
+    <a class="btn btn-ghost btn-sm" href="notifications.php"><?php e('nav.notifications'); ?></a>
+    <a class="btn btn-ghost btn-sm" href="account.php"><?php e('nav.account'); ?></a>
+    <a class="btn btn-ghost btn-sm" href="logout.php"><?php e('common.logout'); ?></a>
   </div>
 </div>
 
 <div class="wrap">
-  <div class="h">Saving Rooms</div>
+  <div class="h"><?php e('page.rooms'); ?></div>
   <div class="p">Save together toward a goal. Browse rooms, request to join, or create your own with clear rules. Some rooms may be unavailable depending on your trust level or a cooldown period.</div>
   <div id="eligibility" style="color:var(--muted);font-size:12px;line-height:1.6;margin:-8px 0 18px 0;"></div>
 
@@ -587,3 +591,4 @@ loadRooms();
 </script>
 </body>
 </html>
+ 

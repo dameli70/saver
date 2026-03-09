@@ -3,12 +3,99 @@
 
   const LS = {};
 
+  const I18N = (window.LS_I18N && window.LS_I18N.strings) ? window.LS_I18N.strings : {};
+  function t(key, fallback){
+    return (I18N && typeof I18N[key] === 'string') ? I18N[key] : fallback;
+  }
+
+  const STR = {
+    reauth_title: t('js.reauth_title', 'Re-authentication required'),
+    reauth_sub: t('js.reauth_sub', 'Confirm it’s you to continue. Choose a method below.'),
+    authenticator_code: t('js.authenticator_code', 'Authenticator code'),
+    use_passkey: t('js.use_passkey', 'Use passkey'),
+    use_auth_code: t('js.use_auth_code', 'Use authenticator code'),
+    waiting: t('js.waiting', 'Waiting for confirmation…'),
+    internal_error_missing_auth: t('js.internal_error_missing_auth', 'Internal error: missing auth handler'),
+    enable_totp_or_passkey: t('js.enable_totp_or_passkey', 'Enable TOTP or add a passkey in Account'),
+    passkey_reauth_failed: t('js.passkey_reauth_failed', 'Passkey re-auth failed'),
+    enter_6_digit_code: t('js.enter_6_digit_code', 'Enter a 6-digit code'),
+    invalid_code: t('js.invalid_code', 'Invalid code'),
+    cancelled: t('js.cancelled', 'Cancelled'),
+    unsupported_reauth: t('js.unsupported_reauth', 'Unsupported re-auth method'),
+    reauth_failed: t('js.reauth_failed', 'Re-auth failed'),
+    copy_confirm: t('js.copy_confirm', 'Copy to clipboard? Clipboard contents may be readable by other apps until overwritten.'),
+
+    confirm: t('common.confirm', 'Confirm'),
+    cancel: t('common.cancel', 'Cancel'),
+    back: t('common.back', 'Back'),
+    close: t('common.close', 'Close'),
+  };
+
   LS.esc = function(s){
     return String(s||'')
       .replace(/&/g,'&amp;')
       .replace(/</g,'&lt;')
       .replace(/>/g,'&gt;')
       .replace(/"/g,'&quot;');
+  };
+
+  LS._defaultLocale = 'fr';
+
+  LS._defaultStrings = {
+    'js.reauth.close': 'Close',
+    'js.reauth.title': 'Re-authentication required',
+    'js.reauth.subtitle': 'Confirm it’s you to continue. Choose a method below.',
+    'js.reauth.authenticator_code_label': 'Authenticator code',
+    'js.reauth.authenticator_code_placeholder': '123456',
+    'js.reauth.confirm': 'Confirm',
+    'js.reauth.back': 'Back',
+    'js.reauth.waiting': 'Waiting for confirmation…',
+    'js.reauth.use_passkey': 'Use passkey',
+    'js.reauth.use_authenticator_code': 'Use authenticator code',
+    'js.common.cancel': 'Cancel',
+
+    'js.errors.missing_auth_handler': 'Internal error: missing auth handler',
+    'js.reauth.enable_totp_or_passkey': 'Enable TOTP or add a passkey in Account',
+    'js.reauth.passkey_failed': 'Passkey re-auth failed',
+    'js.reauth.enter_6_digit_code': 'Enter a 6-digit code',
+    'js.reauth.invalid_code': 'Invalid code',
+    'js.reauth.cancelled': 'Cancelled',
+    'js.reauth.unsupported_method': 'Unsupported re-auth method',
+    'js.reauth.failed': 'Re-auth failed',
+
+    'js.copy.confirm_sensitive': 'Copy to clipboard? Clipboard contents may be readable by other apps until overwritten.',
+  };
+
+  LS.getI18n = function(){
+    const raw = (window && window.LS_I18N && typeof window.LS_I18N === 'object') ? window.LS_I18N : null;
+    const strings = (raw && raw.strings && typeof raw.strings === 'object') ? raw.strings : {};
+
+    const lang = (raw && typeof raw.lang === 'string' && raw.lang) ? raw.lang :
+      (document && document.documentElement && document.documentElement.lang ? document.documentElement.lang : LS._defaultLocale);
+
+    return {
+      lang: lang || LS._defaultLocale,
+      strings,
+    };
+  };
+
+  LS.locale = function(){
+    return LS.getI18n().lang || LS._defaultLocale;
+  };
+
+  LS.t = function(key){
+    const i18n = LS.getI18n();
+
+    let val = null;
+    if(i18n.strings && Object.prototype.hasOwnProperty.call(i18n.strings, key)){
+      val = i18n.strings[key];
+    }else if(Object.prototype.hasOwnProperty.call(LS._defaultStrings, key)){
+      val = LS._defaultStrings[key];
+    }else{
+      val = key;
+    }
+
+    return String(val == null ? '' : val);
   };
 
   LS.toast = function(msg, type='ok', ms=3200){
@@ -41,12 +128,12 @@
 
   LS.fmtLocal = function(d){
     if(!(d instanceof Date) || isNaN(d.getTime())) return '';
-    return d.toLocaleString('en-US', {year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+    return d.toLocaleString(LS.locale(), {year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
   };
 
   LS.fmtUtc = function(d){
     if(!(d instanceof Date) || isNaN(d.getTime())) return '';
-    return new Intl.DateTimeFormat('en-US', {
+    return new Intl.DateTimeFormat(LS.locale(), {
       year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',
       timeZone:'UTC',
       timeZoneName:'short'
@@ -91,9 +178,9 @@
     el.className = 'ls-modal-overlay';
     el.innerHTML = `
       <div class="ls-modal" role="dialog" aria-modal="true" aria-labelledby="ls-reauth-title">
-        <button class="ls-modal-x" type="button" aria-label="Close">×</button>
-        <div class="ls-modal-title" id="ls-reauth-title">Re-authentication required</div>
-        <div class="ls-modal-sub">Confirm it’s you to continue. Choose a method below.</div>
+        <button class="ls-modal-x" type="button" aria-label="${LS.esc(STR.close)}">×</button>
+        <div class="ls-modal-title" id="ls-reauth-title">${LS.esc(STR.reauth_title)}</div>
+        <div class="ls-modal-sub">${LS.esc(STR.reauth_sub)}</div>
 
         <div class="msg msg-err" id="ls-reauth-err"></div>
 
@@ -101,15 +188,15 @@
 
         <div id="ls-reauth-totp" style="display:none;">
           <div class="field" style="margin-top:12px;">
-            <label>Authenticator code</label>
+            <label>${LS.esc(STR.authenticator_code)}</label>
             <input inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456" id="ls-reauth-code">
           </div>
-          <button class="btn btn-primary" type="button" id="ls-reauth-submit">Confirm</button>
-          <button class="btn btn-ghost" type="button" id="ls-reauth-back" style="margin-top:10px;width:100%;">Back</button>
+          <button class="btn btn-primary" type="button" id="ls-reauth-submit">${LS.esc(STR.confirm)}</button>
+          <button class="btn btn-ghost" type="button" id="ls-reauth-back" style="margin-top:10px;width:100%;">${LS.esc(STR.back)}</button>
         </div>
 
         <div id="ls-reauth-wait" style="display:none;margin-top:12px;font-size:12px;color:var(--muted);letter-spacing:.4px;">
-          <span class="spin light"></span> Waiting for confirmation…
+          <span class="spin light"></span> ${LS.esc(STR.waiting)}
         </div>
       </div>
     `;
@@ -169,7 +256,7 @@
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'btn btn-primary';
-      b.textContent = 'Use passkey';
+      b.textContent = STR.use_passkey;
       btns.push({el:b, method:'passkey'});
       choices.appendChild(b);
     }
@@ -178,7 +265,7 @@
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'btn btn-ghost';
-      b.textContent = 'Use authenticator code';
+      b.textContent = STR.use_auth_code;
       b.style.width = '100%';
       b.style.marginTop = '10px';
       btns.push({el:b, method:'totp'});
@@ -188,7 +275,7 @@
     const cancel = document.createElement('button');
     cancel.type = 'button';
     cancel.className = 'btn btn-ghost';
-    cancel.textContent = 'Cancel';
+    cancel.textContent = STR.cancel;
     cancel.style.width = '100%';
     cancel.style.marginTop = '10px';
     choices.appendChild(cancel);
@@ -257,12 +344,12 @@
   LS.reauth = async function(methods, opts){
     const post = opts && typeof opts.post === 'function' ? opts.post : null;
     if(!post){
-      LS.toast('Internal error: missing auth handler', 'err');
+      LS.toast(STR.internal_error_missing_auth, 'err');
       return false;
     }
 
     if(!methods || (!methods.passkey && !methods.totp)){
-      LS.toast('Enable TOTP or add a passkey in Account', 'warn');
+      LS.toast(STR.enable_totp_or_passkey, 'warn');
       return false;
     }
 
@@ -288,7 +375,7 @@
     try{
       if(modalState.method === 'passkey'){
         const begin = await post('api/webauthn.php', {action:'reauth_begin'});
-        if(!begin || !begin.success) { showErr(begin && begin.error ? begin.error : 'Passkey re-auth failed'); return false; }
+        if(!begin || !begin.success) { showErr(begin && begin.error ? begin.error : STR.passkey_reauth_failed); return false; }
 
         const pk = begin.publicKey || {};
         const allow = (pk.allowCredentials||[]).map(c => ({type:c.type, id: LS.b64uToBuf(c.id)}));
@@ -313,7 +400,7 @@
           }
         });
 
-        if(!fin || !fin.success) { showErr(fin && fin.error ? fin.error : 'Passkey re-auth failed'); return false; }
+        if(!fin || !fin.success) { showErr(fin && fin.error ? fin.error : STR.passkey_reauth_failed); return false; }
 
         cleanup();
         return true;
@@ -338,7 +425,7 @@
 
             const code = (codeEl.value || '').trim();
             if(!/^\d{6}$/.test(code)){
-              err.textContent = 'Enter a 6-digit code';
+              err.textContent = STR.enter_6_digit_code;
               err.classList.add('show');
               return;
             }
@@ -349,12 +436,12 @@
             const res = await post('api/totp.php', {action:'reauth', code});
 
             submit.disabled = false;
-            submit.textContent = 'Confirm';
+            submit.textContent = STR.confirm;
 
             if(res && res.success){
               done(true);
             }else{
-              err.textContent = (res && res.error) ? res.error : 'Invalid code';
+              err.textContent = (res && res.error) ? res.error : STR.invalid_code;
               err.classList.add('show');
             }
           }
@@ -372,17 +459,17 @@
           codeEl.addEventListener('keydown', onKey);
         });
 
-        if(!r) { showErr('Cancelled'); return false; }
+        if(!r) { showErr(STR.cancelled); return false; }
 
         cleanup();
         return true;
       }
 
-      showErr('Unsupported re-auth method');
+      showErr(STR.unsupported_reauth);
       return false;
 
     }catch(e){
-      showErr(e && e.message ? e.message : 'Re-auth failed');
+      showErr(e && e.message ? e.message : STR.reauth_failed);
       return false;
     }
   };
@@ -390,7 +477,7 @@
   LS.copySensitive = async function(text, opts){
     const clearAfterMs = (opts && Number.isFinite(opts.clearAfterMs)) ? opts.clearAfterMs : 30000;
 
-    const ok = confirm('Copy to clipboard? Clipboard contents may be readable by other apps until overwritten.');
+    const ok = confirm(STR.copy_confirm);
     if(!ok) return false;
 
     await navigator.clipboard.writeText(String(text||''));

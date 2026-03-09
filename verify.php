@@ -5,31 +5,54 @@ requireInstalledForPage();
 require_once __DIR__ . '/includes/helpers.php';
 startSecureSession();
 
-$email = strtolower(trim($_GET['email'] ?? ''));
-$token = trim($_GET['token'] ?? '');
+$email = strtolower(trim((string)($_GET['email'] ?? '')));
+$token = trim((string)($_GET['token'] ?? ''));
 
 header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none';");
 header("X-Frame-Options: DENY");
 header("X-Content-Type-Options: nosniff");
 header("Referrer-Policy: no-referrer");
 
-function page(string $title, string $msg, bool $ok = false): void {
+function renderVerifyPage(string $titleKey, string $msgKey, bool $ok = false): void {
     $msgClass = $ok ? 'msg msg-ok show' : 'msg msg-warn show';
-    $appName = htmlspecialchars(APP_NAME);
+    $appNameEsc = htmlspecialchars(APP_NAME, ENT_QUOTES, 'UTF-8');
+    $langAttr = htmlLangAttr();
 
-    echo "<!doctype html><html lang=\"en\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1,viewport-fit=cover\">";
-    echo "<title>" . htmlspecialchars($title) . " — {$appName}</title>";
+    $title = t($titleKey, ['app' => APP_NAME]);
+    $msgHtml = t($msgKey, ['app' => APP_NAME]);
+
+    ob_start();
+    emitI18nJsGlobals();
+    $i18nScript = ob_get_clean();
+
+    $curLang = currentLang();
+    $frUrl = htmlspecialchars(langSwitchUrl('fr'), ENT_QUOTES, 'UTF-8');
+    $enUrl = htmlspecialchars(langSwitchUrl('en'), ENT_QUOTES, 'UTF-8');
+
+    echo "<!doctype html><html {$langAttr}><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1,viewport-fit=cover\">";
+    echo "<title>" . htmlspecialchars($title, ENT_QUOTES, 'UTF-8') . " — {$appNameEsc}</title>";
     echo "<link rel=\"preconnect\" href=\"https://fonts.googleapis.com\"><link href=\"https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap\" rel=\"stylesheet\">";
+    echo $i18nScript;
     echo "<script src=\"assets/theme.js\"></script>";
     echo "<link rel=\"stylesheet\" href=\"assets/base.css\">";
     echo "<link rel=\"stylesheet\" href=\"assets/auth.css\">";
     echo "</head><body>";
-    echo "<button class=\"theme-toggle\" type=\"button\" data-theme-toggle>Theme</button>";
-    echo "<div class=\"box\"><div class=\"logo\">{$appName}</div><div class=\"{$msgClass}\">{$msg}</div><a class=\"btn btn-primary\" href=\"login.php\">Continue</a></div></body></html>";
+
+    echo '<a class="lang-toggle fr' . ($curLang === 'fr' ? ' active' : '') . '" href="' . $frUrl . '">' . htmlspecialchars(t('common.lang_fr'), ENT_QUOTES, 'UTF-8') . '</a>';
+    echo '<a class="lang-toggle en' . ($curLang === 'en' ? ' active' : '') . '" href="' . $enUrl . '">' . htmlspecialchars(t('common.lang_en'), ENT_QUOTES, 'UTF-8') . '</a>';
+    echo '<button class="theme-toggle" type="button" data-theme-toggle>' . htmlspecialchars(t('common.theme'), ENT_QUOTES, 'UTF-8') . '</button>';
+
+    echo '<div class="box">'
+        . '<div class="logo">' . $appNameEsc . '</div>'
+        . '<div class="' . $msgClass . '">' . $msgHtml . '</div>'
+        . '<a class="btn btn-primary" href="login.php">' . htmlspecialchars(t('verify.continue'), ENT_QUOTES, 'UTF-8') . '</a>'
+        . '</div>';
+
+    echo '</body></html>';
 }
 
 if (!filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($token) < 10) {
-    page('Verification failed', '<strong>Invalid verification link.</strong> Please request a new one from your account page.');
+    renderVerifyPage('verify.failed', 'verify.invalid_link_html');
     exit;
 }
 
@@ -39,12 +62,12 @@ $stmt->execute([$email]);
 $u = $stmt->fetch();
 
 if (!$u) {
-    page('Verification failed', '<strong>Account not found.</strong>');
+    renderVerifyPage('verify.failed', 'verify.account_not_found_html');
     exit;
 }
 
 if (!empty($u['email_verified_at'])) {
-    page('Email verified', '<strong>Email already verified.</strong> You can log in and use the dashboard.', true);
+    renderVerifyPage('verify.verified', 'verify.already_verified_html', true);
     exit;
 }
 
@@ -53,12 +76,12 @@ $expires  = $u['email_verification_expires_at'] ?? null;
 $given    = hash('sha256', $token);
 
 if (!$expected || !hash_equals($expected, $given)) {
-    page('Verification failed', '<strong>Verification link is invalid.</strong> Please request a new one from your account page.');
+    renderVerifyPage('verify.failed', 'verify.invalid_token_html');
     exit;
 }
 
 if (!$expires || new DateTime($expires) < new DateTime()) {
-    page('Verification failed', '<strong>Verification link expired.</strong> Please request a new one from your account page.');
+    renderVerifyPage('verify.failed', 'verify.expired_html');
     exit;
 }
 
@@ -75,4 +98,4 @@ registerCurrentSession((int)$u['id']);
 auditLog('email_verified', null, (int)$u['id']);
 
 header('Location: dashboard.php');
-exit;
+exit; 

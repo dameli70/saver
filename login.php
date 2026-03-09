@@ -20,13 +20,14 @@ header("X-Content-Type-Options: nosniff");
 header("Referrer-Policy: no-referrer");
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html <?= htmlLangAttr() ?>>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Login — <?= htmlspecialchars(APP_NAME) ?></title>
+<title><?php e('login.title', ['app' => APP_NAME]); ?></title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
+<?php emitI18nJsGlobals(); ?>
 <script src="assets/theme.js"></script>
 <link rel="stylesheet" href="assets/base.css">
 <link rel="stylesheet" href="assets/auth.css">
@@ -35,33 +36,35 @@ header("Referrer-Policy: no-referrer");
 </style>
 </head>
 <body>
-  <button class="theme-toggle" type="button" data-theme-toggle>Theme</button>
+  <a class="lang-toggle fr<?= currentLang() === 'fr' ? ' active' : '' ?>" href="<?= htmlspecialchars(langSwitchUrl('fr'), ENT_QUOTES, 'UTF-8') ?>"><?php e('common.lang_fr'); ?></a>
+  <a class="lang-toggle en<?= currentLang() === 'en' ? ' active' : '' ?>" href="<?= htmlspecialchars(langSwitchUrl('en'), ENT_QUOTES, 'UTF-8') ?>"><?php e('common.lang_en'); ?></a>
+  <button class="theme-toggle" type="button" data-theme-toggle><?php e('common.theme'); ?></button>
   <div class="box">
     <div class="logo"><?= htmlspecialchars(APP_NAME) ?></div>
-    <div class="sub">// Login</div>
+    <div class="sub"><?php e('login.subtitle'); ?></div>
 
     <div id="err" class="msg msg-err"></div>
 
     <form id="f">
-      <div class="field"><label>Email</label>
+      <div class="field"><label><?php e('common.email'); ?></label>
         <input type="email" id="email" autocomplete="email" inputmode="email" placeholder="you@example.com" required>
       </div>
-      <div class="field"><label>Login Password</label>
+      <div class="field"><label><?php e('login.login_password'); ?></label>
         <input type="password" id="pwd" autocomplete="current-password" placeholder="••••••••" required>
       </div>
-      <button class="btn btn-primary" id="btn" type="submit"><span id="btn-txt">Login</span></button>
+      <button class="btn btn-primary" id="btn" type="submit"><span id="btn-txt"><?php e('login.btn'); ?></span></button>
     </form>
 
     <div style="height:10px"></div>
 
     <button class="btn btn-primary" id="passkey-btn" type="button" style="background:transparent;border:1px solid var(--b2);color:var(--text);">
-      Use passkey
+      <?php e('login.use_passkey'); ?>
     </button>
 
     <div class="links">
-      <a href="index.php">Home</a>
-      <a href="forgot.php">Forgot password</a>
-      <a href="signup.php">Create account</a>
+      <a href="index.php"><?php e('common.home'); ?></a>
+      <a href="forgot.php"><?php e('login.forgot'); ?></a>
+      <a href="signup.php"><?php e('common.create_account'); ?></a>
     </div>
   </div>
 
@@ -71,6 +74,20 @@ const err=document.getElementById('err');
 const btn=document.getElementById('btn');
 const btnTxt=document.getElementById('btn-txt');
 const passkeyBtn=document.getElementById('passkey-btn');
+
+const STR={
+  emailPwdRequired: <?= json_encode(t('login.email_pwd_required')) ?>,
+  passkeyRequired: <?= json_encode(t('login.passkey_required')) ?>,
+  failed: <?= json_encode(t('login.failed')) ?>,
+  enterTotp: <?= json_encode(t('login.enter_totp')) ?>,
+  codeRequired: <?= json_encode(t('login.code_required')) ?>,
+  networkError: <?= json_encode(t('login.network_error')) ?>,
+  btnLogin: <?= json_encode(t('login.btn')) ?>,
+  usePasskey: <?= json_encode(t('login.use_passkey')) ?>,
+  passkeysUnsupported: <?= json_encode(t('login.passkeys_unsupported')) ?>,
+  passkeyFailed: <?= json_encode(t('login.passkey_failed')) ?>,
+  passkeyLoginFailed: <?= json_encode(t('login.passkey_login_failed')) ?>,
+};
 
 function showErr(m){err.textContent=m;err.classList.add('show');}
 function clearErr(){err.textContent='';err.classList.remove('show');}
@@ -96,7 +113,7 @@ async function doPasswordLogin(e){
 
   const email=document.getElementById('email').value.trim();
   const pwd=document.getElementById('pwd').value;
-  if(!email||!pwd){showErr('Email and password required');return;}
+  if(!email||!pwd){showErr(STR.emailPwdRequired);return;}
 
   btn.disabled=true;
   passkeyBtn.disabled=true;
@@ -109,21 +126,21 @@ async function doPasswordLogin(e){
 
     if(!j.success){
       if(j.error_code==='passkey_required'){
-        showErr('This account requires a passkey. Use the passkey button below.');
+        showErr(STR.passkeyRequired);
         return;
       }
-      showErr(j.error||'Login failed');
+      showErr(j.error||STR.failed);
       return;
     }
 
     if(j.needs_totp){
-      const code = prompt('Enter your 6-digit authenticator code');
-      if(!code){showErr('Code required');return;}
+      const code = prompt(STR.enterTotp);
+      if(!code){showErr(STR.codeRequired);return;}
 
       const r2=await fetch('api/auth.php',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({action:'login_totp',code})});
       const j2=await r2.json();
-      if(!j2.success){showErr(j2.error||'Login failed');return;}
+      if(!j2.success){showErr(j2.error||STR.failed);return;}
 
       if(j2.verified){window.location='dashboard.php';}
       else window.location='account.php';
@@ -134,17 +151,17 @@ async function doPasswordLogin(e){
     else window.location='account.php';
 
   }catch{
-    showErr('Network error');
+    showErr(STR.networkError);
   }finally{
     btn.disabled=false;
     passkeyBtn.disabled=false;
-    btnTxt.textContent='Login';
+    btnTxt.textContent=STR.btnLogin;
   }
 }
 
 async function doPasskeyLogin(){
   clearErr();
-  if(!window.PublicKeyCredential){showErr('Passkeys not supported in this browser');return;}
+  if(!window.PublicKeyCredential){showErr(STR.passkeysUnsupported);return;}
 
   btn.disabled=true;
   passkeyBtn.disabled=true;
@@ -154,7 +171,7 @@ async function doPasskeyLogin(){
     const r=await fetch('api/webauthn.php',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({action:'login_begin'})});
     const j=await r.json();
-    if(!j.success){showErr(j.error||'Passkey failed');return;}
+    if(!j.success){showErr(j.error||STR.passkeyFailed);return;}
 
     const pk=j.publicKey||{};
     const cred=await navigator.credentials.get({publicKey:{
@@ -179,17 +196,17 @@ async function doPasskeyLogin(){
         }
       })});
     const j2=await finish.json();
-    if(!j2.success){showErr(j2.error||'Passkey login failed');return;}
+    if(!j2.success){showErr(j2.error||STR.passkeyLoginFailed);return;}
 
     if(j2.verified){window.location='dashboard.php';}
     else window.location='account.php';
 
   }catch(e){
-    showErr((e && e.message) ? e.message : 'Passkey login failed');
+    showErr((e && e.message) ? e.message : STR.passkeyLoginFailed);
   }finally{
     btn.disabled=false;
     passkeyBtn.disabled=false;
-    passkeyBtn.textContent='Use passkey';
+    passkeyBtn.textContent=STR.usePasskey;
   }
 }
 
@@ -197,4 +214,4 @@ f.addEventListener('submit', doPasswordLogin);
 passkeyBtn.addEventListener('click', doPasskeyLogin);
 </script>
 </body>
-</html>
+</html> 

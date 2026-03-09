@@ -16,13 +16,14 @@ header("X-Content-Type-Options: nosniff");
 header("Referrer-Policy: no-referrer");
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html <?= htmlLangAttr() ?>>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title><?= htmlspecialchars(APP_NAME) ?> — Save money with time locks</title>
+<title><?php e('index.title', ['app' => APP_NAME]); ?></title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
+<?php emitI18nJsGlobals(); ?>
 <script src="assets/theme.js"></script>
 <link rel="stylesheet" href="assets/base.css">
 <link rel="stylesheet" href="assets/panel.css">
@@ -93,135 +94,133 @@ a{color:inherit;}
   <div class="nav">
     <a class="logo" href="index.php"><?= htmlspecialchars(APP_NAME) ?></a>
     <div class="nav-r">
-      <button class="btn btn-ghost btn-theme" type="button" data-theme-toggle>Theme</button>
-      <a class="btn btn-ghost" href="#faq">FAQ</a>
+      <button class="btn btn-ghost btn-theme" type="button" data-theme-toggle><?php e('common.theme'); ?></button>
+      <a class="btn btn-ghost btn-theme" href="<?= htmlspecialchars(langSwitchUrl('fr'), ENT_QUOTES, 'UTF-8') ?>" style="<?= currentLang() === 'fr' ? '' : 'opacity:.6' ?>"><?php e('common.lang_fr'); ?></a>
+      <a class="btn btn-ghost btn-theme" href="<?= htmlspecialchars(langSwitchUrl('en'), ENT_QUOTES, 'UTF-8') ?>" style="<?= currentLang() === 'en' ? '' : 'opacity:.6' ?>"><?php e('common.lang_en'); ?></a>
+      <a class="btn btn-ghost" href="#faq"><?php e('common.faq'); ?></a>
       <?php if ($loggedIn): ?>
         <span class="pill"><?= htmlspecialchars($userEmail) ?></span>
         <?php if ($verified): ?>
-          <a class="btn btn-ghost" href="dashboard.php">Dashboard</a>
-          <a class="btn btn-ghost" href="create_code.php">Create Code</a>
-          <a class="btn btn-ghost" href="my_codes.php">My Codes</a>
-          <a class="btn btn-ghost" href="rooms.php">Rooms</a>
+          <a class="btn btn-ghost" href="dashboard.php"><?php e('nav.dashboard'); ?></a>
+          <a class="btn btn-ghost" href="create_code.php"><?php e('nav.create_code'); ?></a>
+          <a class="btn btn-ghost" href="my_codes.php"><?php e('nav.my_codes'); ?></a>
+          <a class="btn btn-ghost" href="rooms.php"><?php e('nav.rooms'); ?></a>
           <?php if ($isAdmin): ?>
-            <a class="btn btn-ghost" href="admin.php">Admin</a>
+            <a class="btn btn-ghost" href="admin.php"><?php e('nav.admin'); ?></a>
           <?php endif; ?>
         <?php else: ?>
-          <a class="btn btn-ghost" href="account.php">Verify Email</a>
+          <a class="btn btn-ghost" href="account.php"><?php e('nav.verify_email'); ?></a>
         <?php endif; ?>
-        <a class="btn btn-ghost" href="logout.php">Logout</a>
+        <a class="btn btn-ghost" href="logout.php"><?php e('common.logout'); ?></a>
       <?php else: ?>
-        <a class="btn btn-ghost" href="login.php">Login</a>
-        <a class="btn btn-primary" href="signup.php">Create account</a>
+        <a class="btn btn-ghost" href="login.php"><?php e('common.login'); ?></a>
+        <a class="btn btn-primary" href="signup.php"><?php e('common.create_account'); ?></a>
       <?php endif; ?>
     </div>
   </div>
 
   <?php if ($loggedIn && !$verified): ?>
   <div class="notice">
-    <div class="box"><strong>Action required:</strong> verify your email to unlock your dashboard and start saving with time locks.</div>
+    <div class="box"><?= t('index.notice_verify') ?></div>
   </div>
   <?php endif; ?>
 
   <div class="hero">
-    <div class="kicker">Impulse-proof saving • Save together • Private by design</div>
-    <div class="h1">Put a time lock between you and <span>impulse spending</span>.</div>
-    <div class="sub">
-      <?= htmlspecialchars(APP_NAME) ?> helps you build better money habits by adding friction: lock away the codes you use to spend (mobile money PINs, passwords, voucher codes)
-      until a date you choose. For bigger goals, create a <strong>Saving Room</strong> to save with trusted people and clear rules.
-      Your secrets are encrypted in your browser — the server can’t read them.
-    </div>
+    <div class="kicker"><?php e('index.kicker'); ?></div>
+    <div class="h1"><?= t('index.h1') ?></div>
+    <div class="sub"><?= t('index.sub_html', ['app' => htmlspecialchars(APP_NAME, ENT_QUOTES, 'UTF-8')]) ?></div>
 
     <div class="cta">
       <?php if ($loggedIn && $verified): ?>
-        <a class="btn btn-primary" href="dashboard.php">Open my dashboard</a>
-        <a class="btn btn-ghost" href="create_code.php">Create a time lock</a>
-        <a class="btn btn-ghost" href="rooms.php">Explore saving rooms</a>
+        <a class="btn btn-primary" href="dashboard.php"><?php e('index.open_dashboard'); ?></a>
+        <a class="btn btn-ghost" href="create_code.php"><?php e('index.create_time_lock'); ?></a>
+        <a class="btn btn-ghost" href="rooms.php"><?php e('index.explore_rooms'); ?></a>
       <?php elseif ($loggedIn && !$verified): ?>
-        <a class="btn btn-primary" href="account.php">Verify email to continue</a>
-        <a class="btn btn-ghost" href="logout.php">Switch account</a>
+        <a class="btn btn-primary" href="account.php"><?php e('index.verify_email_continue'); ?></a>
+        <a class="btn btn-ghost" href="logout.php"><?php e('index.switch_account'); ?></a>
       <?php else: ?>
-        <a class="btn btn-primary" href="signup.php">Start saving</a>
-        <a class="btn btn-ghost" href="login.php">I already have an account</a>
+        <a class="btn btn-primary" href="signup.php"><?php e('index.start_saving'); ?></a>
+        <a class="btn btn-ghost" href="login.php"><?php e('index.have_account'); ?></a>
       <?php endif; ?>
     </div>
 
     <div class="grid">
       <div class="card">
-        <h3>Cool-off period</h3>
-        <p>Create a delay between a craving and a purchase. When the moment passes, you keep the money.</p>
+        <h3><?php e('index.card1_title'); ?></h3>
+        <p><?php e('index.card1_desc'); ?></p>
       </div>
       <div class="card">
-        <h3>Save with a room</h3>
-        <p>Make a room for a goal (project, rent, trip). Set rules, invite people, and unlock by consensus or rotation.</p>
+        <h3><?php e('index.card2_title'); ?></h3>
+        <p><?php e('index.card2_desc'); ?></p>
       </div>
       <div class="card">
-        <h3>Private by design</h3>
-        <p>We store encrypted blobs and labels. Your vault passphrase stays in your browser — even admins can’t decrypt your secrets.</p>
+        <h3><?php e('index.card3_title'); ?></h3>
+        <p><?php e('index.card3_desc'); ?></p>
       </div>
     </div>
   </div>
 
   <div class="use">
-    <h2>Popular ways people use <?= htmlspecialchars(APP_NAME) ?></h2>
+    <h2><?php e('index.popular_uses', ['app' => APP_NAME]); ?></h2>
     <div class="bullets">
-      <div class="bullet"><div class="t">Break bad spending loops</div><div class="d">Lock your wallet PIN for 24 hours, a week, or until payday. Give yourself time to think.</div></div>
-      <div class="bullet"><div class="t">Create a pause for habits</div><div class="d">Add a delay to high-risk moments. When you have to wait, it’s easier to choose what matters.</div></div>
-      <div class="bullet"><div class="t">Fund a goal</div><div class="d">Use Saving Rooms to collect contributions for projects, school fees, business equipment, or travel.</div></div>
+      <div class="bullet"><div class="t"><?php e('index.bullet1_t'); ?></div><div class="d"><?php e('index.bullet1_d'); ?></div></div>
+      <div class="bullet"><div class="t"><?php e('index.bullet2_t'); ?></div><div class="d"><?php e('index.bullet2_d'); ?></div></div>
+      <div class="bullet"><div class="t"><?php e('index.bullet3_t'); ?></div><div class="d"><?php e('index.bullet3_d'); ?></div></div>
     </div>
   </div>
 
   <div class="how">
-    <h2>How it works</h2>
+    <h2><?php e('index.how_it_works'); ?></h2>
     <div class="steps">
-      <div class="step"><div class="n">1</div><div class="t">Create your vault</div><div class="d">Sign up, verify your email, and set a vault passphrase (used only in your browser).</div></div>
-      <div class="step"><div class="n">2</div><div class="t">Create a time lock</div><div class="d">Choose what to lock (code / PIN / wallet flow), add a hint, and pick a reveal date.</div></div>
-      <div class="step"><div class="n">3</div><div class="t">Save solo or together</div><div class="d">For group goals, create a Saving Room, invite trusted people, and set contribution rules.</div></div>
-      <div class="step"><div class="n">4</div><div class="t">Reveal when it’s time</div><div class="d">After the date arrives, reveal requires strong re-authentication (passkey or authenticator code).</div></div>
+      <div class="step"><div class="n">1</div><div class="t"><?php e('index.step1_t'); ?></div><div class="d"><?php e('index.step1_d'); ?></div></div>
+      <div class="step"><div class="n">2</div><div class="t"><?php e('index.step2_t'); ?></div><div class="d"><?php e('index.step2_d'); ?></div></div>
+      <div class="step"><div class="n">3</div><div class="t"><?php e('index.step3_t'); ?></div><div class="d"><?php e('index.step3_d'); ?></div></div>
+      <div class="step"><div class="n">4</div><div class="t"><?php e('index.step4_t'); ?></div><div class="d"><?php e('index.step4_d'); ?></div></div>
     </div>
 
     <div style="margin-top:14px;color:var(--muted);font-size:11px;line-height:1.7;">
-      Note: <?= htmlspecialchars(APP_NAME) ?> does not hold your funds or connect to your bank. It stores time-locked, encrypted access codes and group-saving rules.
+      <?php e('index.note_html', ['app' => APP_NAME]); ?>
     </div>
   </div>
 
   <div class="faq" id="faq">
-    <h2>FAQ</h2>
+    <h2><?php e('index.faq_title'); ?></h2>
     <div class="faq-grid">
 
       <details class="qa">
-        <summary>Does <?= htmlspecialchars(APP_NAME) ?> hold my money?</summary>
-        <p>No. <?= htmlspecialchars(APP_NAME) ?> does not connect to your bank or wallet. It stores time‑locked, encrypted codes (and room rules) so you can create a cool‑off period before spending.</p>
+        <summary><?php e('index.faq_q1', ['app' => APP_NAME]); ?></summary>
+        <p><?php e('index.faq_a1', ['app' => APP_NAME]); ?></p>
       </details>
 
       <details class="qa">
-        <summary>Can admins read my locked codes?</summary>
-        <p>No. Your vault passphrase stays in your browser. The server stores encrypted blobs and labels — even admins can’t decrypt your secrets.</p>
+        <summary><?php e('index.faq_q2'); ?></summary>
+        <p><?php e('index.faq_a2'); ?></p>
       </details>
 
       <details class="qa">
-        <summary>What if I forget my vault passphrase?</summary>
-        <p>Your vault passphrase can’t be reset by email. If you forget it, your locked codes can’t be recovered. Use a password manager and keep an encrypted backup.</p>
+        <summary><?php e('index.faq_q3'); ?></summary>
+        <p><?php e('index.faq_a3'); ?></p>
       </details>
 
       <details class="qa">
-        <summary>What’s a “Saving Room”?</summary>
-        <p>A Saving Room is a shared goal with clear rules: dates, contributions, and how unlocking works. You can save with trusted people and keep everyone aligned.</p>
+        <summary><?php e('index.faq_q4'); ?></summary>
+        <p><?php e('index.faq_a4'); ?></p>
       </details>
 
       <details class="qa">
-        <summary>Can I unlock early?</summary>
-        <p>Time locks are meant to protect you from impulse decisions. In general, you unlock when the date arrives — and sensitive actions may ask for extra confirmation (passkey or authenticator code).</p>
+        <summary><?php e('index.faq_q5'); ?></summary>
+        <p><?php e('index.faq_a5'); ?></p>
       </details>
 
       <details class="qa">
-        <summary>How do backups work?</summary>
-        <p>Backups are encrypted snapshots you can download and restore later. They help you move to a new device without relying on plaintext storage.</p>
+        <summary><?php e('index.faq_q6'); ?></summary>
+        <p><?php e('index.faq_a6'); ?></p>
       </details>
 
     </div>
   </div>
 
-  <div class="footer">© <?= date('Y') ?> <?= htmlspecialchars(APP_NAME) ?> • <a href="#faq">FAQ</a> • Time locks for better money habits</div>
+  <div class="footer">© <?= date('Y') ?> <?= htmlspecialchars(APP_NAME) ?> • <a href="#faq"><?php e('common.faq'); ?></a> • <?php e('index.footer'); ?></div>
 </div>
 </body>
-</html>
+</html> 

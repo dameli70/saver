@@ -20,13 +20,14 @@ header("X-Content-Type-Options: nosniff");
 header("Referrer-Policy: no-referrer");
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html <?= htmlLangAttr() ?>>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Create account — <?= htmlspecialchars(APP_NAME) ?></title>
+<title><?= htmlspecialchars(APP_NAME) ?> — <?= htmlspecialchars(t('page.signup')) ?></title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
+<?php emitI18nJsGlobals(); ?>
 <script src="assets/theme.js"></script>
 <link rel="stylesheet" href="assets/base.css">
 <link rel="stylesheet" href="assets/auth.css">
@@ -41,15 +42,14 @@ header("Referrer-Policy: no-referrer");
 </style>
 </head>
 <body>
-  <button class="theme-toggle" type="button" data-theme-toggle>Theme</button>
+  <a class="lang-toggle fr<?= currentLang() === 'fr' ? ' active' : '' ?>" href="<?= htmlspecialchars(langSwitchUrl('fr'), ENT_QUOTES, 'UTF-8') ?>"><?php e('common.lang_fr'); ?></a>
+  <a class="lang-toggle en<?= currentLang() === 'en' ? ' active' : '' ?>" href="<?= htmlspecialchars(langSwitchUrl('en'), ENT_QUOTES, 'UTF-8') ?>"><?php e('common.lang_en'); ?></a>
+  <button class="theme-toggle" type="button" data-theme-toggle><?php e('common.theme'); ?></button>
   <div class="box">
     <div class="logo"><?= htmlspecialchars(APP_NAME) ?></div>
-    <div class="sub">// Create account</div>
+    <div class="sub"><?php e('signup.subtitle'); ?></div>
 
-    <div class="callout">
-      Your <strong>login password</strong> authenticates you to this site.<br>
-      Your <strong>vault passphrase</strong> is used only in your browser to encrypt/decrypt codes and is never stored by the server — you will enter it when you generate or reveal codes.
-    </div>
+    <div class="callout"><?= t('signup.callout_html'); ?></div>
 
     <div id="err" class="msg msg-err"></div>
     <div id="ok" class="msg msg-ok"></div>
@@ -210,4 +210,4 @@ f.addEventListener('submit', async (e)=>{
 });
 </script>
 </body>
-</html>
+</html> 

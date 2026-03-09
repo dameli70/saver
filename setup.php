@@ -92,13 +92,14 @@ header("X-Content-Type-Options: nosniff");
 header("Referrer-Policy: no-referrer");
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html <?= htmlLangAttr() ?>>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Setup — <?= htmlspecialchars(APP_NAME) ?></title>
+<title><?= htmlspecialchars(APP_NAME) ?> — <?= htmlspecialchars(t('page.setup')) ?></title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
+<?php emitI18nJsGlobals(); ?>
 <script src="assets/theme.js"></script>
 <script src="assets/app.js"></script>
 <link rel="stylesheet" href="assets/base.css">
@@ -127,17 +128,20 @@ header("Referrer-Policy: no-referrer");
   <a class="logo" href="index.php"><?= htmlspecialchars(APP_NAME) ?></a>
   <div class="nav-r">
     <span class="pill" style="display:none;"><?= htmlspecialchars($userEmail) ?></span>
-    <button class="btn btn-ghost btn-sm btn-theme" type="button" data-theme-toggle>Theme</button>
-    <a class="btn btn-ghost btn-sm" href="dashboard.php">Dashboard</a>
-    <a class="btn btn-ghost btn-sm" href="account.php">Account</a>
-    <?php if ($isAdmin): ?><a class="btn btn-ghost btn-sm" href="admin.php">Admin</a><?php endif; ?>
-    <a class="btn btn-ghost btn-sm" href="logout.php">Logout</a>
+    <button class="btn btn-ghost btn-sm btn-theme" type="button" data-theme-toggle><?php e('common.theme'); ?></button>
+    <?php $curLang = currentLang(); ?>
+    <a class="<?= $curLang === 'fr' ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm' ?>" href="<?= htmlspecialchars(langSwitchUrl('fr')) ?>"><?php e('common.lang_fr'); ?></a>
+    <a class="<?= $curLang === 'en' ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm' ?>" href="<?= htmlspecialchars(langSwitchUrl('en')) ?>"><?php e('common.lang_en'); ?></a>
+    <a class="btn btn-ghost btn-sm" href="dashboard.php"><?php e('nav.dashboard'); ?></a>
+    <a class="btn btn-ghost btn-sm" href="account.php"><?php e('nav.account'); ?></a>
+    <?php if ($isAdmin): ?><a class="btn btn-ghost btn-sm" href="admin.php"><?php e('nav.admin'); ?></a><?php endif; ?>
+    <a class="btn btn-ghost btn-sm" href="logout.php"><?php e('common.logout'); ?></a>
   </div>
 </div>
 
 <div class="wrap">
-  <div class="h">Setup</div>
-  <div class="p">Get <?= htmlspecialchars(APP_NAME) ?> ready for daily use. This takes a few minutes and makes unlocking and backups safer.</div>
+  <div class="h"><?php e('page.setup'); ?></div>
+  <div class="p"><?php e('setup.intro', ['app' => APP_NAME]); ?></div>
 
   <div class="card" style="margin-bottom:14px;">
     <div class="card-title"><div class="dot"></div>Progress</div>
@@ -288,4 +292,4 @@ document.getElementById('finish').addEventListener('click', async ()=>{
 });
 </script>
 </body>
-</html>
+</html> 

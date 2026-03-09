@@ -2,6 +2,17 @@
   const KEY = 'locksmith_theme';
   const root = document.documentElement;
 
+  function t(key, fallback){
+    const raw = (window && window.LS_I18N && typeof window.LS_I18N === 'object') ? window.LS_I18N : null;
+    const strings = (raw && raw.strings && typeof raw.strings === 'object') ? raw.strings : {};
+
+    if(strings && Object.prototype.hasOwnProperty.call(strings, key)){
+      return String(strings[key]);
+    }
+
+    return String(fallback == null ? key : fallback);
+  }
+
   function apply(theme){
     root.setAttribute('data-theme', theme);
   }
@@ -37,7 +48,9 @@
 
   function toggleLabel(){
     const cur = root.getAttribute('data-theme') || 'dark';
-    return cur === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
+    return cur === 'dark'
+      ? t('theme.switch_to_light', 'Switch to light mode')
+      : t('theme.switch_to_dark', 'Switch to dark mode');
   }
 
   function initToggle(el){
@@ -59,4 +72,4 @@
   document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('[data-theme-toggle]').forEach(initToggle);
   });
-})();
+})(); 
