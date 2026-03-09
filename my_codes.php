@@ -29,7 +29,7 @@ header("Permissions-Policy: clipboard-write=(self)");
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>LOCKSMITH — My Codes</title>
+<title><?= htmlspecialchars(APP_NAME) ?> — My Codes</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
 <script src="assets/theme.js"></script>
@@ -40,8 +40,12 @@ header("Permissions-Policy: clipboard-write=(self)");
 .app-body{max-width:820px;}
 
 .locks-grid{display:flex;flex-direction:column;gap:12px;}
-.lock-card{background:var(--s1);border:1px solid var(--b1);padding:16px 18px;position:relative;transition:border-color .2s;}
-.lock-card:hover{border-color:var(--b2);}
+.lock-card{background:var(--s1);border:1px solid var(--b1);padding:16px 18px;position:relative;
+  border-radius:var(--radius-card);box-shadow:var(--shadow-card);
+  transition:transform .18s,box-shadow .18s,border-color .18s;}
+@media(hover:hover){
+  .lock-card:hover{transform:translateY(-2px);border-color:var(--b2);box-shadow:var(--shadow-card-hover);}
+}
 .lock-card.st-locked{border-left:3px solid rgba(255,71,87,.5);}
 .lock-card.st-unlocked{border-left:3px solid rgba(71,255,176,.5);}
 .lock-card.st-pending{border-left:3px solid rgba(255,170,0,.5);}
@@ -74,9 +78,10 @@ header("Permissions-Policy: clipboard-write=(self)");
   display:none;align-items:flex-end;justify-content:center;z-index:500;padding:0 0 max(0px,var(--sab)) 0;}
 #reveal-overlay.show{display:flex;}
 .reveal-sheet{background:var(--s1);border:1px solid var(--b2);border-bottom:none;
-  padding:28px 22px max(28px,var(--sab));width:100%;max-width:480px;position:relative;}
+  padding:28px 22px max(28px,var(--sab));width:100%;max-width:480px;position:relative;
+  border-radius:var(--radius-card) var(--radius-card) 0 0;box-shadow:var(--shadow-card);}
 @media(min-width:600px){#reveal-overlay{align-items:center;}
-  .reveal-sheet{border:1px solid var(--b2);max-width:480px;padding:32px;}}
+  .reveal-sheet{border:1px solid var(--b2);max-width:480px;padding:32px;border-radius:var(--radius-card);}}
 .modal-close{position:absolute;top:12px;right:14px;background:none;border:none;color:var(--muted);
   font-size:22px;cursor:pointer;padding:4px;min-width:32px;min-height:32px;
   display:flex;align-items:center;justify-content:center;}
@@ -91,7 +96,7 @@ header("Permissions-Policy: clipboard-write=(self)");
 .vault-input-wrap label{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:6px;}
 .vault-input-wrap input{width:100%;background:var(--code-bg);border:1px solid rgba(232,255,71,.2);
   color:var(--accent);font-family:var(--mono);font-size:15px;padding:13px;outline:none;
-  border-radius:0;-webkit-appearance:none;}
+  border-radius:var(--radius-input);-webkit-appearance:none;}
 
 
 </style>
@@ -101,7 +106,7 @@ header("Permissions-Policy: clipboard-write=(self)");
 
 <div id="app">
   <div class="topbar">
-    <div class="topbar-logo">LOCK<span>SMITH</span></div>
+    <div class="topbar-logo"><?= htmlspecialchars(APP_NAME) ?></div>
     <div class="topbar-r">
       <span class="user-pill"><?= htmlspecialchars($userEmail) ?></span>
       <button class="btn btn-ghost btn-sm btn-theme" type="button" data-theme-toggle>Theme</button>

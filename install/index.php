@@ -112,6 +112,7 @@ function updateConfigFile(string $path, array $vals): void {
         'APP_HMAC_SECRET' => $vals['app_hmac_secret'],
         'APP_ENV' => $vals['app_env'],
         'APP_NAME' => $vals['app_name'],
+        'APP_LOGO_URL' => $vals['app_logo_url'],
         'MAIL_FROM' => $vals['mail_from'],
         'EMAIL_VERIFY_TTL_HOURS' => (string)$vals['email_verify_ttl_hours'],
 
@@ -234,7 +235,8 @@ $vals = [
     'db_pass' => '',
     'db_charset' => 'utf8mb4',
     'app_env' => 'development',
-    'app_name' => 'LOCKSMITH',
+    'app_name' => 'Controle',
+    'app_logo_url' => '',
     'mail_from' => 'no-reply@localhost',
     'email_verify_ttl_hours' => 24,
 
@@ -265,7 +267,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $adminPass2 = (string)($_POST['admin_pass2'] ?? '');
 
     $vals['app_env'] = trim((string)($_POST['app_env'] ?? 'development'));
-    $vals['app_name'] = trim((string)($_POST['app_name'] ?? 'LOCKSMITH'));
+    $vals['app_name'] = trim((string)($_POST['app_name'] ?? 'Controle'));
+    $vals['app_logo_url'] = trim((string)($_POST['app_logo_url'] ?? ''));
     $vals['mail_from'] = trim((string)($_POST['mail_from'] ?? 'no-reply@localhost'));
     $vals['email_verify_ttl_hours'] = (int)($_POST['email_verify_ttl_hours'] ?? 24);
 
@@ -290,6 +293,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!in_array($vals['app_env'], ['development', 'production'], true)) $errors[] = 'Invalid APP_ENV.';
     if ($vals['app_name'] === '') $errors[] = 'APP_NAME is required.';
     if (!filter_var($vals['mail_from'], FILTER_VALIDATE_EMAIL)) $errors[] = 'MAIL_FROM must be a valid email.';
+    if ($vals['app_logo_url'] !== '' && !preg_match('#^(https?://|/|\./|\.\./|assets/)#', $vals['app_logo_url'])) {
+        $errors[] = 'APP_LOGO_URL must be an absolute URL (https://...) or a local path (e.g. /assets/logo.png).';
+    }
     if ($vals['email_verify_ttl_hours'] < 1 || $vals['email_verify_ttl_hours'] > 168) $errors[] = 'Email verification TTL must be 1–168 hours.';
 
     if ($vals['smtp_host'] !== '') {
@@ -380,7 +386,7 @@ header("Referrer-Policy: no-referrer");
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Install — LOCKSMITH</title>
+<title>Install — <?= htmlspecialchars($vals['app_name'] ?? 'Controle') ?></title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../assets/base.css">
@@ -390,10 +396,12 @@ header("Referrer-Policy: no-referrer");
 .orb1{width:520px;height:520px;top:-170px;right:-120px;}
 .orb2{width:360px;height:360px;bottom:40px;left:-90px;}
 .wrap{position:relative;z-index:1;max-width:980px;margin:0 auto;padding:max(24px,var(--sat)) 18px 60px;}
-.logo{font-family:var(--display);font-weight:900;letter-spacing:-1px;font-size:28px;margin-bottom:4px;}
-.logo span{color:var(--accent);} 
+.logo{display:flex;align-items:center;gap:12px;margin-bottom:4px;}
+.logo img{display:block;max-height:44px;max-width:220px;object-fit:contain;border:1px solid rgba(255,255,255,.08);background:rgba(0,0,0,.12);padding:6px;}
+.logo-text{font-family:var(--display);font-weight:900;letter-spacing:-1px;font-size:28px;line-height:1;}
+.logo-text span{color:var(--accent);} 
 .sub{color:var(--muted);font-size:11px;letter-spacing:2px;text-transform:uppercase;margin-bottom:18px;}
-.card{background:rgba(13,15,20,.9);padding:18px;}
+.card{background:rgba(13,15,20,.9);border:1px solid var(--b1);padding:18px;border-radius:var(--radius-card);box-shadow:var(--shadow-card);}
 .grid{display:grid;grid-template-columns:1fr;gap:12px;}
 @media(min-width:840px){.grid{grid-template-columns:1fr 1fr;}}
 .field{margin-bottom:12px;}
@@ -408,7 +416,7 @@ hr{border:none;border-top:1px solid var(--b1);margin:16px 0;}
 <body>
 <div class="orb orb1"></div><div class="orb orb2"></div>
 <div class="wrap">
-  <div class="logo">LOCK<span>SMITH</span></div>
+  <div class="logo"><?= htmlspecialchars($vals['app_name'] ?? 'Controle') ?></div>
   <div class="sub">// Installation</div>
 
   <?php if ($errors): ?>
@@ -465,7 +473,9 @@ hr{border:none;border-top:1px solid var(--b1);margin:16px 0;}
             </select>
           </div>
 
-          <div class="field"><label>APP_NAME</label><input name="app_name" value="<?= htmlspecialchars($vals['app_name'] ?? 'LOCKSMITH') ?>" required></div>
+          <div class="field"><label>APP_NAME</label><input name="app_name" value="<?= htmlspecialchars($vals['app_name'] ?? 'Controle') ?>" required></div>
+          <div class="field"><label>APP_LOGO_URL (optional)</label><input name="app_logo_url" value="<?= htmlspecialchars($vals['app_logo_url'] ?? '') ?>" placeholder="/assets/logo.png or https://..."></div>
+          <div class="note" style="margin-top:-6px;">Leave empty to use text-only branding. If set, the installer will show the logo and save it in <code>config/database.php</code>.</div>
           <div class="field"><label>MAIL_FROM</label><input name="mail_from" value="<?= htmlspecialchars($vals['mail_from'] ?? 'no-reply@localhost') ?>" required></div>
           <div class="field"><label>Email verification TTL (hours)</label><input name="email_verify_ttl_hours" type="number" min="1" max="168" value="<?= (int)($vals['email_verify_ttl_hours'] ?? 24) ?>" required></div>
 

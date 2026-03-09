@@ -28,7 +28,7 @@ function exportPayload(int $userId): array {
     unset($lock);
 
     return [
-        'app' => defined('APP_NAME') ? APP_NAME : 'LOCKSMITH',
+        'app' => defined('APP_NAME') ? APP_NAME : 'Controle',
         'export_version' => 2,
         'exported_at' => date('c'),
         'locks' => $locks,

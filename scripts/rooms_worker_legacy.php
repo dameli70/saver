@@ -1,6 +1,6 @@
 <?php
 // ============================================================
-//  LOCKSMITH — Saving Rooms Worker (legacy)
+//  Controle — Saving Rooms Worker (legacy)
 //
 //  NOTE: This file is kept for reference. Use the current worker:
 //    php scripts/rooms_worker.php

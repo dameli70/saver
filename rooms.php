@@ -28,7 +28,7 @@ header("Referrer-Policy: no-referrer");
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Saving Rooms — LOCKSMITH</title>
+<title>Saving Rooms — <?= htmlspecialchars(APP_NAME) ?></title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
 <script src="assets/theme.js"></script>
@@ -66,7 +66,7 @@ header("Referrer-Policy: no-referrer");
 <div class="orb orb1"></div><div class="orb orb2"></div>
 
 <div class="nav">
-  <a class="logo" href="index.php">LOCK<span>SMITH</span></a>
+  <a class="logo" href="index.php"><?= htmlspecialchars(APP_NAME) ?></a>
   <div class="nav-r">
     <span class="pill"><?= htmlspecialchars($userEmail) ?></span>
     <button class="btn btn-ghost btn-sm btn-theme" type="button" data-theme-toggle>Theme</button>
@@ -81,8 +81,8 @@ header("Referrer-Policy: no-referrer");
 </div>
 
 <div class="wrap">
-  <div class="h">Public Discovery Board</div>
-  <div class="p">Rooms shown are filtered by your trust level. Joining also requires you are not in a restricted period. Join requests must be approved by the room maker.</div>
+  <div class="h">Saving Rooms</div>
+  <div class="p">Save together toward a goal. Browse rooms, request to join, or create your own with clear rules. Some rooms may be unavailable depending on your trust level or a cooldown period.</div>
   <div id="eligibility" style="color:var(--muted);font-size:12px;line-height:1.6;margin:-8px 0 18px 0;"></div>
 
   <div class="card" style="margin-bottom:14px;">
@@ -93,20 +93,20 @@ header("Referrer-Policy: no-referrer");
   <div class="grid">
     <div class="card" style="grid-column:1/-1;">
       <div class="card-title">My rooms</div>
-      <div class="p" style="margin-top:-6px;">Your active, pending, and completed rooms.</div>
+      <div class="p" style="margin-top:-6px;">Rooms you created or joined — active, pending, or completed.</div>
       <div id="myrooms-msg" class="msg"></div>
       <div id="myrooms-wrap" class="rooms"></div>
     </div>
 
     <div class="card">
-      <div class="card-title">Rooms</div>
+      <div class="card-title">Discover rooms</div>
       <div id="rooms-msg" class="msg"></div>
       <div id="rooms-wrap" class="rooms"></div>
     </div>
 
     <div class="card">
-      <div class="card-title">Create room</div>
-      <div class="p" style="margin-top:-6px;">Define all terms before the start date. Once the lobby locks, terms cannot change.</div>
+      <div class="card-title">Create a room</div>
+      <div class="p" style="margin-top:-6px;">Set the goal, the rules, and the dates. Once the room starts, the rules lock in.</div>
 
       <div class="field"><label>Purpose</label>
         <select id="cr-purpose">
@@ -352,10 +352,10 @@ function updateEligibility(){
 
   const bits = [];
   if(myTrustLevel !== null){
-    bits.push('Your trust level: Level ' + esc(myTrustLevel));
+    bits.push('Your room access level: Level ' + esc(myTrustLevel));
   }
   if(myRestrictedUntil){
-    bits.push('Restricted until <b>' + esc(fmtLocal(myRestrictedUntil)) + '</b> <span class="utc-pill" title="Stored/enforced in UTC">' + esc(fmtUtc(myRestrictedUntil)) + '</span> (cannot join new rooms)');
+    bits.push('Cooldown until <b>' + esc(fmtLocal(myRestrictedUntil)) + '</b> <span class="utc-pill" title="Stored/enforced in UTC">' + esc(fmtUtc(myRestrictedUntil)) + '</span> (you can’t join new rooms yet)');
   }
 
   el.innerHTML = bits.join(' · ');

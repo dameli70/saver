@@ -1,18 +1,33 @@
 <?php
 // ============================================================
-//  LOCKSMITH — CLI Installer
+//  Controle — CLI Installer
 //
-//  Usage:
+//  Usage (interactive):
 //    php install/install.php
-//    php install/install.php --non-interactive --init-db=1 \
+//
+//  Usage (non-interactive):
+//    php install/install.php --non-interactive --init-db=1 --apply-migrations=1 \
 //      --db-host=localhost --db-name=locksmith --db-user=root --db-pass='' \
-//      --app-env=development --app-name=LOCKSMITH --mail-from=no-reply@localhost \
-//      --email-verify-ttl-hours=24
+//      --app-env=development --app-name=Controle --app-logo-url='' --mail-from=no-reply@localhost \
+//      --email-verify-ttl-hours=24 \
+//      --smtp-host=smtp.example.com --smtp-port=587 --smtp-secure=tls \
+//      --smtp-user=user --smtp-pass=pass --smtp-verify-peer=1 \
+//      --admin-email=admin@example.com --admin-pass='change_me_please'
 // ============================================================
 
 if (PHP_SAPI !== 'cli') {
     fwrite(STDERR, "This installer must be run from the command line.\n");
     exit(1);
+}
+
+requireExt('openssl');
+requireExt('pdo_mysql');
+requireExt('mbstring');
+
+$args = parseArgs($argv);
+if (!empty($args['help'])) {
+    usage();
+    exit(0);
 }
 
 $root = realpath(__DIR__ . '/..');
@@ -21,322 +36,20 @@ if ($root === false) {
     exit(1);
 }
 
-$configPath   = $root . '/config/database.php';
-$schemaPath   = $root . '/config/schema.sql';
+$configPath    = $root . '/config/database.php';
+$schemaPath    = $root . '/config/schema.sql';
 $migrationsDir = $root . '/config/migrations';
-
-function usage(): void {
-    $msg = <<<TXT
-LOCKSMITH Installer
-
-Options:
-  --non-interactive               Do not prompt. Require flags for all values.
-  --force=1                       Overwrite config/database.php without prompting.
-
-  --db-host=HOST                  Database host
-  --db-name=NAME                  Database name
-  --db-user=USER                  Database user
-  --db-pass=PASS                  Database password
-  --db-charset=CHARSET            Database charset (default: utf8mb4)
-
-  --app-env=development|production
-  --app-name=NAME                 Default: LOCKSMITH
-  --mail-from=EMAIL               Default: no-reply@localhost
-  --email-verify-ttl-hours=HOURS  Default: 24
-
-  --smtp-host=HOST                Optional; if empty, PHP mail() is used
-  --smtp-port=PORT                Default: 587
-  --smtp-user=USER
-  --smtp-pass=PASS
-  --smtp-secure=none|tls|ssl      Default: tls
-  --smtp-verify-peer=0|1          Default: 1
-
-  --init-db=1                     Create tables by running config/schema.sql
-  --apply-migrations=1            Apply SQL files in config/migrations (safe to re-run)
-
-  --admin-email=EMAIL             Create initial Super Admin user (required on fresh install)
-  --admin-pass=PASS               Initial Super Admin login password (min 8 chars)
-
-TXT;
-    fwrite(STDOUT, $msg);
-}
-
-function parseArgs(array $argv): array {
-    $out = [];
-    foreach ($argv as $i => $arg) {
-        if ($i === 0) continue;
-        if ($arg === '--help' || $arg === '-h') {
-            $out['help'] = true;
-            continue;
-        }
-        if (str_starts_with($arg, '--')) {
-            $kv = substr($arg, 2);
-            $eq = strpos($kv, '=');
-            if ($eq === false) {
-                $out[$kv] = true;
-            } else {
-                $k = substr($kv, 0, $eq);
-                $v = substr($kv, $eq + 1);
-                $out[$k] = $v;
-            }
-        }
-    }
-    return $out;
-}
-
-function prompt(string $label, ?string $default = null): string {
-    $suffix = $default !== null ? " [{$default}]" : '';
-    fwrite(STDOUT, $label . $suffix . ': ');
-    $in = fgets(STDIN);
-    if ($in === false) return $default ?? '';
-    $in = trim($in);
-    if ($in === '' && $default !== null) return $default;
-    return $in;
-}
-
-function promptYesNo(string $label, bool $default): bool {
-    $d = $default ? 'Y/n' : 'y/N';
-    $in = strtolower(prompt($label . " ({$d})", ''));
-    if ($in === '') return $default;
-    return in_array($in, ['y', 'yes'], true);
-}
-
-function requireExt(string $ext): void {
-    if (!extension_loaded($ext)) {
-        fwrite(STDERR, "Missing required PHP extension: {$ext}\n");
-        exit(1);
-    }
-}
-
-function phpSingleQuoted(string $value): string {
-    return "'" . str_replace(["\\", "'"], ["\\\\", "\\'"], $value) . "'";
-}
-
-function updateConfigFile(string $path, array $vals, bool $force): void {
-    if (!file_exists($path)) {
-        fwrite(STDERR, "Missing config file: {$path}\n");
-        exit(1);
-    }
-
-    if (!$force) {
-        $ok = promptYesNo("Update {$path}?", true);
-        if (!$ok) {
-            fwrite(STDOUT, "Aborted.\n");
-            exit(0);
-        }
-    }
-
-    $backupPath = $path . '.bak.' . date('Ymd_His');
-    if (!copy($path, $backupPath)) {
-        fwrite(STDERR, "Failed to create backup: {$backupPath}\n");
-        exit(1);
-    }
-
-    $src = file_get_contents($path);
-    if ($src === false) {
-        fwrite(STDERR, "Failed to read: {$path}\n");
-        exit(1);
-    }
-
-    $repls = [
-        'DB_HOST' => $vals['db_host'],
-        'DB_NAME' => $vals['db_name'],
-        'DB_USER' => $vals['db_user'],
-        'DB_PASS' => $vals['db_pass'],
-        'DB_CHARSET' => $vals['db_charset'],
-        'APP_HMAC_SECRET' => $vals['app_hmac_secret'],
-        'APP_ENV' => $vals['app_env'],
-        'APP_NAME' => $vals['app_name'],
-        'MAIL_FROM' => $vals['mail_from'],
-        'EMAIL_VERIFY_TTL_HOURS' => (string)$vals['email_verify_ttl_hours'],
-
-        'SMTP_HOST' => $vals['smtp_host'],
-        'SMTP_PORT' => (string)$vals['smtp_port'],
-        'SMTP_USER' => $vals['smtp_user'],
-        'SMTP_PASS' => $vals['smtp_pass'],
-        'SMTP_SECURE' => $vals['smtp_secure'],
-        'SMTP_VERIFY_PEER' => (string)$vals['smtp_verify_peer'],
-    ];
-
-    foreach ($repls as $const => $val) {
-        if (in_array($const, ['EMAIL_VERIFY_TTL_HOURS', 'SMTP_PORT', 'SMTP_VERIFY_PEER'], true)) {
-            $pattern = "/define\\('" . preg_quote($const, '/') . "',\\s*[^)]+\\);/";
-            $replace = "define('{$const}', " . (int)$val . ");";
-        } else {
-            $pattern = "/define\\('" . preg_quote($const, '/') . "',\\s*'(?:\\\\'|[^'])*'\\);/";
-            $replace = "define('{$const}', " . phpSingleQuoted($val) . ");";
-        }
-        $src = preg_replace($pattern, $replace, $src, 1, $count);
-        if ($count !== 1) {
-            fwrite(STDERR, "Could not update {$const} in {$path} (pattern mismatch).\n");
-            fwrite(STDERR, "Backup remains at {$backupPath}.\n");
-            exit(1);
-        }
-    }
-
-    if (file_put_contents($path, $src) === false) {
-        fwrite(STDERR, "Failed to write: {$path}\n");
-        fwrite(STDERR, "Backup remains at {$backupPath}.\n");
-        exit(1);
-    }
-
-    fwrite(STDOUT, "Updated {$path}\n");
-    fwrite(STDOUT, "Backup saved to {$backupPath}\n");
-}
-
-function connectPdoServer(string $host, string $charset, string $user, string $pass): PDO {
-    $dsn = "mysql:host={$host};charset={$charset}";
-    return new PDO($dsn, $user, $pass, [
-        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-        PDO::ATTR_EMULATE_PREPARES => false,
-    ]);
-}
-
-function connectPdoDb(string $host, string $db, string $charset, string $user, string $pass): PDO {
-    $dsn = "mysql:host={$host};dbname={$db};charset={$charset}";
-    return new PDO($dsn, $user, $pass, [
-        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-        PDO::ATTR_EMULATE_PREPARES => false,
-    ]);
-}
-
-function splitSqlStatements(string $sql): array {
-    // schema.sql is simple (no stored procedures). We strip -- comments and split on semicolons.
-    $lines = preg_split('/\R/', $sql);
-    $buf = [];
-    foreach ($lines as $line) {
-        $trim = ltrim($line);
-        if (str_starts_with($trim, '--')) continue;
-        $buf[] = $line;
-    }
-    $sql = implode("\n", $buf);
-    $parts = array_map('trim', explode(';', $sql));
-    return array_values(array_filter($parts, fn($p) => $p !== ''));
-}
-
-function ensureMigrationsTable(PDO $pdo): void {
-    $pdo->exec("CREATE TABLE IF NOT EXISTS schema_migrations (filename VARCHAR(255) PRIMARY KEY, applied_at DATETIME DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB");
-}
-
-function migrationApplied(PDO $pdo, string $filename): bool {
-    $stmt = $pdo->prepare("SELECT filename FROM schema_migrations WHERE filename = ?");
-    $stmt->execute([$filename]);
-    return (bool)$stmt->fetch();
-}
-
-function markMigrationApplied(PDO $pdo, string $filename): void {
-    $stmt = $pdo->prepare("INSERT IGNORE INTO schema_migrations (filename) VALUES (?)");
-    $stmt->execute([$filename]);
-}
-
-function applySqlFile(PDO $pdo, string $path, bool $ignoreDuplicates): void {
-    $sql = file_get_contents($path);
-    if ($sql === false) {
-        throw new RuntimeException("Failed to read SQL file: {$path}");
-    }
-    $stmts = splitSqlStatements($sql);
-    foreach ($stmts as $stmt) {
-        $trim = ltrim($stmt);
-        if ($trim === '') continue;
-        if (preg_match('/^CREATE\s+DATABASE/i', $trim)) continue;
-        if (preg_match('/^USE\s+/i', $trim)) continue;
-
-        try {
-            $pdo->exec($stmt);
-        } catch (PDOException $e) {
-            $msg = $e->getMessage();
-            if ($ignoreDuplicates && (
-                str_contains($msg, 'Duplicate column name') ||
-                str_contains($msg, 'Duplicate key name') ||
-                str_contains($msg, 'Duplicate index')
-            )) {
-                continue;
-            }
-            throw $e;
-        }
-    }
-}
-
-function hashLoginPasswordInstaller(string $password): string {
-    return password_hash($password, PASSWORD_ARGON2ID, [
-        'memory_cost' => 65536,
-        'time_cost'   => 4,
-        'threads'     => 2,
-    ]);
-}
-
-function hashVaultVerifierInstaller(string $passphrase): string {
-    return password_hash($passphrase, PASSWORD_ARGON2ID, [
-        'memory_cost' => 65536,
-        'time_cost'   => 4,
-        'threads'     => 2,
-    ]);
-}
-
-function createInitialAdmin(PDO $pdo, string $email, string $loginPwd): void {
-    $email = strtolower(trim($email));
-    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        throw new RuntimeException('Admin email must be a valid email address.');
-    }
-    if (strlen($loginPwd) < 8) {
-        throw new RuntimeException('Admin login password must be at least 8 characters.');
-    }
-
-    $hasAdminCol = false;
-    try {
-        $stmt = $pdo->query("SELECT 1 FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'users' AND column_name = 'is_admin' LIMIT 1");
-        $hasAdminCol = (bool)$stmt->fetchColumn();
-    } catch (Throwable) {
-        $hasAdminCol = false;
-    }
-
-    if (!$hasAdminCol) {
-        throw new RuntimeException("Your schema does not include users.is_admin. Re-run the installer with schema initialization enabled.");
-    }
-
-    $users = (int)$pdo->query('SELECT COUNT(*) FROM users')->fetchColumn();
-    if ($users !== 0) {
-        throw new RuntimeException('Users already exist. Refusing to create an initial super admin.');
-    }
-
-    $loginHash = hashLoginPasswordInstaller($loginPwd);
-
-    $vaultVerifierSalt = bin2hex(random_bytes(32));
-    $vaultVerifier     = hashVaultVerifierInstaller(bin2hex(random_bytes(32)) . $vaultVerifierSalt);
-
-    $pdo->prepare("INSERT INTO users (email, login_hash, vault_verifier, vault_verifier_salt, is_admin, email_verified_at) VALUES (?, ?, ?, ?, 1, NOW())")
-        ->execute([$email, $loginHash, $vaultVerifier, $vaultVerifierSalt]);
-}
-
-$args = parseArgs($argv);
-if (!empty($args['help'])) {
-    usage();
-    exit(0);
-}
-
-$nonInteractive = !empty($args['non-interactive']);
-$force         = (($args['force'] ?? '') === '1');
-
-// ── Basic checks ───────────────────────────────────────────
-if (version_compare(PHP_VERSION, '8.1.0', '<')) {
-    fwrite(STDERR, "PHP 8.1+ required. You are running " . PHP_VERSION . "\n");
-    exit(1);
-}
-requireExt('openssl');
-requireExt('pdo');
-requireExt('pdo_mysql');
-requireExt('mbstring');
 
 if (!file_exists($schemaPath)) {
     fwrite(STDERR, "Missing schema file: {$schemaPath}\n");
     exit(1);
 }
 
-// ── Gather values ──────────────────────────────────────────
+$nonInteractive = !empty($args['non-interactive']);
+$force          = (($args['force'] ?? '') === '1');
+
 $get = function(string $key, ?string $default = null) use ($args, $nonInteractive): string {
-    if (isset($args[$key])) return (string)$args[$key];
+    if (array_key_exists($key, $args)) return (string)$args[$key];
     if ($nonInteractive) {
         if ($default !== null) return $default;
         fwrite(STDERR, "Missing required option --{$key}=... (non-interactive).\n");
@@ -358,8 +71,10 @@ if (!in_array($vals['app_env'], ['development', 'production'], true)) {
     exit(1);
 }
 
-$vals['app_name'] = $get('app-name', 'LOCKSMITH');
+$vals['app_name'] = $get('app-name', 'Controle');
+$vals['app_logo_url'] = $get('app-logo-url', '');
 $vals['mail_from'] = $get('mail-from', 'no-reply@localhost');
+
 $ttl = $get('email-verify-ttl-hours', '24');
 if (!ctype_digit((string)$ttl) || (int)$ttl < 1 || (int)$ttl > 168) {
     fwrite(STDERR, "Invalid --email-verify-ttl-hours (1-168).\n");
@@ -403,9 +118,6 @@ if ($vals['smtp_host'] !== '') {
 
 $vals['app_hmac_secret'] = bin2hex(random_bytes(32));
 
-$adminEmail = $get('admin-email', null);
-$adminPass  = $get('admin-pass', null);
-
 $initDb = (($args['init-db'] ?? '') === '1');
 $applyMigrations = (($args['apply-migrations'] ?? '') === '1');
 
@@ -414,56 +126,45 @@ if (!$nonInteractive) {
     $applyMigrations = $applyMigrations || promptYesNo('Apply migrations now? (safe to re-run)', true);
 }
 
-// ── Validate DB credentials (do not write config on failure) ─
 fwrite(STDOUT, "Validating MySQL credentials...\n");
 
-$dbPdo = null;
-
 try {
-    // Always validate credentials against the server first (catches wrong user/pass)
+    // Validate credentials against the server (catches wrong user/pass).
     $serverPdo = connectPdoServer($vals['db_host'], $vals['db_charset'], $vals['db_user'], $vals['db_pass']);
 
     if ($initDb || $applyMigrations) {
-        // Create DB if possible. If privileges are missing, the next step will fail clearly.
         $dbName = $vals['db_name'];
         $quotedDb = '`' . str_replace('`', '``', $dbName) . '`';
         $serverPdo->exec("CREATE DATABASE IF NOT EXISTS {$quotedDb} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
-
-        $dbPdo = connectPdoDb($vals['db_host'], $vals['db_name'], $vals['db_charset'], $vals['db_user'], $vals['db_pass']);
-
-        if ($initDb) {
-            fwrite(STDOUT, "Applying schema (config/schema.sql)...\n");
-            applySqlFile($dbPdo, $schemaPath, true);
-            fwrite(STDOUT, "Schema applied.\n");
-        }
-
-        if ($applyMigrations) {
-            if (is_dir($migrationsDir)) {
-                ensureMigrationsTable($dbPdo);
-                $files = array_values(array_filter(scandir($migrationsDir) ?: [], fn($f) => preg_match('/\\.sql$/i', $f)));
-                sort($files, SORT_NATURAL);
-
-                foreach ($files as $f) {
-                    if (migrationApplied($dbPdo, $f)) continue;
-                    $path = $migrationsDir . '/' . $f;
-                    fwrite(STDOUT, "Applying migration {$f}...\n");
-                    applySqlFile($dbPdo, $path, true);
-                    markMigrationApplied($dbPdo, $f);
-                }
-
-                fwrite(STDOUT, "Migrations applied.\n");
-            } else {
-                fwrite(STDOUT, "No migrations directory found; skipping.\n");
-            }
-        }
-    } else {
-        // No schema work requested, but still verify the database is reachable.
-        $dbPdo = connectPdoDb($vals['db_host'], $vals['db_name'], $vals['db_charset'], $vals['db_user'], $vals['db_pass']);
     }
 
-    if (!$dbPdo) {
-        throw new RuntimeException('Database connection failed.');
+    $dbPdo = connectPdoDb($vals['db_host'], $vals['db_name'], $vals['db_charset'], $vals['db_user'], $vals['db_pass']);
+
+    if ($initDb) {
+        fwrite(STDOUT, "Applying schema (config/schema.sql)...\n");
+        applySqlFile($dbPdo, $schemaPath, true);
+        fwrite(STDOUT, "Schema applied.\n");
     }
+
+    if ($applyMigrations && is_dir($migrationsDir)) {
+        ensureMigrationsTable($dbPdo);
+
+        $files = array_values(array_filter(scandir($migrationsDir) ?: [], fn($f) => preg_match('/\\.sql$/i', $f)));
+        sort($files, SORT_NATURAL);
+
+        foreach ($files as $f) {
+            if (migrationApplied($dbPdo, $f)) continue;
+            $path = $migrationsDir . '/' . $f;
+            fwrite(STDOUT, "Applying migration {$f}...\n");
+            applySqlFile($dbPdo, $path, true);
+            markMigrationApplied($dbPdo, $f);
+        }
+
+        fwrite(STDOUT, "Migrations applied.\n");
+    }
+
+    $adminEmail = trim($get('admin-email', ''));
+    $adminPass  = (string)$get('admin-pass', '');
 
     createInitialAdmin($dbPdo, $adminEmail, $adminPass);
 
@@ -473,19 +174,336 @@ try {
     exit(1);
 }
 
-// ── Write config/database.php ───────────────────────────────
 fwrite(STDOUT, "Writing config/database.php...\n");
-updateConfigFile($configPath, $vals, $force);
+writeConfigFile($configPath, $vals, $force);
 
 $flagPath = $root . '/config/installed.flag';
 $flagBody = "installed_at=" . date('c') . "\n";
 $flagBody .= "installed_by=cli\n";
-if (file_put_contents($flagPath, $flagBody) === false) {
-    fwrite(STDERR, "\nWARNING: Could not write {$flagPath}.\n");
-    fwrite(STDERR, "The web app will redirect to /install/ until this file exists.\n");
+file_put_contents($flagPath, $flagBody);
+
+fwrite(STDOUT, "\nDone.\n");
+
+// ───────────────────────────────────────────────────────────
+
+function usage(): void {
+    $msg = <<<TXT
+Controle Installer
+
+Run:
+  php install/install.php
+
+Non-interactive example:
+  php install/install.php --non-interactive --init-db=1 --apply-migrations=1 \
+    --db-host=localhost --db-name=locksmith --db-user=root --db-pass='' \
+    --app-env=development --app-name=Controle --app-logo-url='' --mail-from=no-reply@localhost \
+    --email-verify-ttl-hours=24 \
+    --smtp-host=smtp.example.com --smtp-port=587 --smtp-secure=tls \
+    --smtp-user=user --smtp-pass=pass --smtp-verify-peer=1 \
+    --admin-email=admin@example.com --admin-pass='change_me_please'
+
+TXT;
+    fwrite(STDOUT, $msg);
 }
 
-fwrite(STDOUT, "\nDone.\n\nNext steps:\n");
-fwrite(STDOUT, "- Point your web server document root at this project folder.\n");
-fwrite(STDOUT, "- Visit / (index.php) to access the app.\n");
-fwrite(STDOUT, "- Configure SMTP_* in config/database.php (recommended) or ensure PHP mail() works for verification emails.\n");
+function parseArgs(array $argv): array {
+    $out = [];
+    foreach ($argv as $i => $arg) {
+        if ($i === 0) continue;
+        if ($arg === '--help' || $arg === '-h') {
+            $out['help'] = true;
+            continue;
+        }
+        if (!str_starts_with($arg, '--')) continue;
+
+        $kv = substr($arg, 2);
+        $eq = strpos($kv, '=');
+        if ($eq === false) {
+            $out[$kv] = true;
+            continue;
+        }
+        $out[substr($kv, 0, $eq)] = substr($kv, $eq + 1);
+    }
+    return $out;
+}
+
+function prompt(string $label, ?string $default = null): string {
+    $suffix = $default !== null ? " [{$default}]" : '';
+    fwrite(STDOUT, $label . $suffix . ': ');
+    $in = fgets(STDIN);
+    if ($in === false) return $default ?? '';
+    $in = trim($in);
+    if ($in === '' && $default !== null) return $default;
+    return $in;
+}
+
+function promptYesNo(string $label, bool $default): bool {
+    $d = $default ? 'Y/n' : 'y/N';
+    $in = strtolower(prompt($label . " ({$d})"));
+    if ($in === '') return $default;
+    return in_array($in, ['y', 'yes'], true);
+}
+
+function requireExt(string $ext): void {
+    if (!extension_loaded($ext)) {
+        fwrite(STDERR, "Missing required PHP extension: {$ext}\n");
+        exit(1);
+    }
+}
+
+function connectPdoServer(string $host, string $charset, string $user, string $pass): PDO {
+    $dsn = "mysql:host={$host};charset={$charset}";
+    return new PDO($dsn, $user, $pass, [
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        PDO::ATTR_EMULATE_PREPARES => false,
+    ]);
+}
+
+function connectPdoDb(string $host, string $dbName, string $charset, string $user, string $pass): PDO {
+    $dsn = "mysql:host={$host};dbname={$dbName};charset={$charset}";
+    return new PDO($dsn, $user, $pass, [
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        PDO::ATTR_EMULATE_PREPARES => false,
+    ]);
+}
+
+function splitSqlStatements(string $sql): array {
+    $sql = preg_replace("/\r\n?/", "\n", $sql);
+    $sql = preg_replace('/^\xEF\xBB\xBF/', '', $sql); // strip BOM
+
+    // Remove /* */ comments.
+    $sql = preg_replace('#/\*.*?\*/#s', '', $sql);
+
+    $out = [];
+    $buf = '';
+    $inStr = false;
+    $strCh = '';
+
+    $len = strlen($sql);
+    for ($i = 0; $i < $len; $i++) {
+        $ch = $sql[$i];
+
+        if ($inStr) {
+            $buf .= $ch;
+            if ($ch === $strCh) {
+                $prev = $i > 0 ? $sql[$i - 1] : '';
+                $next = ($i + 1) < $len ? $sql[$i + 1] : '';
+                if ($strCh === "'" && $next === "'") {
+                    $buf .= $next;
+                    $i++;
+                    continue;
+                }
+                if ($prev !== '\\') {
+                    $inStr = false;
+                    $strCh = '';
+                }
+            }
+            continue;
+        }
+
+        if ($ch === '-' && ($i + 1) < $len && $sql[$i + 1] === '-') {
+            while ($i < $len && $sql[$i] !== "\n") $i++;
+            $buf .= "\n";
+            continue;
+        }
+        if ($ch === '#') {
+            while ($i < $len && $sql[$i] !== "\n") $i++;
+            $buf .= "\n";
+            continue;
+        }
+
+        if ($ch === "'" || $ch === '"') {
+            $inStr = true;
+            $strCh = $ch;
+            $buf .= $ch;
+            continue;
+        }
+
+        if ($ch === ';') {
+            $stmt = trim($buf);
+            if ($stmt !== '') $out[] = $stmt;
+            $buf = '';
+            continue;
+        }
+
+        $buf .= $ch;
+    }
+
+    $tail = trim($buf);
+    if ($tail !== '') $out[] = $tail;
+
+    return $out;
+}
+
+function applySqlFile(PDO $db, string $path, bool $ignoreDuplicateErrors): void {
+    $sql = file_get_contents($path);
+    if ($sql === false) throw new RuntimeException("Failed to read SQL file: {$path}");
+
+    $stmts = splitSqlStatements($sql);
+    foreach ($stmts as $stmt) {
+        $trim = ltrim($stmt);
+        if ($trim === '') continue;
+
+        if (preg_match('/^CREATE\s+DATABASE/i', $trim)) continue;
+        if (preg_match('/^USE\s+/i', $trim)) continue;
+
+        try {
+            $db->exec($stmt);
+        } catch (PDOException $e) {
+            $code = (int)($e->errorInfo[1] ?? 0);
+            if ($ignoreDuplicateErrors && in_array($code, [1050, 1060, 1061, 1062, 1068, 1091], true)) {
+                continue;
+            }
+            throw $e;
+        }
+    }
+}
+
+function ensureMigrationsTable(PDO $db): void {
+    $db->exec("CREATE TABLE IF NOT EXISTS schema_migrations (filename VARCHAR(255) PRIMARY KEY, applied_at DATETIME DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB");
+}
+
+function migrationApplied(PDO $db, string $filename): bool {
+    $st = $db->prepare('SELECT 1 FROM schema_migrations WHERE filename = ? LIMIT 1');
+    $st->execute([$filename]);
+    return (bool)$st->fetchColumn();
+}
+
+function markMigrationApplied(PDO $db, string $filename): void {
+    $db->prepare('INSERT IGNORE INTO schema_migrations (filename) VALUES (?)')->execute([$filename]);
+}
+
+function hashLoginPassword(string $password): string {
+    return password_hash($password, PASSWORD_ARGON2ID, [
+        'memory_cost' => 65536,
+        'time_cost'   => 4,
+        'threads'     => 2,
+    ]);
+}
+
+function hashVaultVerifier(string $passphrase): string {
+    return password_hash($passphrase, PASSWORD_ARGON2ID, [
+        'memory_cost' => 65536,
+        'time_cost'   => 4,
+        'threads'     => 2,
+    ]);
+}
+
+function createInitialAdmin(PDO $db, string $email, string $loginPwd): void {
+    $users = (int)$db->query('SELECT COUNT(*) FROM users')->fetchColumn();
+    if ($users !== 0) return;
+
+    $email = strtolower(trim($email));
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        throw new RuntimeException('Admin email must be provided (valid email).');
+    }
+    if (strlen($loginPwd) < 8) {
+        throw new RuntimeException('Admin password must be at least 8 characters.');
+    }
+
+    $vaultVerifierSalt = bin2hex(random_bytes(32));
+    $vaultVerifier = hashVaultVerifier(bin2hex(random_bytes(32)) . $vaultVerifierSalt);
+
+    $loginHash = hashLoginPassword($loginPwd);
+
+    $db->prepare("INSERT INTO users (email, login_hash, vault_verifier, vault_verifier_salt, email_verified_at, is_admin)
+                  VALUES (?, ?, ?, ?, NOW(), 1)")
+       ->execute([$email, $loginHash, $vaultVerifier, $vaultVerifierSalt]);
+
+    fwrite(STDOUT, "Created initial Super Admin: {$email}\n");
+}
+
+function renderConfigPhp(array $vals): string {
+    $dbHost = addslashes($vals['db_host']);
+    $dbName = addslashes($vals['db_name']);
+    $dbUser = addslashes($vals['db_user']);
+    $dbPass = addslashes($vals['db_pass']);
+    $dbCharset = addslashes($vals['db_charset']);
+
+    $appSecret = addslashes($vals['app_hmac_secret']);
+    $appEnv = addslashes($vals['app_env']);
+    $appName = addslashes($vals['app_name']);
+    $appLogoUrl = addslashes($vals['app_logo_url'] ?? '');
+
+    $mailFrom = addslashes($vals['mail_from']);
+    $ttl = (int)$vals['email_verify_ttl_hours'];
+
+    $smtpHost = addslashes($vals['smtp_host']);
+    $smtpPort = (int)$vals['smtp_port'];
+    $smtpUser = addslashes($vals['smtp_user']);
+    $smtpPass = addslashes($vals['smtp_pass']);
+    $smtpSecure = addslashes($vals['smtp_secure']);
+    $smtpVerifyPeer = (int)$vals['smtp_verify_peer'];
+
+    return "<?php\n"
+        . "// ============================================================\n"
+        . "//  Controle — Database Configuration\n"
+        . "//  Generated by the installer.\n"
+        . "// ============================================================\n\n"
+        . "define('DB_HOST',    '" . $dbHost . "');\n"
+        . "define('DB_NAME',    '" . $dbName . "');\n"
+        . "define('DB_USER',    '" . $dbUser . "');\n"
+        . "define('DB_PASS',    '" . $dbPass . "');\n"
+        . "define('DB_CHARSET', '" . $dbCharset . "');\n\n"
+        . "define('APP_HMAC_SECRET', '" . $appSecret . "');\n\n"
+        . "define('APP_ENV', '" . $appEnv . "');\n\n"
+        . "define('APP_NAME', '" . $appName . "');\n"
+        . "define('APP_LOGO_URL', '" . $appLogoUrl . "');\n\n"
+        . "define('APP_BASE_URL', '');\n\n"
+        . "define('MAIL_FROM', '" . $mailFrom . "');\n"
+        . "define('EMAIL_VERIFY_TTL_HOURS', " . $ttl . ");\n\n"
+        . "define('SMTP_HOST', '" . $smtpHost . "');\n"
+        . "define('SMTP_PORT', " . $smtpPort . ");\n"
+        . "define('SMTP_USER', '" . $smtpUser . "');\n"
+        . "define('SMTP_PASS', '" . $smtpPass . "');\n"
+        . "define('SMTP_SECURE', '" . $smtpSecure . "');\n"
+        . "define('SMTP_VERIFY_PEER', " . $smtpVerifyPeer . ");\n\n"
+        . "define('PBKDF2_ITERATIONS', 310000);\n\n"
+        . "date_default_timezone_set('UTC');\n\n"
+        . "function getDB(): PDO {\n"
+        . "    static \\\$pdo = null;\n"
+        . "    if (\\\$pdo === null) {\n"
+        . "        \\\$dsn = \"mysql:host=\".DB_HOST.\";dbname=\".DB_NAME.\";charset=\".DB_CHARSET;\n"
+        . "        \\\$opts = [\n"
+        . "            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,\n"
+        . "            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,\n"
+        . "            PDO::ATTR_EMULATE_PREPARES   => false,\n"
+        . "        ];\n"
+        . "        try {\n"
+        . "            \\\$pdo = new PDO(\\\$dsn, DB_USER, DB_PASS, \\\$opts);\n"
+        . "            try {\n"
+        . "                \\\$pdo->exec(\"SET time_zone = '+00:00'\");\n"
+        . "            } catch (Throwable) {\n"
+        . "            }\n"
+        . "        } catch (PDOException \\\$e) {\n"
+        . "            if (APP_ENV === 'development') {\n"
+        . "                die(json_encode(['error' => 'DB: ' . \\\$e->getMessage()]));\n"
+        . "            }\n"
+        . "            die(json_encode(['error' => 'Database unavailable']));\n"
+        . "        }\n"
+        . "    }\n"
+        . "    return \\\$pdo;\n"
+        . "}\n";
+}
+
+function writeConfigFile(string $path, array $vals, bool $force): void {
+    if (file_exists($path) && !$force) {
+        $ok = promptYesNo("Overwrite {$path}?", true);
+        if (!$ok) {
+            fwrite(STDOUT, "Aborted.\n");
+            exit(0);
+        }
+    }
+
+    if (file_exists($path)) {
+        $backup = $path . '.bak.' . date('Ymd_His');
+        @copy($path, $backup);
+    }
+
+    $src = renderConfigPhp($vals);
+    if (file_put_contents($path, $src) === false) {
+        throw new RuntimeException("Failed to write {$path}");
+    }
+}

@@ -20,6 +20,10 @@ $csrf    = getCsrfToken();
 $userId = (int)(getCurrentUserId() ?? 0);
 $showSecurityBanner = !userHasTotp($userId) && !userHasPasskeys($userId);
 
+$appSlug = strtolower(preg_replace('/[^a-z0-9]+/i', '_', APP_NAME));
+$appSlug = trim($appSlug, '_');
+if ($appSlug === '') $appSlug = 'app';
+
 header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none';");
 header("X-Frame-Options: DENY");
 header("X-Content-Type-Options: nosniff");
@@ -30,7 +34,7 @@ header("Referrer-Policy: no-referrer");
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Backups — LOCKSMITH</title>
+<title>Backups — <?= htmlspecialchars(APP_NAME) ?></title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
 <script src="assets/theme.js"></script>
@@ -65,7 +69,7 @@ header("Referrer-Policy: no-referrer");
 </head>
 <body>
   <div class="nav">
-    <a class="logo" href="index.php">LOCK<span>SMITH</span></a>
+    <a class="logo" href="index.php"><?= htmlspecialchars(APP_NAME) ?></a>
     <div class="nav-r">
       <button class="btn btn-ghost btn-theme" type="button" data-theme-toggle>Theme</button>
       <a class="btn btn-ghost" href="dashboard.php">Dashboard</a>
@@ -147,6 +151,7 @@ header("Referrer-Policy: no-referrer");
 
 <script>
 const CSRF = <?= json_encode($csrf) ?>;
+const APP_SLUG = <?= json_encode($appSlug) ?>;
 
 const localOk=document.getElementById('local-ok');
 const localErr=document.getElementById('local-err');
@@ -302,7 +307,8 @@ document.getElementById('btn-export').addEventListener('click', async ()=>{
     const j=await getStrong('api/backup.php?action=export');
     if(!j.success){show(localErr,j.error||'Export failed');return;}
     const ts = new Date().toISOString().slice(0,10).replace(/-/g,'');
-    downloadJson('locksmith_export_' + ts + '.json', j.export);
+    downloadJson(APP_SLUG + '_export_' + ts + '.json', j.export);
+
     show(localOk,'Export downloaded.');
   }catch{
     show(localErr,'Network error');
@@ -392,7 +398,7 @@ async function downloadCloudId(id){
   const backup=j.backup;
   const label=(backup.label && backup.label.trim()) ? backup.label : ('backup_'+id);
   const safe=label.replace(/[^a-z0-9_\-]+/gi,'_').slice(0,60);
-  downloadJson('locksmith_cloud_' + safe + '_' + id + '.json', backup.backup_blob);
+  downloadJson(APP_SLUG + '_cloud_' + safe + '_' + id + '.json', backup.backup_blob);
   show(cloudOk,'Downloaded cloud backup.');
   return true;
 }

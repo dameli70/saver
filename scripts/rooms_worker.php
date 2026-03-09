@@ -1,6 +1,6 @@
 <?php
 // ============================================================
-//  LOCKSMITH — Saving Rooms Worker (cron)
+//  Controle — Saving Rooms Worker (cron)
 //
 //  Run every 1–5 minutes:
 //    php scripts/rooms_worker.php

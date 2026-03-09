@@ -54,7 +54,7 @@ header("Referrer-Policy: no-referrer");
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Account — LOCKSMITH</title>
+<title>Account — <?= htmlspecialchars(APP_NAME) ?></title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
 <script src="assets/theme.js"></script>
@@ -68,7 +68,7 @@ header("Referrer-Policy: no-referrer");
 .row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
 .k{color:var(--muted);font-size:10px;letter-spacing:2px;text-transform:uppercase;}
 .v{color:var(--text);font-size:12px;letter-spacing:.4px;}
-.badge{display:inline-flex;align-items:center;gap:8px;font-size:10px;letter-spacing:1px;text-transform:uppercase;padding:5px 10px;border:1px solid;}
+.badge{display:inline-flex;align-items:center;gap:8px;font-size:10px;letter-spacing:1px;text-transform:uppercase;padding:5px 10px;border:1px solid;border-radius:var(--radius-pill);}
 .badge.ok{background:rgba(71,255,176,.07);border-color:rgba(71,255,176,.2);color:var(--green);} 
 .badge.wait{background:rgba(255,170,0,.07);border-color:rgba(255,170,0,.2);color:var(--orange);} 
  
@@ -77,21 +77,21 @@ header("Referrer-Policy: no-referrer");
 .field{margin-top:14px;margin-bottom:0;}
 .field label{display:block;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:6px;}
 .field input{width:100%;background:var(--s2);border:1px solid var(--b1);color:var(--text);font-family:var(--mono);
-  font-size:15px;padding:14px;outline:none;transition:border-color .2s;border-radius:0;-webkit-appearance:none;}
+  font-size:15px;padding:14px;outline:none;transition:border-color .2s;border-radius:var(--radius-input);-webkit-appearance:none;}
 .field input:focus{border-color:var(--accent);} 
 .hr{border-top:1px solid var(--b1);margin:16px 0;}
 .list{margin-top:10px;display:flex;flex-direction:column;gap:10px;}
-.item{border:1px solid var(--b1);background:rgba(19,22,29,.55);padding:12px 14px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;}
+.item{border:1px solid var(--b1);background:rgba(19,22,29,.55);padding:12px 14px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;border-radius:var(--radius-card);}
 .small{font-size:11px;color:var(--muted);line-height:1.6;}
 .btn-red{background:rgba(255,71,87,.08);border:1px solid rgba(255,71,87,.2);color:var(--red);} 
 .btn-red:hover{background:rgba(255,71,87,.14);} 
-code{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);padding:2px 6px;}
+code{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);padding:2px 6px;border-radius:10px;}
 
 </style>
 </head>
 <body>
   <div class="nav">
-    <a class="logo" href="index.php">LOCK<span>SMITH</span></a>
+    <a class="logo" href="index.php"><?= htmlspecialchars(APP_NAME) ?></a>
     <div class="nav-r">
       <?php if ($verified): ?>
         <a class="btn btn-ghost" href="dashboard.php">Dashboard</a>
@@ -110,8 +110,8 @@ code{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);pad
   </div>
 
   <div class="wrap">
-    <div class="h">Account</div>
-    <div class="p">Your email must be verified before you can generate or reveal codes.</div>
+    <div class="h">Your account</div>
+    <div class="p"><?= $verified ? 'Manage your vault key, security, and room access.' : 'Verify your email to start creating time locks and joining Saving Rooms.' ?></div>
 
     <div class="card">
       <div class="row">
@@ -151,14 +151,14 @@ code{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);pad
     <div class="card" id="trust-card">
       <div class="row">
         <div>
-          <div class="k">Trust Passport</div>
-          <div class="v">Your platform trust level and reveal history</div>
+          <div class="k">Trust level</div>
+          <div class="v">Room access and saving history</div>
         </div>
         <div class="badge wait" id="trust-level-badge">⏳</div>
       </div>
 
       <div class="small" style="margin-top:12px;">
-        Your level determines which saving rooms you can join. Strikes within a six-month window can trigger restrictions or level regression.
+        Some rooms require a higher level. Staying reliable unlocks more options. If you’re removed from a room, you may have a cooldown before joining new ones.
       </div>
 
       <div class="hr"></div>
@@ -185,14 +185,14 @@ code{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);pad
 
       <div class="hr"></div>
 
-      <div class="k">Completed reveals</div>
-      <div class="small" style="margin-top:6px;">Shown as sealed vaults. A completed reveal means you stayed from start to unlock without removal or flags.</div>
+      <div class="k">Completed time locks</div>
+      <div class="small" style="margin-top:6px;">These are locks you stayed committed to until unlock.</div>
       <div id="trust-completed" style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;"></div>
 
       <div class="hr"></div>
 
-      <div class="k">Active rooms</div>
-      <div class="small" style="margin-top:6px;">Shown as open vaults with countdowns.</div>
+      <div class="k">Active Saving Rooms</div>
+      <div class="small" style="margin-top:6px;">Quick links to your current rooms and countdowns.</div>
       <div id="trust-active" class="list"></div>
 
       <div id="trust-msg" class="msg msg-err"></div>
@@ -203,21 +203,21 @@ code{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);pad
       <div class="row">
         <div>
           <div class="k">Vault passphrase</div>
-          <div class="v">Zero-knowledge encryption key (browser-only)</div>
+          <div class="v">The key you use to lock and unlock your time locks</div>
         </div>
         <div class="badge wait" id="vault-passphrase-status">⏳</div>
       </div>
 
       <div class="small" style="margin-top:12px;">
-        Required to encrypt/decrypt codes. The passphrase is never stored or recoverable by the server.
+        You’ll enter this passphrase when creating and unlocking time locks. If you lose it, nobody can recover your locked codes.
       </div>
 
       <div id="vault-passphrase-unavailable" class="small" style="margin-top:12px;display:none;">
-        Vault passphrase setup is unavailable (missing migrations). Apply migrations in <code>config/migrations/</code>.
+        Vault passphrase setup isn’t available on this server yet. Ask the administrator to apply the latest database migrations.
       </div>
 
       <div id="vault-passphrase-set" class="small" style="margin-top:12px;display:none;">
-        A vault passphrase is set. Keep it safe — if you lose it, your codes cannot be recovered.
+        Your vault passphrase is set. Keep it safe — if you lose it, your locked codes cannot be recovered.
       </div>
 
       <div id="vault-passphrase-form" style="display:none;">
@@ -239,7 +239,7 @@ code{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);pad
       <div class="row">
         <div>
           <div class="k">Two-factor authentication (TOTP)</div>
-          <div class="v">Authenticator app codes (Google Authenticator, 1Password, Aegis, etc.)</div>
+          <div class="v">Use an authenticator app to confirm unlocking and backups</div>
         </div>
         <?php if ($hasTotp): ?>
           <?php if (!empty($u['totp_enabled_at'])): ?>
@@ -253,9 +253,9 @@ code{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);pad
       </div>
 
       <?php if (!$hasTotp): ?>
-        <div class="small" style="margin-top:12px;">TOTP is not available. Apply migrations in <code>config/migrations/</code>.</div>
+        <div class="small" style="margin-top:12px;">TOTP isn’t available on this server yet. Ask the administrator to apply the latest database migrations.</div>
       <?php else: ?>
-        <div class="small" style="margin-top:12px;">Used for step-up authentication (reveal, vault rotation, backups).</div>
+        <div class="small" style="margin-top:12px;">When enabled, you’ll be asked for a 6‑digit code before sensitive actions like unlocking and backups.</div>
 
         <div id="totp-setup" style="display:none;">
           <div class="hr"></div>
@@ -286,15 +286,15 @@ code{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);pad
       <div class="row">
         <div>
           <div class="k">Passkeys</div>
-          <div class="v">Hardware-backed WebAuthn keys (Face ID / Touch ID / security keys)</div>
+          <div class="v">Face ID / Touch ID / security keys (quick sign-in + extra confirmation)</div>
         </div>
         <div class="badge wait" id="passkeys-status">⏳</div>
       </div>
 
       <?php if (!$hasPasskeys): ?>
-        <div class="small" style="margin-top:12px;">Passkeys are not available. Apply migrations in <code>config/migrations/</code>.</div>
+        <div class="small" style="margin-top:12px;">Passkeys aren’t available on this server yet. Ask the administrator to apply the latest database migrations.</div>
       <?php else: ?>
-        <div class="small" style="margin-top:12px;">Passkeys can be used for passwordless login and step-up authentication.</div>
+        <div class="small" style="margin-top:12px;">Use a passkey to sign in without a password and to confirm sensitive actions like unlocking.</div>
 
         <div class="hr"></div>
 
@@ -331,8 +331,8 @@ code{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);pad
       </div>
 
       <div class="small">
-        Your <strong>vault passphrase</strong> is used only in your browser and is <strong>never recoverable</strong> by email reset.
-        Store it safely (password manager + offline copy) and keep backups.
+        Your <strong>vault passphrase</strong> protects your time locks. If you forget it, nobody can recover your locked codes.
+        Save it somewhere safe and make backups.
       </div>
 
       <div class="hr"></div>
@@ -462,7 +462,7 @@ btn.addEventListener('click', async ()=>{
       if(!cr.length){
         const d = document.createElement('div');
         d.className = 'small';
-        d.textContent = 'No completed reveals yet.';
+        d.textContent = 'No completed time locks yet.';
         completed.appendChild(d);
       } else {
         cr.forEach(x => {
@@ -504,7 +504,7 @@ btn.addEventListener('click', async ()=>{
 
           it.innerHTML = `
             <div>
-              <div class="k">Open vault</div>
+              <div class="k">Saving Room</div>
               <div class="v">${String(r.goal_text||r.id||'Room')}</div>
               <div class="small">${String(cd||'')}</div>
             </div>

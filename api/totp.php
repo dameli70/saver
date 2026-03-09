@@ -47,7 +47,7 @@ if ($action === 'begin') {
     $_SESSION['totp_pending_secret'] = $secret;
     $_SESSION['totp_pending_ts'] = time();
 
-    $issuer = defined('APP_NAME') ? APP_NAME : 'LOCKSMITH';
+    $issuer = defined('APP_NAME') ? APP_NAME : 'Controle';
     $label = $issuer . ':' . $u['email'];
     $otpauth = 'otpauth://totp/' . rawurlencode($label) . '?secret=' . rawurlencode($secret) . '&issuer=' . rawurlencode($issuer) . '&algorithm=SHA1&digits=6&period=30';
 
