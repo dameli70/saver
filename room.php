@@ -390,6 +390,73 @@ async function postCsrf(url,body){
   const r=await fetch(apiUrl(url),{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRF-Token':CSRF},body:JSON.stringify(body)});
   return r.json();
 }
+
+function b64uToBuf(b64url){
+  const b64 = String(b64url||'').replace(/-/g,'+').replace(/_/g,'/');
+  const pad = b64.length % 4 ? '='.repeat(4 - (b64.length % 4)) : '';
+  const bin = atob(b64 + pad);
+  const bytes = new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
+  return bytes.buffer;
+}
+function bufToB64u(buf){
+  const bytes = new Uint8Array(buf);
+  let s='';
+  for(let i=0;i<bytes.length;i++) s+=String.fromCharCode(bytes[i]);
+  return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+
+async function ensureReauth(methods){
+  if(methods && methods.passkey && window.PublicKeyCredential){
+    try{
+      const begin = await postCsrf('api/webauthn.php', {action:'reauth_begin'});
+      if(begin.success){
+        const pk = begin.publicKey || {};
+        const allow = (pk.allowCredentials||[]).map(c => ({type:c.type, id: b64uToBuf(c.id)}));
+        const cred = await navigator.credentials.get({publicKey:{
+          challenge: b64uToBuf(pk.challenge),
+          rpId: pk.rpId,
+          timeout: pk.timeout||60000,
+          userVerification: pk.userVerification||'required',
+          allowCredentials: allow,
+        }});
+
+        const a = cred.response;
+        const fin = await postCsrf('api/webauthn.php', {
+          action:'reauth_finish',
+          rawId: bufToB64u(cred.rawId),
+          response:{
+            clientDataJSON: bufToB64u(a.clientDataJSON),
+            authenticatorData: bufToB64u(a.authenticatorData),
+            signature: bufToB64u(a.signature),
+            userHandle: a.userHandle ? bufToB64u(a.userHandle) : null,
+          }
+        });
+        if(fin.success) return true;
+      }
+    }catch{}
+  }
+
+  if(methods && methods.totp){
+    const code = prompt('Enter your 6-digit authenticator code');
+    if(!code) return false;
+    const r = await postCsrf('api/totp.php', {action:'reauth', code});
+    return !!r.success;
+  }
+
+  return false;
+}
+
+async function postStrong(url, body){
+  let j = await postCsrf(url, body);
+  if(!j.success && (j.error_code==='reauth_required' || j.error_code==='security_setup_required')){
+    const ok = await ensureReauth(j.methods||{});
+    if(!ok) return j;
+    j = await postCsrf(url, body);
+  }
+  return j;
+}
+
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function setMsg(id, text, ok){
   const el=document.getElementById(id);
@@ -901,7 +968,7 @@ async function requestJoin(){
     const payload = {action:'request_join', room_id: ROOM_ID};
     if(roomCache && roomCache.visibility === 'unlisted') payload.invite_token = INVITE_TOKEN;
 
-    const res = await postCsrf('/api/rooms.php', payload);
+    const res = await postStrong('/api/rooms.php', payload);
 
     if(!res.success) throw new Error(res.error||'Failed');
     setMsg('room-msg','Join request sent.', true);
@@ -921,7 +988,7 @@ async function respondInvite(decision){
   }
 
   try{
-    const res = await postCsrf('/api/rooms.php', {action:'respond_invite', invite_id: r.my_invite.id, decision});
+    const res = await postStrong('/api/rooms.php', {action:'respond_invite', invite_id: r.my_invite.id, decision});
     if(!res.success) throw new Error(res.error||'Failed');
     setMsg('invite-msg', decision === 'accept' ? 'Invite accepted.' : 'Invite declined.', true);
     await loadRoom();
@@ -967,7 +1034,7 @@ async function generateUnlistedLink(){
   if(input) input.value='';
 
   try{
-    const res = await postCsrf('/api/rooms.php', {action:'unlisted_invite_create', room_id: ROOM_ID});
+    const res = await postStrong('/api/rooms.php', {action:'unlisted_invite_create', room_id: ROOM_ID});
     if(!res.success) throw new Error(res.error||'Failed');
 
     if(input) input.value = res.link || '';
@@ -993,7 +1060,7 @@ async function revokeUnlistedLink(){
   if(input) input.value='';
 
   try{
-    const res = await postCsrf('/api/rooms.php', {action:'unlisted_invite_revoke', room_id: ROOM_ID});
+    const res = await postStrong('/api/rooms.php', {action:'unlisted_invite_revoke', room_id: ROOM_ID});
     if(!res.success) throw new Error(res.error||'Failed');
     setMsg('unlisted-msg','Link revoked.', true);
     await loadUnlistedInviteInfo(true);
@@ -1055,7 +1122,7 @@ async function sendInvite(){
   }
 
   try{
-    const res = await postCsrf('/api/rooms.php', {action:'invite_user', room_id: ROOM_ID, email});
+    const res = await postStrong('/api/rooms.php', {action:'invite_user', room_id: ROOM_ID, email});
     if(!res.success) throw new Error(res.error||'Failed');
     if(input) input.value='';
     setMsg('invites-msg','Invite sent.', true);
@@ -1070,7 +1137,7 @@ async function revokeInvite(inviteId){
   if(!ok) return;
 
   try{
-    const res = await postCsrf('/api/rooms.php', {action:'revoke_invite', invite_id: inviteId});
+    const res = await postStrong('/api/rooms.php', {action:'revoke_invite', invite_id: inviteId});
     if(!res.success) throw new Error(res.error||'Failed');
     setMsg('invites-msg','Invite revoked.', true);
     await loadInvites(true);
@@ -1090,7 +1157,7 @@ async function confirmContribution(){
   const reference = (document.getElementById('contrib-ref')||{}).value || '';
 
   try{
-    const res = await postCsrf('/api/rooms.php', {action:'confirm_contribution', room_id: ROOM_ID, cycle_id: r.active_cycle.id, amount, reference});
+    const res = await postStrong('/api/rooms.php', {action:'confirm_contribution', room_id: ROOM_ID, cycle_id: r.active_cycle.id, amount, reference});
     if(!res.success) throw new Error(res.error||'Failed');
     setMsg('contrib-msg','Contribution confirmed.', true);
     await pollFeed();
@@ -1101,7 +1168,7 @@ async function confirmContribution(){
 
 async function unlockVote(vote){
   try{
-    const res = await postCsrf('/api/rooms.php', {action:'typeA_vote', room_id: ROOM_ID, vote});
+    const res = await postStrong('/api/rooms.php', {action:'typeA_vote', room_id: ROOM_ID, vote});
     if(!res.success) throw new Error(res.error||'Failed');
     setMsg('unlock-msg','Saved.', true);
     await loadRoom();
@@ -1112,7 +1179,7 @@ async function unlockVote(vote){
 
 async function unlockReveal(){
   try{
-    const res = await postCsrf('/api/rooms.php', {action:'typeA_reveal', room_id: ROOM_ID});
+    const res = await postStrong('/api/rooms.php', {action:'typeA_reveal', room_id: ROOM_ID});
     if(!res.success) throw new Error(res.error||'Failed');
 
     const wrap = document.getElementById('unlock-code-wrap');
@@ -1140,7 +1207,7 @@ async function unlockReveal(){
 
 async function typeBVote(vote){
   try{
-    const res = await postCsrf('/api/rooms.php', {action:'typeB_vote', room_id: ROOM_ID, vote});
+    const res = await postStrong('/api/rooms.php', {action:'typeB_vote', room_id: ROOM_ID, vote});
     if(!res.success) throw new Error(res.error||'Failed');
     setMsg('typeb-msg','Saved.', true);
     await loadRoom();
@@ -1151,7 +1218,7 @@ async function typeBVote(vote){
 
 async function typeBReveal(){
   try{
-    const res = await postCsrf('/api/rooms.php', {action:'typeB_reveal', room_id: ROOM_ID});
+    const res = await postStrong('/api/rooms.php', {action:'typeB_reveal', room_id: ROOM_ID});
     if(!res.success) throw new Error(res.error||'Failed');
 
     const wrap = document.getElementById('typeb-code-wrap');
@@ -1183,7 +1250,7 @@ async function typeBRaiseDispute(){
   const reason = (document.getElementById('typeb-dispute-reason')||{}).value || '';
 
   try{
-    const res = await postCsrf('/api/rooms.php', {action:'typeB_raise_dispute', room_id: ROOM_ID, reason});
+    const res = await postStrong('/api/rooms.php', {action:'typeB_raise_dispute', room_id: ROOM_ID, reason});
     if(!res.success) throw new Error(res.error||'Failed');
 
     setMsg(msgId,'Dispute raised.', true);
@@ -1207,7 +1274,7 @@ async function typeBAckDispute(){
   }
 
   try{
-    const res = await postCsrf('/api/rooms.php', {action:'typeB_ack_dispute', room_id: ROOM_ID, dispute_id: dispute.id});
+    const res = await postStrong('/api/rooms.php', {action:'typeB_ack_dispute', room_id: ROOM_ID, dispute_id: dispute.id});
     if(!res.success) throw new Error(res.error||'Failed');
 
     setMsg(msgId,'Acknowledged.', true);
@@ -1227,7 +1294,7 @@ async function createExitRequest(){
   if(!ok) return;
 
   try{
-    const res = await postCsrf('/api/rooms.php', {action:'typeB_exit_request_create', room_id: ROOM_ID});
+    const res = await postStrong('/api/rooms.php', {action:'typeB_exit_request_create', room_id: ROOM_ID});
     if(!res.success) throw new Error(res.error||'Failed');
 
     setMsg(msgId,'Exit request submitted.', true);
@@ -1251,7 +1318,7 @@ async function voteExit(vote){
   }
 
   try{
-    const res = await postCsrf('/api/rooms.php', {action:'typeB_exit_request_vote', room_id: ROOM_ID, exit_request_id: er.id, vote});
+    const res = await postStrong('/api/rooms.php', {action:'typeB_exit_request_vote', room_id: ROOM_ID, exit_request_id: er.id, vote});
     if(!res.success) throw new Error(res.error||'Failed');
 
     setMsg(msgId, res.approved ? 'Exit approved.' : 'Vote saved.', true);
@@ -1278,7 +1345,7 @@ async function cancelExitRequest(){
   if(!ok) return;
 
   try{
-    const res = await postCsrf('/api/rooms.php', {action:'typeB_exit_request_cancel', room_id: ROOM_ID, exit_request_id: er.id});
+    const res = await postStrong('/api/rooms.php', {action:'typeB_exit_request_cancel', room_id: ROOM_ID, exit_request_id: er.id});
     if(!res.success) throw new Error(res.error||'Failed');
 
     setMsg(msgId,'Exit request cancelled.', true);
@@ -1372,7 +1439,7 @@ async function underfillExtend(){
   }
 
   try{
-    const res = await postCsrf('/api/rooms.php', {action:'underfill_decide', room_id: ROOM_ID, decision:'extend_start', new_start_at:startIso, new_reveal_at:revealIso});
+    const res = await postStrong('/api/rooms.php', {action:'underfill_decide', room_id: ROOM_ID, decision:'extend_start', new_start_at:startIso, new_reveal_at:revealIso});
     if(!res.success) throw new Error(res.error||'Failed');
     setMsg('underfill-msg','Saved.', true);
     await loadRoom();
@@ -1394,7 +1461,7 @@ async function underfillLowerMin(){
   }
 
   try{
-    const res = await postCsrf('/api/rooms.php', {action:'underfill_decide', room_id: ROOM_ID, decision:'lower_min', new_min_participants:newMin});
+    const res = await postStrong('/api/rooms.php', {action:'underfill_decide', room_id: ROOM_ID, decision:'lower_min', new_min_participants:newMin});
     if(!res.success) throw new Error(res.error||'Failed');
     setMsg('underfill-msg','Saved.', true);
     await loadRoom();
@@ -1408,7 +1475,7 @@ async function underfillCancel(){
   if(!ok) return;
 
   try{
-    const res = await postCsrf('/api/rooms.php', {action:'underfill_decide', room_id: ROOM_ID, decision:'cancel'});
+    const res = await postStrong('/api/rooms.php', {action:'underfill_decide', room_id: ROOM_ID, decision:'cancel'});
     if(!res.success) throw new Error(res.error||'Failed');
     setMsg('underfill-msg','Room cancelled.', true);
     await loadRoom();
@@ -1466,7 +1533,7 @@ async function reviewJoin(requestId, decision){
   if(!ok) return;
 
   try{
-    const res = await postCsrf('/api/rooms.php', {action:'review_join', request_id: requestId, decision});
+    const res = await postStrong('/api/rooms.php', {action:'review_join', request_id: requestId, decision});
     if(!res.success) throw new Error(res.error||'Failed');
 
     setMsg('maker-msg', 'Saved.', true);

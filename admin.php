@@ -459,11 +459,11 @@ const CSRF = <?= json_encode($csrf) ?>;
 function apiUrl(url){
   return url.startsWith('/') ? url.slice(1) : url;
 }
-async function get(url){
+async function rawGet(url){
   const r = await fetch(apiUrl(url), { credentials: 'same-origin' });
   return r.json();
 }
-async function postCsrf(url, body){
+async function rawPostCsrf(url, body){
   const r = await fetch(apiUrl(url), {
     method: 'POST',
     credentials: 'same-origin',
@@ -473,10 +473,98 @@ async function postCsrf(url, body){
   return r.json();
 }
 
+function b64uToBuf(b64url){
+  const b64 = String(b64url||'').replace(/-/g,'+').replace(/_/g,'/');
+  const pad = b64.length % 4 ? '='.repeat(4 - (b64.length % 4)) : '';
+  const bin = atob(b64 + pad);
+  const bytes = new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
+  return bytes.buffer;
+}
+function bufToB64u(buf){
+  const bytes = new Uint8Array(buf);
+  let s='';
+  for(let i=0;i<bytes.length;i++) s+=String.fromCharCode(bytes[i]);
+  return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+
+async function ensureReauth(methods){
+  if(methods && methods.passkey && window.PublicKeyCredential){
+    try{
+      const begin = await rawPostCsrf('api/webauthn.php', {action:'reauth_begin'});
+      if(begin.success){
+        const pk = begin.publicKey || {};
+        const allow = (pk.allowCredentials||[]).map(c => ({type:c.type, id: b64uToBuf(c.id)}));
+        const cred = await navigator.credentials.get({publicKey:{
+          challenge: b64uToBuf(pk.challenge),
+          rpId: pk.rpId,
+          timeout: pk.timeout||60000,
+          userVerification: pk.userVerification||'required',
+          allowCredentials: allow,
+        }});
+
+        const a = cred.response;
+        const fin = await rawPostCsrf('api/webauthn.php', {
+          action:'reauth_finish',
+          rawId: bufToB64u(cred.rawId),
+          response:{
+            clientDataJSON: bufToB64u(a.clientDataJSON),
+            authenticatorData: bufToB64u(a.authenticatorData),
+            signature: bufToB64u(a.signature),
+            userHandle: a.userHandle ? bufToB64u(a.userHandle) : null,
+          }
+        });
+        if(fin.success) return true;
+      }
+    }catch{}
+  }
+
+  if(methods && methods.totp){
+    const code = prompt('Enter your 6-digit authenticator code');
+    if(!code) return false;
+    const r = await rawPostCsrf('api/totp.php', {action:'reauth', code});
+    return !!r.success;
+  }
+
+  return false;
+}
+
+async function get(url){
+  let j = await rawGet(url);
+  if(!j.success && (j.error_code==='reauth_required' || j.error_code==='security_setup_required')){
+    const ok = await ensureReauth(j.methods||{});
+    if(!ok) return j;
+    j = await rawGet(url);
+  }
+  return j;
+}
+
+async function postCsrf(url, body){
+  let j = await rawPostCsrf(url, body);
+  if(!j.success && (j.error_code==='reauth_required' || j.error_code==='security_setup_required')){
+    const ok = await ensureReauth(j.methods||{});
+    if(!ok) return j;
+    j = await rawPostCsrf(url, body);
+  }
+  return j;
+}
+
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function parseUtcDate(ts){
+  const s = String(ts||'').trim();
+  if(!s) return null;
+
+  // API timestamps are stored in UTC as "YYYY-MM-DD HH:MM:SS".
+  if(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/.test(s)){
+    return new Date(s.replace(' ', 'T') + 'Z');
+  }
+
+  return new Date(s);
+}
 function fmt(ts){
-  if(!ts) return '';
-  try{ return new Date(ts).toLocaleString(); }catch{ return ''; }
+  const d = parseUtcDate(ts);
+  if(!d || isNaN(d.getTime())) return '';
+  return d.toLocaleString();
 }
 
 function setMsg(id, text, ok){

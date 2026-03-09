@@ -542,10 +542,6 @@ function requireStrongAuth(): void {
     $uid = getCurrentUserId();
     if (!$uid) jsonResponse(['error' => 'Unauthorized'], 401);
 
-    // Super Admin bypass: allow admins to perform protected actions without
-    // requiring TOTP/passkey setup. (Admins should still enable 2FA in production.)
-    if (isAdmin((int)$uid)) return;
-
     $methods = [
         'totp' => userHasTotp((int)$uid),
         'passkey' => userHasPasskeys((int)$uid),

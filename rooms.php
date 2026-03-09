@@ -80,7 +80,8 @@ header("Referrer-Policy: no-referrer");
 
 <div class="wrap">
   <div class="h">Public Discovery Board</div>
-  <div class="p">You only see rooms for which you meet the trust level requirement. Join requests must be approved by the room maker.</div>
+  <div class="p">Rooms shown are filtered by your trust level. Joining also requires you are not in a restricted period. Join requests must be approved by the room maker.</div>
+  <div id="eligibility" style="color:var(--muted);font-size:12px;line-height:1.6;margin:-8px 0 18px 0;"></div>
 
   <div class="card" style="margin-bottom:14px;">
     <div class="card-title">Categories</div>
@@ -205,7 +206,75 @@ function setMsg(id, text, ok){
   el.textContent = text;
 }
 
+function b64uToBuf(b64url){
+  const b64 = String(b64url||'').replace(/-/g,'+').replace(/_/g,'/');
+  const pad = b64.length % 4 ? '='.repeat(4 - (b64.length % 4)) : '';
+  const bin = atob(b64 + pad);
+  const bytes = new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
+  return bytes.buffer;
+}
+function bufToB64u(buf){
+  const bytes = new Uint8Array(buf);
+  let s='';
+  for(let i=0;i<bytes.length;i++) s+=String.fromCharCode(bytes[i]);
+  return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+
+async function ensureReauth(methods){
+  if(methods && methods.passkey && window.PublicKeyCredential){
+    try{
+      const begin = await postCsrf('api/webauthn.php', {action:'reauth_begin'});
+      if(begin.success){
+        const pk = begin.publicKey || {};
+        const allow = (pk.allowCredentials||[]).map(c => ({type:c.type, id: b64uToBuf(c.id)}));
+        const cred = await navigator.credentials.get({publicKey:{
+          challenge: b64uToBuf(pk.challenge),
+          rpId: pk.rpId,
+          timeout: pk.timeout||60000,
+          userVerification: pk.userVerification||'required',
+          allowCredentials: allow,
+        }});
+
+        const a = cred.response;
+        const fin = await postCsrf('api/webauthn.php', {
+          action:'reauth_finish',
+          rawId: bufToB64u(cred.rawId),
+          response:{
+            clientDataJSON: bufToB64u(a.clientDataJSON),
+            authenticatorData: bufToB64u(a.authenticatorData),
+            signature: bufToB64u(a.signature),
+            userHandle: a.userHandle ? bufToB64u(a.userHandle) : null,
+          }
+        });
+        if(fin.success) return true;
+      }
+    }catch{}
+  }
+
+  if(methods && methods.totp){
+    const code = prompt('Enter your 6-digit authenticator code');
+    if(!code) return false;
+    const r = await postCsrf('api/totp.php', {action:'reauth', code});
+    return !!r.success;
+  }
+
+  return false;
+}
+
+async function postStrong(url, body){
+  let j = await postCsrf(url, body);
+  if(!j.success && (j.error_code==='reauth_required' || j.error_code==='security_setup_required')){
+    const ok = await ensureReauth(j.methods||{});
+    if(!ok) return j;
+    j = await postCsrf(url, body);
+  }
+  return j;
+}
+
 let currentCategory = '';
+let myTrustLevel = null;
+let myRestrictedUntil = '';
 
 function renderCategories(){
   const cats = [
@@ -249,6 +318,21 @@ function fmtDate(ts){
   return d.toLocaleString();
 }
 
+function updateEligibility(){
+  const el = document.getElementById('eligibility');
+  if(!el) return;
+
+  const bits = [];
+  if(myTrustLevel !== null){
+    bits.push('Your trust level: Level ' + String(myTrustLevel));
+  }
+  if(myRestrictedUntil){
+    bits.push('Restricted until ' + fmtDate(myRestrictedUntil) + ' (cannot join new rooms)');
+  }
+
+  el.textContent = bits.join(' · ');
+}
+
 function buildRoomCard(r){
   const el=document.createElement('div');
   el.className='room';
@@ -283,18 +367,26 @@ function buildRoomCard(r){
   join.className='btn btn-primary btn-sm';
   join.type='button';
   join.textContent='Request to join';
-  join.onclick=async()=>{
+
+  if(myRestrictedUntil){
+    join.className='btn btn-ghost btn-sm';
     join.disabled=true;
-    try{
-      const res=await postCsrf('/api/rooms.php', {action:'request_join', room_id: r.id});
-      if(!res.success) throw new Error(res.error||'Failed');
-      setMsg('rooms-msg','Join request sent.', true);
-    }catch(e){
-      setMsg('rooms-msg', e.message||'Failed', false);
-    }finally{
-      join.disabled=false;
-    }
-  };
+    join.textContent='Restricted';
+    join.title = 'You cannot join new rooms until ' + fmtDate(myRestrictedUntil);
+  } else {
+    join.onclick=async()=>{
+      join.disabled=true;
+      try{
+        const res=await postStrong('/api/rooms.php', {action:'request_join', room_id: r.id});
+        if(!res.success) throw new Error(res.error||'Failed');
+        setMsg('rooms-msg','Join request sent.', true);
+      }catch(e){
+        setMsg('rooms-msg', e.message||'Failed', false);
+      }finally{
+        join.disabled=false;
+      }
+    };
+  }
 
   actions.appendChild(open);
   actions.appendChild(join);
@@ -378,9 +470,17 @@ async function loadRooms(){
     const r=await get('/api/rooms.php?' + qs.toString());
     if(!r.success) throw new Error(r.error||'Failed');
 
+    if(typeof r.your_trust_level !== 'undefined' && r.your_trust_level !== null){
+      const lvl = parseInt(String(r.your_trust_level), 10);
+      myTrustLevel = (lvl && lvl > 0) ? lvl : 1;
+    }
+    myRestrictedUntil = r.restricted_until ? String(r.restricted_until) : '';
+    updateEligibility();
+
     const rooms=r.rooms||[];
     if(!rooms.length){
-      wrap.innerHTML = '<div style="color:var(--muted);font-size:12px;line-height:1.6;">No rooms found for this category and trust level.</div>';
+      const extra = myTrustLevel !== null ? (' Your trust level is Level ' + String(myTrustLevel) + '.') : '';
+      wrap.innerHTML = '<div style="color:var(--muted);font-size:12px;line-height:1.6;">No eligible rooms found for this category.' + esc(extra) + '</div>';
       return;
     }
 
@@ -420,7 +520,7 @@ async function createRoom(){
   const escrow_policy = document.getElementById('cr-escrow').value;
 
   try{
-    const r = await postCsrf('/api/rooms.php', {
+    const r = await postStrong('/api/rooms.php', {
       action:'create_room',
       goal_text: goal,
       purpose_category,

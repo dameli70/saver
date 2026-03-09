@@ -250,6 +250,7 @@ if ($action === 'discover') {
 
     $userId = (int)getCurrentUserId();
     $lvl = getUserTrustLevel($userId);
+    $restrictedUntil = userRestrictedUntil($userId);
 
     $category = $_GET['category'] ?? '';
     $allowed = ['education','travel','business','emergency','community','other'];
@@ -300,7 +301,12 @@ if ($action === 'discover') {
         ];
     }
 
-    jsonResponse(['success' => true, 'rooms' => $out]);
+    jsonResponse([
+        'success' => true,
+        'your_trust_level' => $lvl,
+        'restricted_until' => $restrictedUntil,
+        'rooms' => $out,
+    ]);
 }
 
 // ── MY ROOMS (for UI navigation) ────────────────────────────
@@ -849,6 +855,7 @@ if ($action === 'create_room') {
     requireLogin();
     requireVerifiedEmail();
     requireCsrf();
+    requireStrongAuth();
 
     $userId = (int)getCurrentUserId();
 
@@ -961,6 +968,7 @@ if ($action === 'request_join') {
     requireLogin();
     requireVerifiedEmail();
     requireCsrf();
+    requireStrongAuth();
 
     $userId = (int)getCurrentUserId();
     $roomId = (string)($body['room_id'] ?? '');
@@ -1039,6 +1047,7 @@ if ($action === 'invite_user') {
     requireLogin();
     requireVerifiedEmail();
     requireCsrf();
+    requireStrongAuth();
 
     $userId = (int)getCurrentUserId();
     $roomId = (string)($body['room_id'] ?? '');
@@ -1128,6 +1137,7 @@ if ($action === 'respond_invite') {
     requireLogin();
     requireVerifiedEmail();
     requireCsrf();
+    requireStrongAuth();
 
     $userId   = (int)getCurrentUserId();
     $inviteId = (int)($body['invite_id'] ?? 0);
@@ -1286,6 +1296,7 @@ if ($action === 'unlisted_invite_create') {
     requireLogin();
     requireVerifiedEmail();
     requireCsrf();
+    requireStrongAuth();
 
     $userId = (int)getCurrentUserId();
     $roomId = (string)($body['room_id'] ?? '');
@@ -1344,6 +1355,7 @@ if ($action === 'unlisted_invite_revoke') {
     requireLogin();
     requireVerifiedEmail();
     requireCsrf();
+    requireStrongAuth();
 
     $userId = (int)getCurrentUserId();
     $roomId = (string)($body['room_id'] ?? '');
@@ -1402,6 +1414,7 @@ if ($action === 'revoke_invite') {
     requireLogin();
     requireVerifiedEmail();
     requireCsrf();
+    requireStrongAuth();
 
     $userId = (int)getCurrentUserId();
     $inviteId = (int)($body['invite_id'] ?? 0);
@@ -1457,6 +1470,7 @@ if ($action === 'review_join') {
     requireLogin();
     requireVerifiedEmail();
     requireCsrf();
+    requireStrongAuth();
 
     $userId = (int)getCurrentUserId();
     $reqId = (int)($body['request_id'] ?? 0);

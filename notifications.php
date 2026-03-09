@@ -118,9 +118,21 @@ let cursor = 0;
 let loading = false;
 
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function parseUtcDate(ts){
+  const s = String(ts||'').trim();
+  if(!s) return null;
+
+  // API timestamps are stored in UTC as "YYYY-MM-DD HH:MM:SS".
+  if(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/.test(s)){
+    return new Date(s.replace(' ', 'T') + 'Z');
+  }
+
+  return new Date(s);
+}
 function fmt(ts){
-  if(!ts) return '';
-  try{ return new Date(ts).toLocaleString(); }catch{ return String(ts); }
+  const d = parseUtcDate(ts);
+  if(!d || isNaN(d.getTime())) return String(ts||'');
+  return d.toLocaleString();
 }
 function setMsg(text, ok){
   const el = document.getElementById('msg');

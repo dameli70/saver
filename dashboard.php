@@ -19,7 +19,7 @@ $isAdmin   = isAdmin();
 $csrf      = getCsrfToken();
 
 $userId = (int)(getCurrentUserId() ?? 0);
-$showSecurityBanner = !$isAdmin && !userHasTotp($userId) && !userHasPasskeys($userId);
+$showSecurityBanner = !userHasTotp($userId) && !userHasPasskeys($userId);
 
 // Strict security headers
 header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none';");
@@ -73,8 +73,8 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9998;o
     <?php if ($showSecurityBanner): ?>
     <div class="sec-banner">
       <div>
-        <div class="sec-banner-title">Security setup recommended</div>
-        <div class="sec-banner-sub">Enable TOTP or add a passkey to protect sensitive actions.</div>
+        <div class="sec-banner-title">Security setup required</div>
+        <div class="sec-banner-sub">Enable TOTP or add a passkey to use sensitive actions (reveal, backups, vault rotation, admin actions).</div>
       </div>
       <a class="btn btn-ghost btn-sm" href="account.php#totp-card">Open account</a>
     </div>
