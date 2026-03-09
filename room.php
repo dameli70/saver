@@ -397,8 +397,22 @@ function setMsg(id, text, ok){
   el.className = 'msg ' + (ok ? 'msg-ok' : 'msg-err') + ' show';
   el.textContent = text;
 }
+function parseUtcDate(ts){
+  const s = String(ts||'').trim();
+  if(!s) return null;
+
+  // API timestamps are stored in UTC as "YYYY-MM-DD HH:MM:SS".
+  if(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/.test(s)){
+    return new Date(s.replace(' ', 'T') + 'Z');
+  }
+
+  return new Date(s);
+}
+
 function fmt(ts){
-  try{return new Date(ts).toLocaleString();}catch{return String(ts||'');}
+  const d = parseUtcDate(ts);
+  if(!d || isNaN(d.getTime())) return String(ts||'');
+  return d.toLocaleString();
 }
 function prettyVisibility(v){
   if(v === 'public') return 'Public';
@@ -1333,13 +1347,32 @@ async function underfillExtend(){
   const msg = document.getElementById('underfill-msg');
   msg.className='msg';
 
-  const newStartAt = prompt('Enter new start date/time (YYYY-MM-DD HH:MM:SS)');
-  if(!newStartAt) return;
-  const newRevealAt = prompt('Enter new reveal date/time (YYYY-MM-DD HH:MM:SS)');
-  if(!newRevealAt) return;
+  const rawStart = prompt('Enter new start date/time (YYYY-MM-DDTHH:MM)');
+  if(!rawStart) return;
+  const rawReveal = prompt('Enter new reveal date/time (YYYY-MM-DDTHH:MM)');
+  if(!rawReveal) return;
+
+  const startIso = (function(){
+    const s = String(rawStart||'').trim().replace(' ', 'T');
+    const d = new Date(s);
+    if(isNaN(d.getTime())) return '';
+    return d.toISOString();
+  })();
+
+  const revealIso = (function(){
+    const s = String(rawReveal||'').trim().replace(' ', 'T');
+    const d = new Date(s);
+    if(isNaN(d.getTime())) return '';
+    return d.toISOString();
+  })();
+
+  if(!startIso || !revealIso){
+    setMsg('underfill-msg','Invalid date/time format.', false);
+    return;
+  }
 
   try{
-    const res = await postCsrf('/api/rooms.php', {action:'underfill_decide', room_id: ROOM_ID, decision:'extend_start', new_start_at:newStartAt, new_reveal_at:newRevealAt});
+    const res = await postCsrf('/api/rooms.php', {action:'underfill_decide', room_id: ROOM_ID, decision:'extend_start', new_start_at:startIso, new_reveal_at:revealIso});
     if(!res.success) throw new Error(res.error||'Failed');
     setMsg('underfill-msg','Saved.', true);
     await loadRoom();

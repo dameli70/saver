@@ -39,6 +39,8 @@ define('SMTP_VERIFY_PEER', 1);
 // PBKDF2 iterations — match what client uses
 define('PBKDF2_ITERATIONS', 310000);
 
+date_default_timezone_set('UTC');
+
 function getDB(): PDO {
     static $pdo = null;
     if ($pdo === null) {
@@ -50,6 +52,13 @@ function getDB(): PDO {
         ];
         try {
             $pdo = new PDO($dsn, DB_USER, DB_PASS, $opts);
+
+            // Use UTC consistently for DB time functions like NOW().
+            try {
+                $pdo->exec("SET time_zone = '+00:00'");
+            } catch (Throwable) {
+                // Ignore if the DB user lacks permission to set session timezone.
+            }
         } catch (PDOException $e) {
             if (APP_ENV === 'development') {
                 die(json_encode(['error' => 'DB: ' . $e->getMessage()]));

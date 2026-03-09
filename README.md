@@ -51,17 +51,26 @@ Edit `config/database.php`:
 Pages:
 - `index.php` — home/marketing page
 - `signup.php` — create account (sends verification email)
-- `login.php` — login page (redirects based on verification)
-- `account.php` — account + email verification status, resend link
+- `login.php` — login page
+- `forgot.php` / `reset.php` — password reset UI
 - `verify.php` — handles verification token
 - `dashboard.php` — authenticated, email-verified app UI
 - `create_code.php` — create a new time-locked code (and wallet PIN locks)
+- `my_codes.php` — list/reveal/delete your locks (browser-side decryption)
 - `backup.php` — local export/import + cloud backups
+- `vault_settings.php` — vault / passphrase / recovery settings
+- `notifications.php` — in-app notifications
+- `rooms.php` / `room.php` — saving rooms (discovery + room detail)
 - `admin.php` — super admin dashboard (requires admin)
+- `account.php` — account security settings
 - `logout.php` — destroys session
 
 API:
 - `api/auth.php` — register/login/logout + resend verification
+- `api/password_reset.php` — password reset endpoints
+- `api/csrf.php` — CSRF token utilities
+- `api/account.php` — account info + security status
+- `api/notifications.php` — in-app notifications
 - `api/salt.php` — issues one-time per-lock KDF salt
 - `api/generate.php` — store a new encrypted code
 - `api/locks.php` — list user codes (metadata)
@@ -70,12 +79,17 @@ API:
 - `api/reveal.php` — time-gated retrieval of ciphertext blobs (browser decrypts)
 - `api/delete.php` — delete a code
 - `api/backup.php` — local export/import + cloud backups
+- `api/vault.php` / `api/vault_verify.php` — vault verification + setup
+- `api/totp.php` / `api/webauthn.php` — 2FA / passkeys
+- `api/trust.php` — trust passport
+- `api/rooms.php` / `api/rooms_stream.php` — saving rooms API + activity stream
 - `api/carriers.php` — list mobile money carrier templates
-- `api/wallet_create.php` — create a new time-locked wallet PIN record
-- `api/wallet_locks.php` — list wallet locks (metadata)
-- `api/wallet_confirm.php` — confirm wallet PIN setup
-- `api/wallet_fail.php` — discard wallet PIN setup
-- `api/admin.php` — super admin data endpoints (users + codes + carriers)
+- `api/wallet_create.php` / `api/wallet_locks.php` — wallet PIN locks
+- `api/wallet_confirm.php` / `api/wallet_reveal.php` / `api/wallet_delete.php` / `api/wallet_fail.php` — wallet lock lifecycle
+- `api/admin.php` — super admin data endpoints
+
+Workers:
+- `scripts/rooms_worker.php` — cron worker for saving rooms
 
 ## Security Model (high level)
 - **Zero plaintext storage**: the server never stores plaintext codes.

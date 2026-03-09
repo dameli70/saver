@@ -476,7 +476,10 @@ async function postCsrf(url, body){
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function fmt(ts){
   if(!ts) return '';
-  try{ return new Date(ts).toLocaleString(); }catch{ re</old_code><new_code>function setMsg(id, text, ok){
+  try{ return new Date(ts).toLocaleString(); }catch{ return ''; }
+}
+
+function setMsg(id, text, ok){
   const el = document.getElementById(id);
   if(!el) return;
   el.className = 'msg ' + (ok ? 'msg-ok' : 'msg-err') + ' show';

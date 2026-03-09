@@ -230,8 +230,23 @@ function renderCategories(){
   });
 }
 
+function parseUtcDate(ts){
+  const s = String(ts||'').trim();
+  if(!s) return null;
+
+  // API timestamps are stored in UTC as "YYYY-MM-DD HH:MM:SS".
+  // Parse explicitly as UTC to avoid browser-dependent parsing.
+  if(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/.test(s)){
+    return new Date(s.replace(' ', 'T') + 'Z');
+  }
+
+  return new Date(s);
+}
+
 function fmtDate(ts){
-  try{return new Date(ts).toLocaleString();}catch{return String(ts||'');}
+  const d = parseUtcDate(ts);
+  if(!d || isNaN(d.getTime())) return String(ts||'');
+  return d.toLocaleString();
 }
 
 function buildRoomCard(r){
@@ -379,10 +394,12 @@ async function loadRooms(){
 }
 
 function toServerDateTimeLocal(v){
-  // datetime-local gives local time; server expects parseable string.
-  // We send the raw value; API uses strtotime() which interprets server timezone.
-  // For now, keep consistent behavior with existing app pages.
-  return String(v||'');
+  // datetime-local gives local time. Convert to an unambiguous UTC instant.
+  const s = String(v||'').trim();
+  if(!s) return '';
+  const d = new Date(s);
+  if(isNaN(d.getTime())) return '';
+  return d.toISOString();
 }
 
 async function createRoom(){

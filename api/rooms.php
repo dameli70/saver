@@ -864,8 +864,8 @@ if ($action === 'create_room') {
     $amount = (string)($body['participation_amount'] ?? '');
     $periodicity = (string)($body['periodicity'] ?? 'weekly');
 
-    $startAt = trim((string)($body['start_at'] ?? ''));
-    $revealAt = trim((string)($body['reveal_at'] ?? ''));
+    $startAtRaw = trim((string)($body['start_at'] ?? ''));
+    $revealAtRaw = trim((string)($body['reveal_at'] ?? ''));
 
     $privacyMode = !empty($body['privacy_mode']) ? 1 : 0;
     $escrowPolicy = (string)($body['escrow_policy'] ?? 'redistribute');
@@ -884,11 +884,19 @@ if ($action === 'create_room') {
     if (!is_numeric($amount) || (float)$amount <= 0) jsonResponse(['error' => 'Invalid participation_amount'], 400);
     if (!in_array($periodicity, ['weekly','biweekly','monthly'], true)) jsonResponse(['error' => 'Invalid periodicity'], 400);
 
-    $startTs = strtotime($startAt);
-    $revealTs = strtotime($revealAt);
-    if (!$startTs || !$revealTs) jsonResponse(['error' => 'Invalid start/reveal dates'], 400);
-    if ($startTs <= time() + 300) jsonResponse(['error' => 'Start date must be in the future'], 400);
-    if ($revealTs <= $startTs) jsonResponse(['error' => 'Reveal date must be after start date'], 400);
+    try {
+        $startDt = new DateTimeImmutable($startAtRaw, new DateTimeZone('UTC'));
+        $revealDt = new DateTimeImmutable($revealAtRaw, new DateTimeZone('UTC'));
+    } catch (Exception) {
+        jsonResponse(['error' => 'Invalid start/reveal dates'], 400);
+    }
+
+    $nowUtc = new DateTimeImmutable('now', new DateTimeZone('UTC'));
+    if ($startDt <= $nowUtc->modify('+5 minutes')) jsonResponse(['error' => 'Start date must be in the future'], 400);
+    if ($revealDt <= $startDt) jsonResponse(['error' => 'Reveal date must be after start date'], 400);
+
+    $startStr = $startDt->format('Y-m-d H:i:s');
+    $revealStr = $revealDt->format('Y-m-d H:i:s');
 
     if (!in_array($escrowPolicy, ['redistribute','refund_minus_fee'], true)) jsonResponse(['error' => 'Invalid escrow_policy'], 400);
 
@@ -925,8 +933,8 @@ if ($action === 'create_room') {
            $maxP,
            $amount,
            $periodicity,
-           date('Y-m-d H:i:s', $startTs),
-           date('Y-m-d H:i:s', $revealTs),
+           $startStr,
+           $revealStr,
            $privacyMode,
            $escrowPolicy,
        ]);
@@ -1548,21 +1556,23 @@ if ($action === 'underfill_decide') {
     $db->beginTransaction();
 
     if ($decision === 'extend_start') {
-        $newStartAt = (string)($body['new_start_at'] ?? '');
-        $newRevealAt = (string)($body['new_reveal_at'] ?? '');
+        $newStartAtRaw = (string)($body['new_start_at'] ?? '');
+        $newRevealAtRaw = (string)($body['new_reveal_at'] ?? '');
 
-        $startTs = strtotime($newStartAt);
-        $revealTs = strtotime($newRevealAt);
-
-        if (!$startTs || !$revealTs) {
+        try {
+            $startDt = new DateTimeImmutable($newStartAtRaw, new DateTimeZone('UTC'));
+            $revealDt = new DateTimeImmutable($newRevealAtRaw, new DateTimeZone('UTC'));
+        } catch (Exception) {
             $db->rollBack();
             jsonResponse(['error' => 'Invalid dates'], 400);
         }
-        if ($startTs <= time() + 300) {
+
+        $nowUtc = new DateTimeImmutable('now', new DateTimeZone('UTC'));
+        if ($startDt <= $nowUtc->modify('+5 minutes')) {
             $db->rollBack();
             jsonResponse(['error' => 'Start date must be in the future'], 400);
         }
-        if ($revealTs <= $startTs) {
+        if ($revealDt <= $startDt) {
             $db->rollBack();
             jsonResponse(['error' => 'Reveal date must be after start date'], 400);
         }
@@ -1573,21 +1583,31 @@ if ($action === 'underfill_decide') {
             jsonResponse(['error' => 'Maximum extensions reached'], 403);
         }
 
-        $oldStartTs = strtotime((string)$room['start_at']);
-        if ($oldStartTs && $startTs > ($oldStartTs + (30 * 86400))) {
-            $db->rollBack();
-            jsonResponse(['error' => 'Each extension is capped at 30 days'], 403);
+        $oldStartRaw = (string)$room['start_at'];
+        if ($oldStartRaw !== '') {
+            try {
+                $oldStartDt = new DateTimeImmutable($oldStartRaw, new DateTimeZone('UTC'));
+                if ($startDt > $oldStartDt->modify('+30 days')) {
+                    $db->rollBack();
+                    jsonResponse(['error' => 'Each extension is capped at 30 days'], 403);
+                }
+            } catch (Exception) {
+                // Ignore: fall back to allowing the extension.
+            }
         }
 
+        $startStr = $startDt->format('Y-m-d H:i:s');
+        $revealStr = $revealDt->format('Y-m-d H:i:s');
+
         $db->prepare("UPDATE saving_rooms SET start_at = ?, reveal_at = ?, extensions_used = extensions_used + 1, updated_at=NOW() WHERE id = ?")
-           ->execute([date('Y-m-d H:i:s', $startTs), date('Y-m-d H:i:s', $revealTs), $roomId]);
+           ->execute([$startStr, $revealStr, $roomId]);
 
         // Keep invite expiry aligned to the (possibly extended) start date.
         $db->prepare("UPDATE saving_room_invites SET expires_at = ? WHERE room_id = ? AND status = 'active'")
-           ->execute([date('Y-m-d H:i:s', $startTs), $roomId]);
+           ->execute([$startStr, $roomId]);
 
         $db->prepare("UPDATE saving_room_underfill_alerts SET status='resolved', resolved_at=NOW(), resolution_action='extend_start', resolution_payload=JSON_OBJECT('new_start_at', ?, 'new_reveal_at', ?) WHERE room_id = ?")
-           ->execute([date('Y-m-d H:i:s', $startTs), date('Y-m-d H:i:s', $revealTs), $roomId]);
+           ->execute([$startStr, $revealStr, $roomId]);
 
         activityLog($roomId, 'underfilled_resolved', ['action' => 'extend_start']);
 

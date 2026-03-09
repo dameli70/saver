@@ -340,7 +340,7 @@ function buildCard(lock){
     b.className='btn btn-green btn-sm';
     b.type='button';
     b.textContent='Reveal';
-    b.addEventListener('click', ()=>openReveal(lock.kind, lock.id,, lock.hint||''));
+    b.addEventListener('click', ()=>openReveal(lock.kind, lock.id, lock.label||'Reveal', lock.hint||''));
     actions.appendChild(b);
   } else if(st==='auto_saved'){
     const b=document.createElement('button');
