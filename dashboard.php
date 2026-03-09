@@ -19,6 +19,20 @@ $isAdmin   = isAdmin();
 $csrf      = getCsrfToken();
 
 $userId = (int)(getCurrentUserId() ?? 0);
+$skipSetup = !empty($_GET['skip_setup']);
+if ($skipSetup) {
+    $_SESSION['onboarding_skip_once'] = 1;
+}
+
+if ($userId && empty($_SESSION['onboarding_skip_once']) && !isOnboardingComplete($userId)) {
+    header('Location: setup.php');
+    exit;
+}
+
+if (!empty($_SESSION['onboarding_skip_once'])) {
+    unset($_SESSION['onboarding_skip_once']);
+}
+
 $hasTotp    = userHasTotp($userId);
 $hasPasskey = userHasPasskeys($userId);
 $hasVault   = userHasVaultPassphraseCheck($userId);
@@ -76,12 +90,14 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9998;o
     <div class="topbar-r">
       <span class="user-pill"><?= htmlspecialchars($userEmail) ?></span>
       <button class="btn btn-ghost btn-sm btn-theme" type="button" data-theme-toggle>Theme</button>
+      <a class="btn btn-ghost btn-sm" href="index.php#faq">FAQ</a>
       <a class="btn btn-ghost btn-sm" href="create_code.php">Create Code</a>
       <a class="btn btn-ghost btn-sm" href="my_codes.php">My Codes</a>
       <a class="btn btn-ghost btn-sm" href="rooms.php">Rooms</a>
       <a class="btn btn-ghost btn-sm" href="notifications.php">Notifications</a>
       <a class="btn btn-ghost btn-sm" href="backup.php">Backup</a>
       <a class="btn btn-ghost btn-sm" href="vault_settings.php">Vault</a>
+      <a class="btn btn-ghost btn-sm" href="setup.php">Setup</a>
       <a class="btn btn-ghost btn-sm" href="account.php">Account</a>
       <?php if ($isAdmin): ?><a class="btn btn-ghost btn-sm" href="admin.php">Admin</a><?php endif; ?>
       <a class="btn btn-ghost btn-sm" href="logout.php">Logout</a>

@@ -129,6 +129,57 @@ function userHasVaultPassphraseCheck(int $userId): bool {
     return $u && !empty($u['vault_check_cipher']);
 }
 
+function hasOnboardingColumns(): bool {
+    static $cached = null;
+    if ($cached !== null) return $cached;
+
+    try {
+        $db = getDB();
+        $stmt = $db->query("SELECT 1 FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'users' AND column_name = 'onboarding_completed_at' LIMIT 1");
+        $cached = (bool)$stmt->fetchColumn();
+        return $cached;
+    } catch (Throwable) {
+        $cached = false;
+        return false;
+    }
+}
+
+function isOnboardingComplete(?int $userId = null): bool {
+    startSecureSession();
+
+    // If the column doesn't exist, don't block users from the app.
+    if (!hasOnboardingColumns()) return true;
+
+    if (!empty($_SESSION['onboarding_complete'])) return true;
+
+    $uid = $userId ?? getCurrentUserId();
+    if (!$uid) return false;
+
+    $db = getDB();
+    $stmt = $db->prepare('SELECT onboarding_completed_at FROM users WHERE id = ?');
+    $stmt->execute([(int)$uid]);
+    $row = $stmt->fetch();
+
+    $ok = !empty($row['onboarding_completed_at']);
+    if ($ok && $uid === getCurrentUserId()) {
+        $_SESSION['onboarding_complete'] = 1;
+    }
+    return $ok;
+}
+
+function markOnboardingComplete(int $userId): void {
+    startSecureSession();
+
+    if (!hasOnboardingColumns()) return;
+
+    $db = getDB();
+    $db->prepare('UPDATE users SET onboarding_completed_at = NOW() WHERE id = ?')->execute([(int)$userId]);
+
+    if ($userId === getCurrentUserId()) {
+        $_SESSION['onboarding_complete'] = 1;
+    }
+}
+
 function currentSessionIdHash(): string {
     startSecureSession();
     return hash_hmac('sha256', session_id(), APP_HMAC_SECRET);

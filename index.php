@@ -70,6 +70,17 @@ a{color:inherit;}
 .notice{max-width:960px;margin:0 auto;padding:18px 18px 0;}
 .notice .box{border:1px solid rgba(255,170,0,.25);background:rgba(255,170,0,.06);padding:14px 16px;color:var(--muted);font-size:12px;line-height:1.6;}
 .notice .box strong{color:var(--orange);} 
+
+.faq{max-width:960px;margin:0 auto;padding:0 18px 60px;}
+.faq h2{font-family:var(--display);font-weight:900;font-size:16px;letter-spacing:1px;margin:0 0 12px;}
+.faq-grid{display:grid;grid-template-columns:1fr;gap:10px;}
+@media(min-width:740px){.faq-grid{grid-template-columns:repeat(2,1fr);} }
+.qa{background:rgba(13,15,20,.7);border:1px solid var(--b1);padding:14px;}
+.qa summary{cursor:pointer;list-style:none;font-family:var(--display);font-weight:800;font-size:12px;letter-spacing:1px;line-height:1.4;}
+.qa summary::-webkit-details-marker{display:none;}
+.qa summary::after{content:'+';float:right;color:var(--muted);}
+.qa[open] summary::after{content:'–';}
+.qa p{margin-top:10px;color:var(--muted);font-size:12px;line-height:1.7;}
 </style>
 </head>
 <body>
@@ -79,6 +90,7 @@ a{color:inherit;}
     <a class="logo" href="index.php"><?= htmlspecialchars(APP_NAME) ?></a>
     <div class="nav-r">
       <button class="btn btn-ghost btn-theme" type="button" data-theme-toggle>Theme</button>
+      <a class="btn btn-ghost" href="#faq">FAQ</a>
       <?php if ($loggedIn): ?>
         <span class="pill"><?= htmlspecialchars($userEmail) ?></span>
         <?php if ($verified): ?>
@@ -168,7 +180,44 @@ a{color:inherit;}
     </div>
   </div>
 
-  <div class="footer">© <?= date('Y') ?> <?= htmlspecialchars(APP_NAME) ?> • Time locks for better money habits</div>
+  <div class="faq" id="faq">
+    <h2>FAQ</h2>
+    <div class="faq-grid">
+
+      <details class="qa">
+        <summary>Does <?= htmlspecialchars(APP_NAME) ?> hold my money?</summary>
+        <p>No. <?= htmlspecialchars(APP_NAME) ?> does not connect to your bank or wallet. It stores time‑locked, encrypted codes (and room rules) so you can create a cool‑off period before spending.</p>
+      </details>
+
+      <details class="qa">
+        <summary>Can admins read my locked codes?</summary>
+        <p>No. Your vault passphrase stays in your browser. The server stores encrypted blobs and labels — even admins can’t decrypt your secrets.</p>
+      </details>
+
+      <details class="qa">
+        <summary>What if I forget my vault passphrase?</summary>
+        <p>Your vault passphrase can’t be reset by email. If you forget it, your locked codes can’t be recovered. Use a password manager and keep an encrypted backup.</p>
+      </details>
+
+      <details class="qa">
+        <summary>What’s a “Saving Room”?</summary>
+        <p>A Saving Room is a shared goal with clear rules: dates, contributions, and how unlocking works. You can save with trusted people and keep everyone aligned.</p>
+      </details>
+
+      <details class="qa">
+        <summary>Can I unlock early?</summary>
+        <p>Time locks are meant to protect you from impulse decisions. In general, you unlock when the date arrives — and sensitive actions may ask for extra confirmation (passkey or authenticator code).</p>
+      </details>
+
+      <details class="qa">
+        <summary>How do backups work?</summary>
+        <p>Backups are encrypted snapshots you can download and restore later. They help you move to a new device without relying on plaintext storage.</p>
+      </details>
+
+    </div>
+  </div>
+
+  <div class="footer">© <?= date('Y') ?> <?= htmlspecialchars(APP_NAME) ?> • <a href="#faq">FAQ</a> • Time locks for better money habits</div>
 </div>
 </body>
 </html>
