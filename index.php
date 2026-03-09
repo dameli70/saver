@@ -83,8 +83,8 @@ a{color:inherit;}
         <span class="pill"><?= htmlspecialchars($userEmail) ?></span>
         <?php if ($verified): ?>
           <a class="btn btn-ghost" href="dashboard.php">Dashboard</a>
-          <a class="btn btn-ghost" href="create_code.php">Create Lock</a>
-          <a class="btn btn-ghost" href="my_codes.php">My Locks</a>
+          <a class="btn btn-ghost" href="create_code.php">Create Code</a>
+          <a class="btn btn-ghost" href="my_codes.php">My Codes</a>
           <a class="btn btn-ghost" href="rooms.php">Rooms</a>
           <?php if ($isAdmin): ?>
             <a class="btn btn-ghost" href="admin.php">Admin</a>

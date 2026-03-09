@@ -733,16 +733,53 @@ btn.addEventListener('click', async ()=>{
       j.sessions.forEach(s=>{
         const el=document.createElement('div');
         el.className='item';
-        const cur=s.is_current?'<span style="color:var(--green)">CURRENT</span>':'<span style="color:var(--muted)">OTHER</span>';
-        const ua=(s.user_agent||'').slice(0,160);
-        el.innerHTML=`
-          <div>
-            <div class="small">${cur} · Last seen: <span style="color:var(--text)">${s.last_seen_at||''}</span></div>
-            <div class="small">IP: <span style="color:var(--text)">${s.ip_address||''}</span></div>
-            <div class="small">UA: <span style="color:var(--text)">${ua}</span></div>
-          </div>
-          <div class="small">Created: <span style="color:var(--text)">${s.created_at||''}</span></div>
-        `;
+
+        const left=document.createElement('div');
+        const right=document.createElement('div');
+        right.className='small';
+
+        const line1=document.createElement('div');
+        line1.className='small';
+
+        const curSpan=document.createElement('span');
+        curSpan.style.color = s.is_current ? 'var(--green)' : 'var(--muted)';
+        curSpan.textContent = s.is_current ? 'CURRENT' : 'OTHER';
+        line1.appendChild(curSpan);
+        line1.append(' · Last seen: ');
+
+        const lastSeen=document.createElement('span');
+        lastSeen.style.color='var(--text)';
+        lastSeen.textContent = s.last_seen_at || '';
+        line1.appendChild(lastSeen);
+
+        const line2=document.createElement('div');
+        line2.className='small';
+        line2.append('IP: ');
+        const ip=document.createElement('span');
+        ip.style.color='var(--text)';
+        ip.textContent = s.ip_address || '';
+        line2.appendChild(ip);
+
+        const line3=document.createElement('div');
+        line3.className='small';
+        line3.append('UA: ');
+        const ua=document.createElement('span');
+        ua.style.color='var(--text)';
+        ua.textContent = String(s.user_agent || '').slice(0, 160);
+        line3.appendChild(ua);
+
+        left.appendChild(line1);
+        left.appendChild(line2);
+        left.appendChild(line3);
+
+        right.append('Created: ');
+        const created=document.createElement('span');
+        created.style.color='var(--text)';
+        created.textContent = s.created_at || '';
+        right.appendChild(created);
+
+        el.appendChild(left);
+        el.appendChild(right);
         wrap.appendChild(el);
       });
     }catch{

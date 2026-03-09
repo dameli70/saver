@@ -43,8 +43,11 @@ Edit `config/database.php`:
 - `DB_HOST`, `DB_NAME`, `DB_USER`, `DB_PASS`
 - `APP_HMAC_SECRET` (generate with `php -r "echo bin2hex(random_bytes(32));"`)
 - `APP_ENV` (`development` or `production`)
+- `APP_BASE_URL` (recommended in production; used for emailed links)
 - `MAIL_FROM` (used for verification emails)
 - `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_SECURE`, `SMTP_VERIFY_PEER` (recommended)
+
+**Important:** ensure your web server does **not** serve `config/` (it contains secrets). If using Apache, `config/.htaccess` denies access; for Nginx add an equivalent deny rule.
 
 ## Project Layout
 
