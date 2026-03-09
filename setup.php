@@ -39,6 +39,50 @@ try {
     $lastBackupAt = null;
 }
 
+$lockCount = 0;
+try {
+    $db = $db ?? getDB();
+    $stmt = $db->prepare('SELECT COUNT(*) AS c FROM locks WHERE user_id = ?');
+    $stmt->execute([$userId]);
+    $lockCount = (int)($stmt->fetchColumn() ?? 0);
+} catch (Throwable) {
+    $lockCount = 0;
+}
+
+$setupStepsTotal = 4;
+$setupDone = 0;
+if ($hasVault) $setupDone++;
+if ($hasTotp || $hasPasskey) $setupDone++;
+if ($backupCount > 0) $setupDone++;
+if ($lockCount > 0) $setupDone++;
+$setupPercent = (int)floor(($setupDone / $setupStepsTotal) * 100);
+
+$nextSetupText = 'Next: review your setup.';
+$nextSetupLabel = 'Continue';
+$nextSetupHref = 'setup.php';
+
+if (!$hasVault) {
+    $nextSetupText = 'Next: set your vault passphrase.';
+    $nextSetupLabel = 'Open vault';
+    $nextSetupHref = 'vault_settings.php';
+} elseif (!$hasTotp && !$hasPasskey) {
+    $nextSetupText = 'Next: add a passkey or authenticator app.';
+    $nextSetupLabel = 'Add confirmation';
+    $nextSetupHref = 'account.php#passkeys-card';
+} elseif ($backupCount <= 0) {
+    $nextSetupText = 'Next: download an encrypted backup.';
+    $nextSetupLabel = 'Open backup';
+    $nextSetupHref = 'backup.php';
+} elseif ($lockCount <= 0) {
+    $nextSetupText = 'Next: create your first time lock.';
+    $nextSetupLabel = 'Create a time lock';
+    $nextSetupHref = 'create_code.php';
+} else {
+    $nextSetupText = 'You’re ready.';
+    $nextSetupLabel = 'Go to dashboard';
+    $nextSetupHref = 'dashboard.php';
+}
+
 $onboardingAvailable = hasOnboardingColumns();
 $onboardingDone = isOnboardingComplete($userId);
 
@@ -95,6 +139,21 @@ header("Referrer-Policy: no-referrer");
   <div class="h">Setup</div>
   <div class="p">Get <?= htmlspecialchars(APP_NAME) ?> ready for daily use. This takes a few minutes and makes unlocking and backups safer.</div>
 
+  <div class="card" style="margin-bottom:14px;">
+    <div class="card-title"><div class="dot"></div>Progress</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+      <div style="min-width:220px;flex:1;">
+        <div style="font-size:12px;color:var(--muted);line-height:1.7;">
+          <strong style="color:var(--text);font-weight:800;"><?= (int)$setupPercent ?>%</strong> complete — <?= htmlspecialchars($nextSetupText) ?>
+        </div>
+        <div style="height:10px;border:1px solid var(--b1);background:rgba(255,255,255,.02);margin-top:10px;">
+          <div style="height:100%;width:<?= (int)$setupPercent ?>%;background:linear-gradient(90deg, var(--accent), rgba(255,255,255,.12));"></div>
+        </div>
+      </div>
+      <a class="btn btn-primary" href="<?= htmlspecialchars($nextSetupHref) ?>" style="width:auto;"><?= htmlspecialchars($nextSetupLabel) ?></a>
+    </div>
+    <div class="p" style="margin-top:10px;color:var(--muted);">Vault passphrase + confirmation + backup + first time lock.</div>
+  </div>
   <?php if ($onboardingAvailable && $onboardingDone): ?>
     <div class="card" style="margin-bottom:14px;">
       <div class="card-title">You’re all set</div>
@@ -156,7 +215,7 @@ header("Referrer-Policy: no-referrer");
           <div class="step-title">4) Create your first time lock</div>
           <div class="step-sub">Start small: lock a wallet PIN or a spending code for 24 hours. The goal is to create a cool‑off period.</div>
         </div>
-        <div class="badge">optional</div>
+        <div class="badge <?= $lockCount > 0 ? 'ok' : '' ?>"><?= $lockCount > 0 ? ('✓ ' . (int)$lockCount) : 'todo' ?></div>
       </div>
       <div class="actions">
         <a class="btn btn-primary" href="create_code.php" style="width:auto;">Create a time lock</a>

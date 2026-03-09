@@ -54,6 +54,50 @@ try {
     $lastBackupAt = null;
 }
 
+$lockCount = 0;
+try {
+    $db = $db ?? getDB();
+    $stmt = $db->prepare('SELECT COUNT(*) AS c FROM locks WHERE user_id = ?');
+    $stmt->execute([$userId]);
+    $lockCount = (int)($stmt->fetchColumn() ?? 0);
+} catch (Throwable) {
+    $lockCount = 0;
+}
+
+$setupStepsTotal = 4;
+$setupDone = 0;
+if ($hasVault) $setupDone++;
+if ($hasTotp || $hasPasskey) $setupDone++;
+if ($backupCount > 0) $setupDone++;
+if ($lockCount > 0) $setupDone++;
+$setupPercent = (int)floor(($setupDone / $setupStepsTotal) * 100);
+
+$nextSetupText = 'Next: review your setup.';
+$nextSetupLabel = 'Open setup';
+$nextSetupHref = 'setup.php';
+
+if (!$hasVault) {
+    $nextSetupText = 'Next: set your vault passphrase.';
+    $nextSetupLabel = 'Open vault';
+    $nextSetupHref = 'vault_settings.php';
+} elseif (!$hasTotp && !$hasPasskey) {
+    $nextSetupText = 'Next: add a passkey or authenticator app.';
+    $nextSetupLabel = 'Add confirmation';
+    $nextSetupHref = 'account.php#passkeys-card';
+} elseif ($backupCount <= 0) {
+    $nextSetupText = 'Next: download an encrypted backup.';
+    $nextSetupLabel = 'Open backup';
+    $nextSetupHref = 'backup.php';
+} elseif ($lockCount <= 0) {
+    $nextSetupText = 'Next: create your first time lock.';
+    $nextSetupLabel = 'Create a time lock';
+    $nextSetupHref = 'create_code.php';
+} else {
+    $nextSetupText = 'You’re ready.';
+    $nextSetupLabel = 'Create a time lock';
+    $nextSetupHref = 'create_code.php';
+}
+
 // Strict security headers
 header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none';");
 header("X-Frame-Options: DENY");
@@ -105,6 +149,21 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9998;o
   </div>
 
   <div class="app-body">
+
+    <div class="card" style="margin-top:0;">
+      <div class="card-title"><div class="dot"></div>Onboarding</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+        <div style="min-width:220px;flex:1;">
+          <div style="font-size:12px;color:var(--muted);line-height:1.7;">
+            <strong style="color:var(--text);font-weight:800;"><?= (int)$setupPercent ?>%</strong> complete — <?= htmlspecialchars($nextSetupText) ?>
+          </div>
+          <div style="height:10px;border:1px solid var(--b1);background:rgba(255,255,255,.02);margin-top:10px;">
+            <div style="height:100%;width:<?= (int)$setupPercent ?>%;background:linear-gradient(90deg, var(--accent), rgba(255,255,255,.12));"></div>
+          </div>
+        </div>
+        <a class="btn btn-primary" href="<?= htmlspecialchars($nextSetupHref) ?>" style="width:auto;"><?= htmlspecialchars($nextSetupLabel) ?></a>
+      </div>
+    </div>
 
     <?php if ($showSecurityBanner): ?>
     <div class="sec-banner">
@@ -171,6 +230,19 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9998;o
             </div>
           </div>
           <a class="btn btn-ghost btn-sm" href="backup.php" style="width:auto;">Open</a>
+        </div>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px;border:1px solid var(--b1);background:rgba(255,255,255,.02);">
+          <div style="display:flex;align-items:center;gap:10px;min-width:0;">
+            <div style="font-size:12px;color:<?= $lockCount > 0 ? 'var(--green)' : 'var(--orange)' ?>;"><?= $lockCount > 0 ? '✓' : '•' ?></div>
+            <div style="min-width:0;">
+              <div style="font-family:var(--display);font-weight:800;font-size:12px;">First time lock</div>
+              <div style="color:var(--muted);font-size:11px;line-height:1.6;">
+                <?= $lockCount > 0 ? 'Time locks created: <span style="color:var(--text);">' . (int)$lockCount . '</span>' : 'Create your first time lock to start building a cool-off period before spending.'; ?>
+              </div>
+            </div>
+          </div>
+          <a class="btn btn-ghost btn-sm" href="create_code.php" style="width:auto;">Create</a>
         </div>
 
       </div>
