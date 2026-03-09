@@ -138,7 +138,7 @@ header("Referrer-Policy: no-referrer");
         <div class="card-title" style="margin-bottom:10px;">Unlock (Type A)</div>
         <div class="p" style="margin-bottom:10px;">Requires 100% approval after the reveal date. When revealed, the unlock code is valid for 72 hours.</div>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="two-col">
           <div>
             <div class="k">Consensus</div>
             <div class="v" id="unlock-consensus">—</div>
@@ -180,7 +180,7 @@ header("Referrer-Policy: no-referrer");
           </div>
         </div>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
+        <div class="two-col" style="margin-top:12px;">
           <div>
             <div class="k">Window</div>
             <div class="v" id="typeb-window">—</div>

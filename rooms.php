@@ -147,7 +147,7 @@ header("Referrer-Policy: no-referrer");
       </div>
 
       <div class="field"><label>Participants (min / max)</label>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="two-col">
           <input id="cr-min" type="number" min="2" value="2">
           <input id="cr-max" type="number" min="2" value="6">
         </div>
