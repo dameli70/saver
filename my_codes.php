@@ -33,6 +33,7 @@ header("Permissions-Policy: clipboard-write=(self)");
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
 <script src="assets/theme.js"></script>
+<script src="assets/app.js"></script>
 <link rel="stylesheet" href="assets/base.css">
 <link rel="stylesheet" href="assets/app.css">
 <style>
@@ -165,6 +166,8 @@ let vaultSlotSession   = 1;
 let revealedPwd = null;
 let currentReveal = null; // {kind:'lock'|'wallet', id:string}
 
+let countdownTimer = null;
+
 function apiUrl(url){return url.startsWith('/') ? url.slice(1) : url;}
 async function get(url){const r=await fetch(apiUrl(url),{credentials:'same-origin'});return r.json();}
 async function postCsrf(url,body){
@@ -172,10 +175,43 @@ async function postCsrf(url,body){
   return r.json();
 }
 
-function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
-function toast(msg,type='ok'){const t=document.createElement('div');t.className=`toast ${type}`;t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),3200);} 
+function esc(s){
+  if(window.LS && LS.esc) return LS.esc(s);
+  return String(s||'')
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;');
+}
+function toast(msg,type='ok'){
+  if(window.LS && LS.toast) return LS.toast(msg, type);
+  const t=document.createElement('div');t.className=`toast ${type}`;t.textContent=String(msg||'');document.body.appendChild(t);setTimeout(()=>t.remove(),3200);
+}
 
-function bytesToB64(bytes){return btoa(String.fromCharCode(...bytes));}
+function parseUtc(ts){
+  return (window.LS && LS.parseUtc) ? LS.parseUtc(ts) : new Date(ts);
+}
+
+function fmtLocalTs(ts){
+  const d = parseUtc(ts);
+  return (window.LS && LS.fmtLocal) ? LS.fmtLocal(d) : (d && !isNaN(d.getTime()) ? d.toLocaleString() : '');
+}
+
+function fmtUtcTs(ts){
+  const d = parseUtc(ts);
+  return (window.LS && LS.fmtUtc) ? LS.fmtUtc(d) : (d && !isNaN(d.getTime()) ? d.toUTCString() : '');
+}
+
+function renderLoadingSkeleton(){
+  return `
+    <div class="locks-grid">
+      <div class="skel" style="height:120px;"></div>
+      <div class="skel" style="height:120px;"></div>
+      <div class="skel" style="height:120px;"></div>
+    </div>
+  `;
+}
+
 function b64ToBytes(b64){return Uint8Array.from(atob(b64), c => c.charCodeAt(0));}
 
 function requireWebCrypto(){
@@ -214,9 +250,23 @@ async function aesDecrypt(cipherBlobB64, ivB64, tagB64, key){
   return new TextDecoder().decode(pt);
 }
 
+function startCountdownTicker(){
+  if(countdownTimer) clearInterval(countdownTimer);
+  countdownTimer = setInterval(()=>{
+    document.querySelectorAll('[data-countdown-until]')
+      .forEach(el => {
+        const until = parseInt(el.getAttribute('data-countdown-until')||'0', 10) || 0;
+        const now = Date.now();
+        const seconds = Math.max(0, Math.floor((until - now)/1000));
+        const label = (window.LS && LS.fmtCountdown) ? LS.fmtCountdown(seconds) : String(seconds);
+        el.textContent = seconds > 0 ? `⏱ Reveals in ${label}` : '⏱ Reveal eligible';
+      });
+  }, 1000);
+}
+
 async function loadLocks(){
   const wrap=document.getElementById('locks-wrap');
-  wrap.innerHTML='<div style="text-align:center;padding:40px;color:var(--muted);font-size:11px;letter-spacing:2px">LOADING…</div>';
+  wrap.innerHTML=renderLoadingSkeleton();
 
   try{
     const [a,b] = await Promise.allSettled([
@@ -256,8 +306,10 @@ async function loadLocks(){
     });
 
     mapped.sort((x,y) => {
-      const ax = Date.parse(x.created_at || x.reveal_date || '') || 0;
-      const ay = Date.parse(y.created_at || y.reveal_date || '') || 0;
+      const dx = parseUtc(x.created_at || x.reveal_date || '');
+      const dy = parseUtc(y.created_at || y.reveal_date || '');
+      const ax = (dx && !isNaN(dx.getTime())) ? dx.getTime() : 0;
+      const ay = (dy && !isNaN(dy.getTime())) ? dy.getTime() : 0;
       return ay - ax;
     });
 
@@ -267,7 +319,10 @@ async function loadLocks(){
     }
 
     wrap.innerHTML='<div class="locks-grid" id="locks-grid"></div>';
-    mapped.forEach(l=>document.getElementById('locks-grid').appendChild(buildCard(l)));
+    const grid = document.getElementById('locks-grid');
+    mapped.forEach(l=>grid.appendChild(buildCard(l)));
+
+    startCountdownTicker();
 
   }catch{
     wrap.innerHTML='<div class="empty"><p>Failed to load.</p></div>';
@@ -280,7 +335,10 @@ function buildCard(lock){
   el.className=`lock-card st-${st}`;
 
   const badges={locked:'🔒 Locked',unlocked:'🔓 Unlocked',pending:'⏳ Pending',auto_saved:'💾 Auto-saved',rejected:'✗ Void'};
-  const rd=new Date(lock.reveal_date).toLocaleDateString('en-US',{year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+
+  const revealD = parseUtc(lock.reveal_date);
+  const localStr = fmtLocalTs(lock.reveal_date);
+  const utcStr = fmtUtcTs(lock.reveal_date);
 
   const top=document.createElement('div');
   top.className='lc-top';
@@ -311,23 +369,25 @@ function buildCard(lock){
     el.appendChild(note);
   }
 
-  if(st==='locked'&&lock.time_remaining){
-    const t=lock.time_remaining;
-    const countdown=document.createElement('div');
-    countdown.className='lc-countdown';
-    countdown.textContent=`⏱ ${t.days}d ${t.hours}h ${t.minutes}m remaining`;
-    el.appendChild(countdown);
+  if((st==='locked' || st==='unlocked') && revealD && !isNaN(revealD.getTime())){
+    const cd=document.createElement('div');
+    cd.className='lc-countdown';
+    cd.setAttribute('data-countdown-until', String(revealD.getTime()));
+    cd.textContent='⏱';
+    el.appendChild(cd);
   }
 
   const meta=document.createElement('div');
   meta.className='lc-meta';
 
+  const whenHtml = `<span>${esc(localStr)}</span> <span class="utc-pill" title="Stored & enforced in UTC">${esc(utcStr)}</span>`;
+
   if(lock.kind === 'wallet'){
     const revealed = lock.revealed_at ? '<span style="color:var(--green)">✓</span>' : '<span style="color:var(--muted)">—</span>';
-    meta.innerHTML=`Type: <span>Wallet PIN · ${esc(lock.password_length)} chars</span><br>Carrier: <span>${esc(lock.carrier_name||'')}</span><br>Unlock: <span>${esc(rd)}</span><br>Revealed: ${revealed}`;
+    meta.innerHTML=`Type: <span>Wallet PIN · ${esc(lock.password_length)} chars</span><br>Carrier: <span>${esc(lock.carrier_name||'')}</span><br>Unlock: ${whenHtml}<br>Revealed: ${revealed}`;
   } else {
     const copied = lock.copied_at ? '<span style="color:var(--green)">✓</span>' : '<span style="color:var(--red)">not copied</span>';
-    meta.innerHTML=`Type: <span>${esc(lock.password_type)} · ${esc(lock.password_length)} chars</span><br>Reveal: <span>${esc(rd)}</span><br>Copied: ${copied}`;
+    meta.innerHTML=`Type: <span>${esc(lock.password_type)} · ${esc(lock.password_length)} chars</span><br>Reveal: ${whenHtml}<br>Copied: ${copied}`;
   }
 
   el.appendChild(meta);
@@ -364,7 +424,8 @@ function buildCard(lock){
     b.disabled=true;
     b.style.opacity='.3';
     b.style.cursor='not-allowed';
-    b.textContent=`Sealed until ${rd}`;
+    b.textContent=`Sealed until ${localStr}`;
+    b.title=`UTC: ${utcStr}`;
     actions.appendChild(b);
   }
 
@@ -396,59 +457,11 @@ function openReveal(kind, id, label, hint){
 }
 
 async function ensureReauth(methods){
-  if(methods && methods.passkey && window.PublicKeyCredential){
-    try{
-      const begin = await postCsrf('api/webauthn.php', {action:'reauth_begin'});
-      if(begin.success){
-        const pk = begin.publicKey || {};
-        const allow = (pk.allowCredentials||[]).map(c => ({type:c.type, id: b64uToBuf(c.id)}));
-        const cred = await navigator.credentials.get({publicKey:{
-          challenge: b64uToBuf(pk.challenge),
-          rpId: pk.rpId,
-          timeout: pk.timeout||60000,
-          userVerification: pk.userVerification||'required',
-          allowCredentials: allow,
-        }});
-        const a = cred.response;
-        const fin = await postCsrf('api/webauthn.php', {
-          action:'reauth_finish',
-          rawId: bufToB64u(cred.rawId),
-          response:{
-            clientDataJSON: bufToB64u(a.clientDataJSON),
-            authenticatorData: bufToB64u(a.authenticatorData),
-            signature: bufToB64u(a.signature),
-            userHandle: a.userHandle ? bufToB64u(a.userHandle) : null,
-          }
-        });
-        if(fin.success) return true;
-      }
-    }catch{}
+  if(window.LS && LS.reauth){
+    return LS.reauth(methods||{}, {post: postCsrf});
   }
-
-  if(methods && methods.totp){
-    const code = prompt('Enter your 6-digit authenticator code');
-    if(!code) return false;
-    const r = await postCsrf('api/totp.php', {action:'reauth', code});
-    return !!r.success;
-  }
-
   toast('Enable TOTP or add a passkey in Account', 'warn');
   return false;
-}
-
-function b64uToBuf(b64url){
-  const b64 = String(b64url||'').replace(/-/g,'+').replace(/_/g,'/');
-  const pad = b64.length % 4 ? '='.repeat(4 - (b64.length % 4)) : '';
-  const bin = atob(b64 + pad);
-  const bytes = new Uint8Array(bin.length);
-  for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
-  return bytes.buffer;
-}
-function bufToB64u(buf){
-  const bytes = new Uint8Array(buf);
-  let s='';
-  for(let i=0;i<bytes.length;i++) s+=String.fromCharCode(bytes[i]);
-  return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
 }
 
 async function doReveal(){
@@ -512,11 +525,21 @@ function closeReveal(e){
 async function copyRevealed(){
   if(!revealedPwd || !currentReveal || !currentReveal.id) return;
   try{
-    await navigator.clipboard.writeText(revealedPwd);
+    let copied = false;
+    if(window.LS && LS.copySensitive){
+      copied = await LS.copySensitive(revealedPwd, {clearAfterMs: 30000});
+    }else{
+      await navigator.clipboard.writeText(revealedPwd);
+      copied = true;
+    }
+
+    if(!copied) return;
+
     if(currentReveal.kind !== 'wallet'){
       await postCsrf('api/copied.php',{lock_id:currentReveal.id});
     }
-    toast('Copied!','ok');
+
+    toast('Copied (will try to clear in ~30s)','ok');
     loadLocks();
   }catch{
     toast('Select the text manually','err');
