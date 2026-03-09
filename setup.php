@@ -57,31 +57,34 @@ if ($backupCount > 0) $setupDone++;
 if ($lockCount > 0) $setupDone++;
 $setupPercent = (int)floor(($setupDone / $setupStepsTotal) * 100);
 
-$nextSetupText = 'Next: review your setup.';
-$nextSetupLabel = 'Continue';
+$nextSetupTextKey = 'onboarding.next.review';
+$nextSetupLabelKey = 'onboarding.action.continue';
 $nextSetupHref = 'setup.php';
 
 if (!$hasVault) {
-    $nextSetupText = 'Next: set your vault passphrase.';
-    $nextSetupLabel = 'Open vault';
+    $nextSetupTextKey = 'onboarding.next.vault_passphrase';
+    $nextSetupLabelKey = 'onboarding.action.open_vault';
     $nextSetupHref = 'vault_settings.php';
 } elseif (!$hasTotp && !$hasPasskey) {
-    $nextSetupText = 'Next: add a passkey or authenticator app.';
-    $nextSetupLabel = 'Add confirmation';
+    $nextSetupTextKey = 'onboarding.next.confirmation';
+    $nextSetupLabelKey = 'onboarding.action.add_confirmation';
     $nextSetupHref = 'account.php#passkeys-card';
 } elseif ($backupCount <= 0) {
-    $nextSetupText = 'Next: download an encrypted backup.';
-    $nextSetupLabel = 'Open backup';
+    $nextSetupTextKey = 'onboarding.next.backup';
+    $nextSetupLabelKey = 'onboarding.action.open_backup';
     $nextSetupHref = 'backup.php';
 } elseif ($lockCount <= 0) {
-    $nextSetupText = 'Next: create your first time lock.';
-    $nextSetupLabel = 'Create a time lock';
+    $nextSetupTextKey = 'onboarding.next.first_time_lock';
+    $nextSetupLabelKey = 'onboarding.action.create_time_lock';
     $nextSetupHref = 'create_code.php';
 } else {
-    $nextSetupText = 'You’re ready.';
-    $nextSetupLabel = 'Go to dashboard';
+    $nextSetupTextKey = 'onboarding.next.ready';
+    $nextSetupLabelKey = 'onboarding.action.go_to_dashboard';
     $nextSetupHref = 'dashboard.php';
 }
+
+$nextSetupText = t($nextSetupTextKey);
+$nextSetupLabel = t($nextSetupLabelKey);
 
 $onboardingAvailable = hasOnboardingColumns();
 $onboardingDone = isOnboardingComplete($userId);
@@ -144,11 +147,11 @@ header("Referrer-Policy: no-referrer");
   <div class="p"><?php e('setup.intro', ['app' => APP_NAME]); ?></div>
 
   <div class="card" style="margin-bottom:14px;">
-    <div class="card-title"><div class="dot"></div>Progress</div>
+    <div class="card-title"><div class="dot"></div><?php e('setup.progress'); ?></div>
     <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
       <div style="min-width:220px;flex:1;">
         <div style="font-size:12px;color:var(--muted);line-height:1.7;">
-          <strong style="color:var(--text);font-weight:800;"><?= (int)$setupPercent ?>%</strong> complete — <?= htmlspecialchars($nextSetupText) ?>
+          <strong style="color:var(--text);font-weight:800;"><?= (int)$setupPercent ?>%</strong> <?php e('dashboard.progress_suffix', ['next' => $nextSetupText]); ?>
         </div>
         <div style="height:10px;border:1px solid var(--b1);background:rgba(255,255,255,.02);margin-top:10px;">
           <div style="height:100%;width:<?= (int)$setupPercent ?>%;background:linear-gradient(90deg, var(--accent), rgba(255,255,255,.12));"></div>
@@ -156,15 +159,15 @@ header("Referrer-Policy: no-referrer");
       </div>
       <a class="btn btn-primary" href="<?= htmlspecialchars($nextSetupHref) ?>" style="width:auto;"><?= htmlspecialchars($nextSetupLabel) ?></a>
     </div>
-    <div class="p" style="margin-top:10px;color:var(--muted);">Vault passphrase + confirmation + backup + first time lock.</div>
+    <div class="p" style="margin-top:10px;color:var(--muted);"><?php e('setup.progress_sub'); ?></div>
   </div>
   <?php if ($onboardingAvailable && $onboardingDone): ?>
     <div class="card" style="margin-bottom:14px;">
-      <div class="card-title">You’re all set</div>
-      <div class="p" style="margin-top:-6px;">You can revisit this page anytime.</div>
+      <div class="card-title"><?php e('setup.all_set_title'); ?></div>
+      <div class="p" style="margin-top:-6px;"><?php e('setup.all_set_sub'); ?></div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;">
-        <a class="btn btn-primary" href="dashboard.php" style="width:auto;">Go to dashboard</a>
-        <a class="btn btn-ghost" href="create_code.php" style="width:auto;">Create a time lock</a>
+        <a class="btn btn-primary" href="dashboard.php" style="width:auto;"><?php e('onboarding.action.go_to_dashboard'); ?></a>
+        <a class="btn btn-ghost" href="create_code.php" style="width:auto;"><?php e('onboarding.action.create_time_lock'); ?></a>
       </div>
     </div>
   <?php endif; ?>
@@ -174,88 +177,88 @@ header("Referrer-Policy: no-referrer");
     <div class="step">
       <div class="step-top">
         <div>
-          <div class="step-title">1) Vault passphrase</div>
-          <div class="step-sub">This is the key you use to lock and unlock your codes. Keep it safe. If you lose it, nobody can recover your locked codes.</div>
+          <div class="step-title"><?php e('setup.step1_title'); ?></div>
+          <div class="step-sub"><?php e('setup.step1_sub'); ?></div>
         </div>
-        <div class="badge <?= $hasVault ? 'ok' : '' ?>"><?= $hasVault ? '✓ set' : 'not set' ?></div>
+        <div class="badge <?= $hasVault ? 'ok' : '' ?>"><?= $hasVault ? t('setup.status.set') : t('setup.status.not_set') ?></div>
       </div>
       <div class="actions">
-        <a class="btn btn-primary" href="vault_settings.php" style="width:auto;">Open vault</a>
-        <a class="btn btn-ghost" href="account.php#vault-passphrase-card" style="width:auto;">Manage in account</a>
+        <a class="btn btn-primary" href="vault_settings.php" style="width:auto;"><?php e('onboarding.action.open_vault'); ?></a>
+        <a class="btn btn-ghost" href="account.php#vault-passphrase-card" style="width:auto;"><?php e('setup.manage_in_account'); ?></a>
       </div>
     </div>
 
     <div class="step">
       <div class="step-top">
         <div>
-          <div class="step-title">2) Extra confirmation</div>
-          <div class="step-sub">Add a passkey or authenticator app. You’ll be asked for it before sensitive actions like unlocking and backups.</div>
+          <div class="step-title"><?php e('setup.step2_title'); ?></div>
+          <div class="step-sub"><?php e('setup.step2_sub'); ?></div>
         </div>
-        <div class="badge <?= ($hasTotp || $hasPasskey) ? 'ok' : '' ?>"><?= ($hasTotp || $hasPasskey) ? '✓ ready' : 'recommended' ?></div>
+        <div class="badge <?= ($hasTotp || $hasPasskey) ? 'ok' : '' ?>"><?= ($hasTotp || $hasPasskey) ? t('setup.status.ready') : t('setup.status.recommended') ?></div>
       </div>
       <div class="actions">
-        <a class="btn btn-primary" href="account.php#passkeys-card" style="width:auto;">Add passkey</a>
-        <a class="btn btn-ghost" href="account.php#totp-card" style="width:auto;">Setup authenticator</a>
+        <a class="btn btn-primary" href="account.php#passkeys-card" style="width:auto;"><?php e('setup.add_passkey'); ?></a>
+        <a class="btn btn-ghost" href="account.php#totp-card" style="width:auto;"><?php e('setup.setup_authenticator'); ?></a>
       </div>
     </div>
 
     <div class="step">
       <div class="step-top">
         <div>
-          <div class="step-title">3) Backup</div>
-          <div class="step-sub">Download an encrypted backup file so you can restore on a new device.</div>
+          <div class="step-title"><?php e('setup.step3_title'); ?></div>
+          <div class="step-sub"><?php e('setup.step3_sub'); ?></div>
         </div>
-        <div class="badge <?= $backupCount > 0 ? 'ok' : '' ?>"><?= $backupCount > 0 ? ('✓ ' . (int)$backupCount) : 'none yet' ?></div>
+        <div class="badge <?= $backupCount > 0 ? 'ok' : '' ?>"><?= $backupCount > 0 ? (t('setup.status.count', ['count' => (int)$backupCount])) : t('setup.status.none_yet') ?></div>
       </div>
       <div class="actions">
-        <a class="btn btn-primary" href="backup.php" style="width:auto;">Open backup</a>
-        <?php if ($lastBackupAt): ?><span class="utc-pill" title="Stored in UTC" style="align-self:center;">Last: <?= htmlspecialchars($lastBackupAt) ?> UTC</span><?php endif; ?>
+        <a class="btn btn-primary" href="backup.php" style="width:auto;"><?php e('onboarding.action.open_backup'); ?></a>
+        <?php if ($lastBackupAt): ?><span class="utc-pill" title="<?= htmlspecialchars(t('dashboard.stored_in_utc'), ENT_QUOTES, 'UTF-8') ?>" style="align-self:center;"><?php e('setup.last', ['ts' => $lastBackupAt]); ?></span><?php endif; ?>
       </div>
     </div>
 
     <div class="step">
       <div class="step-top">
         <div>
-          <div class="step-title">4) Create your first time lock</div>
-          <div class="step-sub">Start small: lock a wallet PIN or a spending code for 24 hours. The goal is to create a cool‑off period.</div>
+          <div class="step-title"><?php e('setup.step4_title'); ?></div>
+          <div class="step-sub"><?php e('setup.step4_sub'); ?></div>
         </div>
-        <div class="badge <?= $lockCount > 0 ? 'ok' : '' ?>"><?= $lockCount > 0 ? ('✓ ' . (int)$lockCount) : 'todo' ?></div>
+        <div class="badge <?= $lockCount > 0 ? 'ok' : '' ?>"><?= $lockCount > 0 ? (t('setup.status.count', ['count' => (int)$lockCount])) : t('setup.status.todo') ?></div>
       </div>
       <div class="actions">
-        <a class="btn btn-primary" href="create_code.php" style="width:auto;">Create a time lock</a>
-        <a class="btn btn-ghost" href="my_codes.php" style="width:auto;">View my time locks</a>
+        <a class="btn btn-primary" href="create_code.php" style="width:auto;"><?php e('onboarding.action.create_time_lock'); ?></a>
+        <a class="btn btn-ghost" href="my_codes.php" style="width:auto;"><?php e('setup.view_my_time_locks'); ?></a>
       </div>
     </div>
 
     <div class="step" style="grid-column:1/-1;">
       <div class="step-top">
         <div>
-          <div class="step-title">5) Save together (optional)</div>
-          <div class="step-sub">Create a Saving Room for a goal, invite trusted people, and lock the rules in before the start date.</div>
+          <div class="step-title"><?php e('setup.step5_title'); ?></div>
+          <div class="step-sub"><?php e('setup.step5_sub'); ?></div>
         </div>
-        <div class="badge">optional</div>
+        <div class="badge"><?php e('common.optional'); ?></div>
       </div>
       <div class="actions">
-        <a class="btn btn-primary" href="rooms.php" style="width:auto;">Open Saving Rooms</a>
-        <a class="btn btn-ghost" href="notifications.php" style="width:auto;">Notifications</a>
+        <a class="btn btn-primary" href="rooms.php" style="width:auto;"><?php e('setup.open_saving_rooms'); ?></a>
+        <a class="btn btn-ghost" href="notifications.php" style="width:auto;"><?php e('nav.notifications'); ?></a>
       </div>
     </div>
 
   </div>
 
   <div class="card" style="margin-top:14px;">
-    <div class="card-title">Continue</div>
-    <div class="p" style="margin-top:-6px;">You can always come back to this page from Dashboard → Setup.</div>
+    <div class="card-title"><?php e('setup.continue_title'); ?></div>
+    <div class="p" style="margin-top:-6px;"><?php e('setup.continue_sub'); ?></div>
 
     <div style="display:flex;gap:10px;flex-wrap:wrap;">
-      <button class="btn btn-primary" id="finish" type="button" style="width:auto;">Go to dashboard</button>
-      <a class="btn btn-ghost" href="dashboard.php?skip_setup=1" style="width:auto;">Remind me next time</a>
+      <button class="btn btn-primary" id="finish" type="button" style="width:auto;"><?php e('onboarding.action.go_to_dashboard'); ?></button>
+      <a class="btn btn-ghost" href="dashboard.php?skip_setup=1" style="width:auto;"><?php e('setup.remind_next_time'); ?></a>
     </div>
 
     <div id="msg" class="msg"></div>
 
     <?php if (!$onboardingAvailable): ?>
-      <div class="p" style="margin-top:12px;color:var(--muted);">Note: onboarding tracking is unavailable on this server (missing database migrations). This page won’t auto-hide.</div>
+      <div class="p" style="margin-top:12px;color:var(--muted);"><?php e('setup.note_tracking_unavailable'); ?></div>
     <?php endif; ?>
   </div>
 </div>
@@ -284,10 +287,10 @@ document.getElementById('finish').addEventListener('click', async ()=>{
 
   try{
     const j = await postCsrf('api/onboarding.php', {action:'complete'});
-    if(!j.success){setMsg(j.error||'Failed', false);return;}
+    if(!j.success){setMsg(j.error||<?= json_encode(t('common.failed')) ?>, false);return;}
     window.location.href='dashboard.php';
   }catch{
-    setMsg('Network error', false);
+    setMsg(<?= json_encode(t('common.network_error')) ?>, false);
   }
 });
 </script>

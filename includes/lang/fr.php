@@ -188,4 +188,191 @@ return [
     'verify.already_verified_html' => '<strong>E-mail déjà vérifié.</strong> Vous pouvez vous connecter et utiliser le tableau de bord.',
     'verify.invalid_token_html' => '<strong>Lien de vérification invalide.</strong> Veuillez en demander un nouveau depuis la page Compte.',
     'verify.expired_html' => '<strong>Lien de vérification expiré.</strong> Veuillez en demander un nouveau depuis la page Compte.',
+
+    // Commun (extra)
+    'common.open' => 'Ouvrir',
+    'common.create' => 'Créer',
+    'common.refresh' => 'Actualiser',
+    'common.loading' => 'Chargement…',
+    'common.load_more' => 'Charger plus',
+    'common.optional' => 'optionnel',
+    'common.failed' => 'Échec',
+
+    // Crypto / support navigateur
+    'crypto.unavailable' => 'La cryptographie sécurisée n’est pas disponible dans ce navigateur.',
+    'crypto.webcrypto_unavailable' => 'L’API Web Crypto n’est pas disponible. Utilisez HTTPS (ou localhost) pour définir une phrase secrète de coffre.',
+
+    // Démarrage (partagé)
+    'onboarding.next.review' => 'Prochaine étape : vérifier votre configuration.',
+    'onboarding.next.vault_passphrase' => 'Prochaine étape : définir votre phrase secrète de coffre.',
+    'onboarding.next.confirmation' => 'Prochaine étape : ajouter une passkey ou une application d’authentification.',
+    'onboarding.next.backup' => 'Prochaine étape : télécharger une sauvegarde chiffrée.',
+    'onboarding.next.first_time_lock' => 'Prochaine étape : créer votre premier verrou temporel.',
+    'onboarding.next.ready' => 'C’est prêt.',
+
+    'onboarding.action.continue' => 'Continuer',
+    'onboarding.action.open_setup' => 'Ouvrir la configuration',
+    'onboarding.action.open_vault' => 'Ouvrir le coffre',
+    'onboarding.action.add_confirmation' => 'Ajouter une confirmation',
+    'onboarding.action.open_backup' => 'Ouvrir les sauvegardes',
+    'onboarding.action.create_time_lock' => 'Créer un verrou temporel',
+    'onboarding.action.go_to_dashboard' => 'Aller au tableau de bord',
+
+    // Tableau de bord
+    'dashboard.onboarding' => 'Démarrage',
+    'dashboard.progress_suffix' => 'terminé — {next}',
+    'dashboard.security_banner_title' => 'Finalisez votre configuration de sécurité',
+    'dashboard.security_banner_sub' => 'Ajoutez une passkey ou un code d’authentification pour confirmer les actions sensibles (déverrouillage, sauvegardes, validations de salle).',
+    'dashboard.open_account' => 'Ouvrir le compte',
+    'dashboard.quick_actions' => 'Actions rapides',
+    'dashboard.create_time_lock' => 'Créer un verrou temporel',
+    'dashboard.my_time_locks' => 'Mes verrous temporels',
+    'dashboard.quick_actions_sub' => 'Créez un verrou temporel quand vous voulez une période de refroidissement avant de dépenser. Utilisez les salles d’épargne pour épargner ensemble avec des règles claires.',
+    'dashboard.setup_checklist' => 'Liste de configuration',
+    'dashboard.check.vault_title' => 'Phrase secrète du coffre',
+    'dashboard.check.vault_sub' => 'Définissez votre phrase secrète de coffre, puis utilisez‑la pour verrouiller et déverrouiller vos verrous temporels. Conservez‑la en lieu sûr.',
+    'dashboard.check.confirm_title' => 'Confirmation supplémentaire',
+    'dashboard.check.confirm_sub' => 'Ajoutez une passkey ou une application d’authentification pour protéger le déverrouillage et les sauvegardes.',
+    'dashboard.check.backup_title' => 'Sauvegarde',
+    'dashboard.backups_count_label' => 'Sauvegardes :',
+    'dashboard.check.backup_sub' => 'Téléchargez une sauvegarde chiffrée afin de pouvoir restaurer sur un nouvel appareil.',
+    'dashboard.stored_in_utc' => 'Enregistré en UTC',
+    'dashboard.last_backup' => 'Dernière sauvegarde : {ts} UTC',
+    'dashboard.check.first_lock_title' => 'Premier verrou temporel',
+    'dashboard.time_locks_created_label' => 'Verrous temporels créés :',
+    'dashboard.check.first_lock_sub' => 'Créez votre premier verrou temporel pour instaurer une période de refroidissement avant de dépenser.',
+    'dashboard.security' => 'Sécurité',
+    'dashboard.security_sub_html' => 'Les actions sensibles peuvent demander une confirmation supplémentaire (passkey ou code d’authentification). Configurez cela dans {account_link}.',
+
+    // Configuration
+    'setup.progress' => 'Progression',
+    'setup.progress_sub' => 'Phrase secrète du coffre + confirmation + sauvegarde + premier verrou temporel.',
+    'setup.all_set_title' => 'Tout est prêt',
+    'setup.all_set_sub' => 'Vous pouvez revenir sur cette page à tout moment.',
+
+    'setup.step1_title' => '1) Phrase secrète du coffre',
+    'setup.step1_sub' => 'C’est la clé qui sert à verrouiller et déverrouiller vos codes. Gardez‑la en sécurité. Si vous la perdez, personne ne pourra récupérer vos codes verrouillés.',
+
+    'setup.step2_title' => '2) Confirmation supplémentaire',
+    'setup.step2_sub' => 'Ajoutez une passkey ou une application d’authentification. Elle vous sera demandée avant les actions sensibles comme le déverrouillage et les sauvegardes.',
+
+    'setup.step3_title' => '3) Sauvegarde',
+    'setup.step3_sub' => 'Téléchargez une sauvegarde chiffrée pour restaurer sur un nouvel appareil.',
+
+    'setup.step4_title' => '4) Créer votre premier verrou temporel',
+    'setup.step4_sub' => 'Commencez petit : verrouillez un PIN de portefeuille ou un code de dépense pendant 24 heures. L’objectif est de créer une période de refroidissement.',
+
+    'setup.step5_title' => '5) Épargner ensemble (optionnel)',
+    'setup.step5_sub' => 'Créez une salle d’épargne pour un objectif, invitez des personnes de confiance et verrouillez les règles avant la date de début.',
+
+    'setup.status.set' => '✓ défini',
+    'setup.status.not_set' => 'non défini',
+    'setup.status.ready' => '✓ prêt',
+    'setup.status.recommended' => 'recommandé',
+    'setup.status.none_yet' => 'aucune pour le moment',
+    'setup.status.todo' => 'à faire',
+    'setup.status.count' => '✓ {count}',
+
+    'setup.manage_in_account' => 'Gérer dans le compte',
+    'setup.add_passkey' => 'Ajouter une passkey',
+    'setup.setup_authenticator' => 'Configurer l’authentificateur',
+    'setup.view_my_time_locks' => 'Voir mes verrous temporels',
+    'setup.open_saving_rooms' => 'Ouvrir les salles d’épargne',
+    'setup.continue_title' => 'Continuer',
+    'setup.continue_sub' => 'Vous pouvez toujours revenir sur cette page depuis Tableau de bord → Configuration.',
+    'setup.remind_next_time' => 'Me le rappeler la prochaine fois',
+    'setup.last' => 'Dernière : {ts} UTC',
+    'setup.note_tracking_unavailable' => 'Remarque : le suivi de démarrage n’est pas disponible sur ce serveur (migrations de base de données manquantes). Cette page ne se masquera pas automatiquement.',
+
+    // Inscription
+    'signup.login_password' => 'Mot de passe de connexion',
+    'signup.min_8_chars' => '(min 8 caractères)',
+    'signup.vault_passphrase' => 'Phrase secrète du coffre',
+    'signup.min_10_chars' => '(min 10 caractères)',
+    'signup.vault_placeholder' => 'Quelque chose de mémorable que vous seul(e) connaissez',
+    'signup.vault_note' => 'Notez-la sur un support physique. Si vous la perdez, vos codes ne pourront pas être récupérés.',
+    'signup.confirm_vault_passphrase' => 'Confirmer la phrase secrète',
+    'signup.confirm_passphrase_placeholder' => 'Confirmer la phrase secrète',
+    'signup.have_account' => 'J’ai déjà un compte',
+
+    'signup.err.fill_all' => 'Remplissez tous les champs',
+    'signup.err.login_pw_min' => 'Le mot de passe de connexion doit contenir au moins 8 caractères',
+    'signup.err.vault_min' => 'La phrase secrète du coffre doit contenir au moins 10 caractères',
+    'signup.err.vault_mismatch' => 'Les phrases secrètes ne correspondent pas',
+    'signup.err.registration_failed' => 'Échec de l’inscription',
+    'signup.ok.created_check_email' => 'Compte créé. Vérifiez votre e-mail avant d’utiliser le tableau de bord.',
+    'signup.dev_verify_html' => 'DEV : l’envoi d’e-mails est souvent désactivé en local. Utilisez ce lien de vérification :<br><a href="{url}">{url}</a>',
+
+    // Réinitialisation
+    'reset.invalid_link' => 'Lien de réinitialisation invalide',
+    'reset.pw_min' => 'Le mot de passe doit contenir au moins 8 caractères',
+    'reset.pw_mismatch' => 'Les mots de passe ne correspondent pas',
+    'reset.failed' => 'Échec de la réinitialisation',
+
+    // Mot de passe oublié
+    'forgot.dev_reset_link' => 'DEV : lien de réinitialisation :',
+
+    // Notifications
+    'notifications.inbox' => 'Boîte de réception',
+    'notifications.mark_all_read' => 'Tout marquer comme lu',
+    'notifications.unread' => 'Non lus',
+    'notifications.none' => 'Aucune notification.',
+    'notifications.open_room' => 'Ouvrir la salle',
+    'notifications.mark_read' => 'Marquer comme lu',
+
+    // Sauvegardes
+    'backup.local_title' => 'Sauvegarde locale',
+    'backup.local_sub' => 'Téléchargez un fichier JSON. Vous pourrez l’importer plus tard sur la même installation ou une nouvelle.',
+    'backup.download_export' => 'Télécharger l’export',
+    'backup.import_title' => 'Importer',
+    'backup.backup_file_label' => 'Fichier de sauvegarde (.json)',
+    'backup.import_into_account' => 'Importer dans ce compte',
+    'backup.import_note' => 'L’import créera de nouveaux codes. En cas de collision d’identifiant, il sera remappé.',
+
+    'backup.cloud_title' => 'Sauvegardes cloud',
+    'backup.cloud_sub' => 'Stockez des instantanés sur ce serveur (toujours uniquement du texte chiffré). Utile en cas de perte d’appareil et pour des restaurations rapides.',
+    'backup.cloud_label_optional' => 'Libellé (optionnel)',
+    'backup.cloud_label_placeholder' => 'ex. Avant rotation de phrase secrète',
+    'backup.download_latest' => 'Télécharger la dernière',
+    'backup.create_cloud_backup' => 'Créer une sauvegarde cloud',
+
+    'backup.export_failed' => 'Échec de l’export',
+    'backup.export_downloaded' => 'Export téléchargé.',
+
+    'backup.select_backup_json' => 'Sélectionnez un fichier JSON de sauvegarde.',
+    'backup.importing' => 'Importation…',
+    'backup.import_failed' => 'Échec de l’import',
+    'backup.import_failed_with' => 'Échec de l’import : {error}',
+    'backup.imported_count' => '{count} codes importés.',
+
+    'backup.cloud_could_not_load' => 'Impossible de charger les sauvegardes cloud',
+    'backup.cloud_count' => 'Sauvegardes cloud : {count}',
+    'backup.no_cloud_backups_yet' => 'Aucune sauvegarde cloud pour le moment.',
+    'backup.latest' => 'Dernière',
+    'backup.backup_number' => 'Sauvegarde n°{id}',
+
+    'backup.download' => 'Télécharger',
+    'backup.restore' => 'Restaurer',
+    'backup.delete' => 'Supprimer',
+
+    'backup.download_failed' => 'Échec du téléchargement',
+    'backup.downloaded_cloud_backup' => 'Sauvegarde cloud téléchargée.',
+
+    'backup.confirm_restore' => 'Restaurer cette sauvegarde dans votre compte ? Cela importera des codes et peut créer des doublons.',
+    'backup.restore_failed' => 'Échec de la restauration',
+    'backup.restored_imported' => 'Restauré. {count} codes importés.',
+
+    'backup.confirm_delete' => 'Supprimer cette sauvegarde cloud ?',
+    'backup.delete_failed' => 'Échec de la suppression',
+    'backup.cloud_backup_deleted' => 'Sauvegarde cloud supprimée.',
+
+    'backup.cloud_backup_failed' => 'Échec de la sauvegarde cloud',
+    'backup.cloud_backup_saved' => 'Sauvegarde cloud enregistrée.',
+
+    'backup.no_cloud_to_download' => 'Aucune sauvegarde cloud à télécharger.',
+
+    'backup.age_days' => 'il y a {count} j',
+    'backup.age_hours' => 'il y a {count} h',
+    'backup.age_minutes' => 'il y a {count} min',
+    'backup.age_seconds' => 'il y a {count} s',
 ]; 

@@ -188,4 +188,191 @@ return [
     'verify.already_verified_html' => '<strong>Email already verified.</strong> You can log in and use the dashboard.',
     'verify.invalid_token_html' => '<strong>Verification link is invalid.</strong> Please request a new one from your account page.',
     'verify.expired_html' => '<strong>Verification link expired.</strong> Please request a new one from your account page.',
+
+    // Common (extra)
+    'common.open' => 'Open',
+    'common.create' => 'Create',
+    'common.refresh' => 'Refresh',
+    'common.loading' => 'Loading…',
+    'common.load_more' => 'Load more',
+    'common.optional' => 'optional',
+    'common.failed' => 'Failed',
+
+    // Crypto / browser support
+    'crypto.unavailable' => 'Secure cryptography is unavailable in this browser.',
+    'crypto.webcrypto_unavailable' => 'Web Crypto API is unavailable. Use HTTPS (or localhost) to set a vault passphrase.',
+
+    // Onboarding (shared)
+    'onboarding.next.review' => 'Next: review your setup.',
+    'onboarding.next.vault_passphrase' => 'Next: set your vault passphrase.',
+    'onboarding.next.confirmation' => 'Next: add a passkey or authenticator app.',
+    'onboarding.next.backup' => 'Next: download an encrypted backup.',
+    'onboarding.next.first_time_lock' => 'Next: create your first time lock.',
+    'onboarding.next.ready' => 'You’re ready.',
+
+    'onboarding.action.continue' => 'Continue',
+    'onboarding.action.open_setup' => 'Open setup',
+    'onboarding.action.open_vault' => 'Open vault',
+    'onboarding.action.add_confirmation' => 'Add confirmation',
+    'onboarding.action.open_backup' => 'Open backup',
+    'onboarding.action.create_time_lock' => 'Create a time lock',
+    'onboarding.action.go_to_dashboard' => 'Go to dashboard',
+
+    // Dashboard
+    'dashboard.onboarding' => 'Onboarding',
+    'dashboard.progress_suffix' => 'complete — {next}',
+    'dashboard.security_banner_title' => 'Finish your security setup',
+    'dashboard.security_banner_sub' => 'Add a passkey or authenticator code to confirm sensitive actions (unlocking, backups, room approvals).',
+    'dashboard.open_account' => 'Open account',
+    'dashboard.quick_actions' => 'Quick actions',
+    'dashboard.create_time_lock' => 'Create a time lock',
+    'dashboard.my_time_locks' => 'My time locks',
+    'dashboard.quick_actions_sub' => 'Create a time lock when you want a cool-off period before spending. Use Saving Rooms to save together with clear rules.',
+    'dashboard.setup_checklist' => 'Setup checklist',
+    'dashboard.check.vault_title' => 'Vault passphrase',
+    'dashboard.check.vault_sub' => 'Set your vault passphrase, then use it to lock and unlock your time locks. Keep it somewhere safe.',
+    'dashboard.check.confirm_title' => 'Extra confirmation',
+    'dashboard.check.confirm_sub' => 'Add a passkey or authenticator app so unlocking and backups are protected.',
+    'dashboard.check.backup_title' => 'Backup',
+    'dashboard.backups_count_label' => 'Backups:',
+    'dashboard.check.backup_sub' => 'Download an encrypted backup file so you can restore on a new device.',
+    'dashboard.stored_in_utc' => 'Stored in UTC',
+    'dashboard.last_backup' => 'Last backup: {ts} UTC',
+    'dashboard.check.first_lock_title' => 'First time lock',
+    'dashboard.time_locks_created_label' => 'Time locks created:',
+    'dashboard.check.first_lock_sub' => 'Create your first time lock to start building a cool-off period before spending.',
+    'dashboard.security' => 'Security',
+    'dashboard.security_sub_html' => 'Sensitive actions may ask for an extra confirmation (passkey or authenticator code). Set this up in {account_link}.',
+
+    // Setup
+    'setup.progress' => 'Progress',
+    'setup.progress_sub' => 'Vault passphrase + confirmation + backup + first time lock.',
+    'setup.all_set_title' => 'You’re all set',
+    'setup.all_set_sub' => 'You can revisit this page anytime.',
+
+    'setup.step1_title' => '1) Vault passphrase',
+    'setup.step1_sub' => 'This is the key you use to lock and unlock your codes. Keep it safe. If you lose it, nobody can recover your locked codes.',
+
+    'setup.step2_title' => '2) Extra confirmation',
+    'setup.step2_sub' => 'Add a passkey or authenticator app. You’ll be asked for it before sensitive actions like unlocking and backups.',
+
+    'setup.step3_title' => '3) Backup',
+    'setup.step3_sub' => 'Download an encrypted backup file so you can restore on a new device.',
+
+    'setup.step4_title' => '4) Create your first time lock',
+    'setup.step4_sub' => 'Start small: lock a wallet PIN or a spending code for 24 hours. The goal is to create a cool-off period.',
+
+    'setup.step5_title' => '5) Save together (optional)',
+    'setup.step5_sub' => 'Create a Saving Room for a goal, invite trusted people, and lock the rules in before the start date.',
+
+    'setup.status.set' => '✓ set',
+    'setup.status.not_set' => 'not set',
+    'setup.status.ready' => '✓ ready',
+    'setup.status.recommended' => 'recommended',
+    'setup.status.none_yet' => 'none yet',
+    'setup.status.todo' => 'todo',
+    'setup.status.count' => '✓ {count}',
+
+    'setup.manage_in_account' => 'Manage in account',
+    'setup.add_passkey' => 'Add passkey',
+    'setup.setup_authenticator' => 'Setup authenticator',
+    'setup.view_my_time_locks' => 'View my time locks',
+    'setup.open_saving_rooms' => 'Open Saving Rooms',
+    'setup.continue_title' => 'Continue',
+    'setup.continue_sub' => 'You can always come back to this page from Dashboard → Setup.',
+    'setup.remind_next_time' => 'Remind me next time',
+    'setup.last' => 'Last: {ts} UTC',
+    'setup.note_tracking_unavailable' => 'Note: onboarding tracking is unavailable on this server (missing database migrations). This page won’t auto-hide.',
+
+    // Signup
+    'signup.login_password' => 'Login Password',
+    'signup.min_8_chars' => '(min 8 chars)',
+    'signup.vault_passphrase' => 'Vault Passphrase',
+    'signup.min_10_chars' => '(min 10 chars)',
+    'signup.vault_placeholder' => 'Something memorable only you know',
+    'signup.vault_note' => 'Write this down somewhere physical. If you lose it, your codes cannot be recovered.',
+    'signup.confirm_vault_passphrase' => 'Confirm Vault Passphrase',
+    'signup.confirm_passphrase_placeholder' => 'Confirm passphrase',
+    'signup.have_account' => 'I already have an account',
+
+    'signup.err.fill_all' => 'Fill in all fields',
+    'signup.err.login_pw_min' => 'Login password must be at least 8 characters',
+    'signup.err.vault_min' => 'Vault passphrase must be at least 10 characters',
+    'signup.err.vault_mismatch' => 'Vault passphrases do not match',
+    'signup.err.registration_failed' => 'Registration failed',
+    'signup.ok.created_check_email' => 'Account created. Check your email to verify before using the dashboard.',
+    'signup.dev_verify_html' => 'DEV: Email sending is often disabled locally. Use this verification link:<br><a href="{url}">{url}</a>',
+
+    // Reset
+    'reset.invalid_link' => 'Invalid reset link',
+    'reset.pw_min' => 'Password must be at least 8 characters',
+    'reset.pw_mismatch' => 'Passwords do not match',
+    'reset.failed' => 'Reset failed',
+
+    // Forgot
+    'forgot.dev_reset_link' => 'DEV: Reset link:',
+
+    // Notifications
+    'notifications.inbox' => 'Inbox',
+    'notifications.mark_all_read' => 'Mark all read',
+    'notifications.unread' => 'Unread',
+    'notifications.none' => 'No notifications.',
+    'notifications.open_room' => 'Open room',
+    'notifications.mark_read' => 'Mark read',
+
+    // Backup
+    'backup.local_title' => 'Local backup',
+    'backup.local_sub' => 'Download a JSON file. You can import it later on the same or a new installation.',
+    'backup.download_export' => 'Download export',
+    'backup.import_title' => 'Import',
+    'backup.backup_file_label' => 'Backup file (.json)',
+    'backup.import_into_account' => 'Import into this account',
+    'backup.import_note' => 'Importing will create new codes. If an ID collides, it will be remapped.',
+
+    'backup.cloud_title' => 'Cloud backups',
+    'backup.cloud_sub' => 'Store snapshots on this server (still ciphertext-only). Useful for device loss and quick restores.',
+    'backup.cloud_label_optional' => 'Label (optional)',
+    'backup.cloud_label_placeholder' => 'e.g. Before passphrase rotation',
+    'backup.download_latest' => 'Download latest',
+    'backup.create_cloud_backup' => 'Create cloud backup',
+
+    'backup.export_failed' => 'Export failed',
+    'backup.export_downloaded' => 'Export downloaded.',
+
+    'backup.select_backup_json' => 'Select a backup JSON file.',
+    'backup.importing' => 'Importing…',
+    'backup.import_failed' => 'Import failed',
+    'backup.import_failed_with' => 'Import failed: {error}',
+    'backup.imported_count' => 'Imported {count} codes.',
+
+    'backup.cloud_could_not_load' => 'Could not load cloud backups',
+    'backup.cloud_count' => 'Cloud backups: {count}',
+    'backup.no_cloud_backups_yet' => 'No cloud backups yet.',
+    'backup.latest' => 'Latest',
+    'backup.backup_number' => 'Backup #{id}',
+
+    'backup.download' => 'Download',
+    'backup.restore' => 'Restore',
+    'backup.delete' => 'Delete',
+
+    'backup.download_failed' => 'Download failed',
+    'backup.downloaded_cloud_backup' => 'Downloaded cloud backup.',
+
+    'backup.confirm_restore' => 'Restore this backup into your account? This will import codes and may create duplicates.',
+    'backup.restore_failed' => 'Restore failed',
+    'backup.restored_imported' => 'Restored. Imported {count} codes.',
+
+    'backup.confirm_delete' => 'Delete this cloud backup?',
+    'backup.delete_failed' => 'Delete failed',
+    'backup.cloud_backup_deleted' => 'Cloud backup deleted.',
+
+    'backup.cloud_backup_failed' => 'Cloud backup failed',
+    'backup.cloud_backup_saved' => 'Cloud backup saved.',
+
+    'backup.no_cloud_to_download' => 'No cloud backups to download.',
+
+    'backup.age_days' => '{count}d ago',
+    'backup.age_hours' => '{count}h ago',
+    'backup.age_minutes' => '{count}m ago',
+    'backup.age_seconds' => '{count}s ago',
 ]; 

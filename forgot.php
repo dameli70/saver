@@ -104,7 +104,7 @@ f.addEventListener('submit', async (e)=>{
     if(j.dev_reset_url){
       dev.style.display='block';
       dev.textContent='';
-      dev.appendChild(document.createTextNode('DEV: Reset link:'));
+      dev.appendChild(document.createTextNode(<?= json_encode(t('forgot.dev_reset_link')) ?>));
       dev.appendChild(document.createElement('br'));
       const a=document.createElement('a');
       a.href=String(j.dev_reset_url);

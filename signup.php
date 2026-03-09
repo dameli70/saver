@@ -55,27 +55,27 @@ header("Referrer-Policy: no-referrer");
     <div id="ok" class="msg msg-ok"></div>
 
     <form id="f">
-      <div class="field"><label>Email</label>
+      <div class="field"><label><?php e('common.email'); ?></label>
         <input type="email" id="email" autocomplete="email" inputmode="email" placeholder="you@example.com" required>
       </div>
-      <div class="field"><label>Login Password <span style="color:var(--muted)">(min 8 chars)</span></label>
+      <div class="field"><label><?php e('signup.login_password'); ?> <span style="color:var(--muted)"><?php e('signup.min_8_chars'); ?></span></label>
         <input type="password" id="pwd" autocomplete="new-password" placeholder="••••••••" required>
       </div>
-      <div class="field"><label>Vault Passphrase <span style="color:var(--muted)">(min 10 chars)</span></label>
-        <input type="password" id="vault" autocomplete="new-password" placeholder="Something memorable only you know" required>
-        <div class="note">Write this down somewhere physical. If you lose it, your codes cannot be recovered.</div>
+      <div class="field"><label><?php e('signup.vault_passphrase'); ?> <span style="color:var(--muted)"><?php e('signup.min_10_chars'); ?></span></label>
+        <input type="password" id="vault" autocomplete="new-password" placeholder="<?= htmlspecialchars(t('signup.vault_placeholder'), ENT_QUOTES, 'UTF-8') ?>" required>
+        <div class="note"><?php e('signup.vault_note'); ?></div>
       </div>
-      <div class="field"><label>Confirm Vault Passphrase</label>
-        <input type="password" id="vault2" autocomplete="new-password" placeholder="Confirm passphrase" required>
+      <div class="field"><label><?php e('signup.confirm_vault_passphrase'); ?></label>
+        <input type="password" id="vault2" autocomplete="new-password" placeholder="<?= htmlspecialchars(t('signup.confirm_passphrase_placeholder'), ENT_QUOTES, 'UTF-8') ?>" required>
       </div>
-      <button class="btn btn-primary" id="btn" type="submit"><span id="btn-txt">Create account</span></button>
+      <button class="btn btn-primary" id="btn" type="submit"><span id="btn-txt"><?php e('common.create_account'); ?></span></button>
     </form>
 
     <div id="dev" class="dev" style="display:none"></div>
 
     <div class="links">
-      <a href="index.php">Home</a>
-      <a href="login.php">I already have an account</a>
+      <a href="index.php"><?php e('common.home'); ?></a>
+      <a href="login.php"><?php e('signup.have_account'); ?></a>
     </div>
   </div>
 
@@ -95,16 +95,17 @@ function showErr(m){err.textContent=m;err.classList.add('show');}
 function showOk(m){ok.textContent=m;ok.classList.add('show');}
 function clearMsgs(){err.textContent='';ok.textContent='';err.classList.remove('show');ok.classList.remove('show');}
 
+
 function bytesToB64(bytes){return btoa(String.fromCharCode(...bytes));}
 function b64ToBytes(b64){return Uint8Array.from(atob(b64), c => c.charCodeAt(0));}
 
 function requireWebCrypto(){
   // WebCrypto (crypto.subtle) is only available in secure contexts (HTTPS or localhost).
   if (!window.crypto || !window.crypto.getRandomValues) {
-    throw new Error('Secure cryptography is unavailable in this browser.');
+    throw new Error(<?= json_encode(t('crypto.unavailable')) ?>);
   }
   if (!window.isSecureContext || !window.crypto.subtle) {
-    throw new Error('Web Crypto API is unavailable. Use HTTPS (or localhost) to set a vault passphrase.');
+    throw new Error(<?= json_encode(t('crypto.webcrypto_unavailable')) ?>);
   }
   return window.crypto;
 }
@@ -167,10 +168,10 @@ f.addEventListener('submit', async (e)=>{
   const vault=document.getElementById('vault').value;
   const vault2=document.getElementById('vault2').value;
 
-  if(!email||!pwd||!vault||!vault2){showErr('Fill in all fields');return;}
-  if(pwd.length<8){showErr('Login password must be at least 8 characters');return;}
-  if(vault.length<10){showErr('Vault passphrase must be at least 10 characters');return;}
-  if(vault!==vault2){showErr('Vault passphrases do not match');return;}
+  if(!email||!pwd||!vault||!vault2){showErr(<?= json_encode(t('signup.err.fill_all')) ?>);return;}
+  if(pwd.length<8){showErr(<?= json_encode(t('signup.err.login_pw_min')) ?>);return;}
+  if(vault.length<10){showErr(<?= json_encode(t('signup.err.vault_min')) ?>);return;}
+  if(vault!==vault2){showErr(<?= json_encode(t('signup.err.vault_mismatch')) ?>);return;}
 
   btn.disabled=true;
   btnTxt.innerHTML='<span class="spin"></span>';
@@ -179,9 +180,9 @@ f.addEventListener('submit', async (e)=>{
     const r=await fetch('api/auth.php',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({action:'register',email,login_password:pwd})});
     const j=await r.json();
-    if(!j.success){showErr(j.error||'Registration failed');return;}
+    if(!j.success){showErr(j.error||<?= json_encode(t('signup.err.registration_failed')) ?>);return;}
 
-    showOk('Account created. Check your email to verify before using the dashboard.');
+    showOk(<?= json_encode(t('signup.ok.created_check_email')) ?>);
 
     // Initialize vault passphrase check so you can unlock on any device.
     try{
@@ -196,16 +197,16 @@ f.addEventListener('submit', async (e)=>{
 
     if(j.dev_verify_url){
       dev.style.display='block';
-      dev.innerHTML='DEV: Email sending is often disabled locally. Use this verification link: <br><a href="'+j.dev_verify_url+'">'+j.dev_verify_url+'</a>';
+      dev.innerHTML = <?= json_encode(t('signup.dev_verify_html')) ?>.replace(/\{url\}/g, String(j.dev_verify_url));
     }
 
     setTimeout(()=>{window.location='account.php';}, 900);
 
   }catch{
-    showErr('Network error');
+    showErr(<?= json_encode(t('common.network_error')) ?>);
   }finally{
     btn.disabled=false;
-    btnTxt.textContent='Create account';
+    btnTxt.textContent=<?= json_encode(t('common.create_account')) ?>;
   }
 });
 </script>
