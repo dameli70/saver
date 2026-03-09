@@ -721,9 +721,65 @@
     });
   }
 
+  function initBottomNav(){
+    const app = document.getElementById('app');
+    if(!app) return;
+    const topbar = app.querySelector('.topbar');
+    if(!topbar) return;
+
+    if(document.querySelector('.bottom-nav')) return;
+
+    function iconForHref(href){
+      const h = String(href||'').trim();
+      if(h === 'dashboard.php') return '⌂';
+      if(h === 'create_code.php') return '✚';
+      if(h === 'my_codes.php') return '⧉';
+      if(h === 'rooms.php') return '◻';
+      if(h === 'notifications.php') return '✉';
+      return '•';
+    }
+
+    const items = [
+      {href:'dashboard.php', label: LS.t('nav.dashboard') || 'Dashboard'},
+      {href:'create_code.php', label: LS.t('nav.create_code') || 'Create'},
+      {href:'my_codes.php', label: LS.t('nav.my_codes') || 'Codes'},
+      {href:'rooms.php', label: LS.t('nav.rooms') || 'Rooms'},
+      {href:'notifications.php', label: LS.t('nav.notifications') || 'Inbox'},
+    ];
+
+    const cur = (()=>{
+      try{
+        const p = window.location && window.location.pathname ? window.location.pathname : '';
+        const parts = p.split('/');
+        return parts[parts.length - 1] || '';
+      }catch{ return ''; }
+    })();
+
+    const nav = document.createElement('nav');
+    nav.className = 'bottom-nav';
+
+    items.forEach(it => {
+      const a = document.createElement('a');
+      a.href = it.href;
+
+      const b = document.createElement('span');
+      b.className = 'btn bn-btn nav-btn btn-ghost btn-sm';
+      if(cur === it.href) b.classList.add('active');
+
+      b.innerHTML = `<span class="nav-ico" aria-hidden="true">${LS.esc(iconForHref(it.href))}</span><span class="nav-lbl">${LS.esc(it.label)}</span>`;
+      a.setAttribute('aria-label', it.label);
+      a.appendChild(b);
+
+      nav.appendChild(a);
+    });
+
+    document.body.appendChild(nav);
+  }
+
   document.addEventListener('DOMContentLoaded', ()=>{
     initNavGroups();
     initMobileNav();
+    initBottomNav();
   });
 
   window.LS = LS;
