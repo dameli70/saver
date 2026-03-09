@@ -1220,7 +1220,6 @@ async function doWalletSetup(){
 
     const saltResp = await get('api/salt.php');
     if(!saltResp.success) throw new Error(saltResp.error||STR.gen_err_kdf_salt);
-');
 
     const kdf_salt = saltResp.kdf_salt;
     const kdf_iterations = saltResp.kdf_iterations;
@@ -1263,7 +1262,6 @@ async function doWalletSetup(){
       // We cannot display the PIN, so we must abort if clipboard isn't available.
       await postCsrfWithReauth('api/wallet_fail.php', {wallet_lock_id: walletLockId});
       throw new Error(STR.wallet_err_clipboard_blocked);
- and allow clipboard access.');
     }
 
     if(action === 'open_dialer'){
