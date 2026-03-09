@@ -115,14 +115,38 @@ if ($action === 'user_summary') {
     $userId = (int)($_GET['user_id'] ?? 0);
     if ($userId <= 0) jsonResponse(['error' => 'user_id required'], 400);
 
-    // Only room makers (or admin) should call this. Enforced in room endpoints too.
-    if (!isAdmin($viewerId) && $viewerId === $userId) {
-        // allow self
+    $isAdminViewer = isAdmin($viewerId);
+
+    // Access control:
+    // - admin: can view any summary
+    // - self: can view own summary
+    // - room maker: can view summaries only for users in their room (requires room_id)
+    if (!$isAdminViewer && $viewerId !== $userId) {
+        $roomId = (string)($_GET['room_id'] ?? '');
+        if ($roomId === '' || strlen($roomId) !== 36) {
+            jsonResponse(['error' => 'Forbidden'], 403);
+        }
+
+        $db = getDB();
+
+        $makerStmt = $db->prepare('SELECT maker_user_id FROM saving_rooms WHERE id = ?');
+        $makerStmt->execute([$roomId]);
+        $makerId = (int)$makerStmt->fetchColumn();
+        if ($makerId !== $viewerId) {
+            jsonResponse(['error' => 'Forbidden'], 403);
+        }
+
+        $rel = $db->prepare('SELECT 1 FROM saving_room_participants WHERE room_id = ? AND user_id = ? LIMIT 1');
+        $rel->execute([$roomId, $userId]);
+        if (!$rel->fetchColumn()) {
+            jsonResponse(['error' => 'Forbidden'], 403);
+        }
+
+    } else {
+        $db = getDB();
     }
 
     ensureUserTrustRow($userId);
-
-    $db = getDB();
     $trust = $db->prepare('SELECT trust_level, completed_reveals_count FROM user_trust WHERE user_id = ?');
     $trust->execute([$userId]);
     $t = $trust->fetch();

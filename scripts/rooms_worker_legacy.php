@@ -1,8 +1,8 @@
 <?php
 // ============================================================
-//  LOCKSMITH — Saving Rooms Worker (cron)
+//  LOCKSMITH — Saving Rooms Worker (legacy)
 //
-//  Run every 1-5 minutes:
+//  NOTE: This file is kept for reference. Use the current worker:
 //    php scripts/rooms_worker.php
 //
 //  Responsibilities (incremental rollout):

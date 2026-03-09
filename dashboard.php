@@ -19,7 +19,26 @@ $isAdmin   = isAdmin();
 $csrf      = getCsrfToken();
 
 $userId = (int)(getCurrentUserId() ?? 0);
-$showSecurityBanner = !$isAdmin && !userHasTotp($userId) && !userHasPasskeys($userId);
+$hasTotp    = userHasTotp($userId);
+$hasPasskey = userHasPasskeys($userId);
+$hasVault   = userHasVaultPassphraseCheck($userId);
+$showSecurityBanner = !$hasTotp && !$hasPasskey;
+
+$backupCount = 0;
+$lastBackupAt = null;
+try {
+    $db = getDB();
+    $stmt = $db->prepare('SELECT COUNT(*) AS c, MAX(created_at) AS last_at FROM backups WHERE user_id = ?');
+    $stmt->execute([$userId]);
+    $row = $stmt->fetch();
+    if ($row) {
+        $backupCount = (int)($row['c'] ?? 0);
+        $lastBackupAt = $row['last_at'] ?? null;
+    }
+} catch (Throwable) {
+    $backupCount = 0;
+    $lastBackupAt = null;
+}
 
 // Strict security headers
 header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none';");
@@ -40,6 +59,7 @@ header("Permissions-Policy: clipboard-write=(self)");
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
 <script src="assets/theme.js"></script>
+<script src="assets/app.js"></script>
 <link rel="stylesheet" href="assets/base.css">
 <link rel="stylesheet" href="assets/app.css">
 <style>
@@ -73,8 +93,8 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9998;o
     <?php if ($showSecurityBanner): ?>
     <div class="sec-banner">
       <div>
-        <div class="sec-banner-title">Security setup recommended</div>
-        <div class="sec-banner-sub">Enable TOTP or add a passkey to protect sensitive actions.</div>
+        <div class="sec-banner-title">Security setup required</div>
+        <div class="sec-banner-sub">Enable TOTP or add a passkey to use sensitive actions (reveal, backups, vault rotation, admin actions).</div>
       </div>
       <a class="btn btn-ghost btn-sm" href="account.php#totp-card">Open account</a>
     </div>
@@ -92,6 +112,51 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9998;o
       </div>
       <div style="margin-top:12px;font-size:12px;color:var(--muted);line-height:1.7;">
         The vault passphrase never leaves your browser. Code creation and reveal are now separated into dedicated pages.
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><div class="dot"></div>Setup checklist</div>
+      <div style="display:flex;flex-direction:column;gap:10px;font-size:12px;">
+
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px;border:1px solid var(--b1);background:rgba(255,255,255,.02);">
+          <div style="display:flex;align-items:center;gap:10px;min-width:0;">
+            <div style="font-size:12px;color:<?= $hasVault ? 'var(--green)' : 'var(--orange)' ?>;"><?= $hasVault ? '✓' : '•' ?></div>
+            <div style="min-width:0;">
+              <div style="font-family:var(--display);font-weight:800;font-size:12px;">Vault initialized</div>
+              <div style="color:var(--muted);font-size:11px;line-height:1.6;">Create a browser-only vault check so the UI can detect vault readiness.</div>
+            </div>
+          </div>
+          <a class="btn btn-ghost btn-sm" href="vault_settings.php" style="width:auto;">Open</a>
+        </div>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px;border:1px solid var(--b1);background:rgba(255,255,255,.02);">
+          <div style="display:flex;align-items:center;gap:10px;min-width:0;">
+            <div style="font-size:12px;color:<?= ($hasTotp || $hasPasskey) ? 'var(--green)' : 'var(--orange)' ?>;"><?= ($hasTotp || $hasPasskey) ? '✓' : '•' ?></div>
+            <div style="min-width:0;">
+              <div style="font-family:var(--display);font-weight:800;font-size:12px;">Security setup</div>
+              <div style="color:var(--muted);font-size:11px;line-height:1.6;">Enable TOTP or add a passkey for step-up reauthentication.</div>
+            </div>
+          </div>
+          <a class="btn btn-ghost btn-sm" href="account.php#totp-card" style="width:auto;">Open</a>
+        </div>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px;border:1px solid var(--b1);background:rgba(255,255,255,.02);">
+          <div style="display:flex;align-items:center;gap:10px;min-width:0;">
+            <div style="font-size:12px;color:<?= $backupCount > 0 ? 'var(--green)' : 'var(--orange)' ?>;"><?= $backupCount > 0 ? '✓' : '•' ?></div>
+            <div style="min-width:0;">
+              <div style="font-family:var(--display);font-weight:800;font-size:12px;">First backup</div>
+              <div style="color:var(--muted);font-size:11px;line-height:1.6;">
+                <?= $backupCount > 0 ? 'Backups: <span style="color:var(--text);">' . (int)$backupCount . '</span>' : 'Create an encrypted snapshot (no plaintext ever stored).'; ?>
+                <?php if ($lastBackupAt): ?>
+                  <span class="utc-pill" title="Stored in UTC" style="margin-left:8px;">Last: <?= htmlspecialchars($lastBackupAt) ?> UTC</span>
+                <?php endif; ?>
+              </div>
+            </div>
+          </div>
+          <a class="btn btn-ghost btn-sm" href="backup.php" style="width:auto;">Open</a>
+        </div>
+
       </div>
     </div>
 

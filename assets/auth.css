@@ -11,6 +11,7 @@ body{display:flex;align-items:center;justify-content:center;padding:max(40px,var
 .field label{display:block;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:6px;}
 .field input{width:100%;background:var(--s2);border:1px solid var(--b1);color:var(--text);font-family:var(--mono);
   font-size:15px;padding:14px;outline:none;transition:border-color .2s;border-radius:0;-webkit-appearance:none;}
+@media(max-width:520px){.field input{font-size:16px;}}
 .field input:focus{border-color:var(--accent);}
 
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;

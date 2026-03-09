@@ -18,7 +18,7 @@ $isAdmin = isAdmin();
 $csrf    = getCsrfToken();
 
 $userId = (int)(getCurrentUserId() ?? 0);
-$showSecurityBanner = !$isAdmin && !userHasTotp($userId) && !userHasPasskeys($userId);
+$showSecurityBanner = !userHasTotp($userId) && !userHasPasskeys($userId);
 
 header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none';");
 header("X-Frame-Options: DENY");
@@ -120,6 +120,7 @@ header("Referrer-Policy: no-referrer");
     <div class="card">
       <div class="card-title">Cloud backups</div>
       <div class="small">Store snapshots on this server (still ciphertext-only). Useful for device loss and quick restores.</div>
+      <div class="small" id="cloud-summary" style="margin-top:10px;"></div>
 
       <div style="height:14px"></div>
 
@@ -130,7 +131,10 @@ header("Referrer-Policy: no-referrer");
             <input id="cloud-label" placeholder="e.g. Before passphrase rotation">
           </div>
         </div>
-        <button class="btn btn-primary" id="btn-cloud-save"><span id="btn-cloud-save-txt">Create cloud backup</span></button>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;">
+          <button class="btn btn-ghost" id="btn-cloud-latest">Download latest</button>
+          <button class="btn btn-primary" id="btn-cloud-save"><span id="btn-cloud-save-txt">Create cloud backup</span></button>
+        </div>
       </div>
 
       <div id="cloud-ok" class="msg msg-ok"></div>
@@ -149,6 +153,9 @@ const localErr=document.getElementById('local-err');
 const cloudOk=document.getElementById('cloud-ok');
 const cloudErr=document.getElementById('cloud-err');
 const cloudList=document.getElementById('cloud-list');
+const cloudSummary=document.getElementById('cloud-summary');
+
+let cloudItemsCache = [];
 
 function show(el,m){el.textContent=m;el.classList.add('show');}
 function clearMsgs(){[localOk,localErr,cloudOk,cloudErr].forEach(e=>{e.textContent='';e.classList.remove('show');});}
@@ -255,6 +262,37 @@ function esc(s){
   return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
+function parseUtcDate(ts){
+  const s = String(ts||'').trim();
+  if(!s) return null;
+
+  if(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(s)){
+    return new Date(s.replace(' ', 'T') + 'Z');
+  }
+
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function fmtLocal(ts){
+  const d = parseUtcDate(ts);
+  if(!d) return String(ts||'');
+  return d.toLocaleString();
+}
+
+function age(ts){
+  const d = parseUtcDate(ts);
+  if(!d) return '';
+  const secs = Math.max(0, Math.floor((Date.now() - d.getTime())/1000));
+  const m = Math.floor(secs/60);
+  const h = Math.floor(m/60);
+  const days = Math.floor(h/24);
+  if(days > 0) return days + 'd ago';
+  if(h > 0) return h + 'h ago';
+  if(m > 0) return m + 'm ago';
+  return secs + 's ago';
+}
+
 document.getElementById('btn-export').addEventListener('click', async ()=>{
   clearMsgs();
   const btn=document.getElementById('btn-export');
@@ -296,14 +334,24 @@ document.getElementById('btn-import').addEventListener('click', async ()=>{
 
 async function refreshCloud(){
   cloudList.innerHTML='';
+  cloudSummary.textContent='';
+
   const j=await getStrong('api/backup.php?action=cloud_list');
   if(!j.success){show(cloudErr,j.error||'Could not load cloud backups');return;}
 
   const items=j.backups||[];
+  cloudItemsCache = items;
+
   if(items.length===0){
+    cloudSummary.textContent='Cloud backups: 0';
     cloudList.innerHTML='<div class="small" style="padding:6px 2px;">No cloud backups yet.</div>';
     return;
   }
+
+  const latest = items[0];
+  const latestLocal = fmtLocal(latest.created_at || '');
+  const latestAge = age(latest.created_at || '');
+  cloudSummary.textContent = `Cloud backups: ${items.length} · Latest: ${latestLocal} (${latest.created_at} UTC)${latestAge ? ' · ' + latestAge : ''}`;
 
   for(const b of items){
     const el=document.createElement('div');
@@ -312,11 +360,19 @@ async function refreshCloud(){
     const label=(b.label && b.label.trim()) ? b.label : ('Backup #' + b.id);
     const size=(b.bytes!==null && b.bytes!==undefined) ? (Math.round((b.bytes/1024)*10)/10 + ' KB') : '';
 
+    const local = fmtLocal(b.created_at || '');
+    const ago = age(b.created_at || '');
+    const metaBits = [
+      local ? (local + ' (' + (b.created_at || '') + ' UTC)') : (b.created_at || ''),
+      ago || '',
+      size || ''
+    ].filter(Boolean);
+
     el.innerHTML = `
       <div class="item-top">
         <div>
           <div class="item-title">${esc(label)}</div>
-          <div class="item-meta">${esc(b.created_at || '')}${size ? ' • ' + esc(size) : ''}</div>
+          <div class="item-meta">${esc(metaBits.join(' • '))}</div>
         </div>
         <div class="item-actions">
           <button class="btn btn-ghost" data-act="dl" data-id="${esc(b.id)}">Download</button>
@@ -328,6 +384,17 @@ async function refreshCloud(){
 
     cloudList.appendChild(el);
   }
+}
+
+async function downloadCloudId(id){
+  const j=await getStrong('api/backup.php?action=cloud_get&id='+encodeURIComponent(id));
+  if(!j.success){show(cloudErr,j.error||'Download failed');return false;}
+  const backup=j.backup;
+  const label=(backup.label && backup.label.trim()) ? backup.label : ('backup_'+id);
+  const safe=label.replace(/[^a-z0-9_\-]+/gi,'_').slice(0,60);
+  downloadJson('locksmith_cloud_' + safe + '_' + id + '.json', backup.backup_blob);
+  show(cloudOk,'Downloaded cloud backup.');
+  return true;
 }
 
 cloudList.addEventListener('click', async (e)=>{
@@ -342,19 +409,9 @@ cloudList.addEventListener('click', async (e)=>{
 
   if(act==='dl'){
     btn.disabled=true; btn.innerHTML='<span class="spin"></span>';
-    try{
-      const j=await getStrong('api/backup.php?action=cloud_get&id='+encodeURIComponent(id));
-      if(!j.success){show(cloudErr,j.error||'Download failed');return;}
-      const backup=j.backup;
-      const label=(backup.label && backup.label.trim()) ? backup.label : ('backup_'+id);
-      const safe=label.replace(/[^a-z0-9_\-]+/gi,'_').slice(0,60);
-      downloadJson('locksmith_cloud_' + safe + '_' + id + '.json', backup.backup_blob);
-      show(cloudOk,'Downloaded cloud backup.');
-    }catch{
-      show(cloudErr,'Network error');
-    }finally{
-      btn.disabled=false; btn.textContent='Download';
-    }
+    try{ await downloadCloudId(id); }
+    catch{ show(cloudErr,'Network error'); }
+    finally{ btn.disabled=false; btn.textContent='Download'; }
   }
 
   if(act==='restore'){
@@ -404,6 +461,26 @@ document.getElementById('btn-cloud-save').addEventListener('click', async ()=>{
   }finally{
     btn.disabled=false; txt.textContent='Create cloud backup';
   }
+});
+
+document.getElementById('btn-cloud-latest').addEventListener('click', async ()=>{
+  clearMsgs();
+
+  if(!cloudItemsCache.length){
+    await refreshCloud();
+  }
+
+  const latest = cloudItemsCache && cloudItemsCache.length ? cloudItemsCache[0] : null;
+  if(!latest || !latest.id){
+    show(cloudErr, 'No cloud backups to download.');
+    return;
+  }
+
+  const btn=document.getElementById('btn-cloud-latest');
+  btn.disabled=true; btn.innerHTML='<span class="spin"></span>';
+  try{ await downloadCloudId(parseInt(latest.id,10)); }
+  catch{ show(cloudErr,'Network error'); }
+  finally{ btn.disabled=false; btn.textContent='Download latest'; }
 });
 
 refreshCloud();

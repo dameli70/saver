@@ -24,8 +24,12 @@
 }
 
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-html{scroll-behavior:smooth;-webkit-tap-highlight-color:transparent;}
+html{scroll-behavior:smooth;-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%;text-size-adjust:100%;}
 body{background:var(--bg);color:var(--text);font-family:var(--mono);font-size:14px;min-height:100vh;overflow-x:hidden;-webkit-font-smoothing:antialiased;}
+
+@media(max-width:520px){
+  input[type="text"],input[type="email"],input[type="password"],input[type="number"],input[type="tel"],input[type="search"],input[type="url"],input[type="datetime-local"],input[type="date"],input[type="time"],textarea,select{font-size:16px;}
+}
 
 :focus-visible{outline:2px solid var(--accent);outline-offset:3px;}
 
@@ -47,6 +51,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--mono);font-size:14
   cursor:pointer;-webkit-appearance:none;border-radius:0;}
 .theme-toggle:hover{border-color:var(--text);color:var(--text);}
 .theme-toggle:active{transform:scale(.98);}
+
+:root[data-theme="light"] .theme-toggle{border-color:var(--b2);color:var(--text);background:rgba(11,16,32,.04);}
+:root[data-theme="light"] .theme-toggle:hover{border-color:rgba(12,18,30,.25);color:var(--text);}
 
 button[data-theme-toggle]{font-size:0;letter-spacing:0;text-transform:none;}
 button[data-theme-toggle]::before{content:'☾';font-size:16px;line-height:1;color:inherit;}

@@ -41,9 +41,11 @@ header("Referrer-Policy: no-referrer");
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
 <script src="assets/theme.js"></script>
+<script src="assets/app.js"></script>
 <link rel="stylesheet" href="assets/base.css">
 <link rel="stylesheet" href="assets/panel.css">
 <link rel="stylesheet" href="assets/panel_components.css">
+<link rel="stylesheet" href="assets/ls_shared.css">
 <style>
 .orb{filter:blur(120px);}
 .orb1{width:520px;height:520px;top:-170px;right:-120px;}
@@ -136,7 +138,7 @@ header("Referrer-Policy: no-referrer");
         <div class="card-title" style="margin-bottom:10px;">Unlock (Type A)</div>
         <div class="p" style="margin-bottom:10px;">Requires 100% approval after the reveal date. When revealed, the unlock code is valid for 72 hours.</div>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="two-col">
           <div>
             <div class="k">Consensus</div>
             <div class="v" id="unlock-consensus">—</div>
@@ -178,7 +180,7 @@ header("Referrer-Policy: no-referrer");
           </div>
         </div>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
+        <div class="two-col" style="margin-top:12px;">
           <div>
             <div class="k">Window</div>
             <div class="v" id="typeb-window">—</div>
@@ -390,15 +392,113 @@ async function postCsrf(url,body){
   const r=await fetch(apiUrl(url),{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRF-Token':CSRF},body:JSON.stringify(body)});
   return r.json();
 }
-function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+function b64uToBuf(b64url){
+  const b64 = String(b64url||'').replace(/-/g,'+').replace(/_/g,'/');
+  const pad = b64.length % 4 ? '='.repeat(4 - (b64.length % 4)) : '';
+  const bin = atob(b64 + pad);
+  const bytes = new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
+  return bytes.buffer;
+}
+function bufToB64u(buf){
+  const bytes = new Uint8Array(buf);
+  let s='';
+  for(let i=0;i<bytes.length;i++) s+=String.fromCharCode(bytes[i]);
+  return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+
+async function ensureReauth(methods){
+  if(window.LS && LS.reauth){
+    return LS.reauth(methods||{}, {post: postCsrf});
+  }
+
+  if(methods && methods.passkey && window.PublicKeyCredential){
+    try{
+      const begin = await postCsrf('api/webauthn.php', {action:'reauth_begin'});
+      if(begin.success){
+        const pk = begin.publicKey || {};
+        const allow = (pk.allowCredentials||[]).map(c => ({type:c.type, id: b64uToBuf(c.id)}));
+        const cred = await navigator.credentials.get({publicKey:{
+          challenge: b64uToBuf(pk.challenge),
+          rpId: pk.rpId,
+          timeout: pk.timeout||60000,
+          userVerification: pk.userVerification||'required',
+          allowCredentials: allow,
+        }});
+
+        const a = cred.response;
+        const fin = await postCsrf('api/webauthn.php', {
+          action:'reauth_finish',
+          rawId: bufToB64u(cred.rawId),
+          response:{
+            clientDataJSON: bufToB64u(a.clientDataJSON),
+            authenticatorData: bufToB64u(a.authenticatorData),
+            signature: bufToB64u(a.signature),
+            userHandle: a.userHandle ? bufToB64u(a.userHandle) : null,
+          }
+        });
+        if(fin.success) return true;
+      }
+    }catch{}
+  }
+
+  if(methods && methods.totp){
+    const code = prompt('Enter your 6-digit authenticator code');
+    if(!code) return false;
+    const r = await postCsrf('api/totp.php', {action:'reauth', code});
+    return !!r.success;
+  }
+
+  return false;
+}
+
+async function postStrong(url, body){
+  let j = await postCsrf(url, body);
+  if(!j.success && (j.error_code==='reauth_required' || j.error_code==='security_setup_required')){
+    const ok = await ensureReauth(j.methods||{});
+    if(!ok) return j;
+    j = await postCsrf(url, body);
+  }
+  return j;
+}
+
+function esc(s){
+  if(window.LS && LS.esc) return LS.esc(s);
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
 function setMsg(id, text, ok){
   const el=document.getElementById(id);
   if(!el) return;
   el.className = 'msg ' + (ok ? 'msg-ok' : 'msg-err') + ' show';
   el.textContent = text;
 }
+function parseUtcDate(ts){
+  if(window.LS && LS.parseUtc) return LS.parseUtc(ts);
+
+  const s = String(ts||'').trim();
+  if(!s) return null;
+
+  // API timestamps are stored in UTC as "YYYY-MM-DD HH:MM:SS".
+  if(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/.test(s)){
+    return new Date(s.replace(' ', 'T') + 'Z');
+  }
+
+  return new Date(s);
+}
+
 function fmt(ts){
-  try{return new Date(ts).toLocaleString();}catch{return String(ts||'');}
+  const d = parseUtcDate(ts);
+  if(!d || isNaN(d.getTime())) return String(ts||'');
+  if(window.LS && LS.fmtLocal) return LS.fmtLocal(d);
+  return d.toLocaleString();
+}
+
+function fmtUtc(ts){
+  const d = parseUtcDate(ts);
+  if(!d || isNaN(d.getTime())) return '';
+  if(window.LS && LS.fmtUtc) return LS.fmtUtc(d);
+  return d.toUTCString();
 }
 function prettyVisibility(v){
   if(v === 'public') return 'Public';
@@ -565,13 +665,55 @@ function destSummary(a){
 let roomCache = null;
 let lastEventId = 0;
 let unlockClearTimer = null;
+let roomTicker = null;
+
+function roomCountdownText(r){
+  if(!r) return '';
+
+  const now = Date.now();
+  const start = parseUtcDate(r.start_at);
+  const reveal = parseUtcDate(r.reveal_at);
+
+  function fmtDelta(ms){
+    const s = Math.max(0, Math.floor(ms/1000));
+    if(window.LS && LS.fmtCountdown) return LS.fmtCountdown(s);
+    return String(s) + 's';
+  }
+
+  if(start && !isNaN(start.getTime()) && now < start.getTime()){
+    return 'Starts in ' + fmtDelta(start.getTime() - now);
+  }
+
+  if(reveal && !isNaN(reveal.getTime()) && now < reveal.getTime()){
+    return 'Reveals in ' + fmtDelta(reveal.getTime() - now);
+  }
+
+  return 'Reveal eligible (server-enforced)';
+}
+
+function updateRoomCountdown(){
+  const r = roomCache;
+  const el = document.getElementById('room-countdown');
+  if(!el || !r) return;
+  el.textContent = roomCountdownText(r);
+}
+
+function startRoomCountdown(){
+  if(roomTicker) clearInterval(roomTicker);
+  roomTicker = setInterval(updateRoomCountdown, 1000);
+}
 
 function renderRoom(){
   const r = roomCache;
   if(!r) return;
 
+  const startLocal = fmt(r.start_at);
+  const startUtc = fmtUtc(r.start_at);
+  const revealLocal = fmt(r.reveal_at);
+  const revealUtc = fmtUtc(r.reveal_at);
+
   document.getElementById('room-title').textContent = r.goal_text || 'Room';
-  document.getElementById('room-sub').textContent = `Type ${r.saving_type} · Level ${r.required_trust_level} · ${r.periodicity} · Starts ${fmt(r.start_at)}`;
+  document.getElementById('room-sub').innerHTML = `Type ${esc(r.saving_type)} · Level ${esc(r.required_trust_level)} · ${esc(r.periodicity)} · Starts <b>${esc(startLocal)}</b> <span class="utc-pill" title="Stored/enforced in UTC">${esc(startUtc)}</span>`;
 
   const ov = document.getElementById('room-overview');
   ov.innerHTML = `
@@ -582,10 +724,15 @@ function renderRoom(){
       <div><span class="k">Destination:</span> ${esc(destSummary(r.destination_account))}</div>
       <div><span class="k">Participants:</span> ${esc(r.approved_count)} / ${esc(r.max_participants)} (min ${esc(r.min_participants)})</div>
       <div><span class="k">Lobby:</span> ${esc(r.lobby_state)} · <span class="k">State:</span> ${esc(r.room_state)}</div>
-      <div><span class="k">Reveal date:</span> ${esc(fmt(r.reveal_at))}</div>
+      <div><span class="k">Start date:</span> ${esc(startLocal)} <span class="utc-pill" title="Stored/enforced in UTC">${esc(startUtc)}</span></div>
+      <div><span class="k">Reveal date:</span> ${esc(revealLocal)} <span class="utc-pill" title="Stored/enforced in UTC">${esc(revealUtc)}</span></div>
+      <div><span class="k">Countdown:</span> <span id="room-countdown"></span></div>
       <div><span class="k">Your status:</span> ${esc(r.my_status||'none')}</div>
     </div>
   `;
+
+  updateRoomCountdown();
+  startRoomCountdown();
 
   const joinBtn = document.getElementById('join-btn');
   const canJoin = (!r.my_status || r.my_status === 'declined') && r.room_state === 'lobby' && r.lobby_state === 'open' && r.visibility !== 'private';
@@ -634,7 +781,9 @@ function renderRoom(){
         document.getElementById('unlock-window').textContent = 'Pending';
       }
 
-      const canReveal = (r.room_state === 'active' && approvals === eligible && eligible > 0 && (new Date(r.reveal_at).getTime() <= Date.now()) && (!ev || ev.status !== 'expired'));
+      const ra = parseUtcDate(r.reveal_at);
+      const revealOk = (ra && !isNaN(ra.getTime()) && ra.getTime() <= Date.now());
+      const canReveal = (r.room_state === 'active' && approvals === eligible && eligible > 0 && revealOk && (!ev || ev.status !== 'expired'));
       document.getElementById('unlock-reveal-btn').style.display = canReveal ? 'inline-flex' : 'none';
     }
   }
@@ -679,7 +828,8 @@ function renderRoom(){
           const actions = document.getElementById('typeb-dispute-actions');
           const ackBtn = document.getElementById('typeb-dispute-ack-btn');
 
-          const endsAt = cur.dispute_window_ends_at ? new Date(cur.dispute_window_ends_at).getTime() : 0;
+          const endsD = cur.dispute_window_ends_at ? parseUtcDate(cur.dispute_window_ends_at) : null;
+          const endsAt = (endsD && !isNaN(endsD.getTime())) ? endsD.getTime() : 0;
           const within = endsAt && Date.now() < endsAt;
           const dispute = (r.rotation && r.rotation.dispute) ? r.rotation.dispute : null;
 
@@ -887,7 +1037,7 @@ async function requestJoin(){
     const payload = {action:'request_join', room_id: ROOM_ID};
     if(roomCache && roomCache.visibility === 'unlisted') payload.invite_token = INVITE_TOKEN;
 
-    const res = await postCsrf('/api/rooms.php', payload);
+    const res = await postStrong('/api/rooms.php', payload);
 
     if(!res.success) throw new Error(res.error||'Failed');
     setMsg('room-msg','Join request sent.', true);
@@ -907,7 +1057,7 @@ async function respondInvite(decision){
   }
 
   try{
-    const res = await postCsrf('/api/rooms.php', {action:'respond_invite', invite_id: r.my_invite.id, decision});
+    const res = await postStrong('/api/rooms.php', {action:'respond_invite', invite_id: r.my_invite.id, decision});
     if(!res.success) throw new Error(res.error||'Failed');
     setMsg('invite-msg', decision === 'accept' ? 'Invite accepted.' : 'Invite declined.', true);
     await loadRoom();
@@ -953,7 +1103,7 @@ async function generateUnlistedLink(){
   if(input) input.value='';
 
   try{
-    const res = await postCsrf('/api/rooms.php', {action:'unlisted_invite_create', room_id: ROOM_ID});
+    const res = await postStrong('/api/rooms.php', {action:'unlisted_invite_create', room_id: ROOM_ID});
     if(!res.success) throw new Error(res.error||'Failed');
 
     if(input) input.value = res.link || '';
@@ -979,7 +1129,7 @@ async function revokeUnlistedLink(){
   if(input) input.value='';
 
   try{
-    const res = await postCsrf('/api/rooms.php', {action:'unlisted_invite_revoke', room_id: ROOM_ID});
+    const res = await postStrong('/api/rooms.php', {action:'unlisted_invite_revoke', room_id: ROOM_ID});
     if(!res.success) throw new Error(res.error||'Failed');
     setMsg('unlisted-msg','Link revoked.', true);
     await loadUnlistedInviteInfo(true);
@@ -1041,7 +1191,7 @@ async function sendInvite(){
   }
 
   try{
-    const res = await postCsrf('/api/rooms.php', {action:'invite_user', room_id: ROOM_ID, email});
+    const res = await postStrong('/api/rooms.php', {action:'invite_user', room_id: ROOM_ID, email});
     if(!res.success) throw new Error(res.error||'Failed');
     if(input) input.value='';
     setMsg('invites-msg','Invite sent.', true);
@@ -1056,7 +1206,7 @@ async function revokeInvite(inviteId){
   if(!ok) return;
 
   try{
-    const res = await postCsrf('/api/rooms.php', {action:'revoke_invite', invite_id: inviteId});
+    const res = await postStrong('/api/rooms.php', {action:'revoke_invite', invite_id: inviteId});
     if(!res.success) throw new Error(res.error||'Failed');
     setMsg('invites-msg','Invite revoked.', true);
     await loadInvites(true);
@@ -1076,7 +1226,7 @@ async function confirmContribution(){
   const reference = (document.getElementById('contrib-ref')||{}).value || '';
 
   try{
-    const res = await postCsrf('/api/rooms.php', {action:'confirm_contribution', room_id: ROOM_ID, cycle_id: r.active_cycle.id, amount, reference});
+    const res = await postStrong('/api/rooms.php', {action:'confirm_contribution', room_id: ROOM_ID, cycle_id: r.active_cycle.id, amount, reference});
     if(!res.success) throw new Error(res.error||'Failed');
     setMsg('contrib-msg','Contribution confirmed.', true);
     await pollFeed();
@@ -1087,7 +1237,7 @@ async function confirmContribution(){
 
 async function unlockVote(vote){
   try{
-    const res = await postCsrf('/api/rooms.php', {action:'typeA_vote', room_id: ROOM_ID, vote});
+    const res = await postStrong('/api/rooms.php', {action:'typeA_vote', room_id: ROOM_ID, vote});
     if(!res.success) throw new Error(res.error||'Failed');
     setMsg('unlock-msg','Saved.', true);
     await loadRoom();
@@ -1098,7 +1248,7 @@ async function unlockVote(vote){
 
 async function unlockReveal(){
   try{
-    const res = await postCsrf('/api/rooms.php', {action:'typeA_reveal', room_id: ROOM_ID});
+    const res = await postStrong('/api/rooms.php', {action:'typeA_reveal', room_id: ROOM_ID});
     if(!res.success) throw new Error(res.error||'Failed');
 
     const wrap = document.getElementById('unlock-code-wrap');
@@ -1126,7 +1276,7 @@ async function unlockReveal(){
 
 async function typeBVote(vote){
   try{
-    const res = await postCsrf('/api/rooms.php', {action:'typeB_vote', room_id: ROOM_ID, vote});
+    const res = await postStrong('/api/rooms.php', {action:'typeB_vote', room_id: ROOM_ID, vote});
     if(!res.success) throw new Error(res.error||'Failed');
     setMsg('typeb-msg','Saved.', true);
     await loadRoom();
@@ -1137,7 +1287,7 @@ async function typeBVote(vote){
 
 async function typeBReveal(){
   try{
-    const res = await postCsrf('/api/rooms.php', {action:'typeB_reveal', room_id: ROOM_ID});
+    const res = await postStrong('/api/rooms.php', {action:'typeB_reveal', room_id: ROOM_ID});
     if(!res.success) throw new Error(res.error||'Failed');
 
     const wrap = document.getElementById('typeb-code-wrap');
@@ -1169,7 +1319,7 @@ async function typeBRaiseDispute(){
   const reason = (document.getElementById('typeb-dispute-reason')||{}).value || '';
 
   try{
-    const res = await postCsrf('/api/rooms.php', {action:'typeB_raise_dispute', room_id: ROOM_ID, reason});
+    const res = await postStrong('/api/rooms.php', {action:'typeB_raise_dispute', room_id: ROOM_ID, reason});
     if(!res.success) throw new Error(res.error||'Failed');
 
     setMsg(msgId,'Dispute raised.', true);
@@ -1193,7 +1343,7 @@ async function typeBAckDispute(){
   }
 
   try{
-    const res = await postCsrf('/api/rooms.php', {action:'typeB_ack_dispute', room_id: ROOM_ID, dispute_id: dispute.id});
+    const res = await postStrong('/api/rooms.php', {action:'typeB_ack_dispute', room_id: ROOM_ID, dispute_id: dispute.id});
     if(!res.success) throw new Error(res.error||'Failed');
 
     setMsg(msgId,'Acknowledged.', true);
@@ -1213,7 +1363,7 @@ async function createExitRequest(){
   if(!ok) return;
 
   try{
-    const res = await postCsrf('/api/rooms.php', {action:'typeB_exit_request_create', room_id: ROOM_ID});
+    const res = await postStrong('/api/rooms.php', {action:'typeB_exit_request_create', room_id: ROOM_ID});
     if(!res.success) throw new Error(res.error||'Failed');
 
     setMsg(msgId,'Exit request submitted.', true);
@@ -1237,7 +1387,7 @@ async function voteExit(vote){
   }
 
   try{
-    const res = await postCsrf('/api/rooms.php', {action:'typeB_exit_request_vote', room_id: ROOM_ID, exit_request_id: er.id, vote});
+    const res = await postStrong('/api/rooms.php', {action:'typeB_exit_request_vote', room_id: ROOM_ID, exit_request_id: er.id, vote});
     if(!res.success) throw new Error(res.error||'Failed');
 
     setMsg(msgId, res.approved ? 'Exit approved.' : 'Vote saved.', true);
@@ -1264,7 +1414,7 @@ async function cancelExitRequest(){
   if(!ok) return;
 
   try{
-    const res = await postCsrf('/api/rooms.php', {action:'typeB_exit_request_cancel', room_id: ROOM_ID, exit_request_id: er.id});
+    const res = await postStrong('/api/rooms.php', {action:'typeB_exit_request_cancel', room_id: ROOM_ID, exit_request_id: er.id});
     if(!res.success) throw new Error(res.error||'Failed');
 
     setMsg(msgId,'Exit request cancelled.', true);
@@ -1333,13 +1483,32 @@ async function underfillExtend(){
   const msg = document.getElementById('underfill-msg');
   msg.className='msg';
 
-  const newStartAt = prompt('Enter new start date/time (YYYY-MM-DD HH:MM:SS)');
-  if(!newStartAt) return;
-  const newRevealAt = prompt('Enter new reveal date/time (YYYY-MM-DD HH:MM:SS)');
-  if(!newRevealAt) return;
+  const rawStart = prompt('Enter new start date/time (YYYY-MM-DDTHH:MM)');
+  if(!rawStart) return;
+  const rawReveal = prompt('Enter new reveal date/time (YYYY-MM-DDTHH:MM)');
+  if(!rawReveal) return;
+
+  const startIso = (function(){
+    const s = String(rawStart||'').trim().replace(' ', 'T');
+    const d = new Date(s);
+    if(isNaN(d.getTime())) return '';
+    return d.toISOString();
+  })();
+
+  const revealIso = (function(){
+    const s = String(rawReveal||'').trim().replace(' ', 'T');
+    const d = new Date(s);
+    if(isNaN(d.getTime())) return '';
+    return d.toISOString();
+  })();
+
+  if(!startIso || !revealIso){
+    setMsg('underfill-msg','Invalid date/time format.', false);
+    return;
+  }
 
   try{
-    const res = await postCsrf('/api/rooms.php', {action:'underfill_decide', room_id: ROOM_ID, decision:'extend_start', new_start_at:newStartAt, new_reveal_at:newRevealAt});
+    const res = await postStrong('/api/rooms.php', {action:'underfill_decide', room_id: ROOM_ID, decision:'extend_start', new_start_at:startIso, new_reveal_at:revealIso});
     if(!res.success) throw new Error(res.error||'Failed');
     setMsg('underfill-msg','Saved.', true);
     await loadRoom();
@@ -1361,7 +1530,7 @@ async function underfillLowerMin(){
   }
 
   try{
-    const res = await postCsrf('/api/rooms.php', {action:'underfill_decide', room_id: ROOM_ID, decision:'lower_min', new_min_participants:newMin});
+    const res = await postStrong('/api/rooms.php', {action:'underfill_decide', room_id: ROOM_ID, decision:'lower_min', new_min_participants:newMin});
     if(!res.success) throw new Error(res.error||'Failed');
     setMsg('underfill-msg','Saved.', true);
     await loadRoom();
@@ -1375,7 +1544,7 @@ async function underfillCancel(){
   if(!ok) return;
 
   try{
-    const res = await postCsrf('/api/rooms.php', {action:'underfill_decide', room_id: ROOM_ID, decision:'cancel'});
+    const res = await postStrong('/api/rooms.php', {action:'underfill_decide', room_id: ROOM_ID, decision:'cancel'});
     if(!res.success) throw new Error(res.error||'Failed');
     setMsg('underfill-msg','Room cancelled.', true);
     await loadRoom();
@@ -1433,7 +1602,7 @@ async function reviewJoin(requestId, decision){
   if(!ok) return;
 
   try{
-    const res = await postCsrf('/api/rooms.php', {action:'review_join', request_id: requestId, decision});
+    const res = await postStrong('/api/rooms.php', {action:'review_join', request_id: requestId, decision});
     if(!res.success) throw new Error(res.error||'Failed');
 
     setMsg('maker-msg', 'Saved.', true);
