@@ -1,5 +1,5 @@
 -- ============================================================
---  LOCKSMITH — Zero-Knowledge Schema v3
+--  Controle — Zero-Knowledge Schema v3
 --
 --  SECURITY GUARANTEE:
 --  The server stores ONLY ciphertext. The decryption key is

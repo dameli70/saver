@@ -1,7 +1,7 @@
-# LOCKSMITH — Time-Locked Codes (Zero-Knowledge Vault)
+# Controle — Time-Locked Codes (Zero-Knowledge Vault)
 ## PHP Web Application
 
-LOCKSMITH is a multi-page PHP app that lets users generate and store **time-locked “codes”** in a **zero-knowledge vault**:
+Controle is a multi-page PHP app that lets users generate and store **time-locked “codes”** in a **zero-knowledge vault**:
 - Encryption/decryption happens in the browser (Web Crypto: PBKDF2 + AES-256-GCM)
 - The server stores only ciphertext + metadata
 - The server enforces the reveal time (server clock, not client clock)

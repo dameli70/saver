@@ -234,7 +234,7 @@ $vals = [
     'db_pass' => '',
     'db_charset' => 'utf8mb4',
     'app_env' => 'development',
-    'app_name' => 'LOCKSMITH',
+    'app_name' => 'Controle',
     'mail_from' => 'no-reply@localhost',
     'email_verify_ttl_hours' => 24,
 
@@ -265,7 +265,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $adminPass2 = (string)($_POST['admin_pass2'] ?? '');
 
     $vals['app_env'] = trim((string)($_POST['app_env'] ?? 'development'));
-    $vals['app_name'] = trim((string)($_POST['app_name'] ?? 'LOCKSMITH'));
+    $vals['app_name'] = trim((string)($_POST['app_name'] ?? 'Controle'));
     $vals['mail_from'] = trim((string)($_POST['mail_from'] ?? 'no-reply@localhost'));
     $vals['email_verify_ttl_hours'] = (int)($_POST['email_verify_ttl_hours'] ?? 24);
 
@@ -380,7 +380,7 @@ header("Referrer-Policy: no-referrer");
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Install — LOCKSMITH</title>
+<title>Install — <?= htmlspecialchars($vals['app_name'] ?? 'Controle') ?></title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../assets/base.css">
@@ -408,7 +408,7 @@ hr{border:none;border-top:1px solid var(--b1);margin:16px 0;}
 <body>
 <div class="orb orb1"></div><div class="orb orb2"></div>
 <div class="wrap">
-  <div class="logo">LOCK<span>SMITH</span></div>
+  <div class="logo"><?= htmlspecialchars($vals['app_name'] ?? 'Controle') ?></div>
   <div class="sub">// Installation</div>
 
   <?php if ($errors): ?>
@@ -465,7 +465,7 @@ hr{border:none;border-top:1px solid var(--b1);margin:16px 0;}
             </select>
           </div>
 
-          <div class="field"><label>APP_NAME</label><input name="app_name" value="<?= htmlspecialchars($vals['app_name'] ?? 'LOCKSMITH') ?>" required></div>
+          <div class="field"><label>APP_NAME</label><input name="app_name" value="<?= htmlspecialchars($vals['app_name'] ?? 'Controle') ?>" required></div>
           <div class="field"><label>MAIL_FROM</label><input name="mail_from" value="<?= htmlspecialchars($vals['mail_from'] ?? 'no-reply@localhost') ?>" required></div>
           <div class="field"><label>Email verification TTL (hours)</label><input name="email_verify_ttl_hours" type="number" min="1" max="168" value="<?= (int)($vals['email_verify_ttl_hours'] ?? 24) ?>" required></div>
 

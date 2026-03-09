@@ -29,7 +29,7 @@ header("Permissions-Policy: clipboard-write=(self)");
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>LOCKSMITH — Create Code</title>
+<title><?= htmlspecialchars(APP_NAME) ?> — Create Code</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
 <script src="assets/theme.js"></script>
@@ -81,7 +81,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
 
 <div id="app">
   <div class="topbar">
-    <div class="topbar-logo">LOCK<span>SMITH</span></div>
+    <div class="topbar-logo"><?= htmlspecialchars(APP_NAME) ?></div>
     <div class="topbar-r">
       <span class="user-pill"><?= htmlspecialchars($userEmail) ?></span>
       <button class="btn btn-ghost btn-sm btn-theme" type="button" data-theme-toggle>Theme</button>

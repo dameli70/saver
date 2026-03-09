@@ -55,7 +55,7 @@ header("Permissions-Policy: clipboard-write=(self)");
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>LOCKSMITH — Dashboard</title>
+<title><?= htmlspecialchars(APP_NAME) ?> — Dashboard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
 <script src="assets/theme.js"></script>
@@ -72,7 +72,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9998;o
 
 <div id="app">
   <div class="topbar">
-    <div class="topbar-logo">LOCK<span>SMITH</span></div>
+    <div class="topbar-logo"><?= htmlspecialchars(APP_NAME) ?></div>
     <div class="topbar-r">
       <span class="user-pill"><?= htmlspecialchars($userEmail) ?></span>
       <button class="btn btn-ghost btn-sm btn-theme" type="button" data-theme-toggle>Theme</button>

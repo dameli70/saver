@@ -1,6 +1,6 @@
 <?php
 // ============================================================
-//  LOCKSMITH — Database Configuration
+//  Controle — Database Configuration
 //  Edit DB_*, APP_HMAC_SECRET, and mail settings.
 //  The encryption key NEVER appears here — it lives only
 //  in the user's browser, derived from their vault passphrase.
@@ -24,11 +24,11 @@ define('APP_HMAC_SECRET', 'REPLACE_WITH_64+_RANDOM_BYTES_hex_php_r_echo_bin2hex_
 
 define('APP_ENV', 'development'); // 'production' in prod
 
-define('APP_NAME', 'LOCKSMITH');
+define('APP_NAME', 'Controle');
 
 // Canonical base URL used for emailed links (verification + password reset).
 // Recommended in production to prevent Host header injection.
-// Example: https://locksmith.example.com
+// Example: https://controle.example.com
 // Leave empty to auto-detect (development only).
 define('APP_BASE_URL', '');
 

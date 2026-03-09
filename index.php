@@ -20,7 +20,7 @@ header("Referrer-Policy: no-referrer");
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>LOCKSMITH — Save money with time locks</title>
+<title><?= htmlspecialchars(APP_NAME) ?> — Save money with time locks</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
 <script src="assets/theme.js"></script>
@@ -76,7 +76,7 @@ a{color:inherit;}
 <div class="orb orb1"></div><div class="orb orb2"></div>
 <div class="wrap">
   <div class="nav">
-    <a class="logo" href="index.php">LOCK<span>SMITH</span></a>
+    <a class="logo" href="index.php"><?= htmlspecialchars(APP_NAME) ?></a>
     <div class="nav-r">
       <button class="btn btn-ghost btn-theme" type="button" data-theme-toggle>Theme</button>
       <?php if ($loggedIn): ?>
@@ -110,7 +110,7 @@ a{color:inherit;}
     <div class="kicker">Impulse-proof saving • Save together • Private by design</div>
     <div class="h1">Put a time lock between you and <span>impulse spending</span>.</div>
     <div class="sub">
-      LOCKSMITH helps you build better money habits by adding friction: lock away the codes you use to spend (mobile money PINs, passwords, voucher codes)
+      <?= htmlspecialchars(APP_NAME) ?> helps you build better money habits by adding friction: lock away the codes you use to spend (mobile money PINs, passwords, voucher codes)
       until a date you choose. For bigger goals, create a <strong>Saving Room</strong> to save with trusted people and clear rules.
       Your secrets are encrypted in your browser — the server can’t read them.
     </div>
@@ -146,7 +146,7 @@ a{color:inherit;}
   </div>
 
   <div class="use">
-    <h2>Popular ways people use LOCKSMITH</h2>
+    <h2>Popular ways people use <?= htmlspecialchars(APP_NAME) ?></h2>
     <div class="bullets">
       <div class="bullet"><div class="t">Break bad spending loops</div><div class="d">Lock your wallet PIN for 24 hours, a week, or until payday. Give yourself time to think.</div></div>
       <div class="bullet"><div class="t">Create a pause for habits</div><div class="d">Add a delay to high-risk moments. When you have to wait, it’s easier to choose what matters.</div></div>
@@ -164,11 +164,11 @@ a{color:inherit;}
     </div>
 
     <div style="margin-top:14px;color:var(--muted);font-size:11px;line-height:1.7;">
-      Note: LOCKSMITH does not hold your funds or connect to your bank. It stores time-locked, encrypted access codes and group-saving rules.
+      Note: <?= htmlspecialchars(APP_NAME) ?> does not hold your funds or connect to your bank. It stores time-locked, encrypted access codes and group-saving rules.
     </div>
   </div>
 
-  <div class="footer">© <?= date('Y') ?> LOCKSMITH • Time locks for better money habits</div>
+  <div class="footer">© <?= date('Y') ?> <?= htmlspecialchars(APP_NAME) ?> • Time locks for better money habits</div>
 </div>
 </body>
 </html>

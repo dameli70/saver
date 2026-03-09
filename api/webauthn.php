@@ -142,7 +142,7 @@ if ($action === 'register_begin') {
         'publicKey' => [
             'challenge' => $challenge,
             'rp' => [
-                'name' => defined('APP_NAME') ? APP_NAME : 'LOCKSMITH',
+                'name' => defined('APP_NAME') ? APP_NAME : 'Controle',
                 'id' => webauthnRpId(),
             ],
             'user' => [

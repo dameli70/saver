@@ -54,7 +54,7 @@ header("Referrer-Policy: no-referrer");
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Account — LOCKSMITH</title>
+<title>Account — <?= htmlspecialchars(APP_NAME) ?></title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
 <script src="assets/theme.js"></script>
@@ -91,7 +91,7 @@ code{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);pad
 </head>
 <body>
   <div class="nav">
-    <a class="logo" href="index.php">LOCK<span>SMITH</span></a>
+    <a class="logo" href="index.php"><?= htmlspecialchars(APP_NAME) ?></a>
     <div class="nav-r">
       <?php if ($verified): ?>
         <a class="btn btn-ghost" href="dashboard.php">Dashboard</a>

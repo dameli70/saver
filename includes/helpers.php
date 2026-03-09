@@ -1,6 +1,6 @@
 <?php
 // ============================================================
-//  LOCKSMITH — Server-Side Helpers (Zero-Knowledge Edition)
+//  Controle — Server-Side Helpers (Zero-Knowledge Edition)
 //
 //  WHAT THIS FILE DOES NOT DO (by design):
 //  - Does NOT derive any encryption key

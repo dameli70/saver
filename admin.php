@@ -33,7 +33,7 @@ header("Referrer-Policy: no-referrer");
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Admin — LOCKSMITH</title>
+<title>Admin — <?= htmlspecialchars(APP_NAME) ?></title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
 <script src="assets/theme.js"></script>
@@ -80,7 +80,7 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--code-bg);border:
 <div class="orb orb1"></div><div class="orb orb2"></div>
 
 <div class="nav">
-  <a class="logo" href="index.php">LOCK<span>SMITH</span></a>
+  <a class="logo" href="index.php"><?= htmlspecialchars(APP_NAME) ?></a>
   <div class="nav-r">
     <span class="badge">SUPER ADMIN</span>
     <span class="pill"><?= htmlspecialchars($userEmail) ?></span>
@@ -263,7 +263,8 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--code-bg);border:
       </div>
       <div class="field">
         <label>Bank account name (optional)</label>
-        <input id="da-bank-name" placeholder="e.g. LOCKSMITH ESCROW">
+        <input id="da-bank-name" placeholder="e.g. <?= htmlspecialchars(APP_NAME) ?> ESCROW">
+KSMITH ESCROW">
       </div>
       <div class="field">
         <label>Bank account number</label>

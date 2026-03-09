@@ -30,7 +30,7 @@ header("Permissions-Policy: clipboard-write=(self)");
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>LOCKSMITH — Notifications</title>
+<title><?= htmlspecialchars(APP_NAME) ?> — Notifications</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
 <script src="assets/theme.js"></script>
@@ -74,7 +74,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9998;o
 <div class="orb orb1"></div><div class="orb orb2"></div>
 
 <div class="nav">
-  <a class="logo" href="index.php">LOCK<span>SMITH</span></a>
+  <a class="logo" href="dashboard.php"><?= htmlspecialchars(APP_NAME) ?></a>
   <div class="nav-r">
     <span class="pill"><?= htmlspecialchars($userEmail) ?></span>
     <button class="btn btn-ghost btn-sm btn-theme" type="button" data-theme-toggle>Theme</button>
