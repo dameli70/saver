@@ -50,13 +50,14 @@ header("X-Content-Type-Options: nosniff");
 header("Referrer-Policy: no-referrer");
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html <?= htmlLangAttr() ?>>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Account — <?= htmlspecialchars(APP_NAME) ?></title>
+<title><?= htmlspecialchars(APP_NAME) ?> — <?= htmlspecialchars(t('page.account')) ?></title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
+<?php emitI18nJsGlobals(); ?>
 <script src="assets/theme.js"></script>
 <link rel="stylesheet" href="assets/base.css">
 <link rel="stylesheet" href="assets/panel.css">
@@ -94,24 +95,27 @@ code{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);pad
     <a class="logo" href="index.php"><?= htmlspecialchars(APP_NAME) ?></a>
     <div class="nav-r">
       <?php if ($verified): ?>
-        <a class="btn btn-ghost" href="dashboard.php">Dashboard</a>
-        <a class="btn btn-ghost" href="create_code.php">Create Code</a>
-        <a class="btn btn-ghost" href="my_codes.php">My Codes</a>
-        <a class="btn btn-ghost" href="rooms.php">Rooms</a>
-        <a class="btn btn-ghost" href="notifications.php">Notifications</a>
-        <a class="btn btn-ghost" href="backup.php">Backups</a>
+        <a class="btn btn-ghost" href="dashboard.php"><?php e('nav.dashboard'); ?></a>
+        <a class="btn btn-ghost" href="create_code.php"><?php e('nav.create_code'); ?></a>
+        <a class="btn btn-ghost" href="my_codes.php"><?php e('nav.my_codes'); ?></a>
+        <a class="btn btn-ghost" href="rooms.php"><?php e('nav.rooms'); ?></a>
+        <a class="btn btn-ghost" href="notifications.php"><?php e('nav.notifications'); ?></a>
+        <a class="btn btn-ghost" href="backup.php"><?php e('nav.backups'); ?></a>
         <?php if ($isAdmin): ?>
-          <a class="btn btn-ghost" href="admin.php">Admin</a>
+          <a class="btn btn-ghost" href="admin.php"><?php e('nav.admin'); ?></a>
         <?php endif; ?>
       <?php endif; ?>
-      <button class="btn btn-ghost btn-theme" type="button" data-theme-toggle>Theme</button>
-      <a class="btn btn-ghost" href="logout.php">Logout</a>
+      <button class="btn btn-ghost btn-theme" type="button" data-theme-toggle><?php e('common.theme'); ?></button>
+      <?php $curLang = currentLang(); ?>
+      <a class="<?= $curLang === 'fr' ? 'btn btn-primary' : 'btn btn-ghost' ?>" href="<?= htmlspecialchars(langSwitchUrl('fr')) ?>"><?php e('common.lang_fr'); ?></a>
+      <a class="<?= $curLang === 'en' ? 'btn btn-primary' : 'btn btn-ghost' ?>" href="<?= htmlspecialchars(langSwitchUrl('en')) ?>"><?php e('common.lang_en'); ?></a>
+      <a class="btn btn-ghost" href="logout.php"><?php e('common.logout'); ?></a>
     </div>
   </div>
 
   <div class="wrap">
-    <div class="h">Your account</div>
-    <div class="p"><?= $verified ? 'Manage your vault key, security, and room access.' : 'Verify your email to start creating time locks and joining Saving Rooms.' ?></div>
+    <div class="h"><?php e('heading.account'); ?></div>
+    <div class="p"><?= $verified ? t('account.sub_verified') : t('account.sub_unverified') ?></div>
 
     <div class="card">
       <div class="row">
