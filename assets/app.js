@@ -491,5 +491,199 @@
     return true;
   };
 
+  function initNavGroups(){
+    const nav = document.querySelector('.topbar .topbar-r');
+    if(!nav) return;
+    if(nav.getAttribute('data-nav-enhanced') === '1') return;
+
+    const user = nav.querySelector('.user-pill');
+
+    const children = Array.from(nav.children).filter(el => el !== user);
+
+    const isLangLink = (el) => el.tagName === 'A' && /set_language\.php\?/.test(el.getAttribute('href') || '');
+    const isThemeBtn = (el) => el.tagName === 'BUTTON' && el.hasAttribute('data-theme-toggle');
+
+    const prefs = children.filter(el => isLangLink(el) || isThemeBtn(el));
+    const rest = children.filter(el => !prefs.includes(el));
+
+    const primaryHrefs = new Set([
+      'dashboard.php',
+      'create_code.php',
+      'my_codes.php',
+      'rooms.php',
+      'notifications.php',
+    ]);
+
+    const isPrimary = (el) => {
+      if(el.tagName !== 'A') return false;
+      const href = (el.getAttribute('href') || '').trim();
+      return primaryHrefs.has(href);
+    };
+
+    const primary = rest.filter(isPrimary);
+    const secondary = rest.filter(el => !primary.includes(el));
+
+    function mkDropdown(label){
+      const d = document.createElement('details');
+      d.className = 'nav-dd';
+
+      const s = document.createElement('summary');
+      s.className = 'btn btn-ghost btn-sm';
+      s.textContent = label;
+
+      const panel = document.createElement('div');
+      panel.className = 'nav-dd-panel';
+
+      d.appendChild(s);
+      d.appendChild(panel);
+
+      // Close other dropdowns when one opens.
+      d.addEventListener('toggle', () => {
+        if(!d.open) return;
+        nav.querySelectorAll('details.nav-dd[open]').forEach(x => { if(x !== d) x.open = false; });
+      });
+
+      // Close when a link inside is clicked.
+      panel.addEventListener('click', (e) => {
+        const a = e.target && e.target.closest ? e.target.closest('a') : null;
+        if(a) d.open = false;
+      });
+
+      return {d, panel};
+    }
+
+    nav.innerHTML = '';
+    if(user) nav.appendChild(user);
+
+    primary.forEach(el => nav.appendChild(el));
+
+    if(secondary.length){
+      const more = mkDropdown(LS.t('common.more') || 'More');
+      secondary.forEach(el => more.panel.appendChild(el));
+      nav.appendChild(more.d);
+    }
+
+    if(prefs.length){
+      const prefsDd = mkDropdown(LS.t('common.settings') || 'Settings');
+      prefs.forEach(el => prefsDd.panel.appendChild(el));
+      nav.appendChild(prefsDd.d);
+    }
+
+    // Close dropdowns when clicking outside.
+    document.addEventListener('click', (e) => {
+      if(!nav.contains(e.target)){
+        nav.querySelectorAll('details.nav-dd[open]').forEach(x => x.open = false);
+      }
+    });
+
+    nav.setAttribute('data-nav-enhanced', '1');
+  }
+
+  function initMobileNav(){
+    const topbar = document.querySelector('.topbar');
+    const nav = topbar ? topbar.querySelector('.topbar-r') : null;
+    if(!topbar || !nav) return;
+
+    // Create menu button once.
+    let btn = topbar.querySelector('.topbar-menu-btn');
+    if(!btn){
+      btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn btn-ghost btn-sm topbar-menu-btn';
+      btn.textContent = LS.t('common.menu') || 'Menu';
+      btn.setAttribute('aria-label', LS.t('common.menu') || 'Menu');
+      topbar.appendChild(btn);
+    }
+
+    function getOverlay(){
+      let ov = document.getElementById('ls-nav-overlay');
+      if(ov) return ov;
+
+      ov = document.createElement('div');
+      ov.id = 'ls-nav-overlay';
+      ov.innerHTML = `
+        <div id="ls-nav-panel" role="dialog" aria-modal="true" aria-labelledby="ls-nav-title">
+          <div id="ls-nav-head">
+            <div id="ls-nav-title">${LS.esc(LS.t('common.menu') || 'Menu')}</div>
+            <button type="button" id="ls-nav-close" aria-label="${LS.esc(STR.close)}">×</button>
+          </div>
+          <div id="ls-nav-body"></div>
+        </div>
+      `;
+      document.body.appendChild(ov);
+      return ov;
+    }
+
+    function isMobile(){
+      return window.matchMedia && window.matchMedia('(max-width: 720px)').matches;
+    }
+
+    function open(){
+      if(!isMobile()) return;
+      const ov = getOverlay();
+      const body = ov.querySelector('#ls-nav-body');
+      if(!body) return;
+
+      // Move the real nav into the drawer so existing event handlers keep working.
+      if(nav.parentNode !== body) body.appendChild(nav);
+
+      ov.classList.add('show');
+      document.body.style.overflow = 'hidden';
+
+      setTimeout(()=>{
+        const first = nav.querySelector('a,button');
+        if(first && first.focus) first.focus();
+      }, 10);
+    }
+
+    function close(){
+      const ov = document.getElementById('ls-nav-overlay');
+      if(!ov) return;
+
+      // Restore nav to topbar.
+      if(nav.parentNode !== topbar) topbar.insertBefore(nav, btn);
+
+      ov.classList.remove('show');
+      document.body.style.overflow = '';
+      if(btn && btn.focus) btn.focus();
+    }
+
+    btn.addEventListener('click', open);
+
+    document.addEventListener('keydown', (e)=>{
+      const ov = document.getElementById('ls-nav-overlay');
+      if(!ov || !ov.classList.contains('show')) return;
+      if(e.key === 'Escape') close();
+    });
+
+    document.addEventListener('click', (e)=>{
+      const ov = document.getElementById('ls-nav-overlay');
+      if(!ov || !ov.classList.contains('show')) return;
+      if(e.target === ov) close();
+    });
+
+    // Delegate close button.
+    document.addEventListener('click', (e)=>{
+      const t = e.target;
+      if(t && t.id === 'ls-nav-close') close();
+    });
+
+    // On resize to desktop, ensure nav is restored.
+    window.addEventListener('resize', ()=>{
+      if(!isMobile()) close();
+    });
+
+    // If user taps a link in the drawer, close it.
+    nav.addEventListener('click', (e)=>{
+      const a = e.target && e.target.closest ? e.target.closest('a') : null;
+      if(a && a.getAttribute('href')) close();
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', ()=>{
+    initNavGroups();
+    initMobileNav();
+  });
+
   window.LS = LS;
 })();

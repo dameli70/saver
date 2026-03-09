@@ -38,6 +38,9 @@
 html{scroll-behavior:smooth;-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%;text-size-adjust:100%;}
 body{background:var(--bg);color:var(--text);font-family:var(--mono);font-size:14px;min-height:100vh;overflow-x:hidden;-webkit-font-smoothing:antialiased;}
 
+img,video,canvas{max-width:100%;height:auto;}
+pre{max-width:100%;overflow:auto;-webkit-overflow-scrolling:touch;}
+
 @media(max-width:520px){
   input[type="text"],input[type="email"],input[type="password"],input[type="number"],input[type="tel"],input[type="search"],input[type="url"],input[type="datetime-local"],input[type="date"],input[type="time"],textarea,select{font-size:16px;}
 }
