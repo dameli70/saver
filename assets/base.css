@@ -10,6 +10,14 @@
   --overlay-bg:rgba(0,0,0,.9);
   --toast-bg:#000;
   --code-bg:#000;
+
+  --radius-card:18px;
+  --radius-btn:14px;
+  --radius-input:14px;
+  --radius-pill:999px;
+
+  --shadow-card:0 10px 30px rgba(0,0,0,.35);
+  --shadow-card-hover:0 14px 44px rgba(0,0,0,.48);
 }
 :root[data-theme="light"]{
   --bg:#f6f7fb;--s1:#ffffff;--s2:#eef1f7;--s3:#e7ebf3;
@@ -21,6 +29,9 @@
   --overlay-bg:rgba(246,247,251,.92);
   --toast-bg:rgba(255,255,255,.94);
   --code-bg:rgba(11,16,32,.06);
+
+  --shadow-card:0 10px 30px rgba(11,16,32,.08);
+  --shadow-card-hover:0 14px 44px rgba(11,16,32,.14);
 }
 
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
@@ -48,7 +59,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--mono);font-size:14
   font-family:var(--mono);
   width:40px;height:40px;padding:0;line-height:1;
   display:flex;align-items:center;justify-content:center;
-  cursor:pointer;-webkit-appearance:none;border-radius:0;}
+  cursor:pointer;-webkit-appearance:none;border-radius:var(--radius-btn);}
 .theme-toggle:hover{border-color:var(--text);color:var(--text);}
 .theme-toggle:active{transform:scale(.98);}
 

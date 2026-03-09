@@ -38,14 +38,18 @@ a{color:inherit;}
  
 .hero{max-width:960px;margin:0 auto;padding:54px 18px 34px;}
 .kicker{display:inline-flex;align-items:center;gap:10px;color:var(--green);font-size:10px;letter-spacing:2px;text-transform:uppercase;
-  background:rgba(71,255,176,.06);border:1px solid rgba(71,255,176,.18);padding:6px 12px;margin-bottom:18px;}
+  background:rgba(71,255,176,.06);border:1px solid rgba(71,255,176,.18);padding:6px 12px;margin-bottom:18px;border-radius:var(--radius-pill);}
 .h1{font-family:var(--display);font-weight:900;letter-spacing:-1.4px;font-size:clamp(30px,5vw,52px);line-height:1.02;margin-bottom:12px;}
 .h1 span{color:var(--accent);} 
 .sub{color:var(--muted);font-size:13px;line-height:1.75;max-width:720px;margin-bottom:22px;}
 .cta{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px;}
 .grid{display:grid;grid-template-columns:1fr;gap:12px;margin-top:26px;}
 @media(min-width:740px){.grid{grid-template-columns:repeat(3,1fr);} }
-.card{background:rgba(13,15,20,.9);border:1px solid var(--b1);padding:18px;}
+.card{background:rgba(13,15,20,.9);border:1px solid var(--b1);padding:18px;border-radius:var(--radius-card);box-shadow:var(--shadow-card);
+  transition:transform .18s,box-shadow .18s,border-color .18s;}
+@media(hover:hover){
+  .card:hover{transform:translateY(-2px);border-color:var(--b2);box-shadow:var(--shadow-card-hover);}
+}
 .card h3{font-family:var(--display);font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--accent);margin-bottom:10px;}
 .card p{color:var(--muted);font-size:12px;line-height:1.7;}
 
@@ -53,7 +57,7 @@ a{color:inherit;}
 .how h2{font-family:var(--display);font-weight:900;font-size:16px;letter-spacing:1px;margin:18px 0 12px;}
 .steps{display:grid;grid-template-columns:1fr;gap:10px;}
 @media(min-width:740px){.steps{grid-template-columns:repeat(2,1fr);} }
-.step{background:rgba(13,15,20,.7);border:1px solid var(--b1);padding:16px;}
+.step{background:rgba(13,15,20,.7);border:1px solid var(--b1);padding:16px;border-radius:var(--radius-card);}
 .step .n{font-family:var(--display);font-weight:900;color:var(--accent);font-size:18px;margin-bottom:6px;}
 .step .t{font-size:12px;letter-spacing:1px;text-transform:uppercase;color:var(--text);margin-bottom:6px;}
 .step .d{font-size:12px;line-height:1.7;color:var(--muted);} 
@@ -62,20 +66,20 @@ a{color:inherit;}
 .use h2{font-family:var(--display);font-weight:900;font-size:16px;letter-spacing:1px;margin:0 0 10px;}
 .bullets{display:grid;grid-template-columns:1fr;gap:10px;}
 @media(min-width:740px){.bullets{grid-template-columns:repeat(3,1fr);} }
-.bullet{border:1px solid var(--b1);background:rgba(0,0,0,.18);padding:14px;}
+.bullet{border:1px solid var(--b1);background:rgba(0,0,0,.18);padding:14px;border-radius:var(--radius-card);}
 .bullet .t{font-family:var(--display);font-size:12px;font-weight:800;margin-bottom:6px;}
 .bullet .d{font-size:12px;line-height:1.7;color:var(--muted);} 
 
 .footer{border-top:1px solid var(--b1);padding:18px;color:var(--muted);font-size:11px;letter-spacing:.5px;text-align:center;}
 .notice{max-width:960px;margin:0 auto;padding:18px 18px 0;}
-.notice .box{border:1px solid rgba(255,170,0,.25);background:rgba(255,170,0,.06);padding:14px 16px;color:var(--muted);font-size:12px;line-height:1.6;}
+.notice .box{border:1px solid rgba(255,170,0,.25);background:rgba(255,170,0,.06);padding:14px 16px;color:var(--muted);font-size:12px;line-height:1.6;border-radius:var(--radius-card);}
 .notice .box strong{color:var(--orange);} 
 
 .faq{max-width:960px;margin:0 auto;padding:0 18px 60px;}
 .faq h2{font-family:var(--display);font-weight:900;font-size:16px;letter-spacing:1px;margin:0 0 12px;}
 .faq-grid{display:grid;grid-template-columns:1fr;gap:10px;}
 @media(min-width:740px){.faq-grid{grid-template-columns:repeat(2,1fr);} }
-.qa{background:rgba(13,15,20,.7);border:1px solid var(--b1);padding:14px;}
+.qa{background:rgba(13,15,20,.7);border:1px solid var(--b1);padding:14px;border-radius:var(--radius-card);}
 .qa summary{cursor:pointer;list-style:none;font-family:var(--display);font-weight:800;font-size:12px;letter-spacing:1px;line-height:1.4;}
 .qa summary::-webkit-details-marker{display:none;}
 .qa summary::after{content:'+';float:right;color:var(--muted);}

@@ -68,7 +68,7 @@ header("Referrer-Policy: no-referrer");
 .row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
 .k{color:var(--muted);font-size:10px;letter-spacing:2px;text-transform:uppercase;}
 .v{color:var(--text);font-size:12px;letter-spacing:.4px;}
-.badge{display:inline-flex;align-items:center;gap:8px;font-size:10px;letter-spacing:1px;text-transform:uppercase;padding:5px 10px;border:1px solid;}
+.badge{display:inline-flex;align-items:center;gap:8px;font-size:10px;letter-spacing:1px;text-transform:uppercase;padding:5px 10px;border:1px solid;border-radius:var(--radius-pill);}
 .badge.ok{background:rgba(71,255,176,.07);border-color:rgba(71,255,176,.2);color:var(--green);} 
 .badge.wait{background:rgba(255,170,0,.07);border-color:rgba(255,170,0,.2);color:var(--orange);} 
  
@@ -77,15 +77,15 @@ header("Referrer-Policy: no-referrer");
 .field{margin-top:14px;margin-bottom:0;}
 .field label{display:block;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:6px;}
 .field input{width:100%;background:var(--s2);border:1px solid var(--b1);color:var(--text);font-family:var(--mono);
-  font-size:15px;padding:14px;outline:none;transition:border-color .2s;border-radius:0;-webkit-appearance:none;}
+  font-size:15px;padding:14px;outline:none;transition:border-color .2s;border-radius:var(--radius-input);-webkit-appearance:none;}
 .field input:focus{border-color:var(--accent);} 
 .hr{border-top:1px solid var(--b1);margin:16px 0;}
 .list{margin-top:10px;display:flex;flex-direction:column;gap:10px;}
-.item{border:1px solid var(--b1);background:rgba(19,22,29,.55);padding:12px 14px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;}
+.item{border:1px solid var(--b1);background:rgba(19,22,29,.55);padding:12px 14px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;border-radius:var(--radius-card);}
 .small{font-size:11px;color:var(--muted);line-height:1.6;}
 .btn-red{background:rgba(255,71,87,.08);border:1px solid rgba(255,71,87,.2);color:var(--red);} 
 .btn-red:hover{background:rgba(255,71,87,.14);} 
-code{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);padding:2px 6px;}
+code{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);padding:2px 6px;border-radius:10px;}
 
 </style>
 </head>

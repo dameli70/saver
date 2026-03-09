@@ -401,7 +401,7 @@ header("Referrer-Policy: no-referrer");
 .logo-text{font-family:var(--display);font-weight:900;letter-spacing:-1px;font-size:28px;line-height:1;}
 .logo-text span{color:var(--accent);} 
 .sub{color:var(--muted);font-size:11px;letter-spacing:2px;text-transform:uppercase;margin-bottom:18px;}
-.card{background:rgba(13,15,20,.9);padding:18px;}
+.card{background:rgba(13,15,20,.9);border:1px solid var(--b1);padding:18px;border-radius:var(--radius-card);box-shadow:var(--shadow-card);}
 .grid{display:grid;grid-template-columns:1fr;gap:12px;}
 @media(min-width:840px){.grid{grid-template-columns:1fr 1fr;}}
 .field{margin-bottom:12px;}
