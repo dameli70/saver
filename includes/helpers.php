@@ -766,3 +766,4 @@ function decryptFromDb(string $enc): string {
 
     return $plain;
 }
+ 

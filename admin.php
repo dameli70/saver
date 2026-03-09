@@ -117,7 +117,7 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--code-bg);border:
               <th>Codes</th>
               <th>Created</th>
               <th>Last login</th>
-              <th>Actions</th>
+              <th>Actions.</th>
             </tr>
           </thead>
           <tbody></tbody>

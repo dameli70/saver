@@ -188,4 +188,4 @@ return [
     'verify.already_verified_html' => '<strong>Email already verified.</strong> You can log in and use the dashboard.',
     'verify.invalid_token_html' => '<strong>Verification link is invalid.</strong> Please request a new one from your account page.',
     'verify.expired_html' => '<strong>Verification link expired.</strong> Please request a new one from your account page.',
-];
+]; 

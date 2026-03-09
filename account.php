@@ -132,7 +132,7 @@ code{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);pad
 
       <?php if (!$verified): ?>
       <div style="margin-top:14px;color:var(--muted);font-size:12px;line-height:1.7;">
-        We sent a verification email. If you don’t see it, check spam/junk. You can resend it below.
+        We sent a verification email. If you don’t see it, check spam/junk. You can resend it below...
       </div>
 
       <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;">

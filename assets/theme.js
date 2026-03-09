@@ -72,4 +72,4 @@
   document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('[data-theme-toggle]').forEach(initToggle);
   });
-})();
+})(); 

@@ -188,4 +188,4 @@ return [
     'verify.already_verified_html' => '<strong>E-mail déjà vérifié.</strong> Vous pouvez vous connecter et utiliser le tableau de bord.',
     'verify.invalid_token_html' => '<strong>Lien de vérification invalide.</strong> Veuillez en demander un nouveau depuis la page Compte.',
     'verify.expired_html' => '<strong>Lien de vérification expiré.</strong> Veuillez en demander un nouveau depuis la page Compte.',
-];
+]; 

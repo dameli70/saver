@@ -84,4 +84,4 @@ button[data-theme-toggle]::before{content:'☾';font-size:16px;line-height:1;col
 
 :root[data-theme="light"] .lang-toggle{border-color:var(--b2);color:var(--text);background:rgba(11,16,32,.04);}
 :root[data-theme="light"] .lang-toggle:hover{border-color:rgba(12,18,30,.25);color:var(--text);}
-:root[data-theme="light"] .lang-toggle.active{border-color:var(--accent);}
+:root[data-theme="light"] .lang-toggle.active{border-color:var(--accent);} 

@@ -223,4 +223,4 @@ a{color:inherit;}
   <div class="footer">© <?= date('Y') ?> <?= htmlspecialchars(APP_NAME) ?> • <a href="#faq"><?php e('common.faq'); ?></a> • <?php e('index.footer'); ?></div>
 </div>
 </body>
-</html>
+</html> 

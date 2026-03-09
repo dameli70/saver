@@ -171,3 +171,4 @@ function emitI18nJsGlobals(?array $keys = null): void {
 
     echo "<script>window.LS_I18N=" . json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . ";</script>\n";
 }
+ 

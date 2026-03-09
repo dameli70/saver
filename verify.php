@@ -98,4 +98,4 @@ registerCurrentSession((int)$u['id']);
 auditLog('email_verified', null, (int)$u['id']);
 
 header('Location: dashboard.php');
-exit;
+exit; 

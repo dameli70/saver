@@ -496,4 +496,4 @@ document.getElementById('btn-cloud-latest').addEventListener('click', async ()=>
 refreshCloud();
 </script>
 </body>
-</html>
+</html> 
