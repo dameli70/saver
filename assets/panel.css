@@ -29,6 +29,9 @@
 .btn-ghost:hover{border-color:var(--text);} 
 .btn-ghost.btn-theme{border-color:var(--accent);color:var(--accent);} 
 .btn-ghost.btn-theme:hover{border-color:var(--text);color:var(--text);} 
+
+:root[data-theme="light"] .btn-ghost.btn-theme{border-color:var(--b2);color:var(--text);background:rgba(11,16,32,.04);} 
+:root[data-theme="light"] .btn-ghost.btn-theme:hover{border-color:rgba(12,18,30,.25);color:var(--text);} 
 .btn-theme{padding:0;min-width:42px;width:42px;} 
 .btn-sm.btn-theme{min-width:38px;width:38px;} 
 .btn-red{background:rgba(255,71,87,.1);border:1px solid rgba(255,71,87,.3);color:var(--red);} 
