@@ -758,6 +758,7 @@ async function doConfirm(action){
       if(wa) wa.style.display='none';
 
       await loadWalletPending(true);
+      document.getElementById('confirm-overlay').classList.remove('show');
       return;
     }
 
@@ -771,8 +772,11 @@ async function doConfirm(action){
     await wipeClipboard();
     pendingLock=null;
 
+    document.getElementById('confirm-overlay').classList.remove('show');
+
   }catch(e){
     msg.textContent = e.message || 'Failed';
+    btns.style.display='grid';
   }
 }
 
@@ -823,13 +827,19 @@ function normalizeWalletAction(action){
 function getCarrierWalletPolicy(carrier){
   // Server-provided policy (if migration 019 is applied) or safe defaults.
   let allowOpenDialer = (carrier && (carrier.wallet_allow_open_dialer ?? carrier.walletAllowOpenDialer)) ?? true;
-  const allowCopyUssd = (carrier && (carrier.wallet_allow_copy_ussd ?? carrier.walletAllowCopyUssd)) ?? true;
+  let allowCopyUssd = (carrier && (carrier.wallet_allow_copy_ussd ?? carrier.walletAllowCopyUssd)) ?? true;
   const def = normalizeWalletAction((carrier && (carrier.wallet_default_action ?? carrier.walletDefaultAction)) ?? walletAction);
 
-  // Safety/UI consistency: if the template embeds {new_pin}, "open dialer" would either
-  // leak the new PIN into the dialer prefill or fail our validation. Hide/disable it.
   const tpl = String((carrier && (carrier.ussd_change_pin_template ?? carrier.ussdChangePinTemplate)) ?? '');
-  if (tpl.includes('{new_pin}')) allowOpenDialer = false;
+
+  // Our wallet flow supports two safe patterns:
+  // - {new_pin} embedded in template => Copy USSD only (open dialer disabled)
+  // - no {new_pin} in template => Open dialer only (copy USSD disabled)
+  if (tpl.includes('{new_pin}')) {
+    allowOpenDialer = false;
+  } else {
+    allowCopyUssd = false;
+  }
 
   return {
     allowOpenDialer: !!allowOpenDialer,
