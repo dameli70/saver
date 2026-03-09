@@ -69,3 +69,19 @@ body{background:var(--bg);color:var(--text);font-family:var(--mono);font-size:14
 button[data-theme-toggle]{font-size:0;letter-spacing:0;text-transform:none;}
 button[data-theme-toggle]::before{content:'☾';font-size:16px;line-height:1;color:inherit;}
 :root[data-theme="light"] button[data-theme-toggle]::before{content:'☀';}
+
+.lang-toggle{position:fixed;top:max(14px,var(--sat));z-index:2000;
+  background:transparent;border:1px solid var(--b2);color:var(--text);
+  font-family:var(--mono);
+  width:40px;height:40px;padding:0;line-height:1;
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;-webkit-appearance:none;border-radius:var(--radius-btn);text-decoration:none;}
+.lang-toggle:hover{border-color:var(--text);color:var(--text);}
+.lang-toggle:active{transform:scale(.98);}
+.lang-toggle.active{border-color:var(--accent);color:var(--accent);}
+.lang-toggle.fr{right:68px;}
+.lang-toggle.en{right:118px;}
+
+:root[data-theme="light"] .lang-toggle{border-color:var(--b2);color:var(--text);background:rgba(11,16,32,.04);}
+:root[data-theme="light"] .lang-toggle:hover{border-color:rgba(12,18,30,.25);color:var(--text);}
+:root[data-theme="light"] .lang-toggle.active{border-color:var(--accent);}

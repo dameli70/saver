@@ -17,6 +17,7 @@
 
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/smtp.php';
+require_once __DIR__ . '/i18n.php';
 
 // ── Session ──────────────────────────────────────────────────
 function startSecureSession(): void {
@@ -27,6 +28,12 @@ function startSecureSession(): void {
         ini_set('session.use_strict_mode', 1);
         ini_set('session.gc_maxlifetime', 3600);
         session_start();
+
+        // Initialize i18n after session_start() so it can read/write language preference.
+        // Default language is French.
+        if (function_exists('i18nBootstrap')) {
+            i18nBootstrap();
+        }
     }
 }
 

@@ -25,13 +25,14 @@ header("Referrer-Policy: no-referrer");
 header("Permissions-Policy: clipboard-write=(self)");
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html <?= htmlLangAttr() ?>>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title><?= htmlspecialchars(APP_NAME) ?> — My Codes</title>
+<title><?= htmlspecialchars(APP_NAME) ?> — <?= htmlspecialchars(t('page.my_codes')) ?></title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
+<?php emitI18nJsGlobals(); ?>
 <script src="assets/theme.js"></script>
 <script src="assets/app.js"></script>
 <link rel="stylesheet" href="assets/base.css">
@@ -109,22 +110,25 @@ header("Permissions-Policy: clipboard-write=(self)");
     <div class="topbar-logo"><?= htmlspecialchars(APP_NAME) ?></div>
     <div class="topbar-r">
       <span class="user-pill"><?= htmlspecialchars($userEmail) ?></span>
-      <button class="btn btn-ghost btn-sm btn-theme" type="button" data-theme-toggle>Theme</button>
-      <a class="btn btn-ghost btn-sm" href="create_code.php">Create Code</a>
-      <a class="btn btn-ghost btn-sm" href="dashboard.php">Dashboard</a>
-      <a class="btn btn-ghost btn-sm" href="rooms.php">Rooms</a>
-      <a class="btn btn-ghost btn-sm" href="notifications.php">Notifications</a>
-      <a class="btn btn-ghost btn-sm" href="backup.php">Backup</a>
-      <a class="btn btn-ghost btn-sm" href="vault_settings.php">Vault</a>
-      <a class="btn btn-ghost btn-sm" href="account.php">Account</a>
-      <?php if ($isAdmin): ?><a class="btn btn-ghost btn-sm" href="admin.php">Admin</a><?php endif; ?>
-      <a class="btn btn-ghost btn-sm" href="logout.php">Logout</a>
+      <button class="btn btn-ghost btn-sm btn-theme" type="button" data-theme-toggle><?php e('common.theme'); ?></button>
+      <?php $curLang = currentLang(); ?>
+      <a class="<?= $curLang === 'fr' ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm' ?>" href="<?= htmlspecialchars(langSwitchUrl('fr')) ?>"><?php e('common.lang_fr'); ?></a>
+      <a class="<?= $curLang === 'en' ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm' ?>" href="<?= htmlspecialchars(langSwitchUrl('en')) ?>"><?php e('common.lang_en'); ?></a>
+      <a class="btn btn-ghost btn-sm" href="create_code.php"><?php e('nav.create_code'); ?></a>
+      <a class="btn btn-ghost btn-sm" href="dashboard.php"><?php e('nav.dashboard'); ?></a>
+      <a class="btn btn-ghost btn-sm" href="rooms.php"><?php e('nav.rooms'); ?></a>
+      <a class="btn btn-ghost btn-sm" href="notifications.php"><?php e('nav.notifications'); ?></a>
+      <a class="btn btn-ghost btn-sm" href="backup.php"><?php e('nav.backups'); ?></a>
+      <a class="btn btn-ghost btn-sm" href="vault_settings.php"><?php e('nav.vault'); ?></a>
+      <a class="btn btn-ghost btn-sm" href="account.php"><?php e('nav.account'); ?></a>
+      <?php if ($isAdmin): ?><a class="btn btn-ghost btn-sm" href="admin.php"><?php e('nav.admin'); ?></a><?php endif; ?>
+      <a class="btn btn-ghost btn-sm" href="logout.php"><?php e('common.logout'); ?></a>
     </div>
   </div>
 
   <div class="app-body">
     <div class="card">
-      <div class="card-title"><div class="dot"></div>My Codes</div>
+      <div class="card-title"><div class="dot"></div><?php e('page.my_codes'); ?></div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:space-between;align-items:center;">
         <div style="font-size:12px;color:var(--muted);line-height:1.7;">View your sealed codes. Unlocking/decryption happens in your browser.</div>
         <button class="btn btn-ghost btn-sm" onclick="loadLocks()">↻ Refresh</button>

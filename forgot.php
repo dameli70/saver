@@ -20,13 +20,14 @@ header("X-Content-Type-Options: nosniff");
 header("Referrer-Policy: no-referrer");
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html <?= htmlLangAttr() ?>>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Reset password — <?= htmlspecialchars(APP_NAME) ?></title>
+<title><?= htmlspecialchars(APP_NAME) ?> — <?= htmlspecialchars(t('page.forgot')) ?></title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
+<?php emitI18nJsGlobals(); ?>
 <script src="assets/theme.js"></script>
 <link rel="stylesheet" href="assets/base.css">
 <link rel="stylesheet" href="assets/auth.css">
@@ -37,27 +38,29 @@ header("Referrer-Policy: no-referrer");
 </style>
 </head>
 <body>
-  <button class="theme-toggle" type="button" data-theme-toggle>Theme</button>
+  <a class="lang-toggle fr<?= currentLang() === 'fr' ? ' active' : '' ?>" href="<?= htmlspecialchars(langSwitchUrl('fr'), ENT_QUOTES, 'UTF-8') ?>"><?php e('common.lang_fr'); ?></a>
+  <a class="lang-toggle en<?= currentLang() === 'en' ? ' active' : '' ?>" href="<?= htmlspecialchars(langSwitchUrl('en'), ENT_QUOTES, 'UTF-8') ?>"><?php e('common.lang_en'); ?></a>
+  <button class="theme-toggle" type="button" data-theme-toggle><?php e('common.theme'); ?></button>
   <div class="box">
     <div class="logo"><?= htmlspecialchars(APP_NAME) ?></div>
-    <div class="sub">// Password reset</div>
+    <div class="sub"><?php e('forgot.subtitle'); ?></div>
 
-    <div class="p">We’ll email you a reset link for your <strong>login password</strong>. Your vault passphrase is never recoverable.</div>
+    <div class="p"><?= t('forgot.intro_html'); ?></div>
 
     <div id="ok" class="msg msg-ok"></div>
     <div id="err" class="msg msg-err"></div>
     <div id="dev" class="dev"></div>
 
     <form id="f">
-      <div class="field"><label>Email</label>
+      <div class="field"><label><?php e('common.email'); ?></label>
         <input type="email" id="email" autocomplete="email" inputmode="email" placeholder="you@example.com" required>
       </div>
-      <button class="btn btn-primary" id="btn" type="submit"><span id="btn-txt">Send reset link</span></button>
+      <button class="btn btn-primary" id="btn" type="submit"><span id="btn-txt"><?php e('forgot.send_link'); ?></span></button>
     </form>
 
     <div class="links">
-      <a href="login.php">Back to login</a>
-      <a href="index.php">Home</a>
+      <a href="login.php"><?php e('forgot.back_to_login'); ?></a>
+      <a href="index.php"><?php e('common.home'); ?></a>
     </div>
   </div>
 
@@ -69,6 +72,14 @@ const dev=document.getElementById('dev');
 const btn=document.getElementById('btn');
 const btnTxt=document.getElementById('btn-txt');
 
+const STR={
+  emailRequired: <?= json_encode(t('forgot.email_required')) ?>,
+  requestFailed: <?= json_encode(t('forgot.request_failed')) ?>,
+  sentGeneric: <?= json_encode(t('forgot.sent_generic')) ?>,
+  networkError: <?= json_encode(t('common.network_error')) ?>,
+  sendLink: <?= json_encode(t('forgot.send_link')) ?>,
+};
+
 function show(el,m){el.textContent=m;el.classList.add('show');}
 function clear(){[ok,err].forEach(e=>{e.textContent='';e.classList.remove('show');});dev.style.display='none';dev.textContent='';}
 
@@ -77,7 +88,7 @@ f.addEventListener('submit', async (e)=>{
   clear();
 
   const email=document.getElementById('email').value.trim();
-  if(!email){show(err,'Email required');return;}
+  if(!email){show(err, STR.emailRequired);return;}
 
   btn.disabled=true;
   btnTxt.innerHTML='<span class="spin"></span>';
@@ -86,19 +97,25 @@ f.addEventListener('submit', async (e)=>{
     const r=await fetch('api/password_reset.php',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({action:'request',email})});
     const j=await r.json();
-    if(!j.success){show(err,j.error||'Request failed');return;}
+    if(!j.success){show(err,j.error||STR.requestFailed);return;}
 
-    show(ok,'If that email exists, a reset link has been sent.');
+    show(ok, STR.sentGeneric);
 
     if(j.dev_reset_url){
       dev.style.display='block';
-      dev.innerHTML='DEV: Reset link: <br><a href="'+j.dev_reset_url+'">'+j.dev_reset_url+'</a>';
+      dev.textContent='';
+      dev.appendChild(document.createTextNode('DEV: Reset link:'));
+      dev.appendChild(document.createElement('br'));
+      const a=document.createElement('a');
+      a.href=String(j.dev_reset_url);
+      a.textContent=String(j.dev_reset_url);
+      dev.appendChild(a);
     }
   }catch{
-    show(err,'Network error');
+    show(err, STR.networkError);
   }finally{
     btn.disabled=false;
-    btnTxt.textContent='Send reset link';
+    btnTxt.textContent=STR.sendLink;
   }
 });
 </script>

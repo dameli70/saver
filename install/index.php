@@ -1,5 +1,7 @@
 <?php
 require_once __DIR__ . '/../includes/install_guard.php';
+require_once __DIR__ . '/../includes/i18n.php';
+i18nBootstrap();
 
 function hashLoginPasswordInstaller(string $password): string {
     return password_hash($password, PASSWORD_ARGON2ID, [
@@ -382,7 +384,7 @@ header("X-Content-Type-Options: nosniff");
 header("Referrer-Policy: no-referrer");
 
 ?><!doctype html>
-<html lang="en">
+<html <?= htmlLangAttr() ?>>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
