@@ -1,0 +1,8 @@
+# Deny web access to config/ (contains secrets).
+# This is an Apache hardening measure; for Nginx, add an equivalent location block.
+<IfModule mod_authz_core.c>
+  Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+  Deny from all
+</IfModule>

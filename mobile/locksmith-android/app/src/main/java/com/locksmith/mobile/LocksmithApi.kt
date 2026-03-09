@@ -48,13 +48,14 @@ class LocksmithApi(
 
     fun logout() {
         csrfToken = null
-        cookieJar.clear()
-        // Best-effort server logout
+        // Best-effort server logout (must happen before clearing cookies).
         thread {
             try {
                 val body = JSONObject().put("action", "logout").toString()
                 requestJson("POST", "/api/auth.php", body, addCsrf = false, idempotent = true)
             } catch (_: Throwable) {
+            } finally {
+                cookieJar.clear()
             }
         }
     }

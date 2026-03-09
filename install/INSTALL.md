@@ -34,5 +34,7 @@ php install/install.php --non-interactive --init-db=1 --apply-migrations=1 \
 ## Notes
 
 - The installer makes a timestamped backup of `config/database.php` before editing.
+- Ensure your web server does **not** serve `config/` or `config/*.bak.*` (contains secrets). If using Apache, `config/.htaccess` denies access; for Nginx add an equivalent deny rule.
 - In production you should use HTTPS (secure cookies + clipboard support).
+- Set `APP_BASE_URL` in `config/database.php` in production so emailed links use a canonical domain.
 - Email verification uses SMTP if configured (recommended), otherwise it falls back to PHP `mail()`.

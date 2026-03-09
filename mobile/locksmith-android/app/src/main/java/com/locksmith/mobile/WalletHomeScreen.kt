@@ -23,6 +23,8 @@ import java.security.SecureRandom
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
+import java.time.ZoneId
+import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 
 private const val VAULT_CHECK_PLAIN = "LOCKSMITH_VAULT_CHECK_v1"
@@ -211,8 +213,8 @@ fun WalletHomeScreen(
                     return@VaultPassphraseDialog
                 }
 
-                if (p1.length < 8) {
-                    err = "Vault passphrase must be at least 8 characters"
+                if (passDialogMode == PassDialogMode.SetNew && p1.length < 10) {
+                    err = "Vault passphrase must be at least 10 characters"
                     return@VaultPassphraseDialog
                 }
 
@@ -439,11 +441,14 @@ fun WalletHomeScreen(
                                             return@callWithTotpRetry
                                         }
 
+                                        // Prefer the server-normalized unlock time for display/storage.
+                                        val unlockAtDisplay = j?.optString("unlock_at")?.takeIf { it.isNotBlank() } ?: unlockAt
+
                                         val devEnc = DeviceCrypto.encrypt(newPin)
                                         val p0 = PendingWalletSetup(
                                             walletLockId = walletLockId,
                                             carrierId = carrier.id,
-                                            unlockAt = unlockAt,
+                                            unlockAt = unlockAtDisplay,
                                             label = label,
                                             newPinCipherB64 = devEnc.cipherB64,
                                             newPinIvB64 = devEnc.ivB64,
@@ -486,8 +491,8 @@ fun WalletHomeScreen(
 
                                                         prefs.clearPendingWalletSetup()
                                                         pendingSetup = null
-                                                        markConfirmed(label, unlockAt)
-                                                        msg = "Wallet locked until $unlockAt"
+                                                        markConfirmed(label, unlockAtDisplay)
+                                                        msg = "Wallet locked until $unlockAtDisplay"
                                                         refreshAll()
                                                     },
                                                 )
@@ -921,7 +926,7 @@ private fun WalletSetupTab(
         }
 
         item {
-            Text("Unlock at: ${dt.format(fmt)}")
+            Text("Unlock at (local): ${dt.format(fmt)}")
         }
 
         item {
@@ -929,8 +934,16 @@ private fun WalletSetupTab(
                 onClick = {
                     val c = selectedCarrier ?: return@Button
                     if (currentPin.isBlank()) return@Button
-                    val unlockAt = dt.format(fmt)
-                    onLockWallet(c, currentPin, unlockAt, label.trim().ifEmpty { null })
+
+                    // Send an ISO-8601 UTC instant to avoid timezone ambiguity.
+                    // The server will normalize and return a canonical UTC DATETIME.
+                    val unlockAtIsoUtc = dt
+                        .atZone(ZoneId.systemDefault())
+                        .withZoneSameInstant(ZoneOffset.UTC)
+                        .toInstant()
+                        .toString()
+
+                    onLockWallet(c, currentPin, unlockAtIsoUtc, label.trim().ifEmpty { null })
                 },
                 modifier = Modifier.fillMaxWidth(),
                 enabled = selectedCarrier != null && currentPin.isNotBlank(),

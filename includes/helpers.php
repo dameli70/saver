@@ -298,11 +298,32 @@ function issuePasswordReset(int $userId, string $email): ?string {
 }
 
 function getAppBaseUrl(): string {
+    // Prefer a configured canonical base URL to avoid Host header injection in emailed links.
+    if (defined('APP_BASE_URL')) {
+        $b = trim((string)APP_BASE_URL);
+        if ($b !== '') return rtrim($b, '/');
+    }
+
     $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-    $host   = $_SERVER['HTTP_HOST'] ?? 'localhost';
-    $dir    = rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? '/'), '/');
+
+    // In production, prefer SERVER_NAME (server config) over HTTP_HOST (request header).
+    $host = 'localhost';
+    if (defined('APP_ENV') && APP_ENV === 'production' && !empty($_SERVER['SERVER_NAME'])) {
+        $host = (string)$_SERVER['SERVER_NAME'];
+    } elseif (!empty($_SERVER['HTTP_HOST'])) {
+        $host = (string)$_SERVER['HTTP_HOST'];
+    } elseif (!empty($_SERVER['SERVER_NAME'])) {
+        $host = (string)$_SERVER['SERVER_NAME'];
+    }
+
+    // Minimal sanitation: strip characters that should never appear in a host.
+    $host = preg_replace('/[^A-Za-z0-9.\-:]/', '', (string)$host);
+    if ($host === '') $host = 'localhost';
+
+    $dir = rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? '/'), '/');
     // If invoked from /api/*, step back to app root.
-    $dir    = preg_replace('#/api$#', '', $dir);
+    $dir = preg_replace('#/api$#', '', $dir);
+
     return $scheme . '://' . $host . ($dir ? $dir : '');
 }
 

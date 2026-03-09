@@ -19,6 +19,23 @@ if (PHP_SAPI !== 'cli') {
     exit(1);
 }
 
+// Prevent concurrent runs (cron overlap).
+$lockPath = __DIR__ . '/rooms_worker.lock';
+$lockFp = @fopen($lockPath, 'c');
+if (!$lockFp) {
+    fwrite(STDERR, "Could not open lock file: {$lockPath}\n");
+    exit(1);
+}
+if (!flock($lockFp, LOCK_EX | LOCK_NB)) {
+    // Another instance is running.
+    fwrite(STDOUT, "[" . date('c') . "] Another rooms_worker is running; exiting.\n");
+    exit(0);
+}
+register_shutdown_function(function() use ($lockFp) {
+    @flock($lockFp, LOCK_UN);
+    @fclose($lockFp);
+});
+
 require_once __DIR__ . '/../config/database.php';
 
 function db(): PDO {
