@@ -93,8 +93,8 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9998;o
     <?php if ($showSecurityBanner): ?>
     <div class="sec-banner">
       <div>
-        <div class="sec-banner-title">Security setup required</div>
-        <div class="sec-banner-sub">Enable TOTP or add a passkey to use sensitive actions (reveal, backups, vault rotation, admin actions).</div>
+        <div class="sec-banner-title">Finish your security setup</div>
+        <div class="sec-banner-sub">Add a passkey or authenticator code to confirm sensitive actions (unlocking, backups, room approvals).</div>
       </div>
       <a class="btn btn-ghost btn-sm" href="account.php#totp-card">Open account</a>
     </div>
@@ -103,15 +103,15 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9998;o
     <div class="card">
       <div class="card-title"><div class="dot"></div>Quick actions</div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;">
-        <a class="btn btn-primary" href="create_code.php" style="width:auto;">Create a code</a>
-        <a class="btn btn-ghost" href="my_codes.php" style="width:auto;">My codes</a>
+        <a class="btn btn-primary" href="create_code.php" style="width:auto;">Create a time lock</a>
+        <a class="btn btn-ghost" href="my_codes.php" style="width:auto;">My time locks</a>
         <a class="btn btn-ghost" href="rooms.php" style="width:auto;">Rooms</a>
         <a class="btn btn-ghost" href="notifications.php" style="width:auto;">Notifications</a>
         <a class="btn btn-ghost" href="backup.php" style="width:auto;">Backup</a>
         <a class="btn btn-ghost" href="vault_settings.php" style="width:auto;">Vault</a>
       </div>
       <div style="margin-top:12px;font-size:12px;color:var(--muted);line-height:1.7;">
-        The vault passphrase never leaves your browser. Code creation and reveal are now separated into dedicated pages.
+        Create a time lock when you want a cool-off period before spending. Use Saving Rooms to save together with clear rules.
       </div>
     </div>
 
@@ -123,8 +123,8 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9998;o
           <div style="display:flex;align-items:center;gap:10px;min-width:0;">
             <div style="font-size:12px;color:<?= $hasVault ? 'var(--green)' : 'var(--orange)' ?>;"><?= $hasVault ? '✓' : '•' ?></div>
             <div style="min-width:0;">
-              <div style="font-family:var(--display);font-weight:800;font-size:12px;">Vault initialized</div>
-              <div style="color:var(--muted);font-size:11px;line-height:1.6;">Create a browser-only vault check so the UI can detect vault readiness.</div>
+              <div style="font-family:var(--display);font-weight:800;font-size:12px;">Vault passphrase</div>
+              <div style="color:var(--muted);font-size:11px;line-height:1.6;">Set your vault passphrase, then use it to lock and unlock your time locks. Keep it somewhere safe.</div>
             </div>
           </div>
           <a class="btn btn-ghost btn-sm" href="vault_settings.php" style="width:auto;">Open</a>
@@ -134,8 +134,8 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9998;o
           <div style="display:flex;align-items:center;gap:10px;min-width:0;">
             <div style="font-size:12px;color:<?= ($hasTotp || $hasPasskey) ? 'var(--green)' : 'var(--orange)' ?>;"><?= ($hasTotp || $hasPasskey) ? '✓' : '•' ?></div>
             <div style="min-width:0;">
-              <div style="font-family:var(--display);font-weight:800;font-size:12px;">Security setup</div>
-              <div style="color:var(--muted);font-size:11px;line-height:1.6;">Enable TOTP or add a passkey for step-up reauthentication.</div>
+              <div style="font-family:var(--display);font-weight:800;font-size:12px;">Extra confirmation</div>
+              <div style="color:var(--muted);font-size:11px;line-height:1.6;">Add a passkey or authenticator app so unlocking and backups are protected.</div>
             </div>
           </div>
           <a class="btn btn-ghost btn-sm" href="account.php#totp-card" style="width:auto;">Open</a>
@@ -145,11 +145,11 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9998;o
           <div style="display:flex;align-items:center;gap:10px;min-width:0;">
             <div style="font-size:12px;color:<?= $backupCount > 0 ? 'var(--green)' : 'var(--orange)' ?>;"><?= $backupCount > 0 ? '✓' : '•' ?></div>
             <div style="min-width:0;">
-              <div style="font-family:var(--display);font-weight:800;font-size:12px;">First backup</div>
+              <div style="font-family:var(--display);font-weight:800;font-size:12px;">Backup</div>
               <div style="color:var(--muted);font-size:11px;line-height:1.6;">
-                <?= $backupCount > 0 ? 'Backups: <span style="color:var(--text);">' . (int)$backupCount . '</span>' : 'Create an encrypted snapshot (no plaintext ever stored).'; ?>
+                <?= $backupCount > 0 ? 'Backups: <span style="color:var(--text);">' . (int)$backupCount . '</span>' : 'Download an encrypted backup file so you can restore on a new device.'; ?>
                 <?php if ($lastBackupAt): ?>
-                  <span class="utc-pill" title="Stored in UTC" style="margin-left:8px;">Last: <?= htmlspecialchars($lastBackupAt) ?> UTC</span>
+                  <span class="utc-pill" title="Stored in UTC" style="margin-left:8px;">Last backup: <?= htmlspecialchars($lastBackupAt) ?> UTC</span>
                 <?php endif; ?>
               </div>
             </div>
@@ -163,8 +163,8 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9998;o
     <div class="card">
       <div class="card-title"><div class="dot"></div>Security</div>
       <div style="font-size:12px;color:var(--muted);line-height:1.7;">
-        In strong security mode, sensitive actions may require re-authentication (TOTP or passkey).
-        Configure this in <a href="account.php" style="color:var(--text);">Account</a>.
+        Sensitive actions may ask for an extra confirmation (passkey or authenticator code).
+        Set this up in <a href="account.php" style="color:var(--text);">Account</a>.
       </div>
     </div>
 
