@@ -41,9 +41,11 @@ header("Referrer-Policy: no-referrer");
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
 <script src="assets/theme.js"></script>
+<script src="assets/app.js"></script>
 <link rel="stylesheet" href="assets/base.css">
 <link rel="stylesheet" href="assets/panel.css">
 <link rel="stylesheet" href="assets/panel_components.css">
+<link rel="stylesheet" href="assets/ls_shared.css">
 <style>
 .orb{filter:blur(120px);}
 .orb1{width:520px;height:520px;top:-170px;right:-120px;}
@@ -407,6 +409,10 @@ function bufToB64u(buf){
 }
 
 async function ensureReauth(methods){
+  if(window.LS && LS.reauth){
+    return LS.reauth(methods||{}, {post: postCsrf});
+  }
+
   if(methods && methods.passkey && window.PublicKeyCredential){
     try{
       const begin = await postCsrf('api/webauthn.php', {action:'reauth_begin'});
@@ -457,7 +463,10 @@ async function postStrong(url, body){
   return j;
 }
 
-function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function esc(s){
+  if(window.LS && LS.esc) return LS.esc(s);
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
 function setMsg(id, text, ok){
   const el=document.getElementById(id);
   if(!el) return;
@@ -465,6 +474,8 @@ function setMsg(id, text, ok){
   el.textContent = text;
 }
 function parseUtcDate(ts){
+  if(window.LS && LS.parseUtc) return LS.parseUtc(ts);
+
   const s = String(ts||'').trim();
   if(!s) return null;
 
@@ -479,7 +490,15 @@ function parseUtcDate(ts){
 function fmt(ts){
   const d = parseUtcDate(ts);
   if(!d || isNaN(d.getTime())) return String(ts||'');
+  if(window.LS && LS.fmtLocal) return LS.fmtLocal(d);
   return d.toLocaleString();
+}
+
+function fmtUtc(ts){
+  const d = parseUtcDate(ts);
+  if(!d || isNaN(d.getTime())) return '';
+  if(window.LS && LS.fmtUtc) return LS.fmtUtc(d);
+  return d.toUTCString();
 }
 function prettyVisibility(v){
   if(v === 'public') return 'Public';
@@ -646,13 +665,55 @@ function destSummary(a){
 let roomCache = null;
 let lastEventId = 0;
 let unlockClearTimer = null;
+let roomTicker = null;
+
+function roomCountdownText(r){
+  if(!r) return '';
+
+  const now = Date.now();
+  const start = parseUtcDate(r.start_at);
+  const reveal = parseUtcDate(r.reveal_at);
+
+  function fmtDelta(ms){
+    const s = Math.max(0, Math.floor(ms/1000));
+    if(window.LS && LS.fmtCountdown) return LS.fmtCountdown(s);
+    return String(s) + 's';
+  }
+
+  if(start && !isNaN(start.getTime()) && now < start.getTime()){
+    return 'Starts in ' + fmtDelta(start.getTime() - now);
+  }
+
+  if(reveal && !isNaN(reveal.getTime()) && now < reveal.getTime()){
+    return 'Reveals in ' + fmtDelta(reveal.getTime() - now);
+  }
+
+  return 'Reveal eligible (server-enforced)';
+}
+
+function updateRoomCountdown(){
+  const r = roomCache;
+  const el = document.getElementById('room-countdown');
+  if(!el || !r) return;
+  el.textContent = roomCountdownText(r);
+}
+
+function startRoomCountdown(){
+  if(roomTicker) clearInterval(roomTicker);
+  roomTicker = setInterval(updateRoomCountdown, 1000);
+}
 
 function renderRoom(){
   const r = roomCache;
   if(!r) return;
 
+  const startLocal = fmt(r.start_at);
+  const startUtc = fmtUtc(r.start_at);
+  const revealLocal = fmt(r.reveal_at);
+  const revealUtc = fmtUtc(r.reveal_at);
+
   document.getElementById('room-title').textContent = r.goal_text || 'Room';
-  document.getElementById('room-sub').textContent = `Type ${r.saving_type} · Level ${r.required_trust_level} · ${r.periodicity} · Starts ${fmt(r.start_at)}`;
+  document.getElementById('room-sub').innerHTML = `Type ${esc(r.saving_type)} · Level ${esc(r.required_trust_level)} · ${esc(r.periodicity)} · Starts <b>${esc(startLocal)}</b> <span class="utc-pill" title="Stored/enforced in UTC">${esc(startUtc)}</span>`;
 
   const ov = document.getElementById('room-overview');
   ov.innerHTML = `
@@ -663,10 +724,15 @@ function renderRoom(){
       <div><span class="k">Destination:</span> ${esc(destSummary(r.destination_account))}</div>
       <div><span class="k">Participants:</span> ${esc(r.approved_count)} / ${esc(r.max_participants)} (min ${esc(r.min_participants)})</div>
       <div><span class="k">Lobby:</span> ${esc(r.lobby_state)} · <span class="k">State:</span> ${esc(r.room_state)}</div>
-      <div><span class="k">Reveal date:</span> ${esc(fmt(r.reveal_at))}</div>
+      <div><span class="k">Start date:</span> ${esc(startLocal)} <span class="utc-pill" title="Stored/enforced in UTC">${esc(startUtc)}</span></div>
+      <div><span class="k">Reveal date:</span> ${esc(revealLocal)} <span class="utc-pill" title="Stored/enforced in UTC">${esc(revealUtc)}</span></div>
+      <div><span class="k">Countdown:</span> <span id="room-countdown"></span></div>
       <div><span class="k">Your status:</span> ${esc(r.my_status||'none')}</div>
     </div>
   `;
+
+  updateRoomCountdown();
+  startRoomCountdown();
 
   const joinBtn = document.getElementById('join-btn');
   const canJoin = (!r.my_status || r.my_status === 'declined') && r.room_state === 'lobby' && r.lobby_state === 'open' && r.visibility !== 'private';
@@ -715,7 +781,9 @@ function renderRoom(){
         document.getElementById('unlock-window').textContent = 'Pending';
       }
 
-      const canReveal = (r.room_state === 'active' && approvals === eligible && eligible > 0 && (new Date(r.reveal_at).getTime() <= Date.now()) && (!ev || ev.status !== 'expired'));
+      const ra = parseUtcDate(r.reveal_at);
+      const revealOk = (ra && !isNaN(ra.getTime()) && ra.getTime() <= Date.now());
+      const canReveal = (r.room_state === 'active' && approvals === eligible && eligible > 0 && revealOk && (!ev || ev.status !== 'expired'));
       document.getElementById('unlock-reveal-btn').style.display = canReveal ? 'inline-flex' : 'none';
     }
   }
@@ -760,7 +828,8 @@ function renderRoom(){
           const actions = document.getElementById('typeb-dispute-actions');
           const ackBtn = document.getElementById('typeb-dispute-ack-btn');
 
-          const endsAt = cur.dispute_window_ends_at ? new Date(cur.dispute_window_ends_at).getTime() : 0;
+          const endsD = cur.dispute_window_ends_at ? parseUtcDate(cur.dispute_window_ends_at) : null;
+          const endsAt = (endsD && !isNaN(endsD.getTime())) ? endsD.getTime() : 0;
           const within = endsAt && Date.now() < endsAt;
           const dispute = (r.rotation && r.rotation.dispute) ? r.rotation.dispute : null;
 

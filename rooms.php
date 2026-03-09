@@ -32,9 +32,11 @@ header("Referrer-Policy: no-referrer");
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
 <script src="assets/theme.js"></script>
+<script src="assets/app.js"></script>
 <link rel="stylesheet" href="assets/base.css">
 <link rel="stylesheet" href="assets/panel.css">
 <link rel="stylesheet" href="assets/panel_components.css">
+<link rel="stylesheet" href="assets/ls_shared.css">
 <style>
 .orb1{width:520px;height:520px;top:-170px;right:-120px;}
 .orb2{width:360px;height:360px;bottom:40px;left:-90px;}
@@ -198,12 +200,53 @@ async function postCsrf(url,body){
   const r=await fetch(apiUrl(url),{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRF-Token':CSRF},body:JSON.stringify(body)});
   return r.json();
 }
-function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+function esc(s){
+  if(window.LS && LS.esc) return LS.esc(s);
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
 function setMsg(id, text, ok){
   const el=document.getElementById(id);
   if(!el) return;
   el.className = 'msg ' + (ok ? 'msg-ok' : 'msg-err') + ' show';
   el.textContent = text;
+}
+
+function parseUtcDate(ts){
+  if(window.LS && LS.parseUtc) return LS.parseUtc(ts);
+
+  const s = String(ts||'').trim();
+  if(!s) return null;
+
+  if(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/.test(s)){
+    return new Date(s.replace(' ', 'T') + 'Z');
+  }
+
+  return new Date(s);
+}
+
+function fmtLocal(ts){
+  const d = parseUtcDate(ts);
+  if(!d || isNaN(d.getTime())) return String(ts||'');
+  if(window.LS && LS.fmtLocal) return LS.fmtLocal(d);
+  return d.toLocaleString();
+}
+
+function fmtUtc(ts){
+  const d = parseUtcDate(ts);
+  if(!d || isNaN(d.getTime())) return '';
+  if(window.LS && LS.fmtUtc) return LS.fmtUtc(d);
+  return d.toUTCString();
+}
+
+function fmtDate(ts){
+  return fmtLocal(ts);
+}
+
+function renderRoomSkeletons(n){
+  let s='';
+  for(let i=0;i<(n||4);i++) s += '<div class="room skel" style="height:132px;"></div>';
+  return s;
 }
 
 function b64uToBuf(b64url){
@@ -222,6 +265,10 @@ function bufToB64u(buf){
 }
 
 async function ensureReauth(methods){
+  if(window.LS && LS.reauth){
+    return LS.reauth(methods||{}, {post: postCsrf});
+  }
+
   if(methods && methods.passkey && window.PublicKeyCredential){
     try{
       const begin = await postCsrf('api/webauthn.php', {action:'reauth_begin'});
@@ -299,38 +346,19 @@ function renderCategories(){
   });
 }
 
-function parseUtcDate(ts){
-  const s = String(ts||'').trim();
-  if(!s) return null;
-
-  // API timestamps are stored in UTC as "YYYY-MM-DD HH:MM:SS".
-  // Parse explicitly as UTC to avoid browser-dependent parsing.
-  if(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/.test(s)){
-    return new Date(s.replace(' ', 'T') + 'Z');
-  }
-
-  return new Date(s);
-}
-
-function fmtDate(ts){
-  const d = parseUtcDate(ts);
-  if(!d || isNaN(d.getTime())) return String(ts||'');
-  return d.toLocaleString();
-}
-
 function updateEligibility(){
   const el = document.getElementById('eligibility');
   if(!el) return;
 
   const bits = [];
   if(myTrustLevel !== null){
-    bits.push('Your trust level: Level ' + String(myTrustLevel));
+    bits.push('Your trust level: Level ' + esc(myTrustLevel));
   }
   if(myRestrictedUntil){
-    bits.push('Restricted until ' + fmtDate(myRestrictedUntil) + ' (cannot join new rooms)');
+    bits.push('Restricted until <b>' + esc(fmtLocal(myRestrictedUntil)) + '</b> <span class="utc-pill" title="Stored/enforced in UTC">' + esc(fmtUtc(myRestrictedUntil)) + '</span> (cannot join new rooms)');
   }
 
-  el.textContent = bits.join(' · ');
+  el.innerHTML = bits.join(' · ');
 }
 
 function buildRoomCard(r){
@@ -351,9 +379,12 @@ function buildRoomCard(r){
   top.appendChild(goal);
   top.appendChild(badge);
 
+  const startLocal = fmtLocal(r.start_at);
+  const startUtc = fmtUtc(r.start_at);
+
   const meta=document.createElement('div');
   meta.className='meta';
-  meta.innerHTML = `Amount: <b>${esc(r.participation_amount)}</b><br>Period: <b>${esc(r.periodicity)}</b><br>Spots remaining: <b>${esc(r.spots_remaining)}</b><br>Starts: <b>${esc(fmtDate(r.start_at))}</b>`;
+  meta.innerHTML = `Amount: <b>${esc(r.participation_amount)}</b><br>Period: <b>${esc(r.periodicity)}</b><br>Spots remaining: <b>${esc(r.spots_remaining)}</b><br>Starts: <b>${esc(startLocal)}</b> <span class="utc-pill" title="Stored/enforced in UTC">${esc(startUtc)}</span>`;
 
   const actions=document.createElement('div');
   actions.className='actions';
@@ -372,7 +403,7 @@ function buildRoomCard(r){
     join.className='btn btn-ghost btn-sm';
     join.disabled=true;
     join.textContent='Restricted';
-    join.title = 'You cannot join new rooms until ' + fmtDate(myRestrictedUntil);
+    join.title = 'You cannot join new rooms until ' + fmtLocal(myRestrictedUntil);
   } else {
     join.onclick=async()=>{
       join.disabled=true;
@@ -415,9 +446,12 @@ function buildMyRoomCard(r){
   top.appendChild(goal);
   top.appendChild(badge);
 
+  const startLocal = fmtLocal(r.start_at);
+  const startUtc = fmtUtc(r.start_at);
+
   const meta=document.createElement('div');
   meta.className='meta';
-  meta.innerHTML = `Amount: <b>${esc(r.participation_amount)}</b><br>Period: <b>${esc(r.periodicity)}</b><br>State: <b>${esc(r.room_state)} / ${esc(r.lobby_state)}</b><br>Starts: <b>${esc(fmtDate(r.start_at))}</b>`;
+  meta.innerHTML = `Amount: <b>${esc(r.participation_amount)}</b><br>Period: <b>${esc(r.periodicity)}</b><br>State: <b>${esc(r.room_state)} / ${esc(r.lobby_state)}</b><br>Starts: <b>${esc(startLocal)}</b> <span class="utc-pill" title="Stored/enforced in UTC">${esc(startUtc)}</span>`;
 
   const actions=document.createElement('div');
   actions.className='actions';
@@ -437,7 +471,7 @@ function buildMyRoomCard(r){
 
 async function loadMyRooms(){
   const wrap=document.getElementById('myrooms-wrap');
-  wrap.innerHTML = '<div style="color:var(--muted);font-size:12px;">Loading…</div>';
+  wrap.innerHTML = renderRoomSkeletons(3);
   document.getElementById('myrooms-msg').className='msg';
 
   try{
@@ -461,7 +495,7 @@ async function loadMyRooms(){
 
 async function loadRooms(){
   const wrap=document.getElementById('rooms-wrap');
-  wrap.innerHTML = '<div style="color:var(--muted);font-size:12px;">Loading…</div>';
+  wrap.innerHTML = renderRoomSkeletons(4);
   document.getElementById('rooms-msg').className='msg';
 
   try{

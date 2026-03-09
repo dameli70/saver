@@ -37,9 +37,11 @@ header("Referrer-Policy: no-referrer");
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
 <script src="assets/theme.js"></script>
+<script src="assets/app.js"></script>
 <link rel="stylesheet" href="assets/base.css">
 <link rel="stylesheet" href="assets/panel.css">
 <link rel="stylesheet" href="assets/panel_components.css">
+<link rel="stylesheet" href="assets/ls_shared.css">
 <style>
 .orb{filter:blur(120px);}
 .orb1{width:520px;height:520px;top:-170px;right:-120px;}
@@ -489,6 +491,10 @@ function bufToB64u(buf){
 }
 
 async function ensureReauth(methods){
+  if(window.LS && LS.reauth){
+    return LS.reauth(methods||{}, {post: rawPostCsrf});
+  }
+
   if(methods && methods.passkey && window.PublicKeyCredential){
     try{
       const begin = await rawPostCsrf('api/webauthn.php', {action:'reauth_begin'});
@@ -549,8 +555,13 @@ async function postCsrf(url, body){
   return j;
 }
 
-function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function esc(s){
+  if(window.LS && LS.esc) return LS.esc(s);
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
 function parseUtcDate(ts){
+  if(window.LS && LS.parseUtc) return LS.parseUtc(ts);
+
   const s = String(ts||'').trim();
   if(!s) return null;
 
@@ -564,6 +575,7 @@ function parseUtcDate(ts){
 function fmt(ts){
   const d = parseUtcDate(ts);
   if(!d || isNaN(d.getTime())) return '';
+  if(window.LS && LS.fmtLocal) return LS.fmtLocal(d);
   return d.toLocaleString();
 }
 
