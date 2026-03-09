@@ -86,9 +86,9 @@ f.addEventListener('submit', async (e)=>{
   const p1=document.getElementById('p1').value;
   const p2=document.getElementById('p2').value;
 
-  if(!email||!token){showErr('Invalid reset link');return;}
-  if(p1.length<8){showErr('Password must be at least 8 characters');return;}
-  if(p1!==p2){showErr('Passwords do not match');return;}
+  if(!email||!token){showErr(<?= json_encode(t('reset.invalid_link')) ?>);return;}
+  if(p1.length<8){showErr(<?= json_encode(t('reset.pw_min')) ?>);return;}
+  if(p1!==p2){showErr(<?= json_encode(t('reset.pw_mismatch')) ?>);return;}
 
   btn.disabled=true;
   btnTxt.innerHTML='<span class="spin"></span>';
@@ -97,16 +97,16 @@ f.addEventListener('submit', async (e)=>{
     const r=await fetch('api/password_reset.php',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({action:'reset',email,token,new_password:p1})});
     const j=await r.json();
-    if(!j.success){showErr(j.error||'Reset failed');return;}
+    if(!j.success){showErr(j.error||<?= json_encode(t('reset.failed')) ?>);return;}
 
     if(j.verified){window.location='dashboard.php';}
     else window.location='account.php';
 
   }catch{
-    showErr('Network error');
+    showErr(<?= json_encode(t('common.network_error')) ?>);
   }finally{
     btn.disabled=false;
-    btnTxt.textContent='Reset password';
+    btnTxt.textContent=<?= json_encode(t('page.reset')) ?>;
   }
 });
 </script>

@@ -103,31 +103,31 @@ header("Referrer-Policy: no-referrer");
     <?php endif; ?>
 
     <div class="card">
-      <div class="card-title">Local backup</div>
+      <div class="card-title"><?php e('backup.local_title'); ?></div>
       <div class="row" style="align-items:flex-end;">
         <div style="flex:1;min-width:240px;">
-          <div class="small">Download a JSON file. You can import it later on the same or a new installation.</div>
+          <div class="small"><?php e('backup.local_sub'); ?></div>
         </div>
-        <button class="btn btn-primary" id="btn-export"><span id="btn-export-txt">Download export</span></button>
+        <button class="btn btn-primary" id="btn-export"><span id="btn-export-txt"><?php e('backup.download_export'); ?></span></button>
       </div>
 
       <div style="height:14px"></div>
 
-      <div class="card-title" style="color:var(--orange);">Import</div>
+      <div class="card-title" style="color:var(--orange);"><?php e('backup.import_title'); ?></div>
       <div class="field">
-        <label>Backup file (.json)</label>
+        <label><?php e('backup.backup_file_label'); ?></label>
         <input type="file" id="import-file" accept="application/json,.json">
       </div>
-      <button class="btn btn-ghost" id="btn-import">Import into this account</button>
-      <div class="small" style="margin-top:10px;">Importing will create new codes. If an ID collides, it will be remapped.</div>
+      <button class="btn btn-ghost" id="btn-import"><?php e('backup.import_into_account'); ?></button>
+      <div class="small" style="margin-top:10px;"><?php e('backup.import_note'); ?></div>
 
       <div id="local-ok" class="msg msg-ok"></div>
       <div id="local-err" class="msg msg-err"></div>
     </div>
 
     <div class="card">
-      <div class="card-title">Cloud backups</div>
-      <div class="small">Store snapshots on this server (still ciphertext-only). Useful for device loss and quick restores.</div>
+      <div class="card-title"><?php e('backup.cloud_title'); ?></div>
+      <div class="small"><?php e('backup.cloud_sub'); ?></div>
       <div class="small" id="cloud-summary" style="margin-top:10px;"></div>
 
       <div style="height:14px"></div>
@@ -135,13 +135,13 @@ header("Referrer-Policy: no-referrer");
       <div class="row" style="align-items:flex-end;">
         <div style="flex:1;min-width:240px;">
           <div class="field" style="margin-bottom:0;">
-            <label>Label (optional)</label>
-            <input id="cloud-label" placeholder="e.g. Before passphrase rotation">
+            <label><?php e('backup.cloud_label_optional'); ?></label>
+            <input id="cloud-label" placeholder="<?= htmlspecialchars(t('backup.cloud_label_placeholder'), ENT_QUOTES, 'UTF-8') ?>">
           </div>
         </div>
         <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;">
-          <button class="btn btn-ghost" id="btn-cloud-latest">Download latest</button>
-          <button class="btn btn-primary" id="btn-cloud-save"><span id="btn-cloud-save-txt">Create cloud backup</span></button>
+          <button class="btn btn-ghost" id="btn-cloud-latest"><?php e('backup.download_latest'); ?></button>
+          <button class="btn btn-primary" id="btn-cloud-save"><span id="btn-cloud-save-txt"><?php e('backup.create_cloud_backup'); ?></span></button>
         </div>
       </div>
 
@@ -151,11 +151,62 @@ header("Referrer-Policy: no-referrer");
       <div style="height:14px"></div>
       <div class="list" id="cloud-list"></div>
     </div>
+
   </div>
 
 <script>
 const CSRF = <?= json_encode($csrf) ?>;
 const APP_SLUG = <?= json_encode($appSlug) ?>;
+
+const STR = {
+  networkError: <?= json_encode(t('common.network_error')) ?>,
+  failed: <?= json_encode(t('common.failed')) ?>,
+  enterTotp: <?= json_encode(t('login.enter_totp')) ?>,
+  enableTotpOrPasskey: <?= json_encode(t('js.enable_totp_or_passkey')) ?>,
+
+  exportFailed: <?= json_encode(t('backup.export_failed')) ?>,
+  exportDownloaded: <?= json_encode(t('backup.export_downloaded')) ?>,
+  downloadExport: <?= json_encode(t('backup.download_export')) ?>,
+
+  selectBackupJson: <?= json_encode(t('backup.select_backup_json')) ?>,
+  importing: <?= json_encode(t('backup.importing')) ?>,
+  importFailed: <?= json_encode(t('backup.import_failed')) ?>,
+  importFailedWith: <?= json_encode(t('backup.import_failed_with')) ?>,
+  importedCount: <?= json_encode(t('backup.imported_count')) ?>,
+  importIntoAccount: <?= json_encode(t('backup.import_into_account')) ?>,
+
+  cloudCouldNotLoad: <?= json_encode(t('backup.cloud_could_not_load')) ?>,
+  cloudCount: <?= json_encode(t('backup.cloud_count')) ?>,
+  noCloudBackupsYet: <?= json_encode(t('backup.no_cloud_backups_yet')) ?>,
+  latest: <?= json_encode(t('backup.latest')) ?>,
+  backupNumber: <?= json_encode(t('backup.backup_number')) ?>,
+
+  download: <?= json_encode(t('backup.download')) ?>,
+  restore: <?= json_encode(t('backup.restore')) ?>,
+  delete: <?= json_encode(t('backup.delete')) ?>,
+  downloadFailed: <?= json_encode(t('backup.download_failed')) ?>,
+  downloadedCloudBackup: <?= json_encode(t('backup.downloaded_cloud_backup')) ?>,
+
+  confirmRestore: <?= json_encode(t('backup.confirm_restore')) ?>,
+  restoreFailed: <?= json_encode(t('backup.restore_failed')) ?>,
+  restoredImported: <?= json_encode(t('backup.restored_imported')) ?>,
+
+  confirmDelete: <?= json_encode(t('backup.confirm_delete')) ?>,
+  deleteFailed: <?= json_encode(t('backup.delete_failed')) ?>,
+  cloudBackupDeleted: <?= json_encode(t('backup.cloud_backup_deleted')) ?>,
+
+  cloudBackupFailed: <?= json_encode(t('backup.cloud_backup_failed')) ?>,
+  cloudBackupSaved: <?= json_encode(t('backup.cloud_backup_saved')) ?>,
+  createCloudBackup: <?= json_encode(t('backup.create_cloud_backup')) ?>,
+
+  noCloudToDownload: <?= json_encode(t('backup.no_cloud_to_download')) ?>,
+  downloadLatest: <?= json_encode(t('backup.download_latest')) ?>,
+
+  ageDays: <?= json_encode(t('backup.age_days')) ?>,
+  ageHours: <?= json_encode(t('backup.age_hours')) ?>,
+  ageMinutes: <?= json_encode(t('backup.age_minutes')) ?>,
+  ageSeconds: <?= json_encode(t('backup.age_seconds')) ?>,
+};
 
 const localOk=document.getElementById('local-ok');
 const localErr=document.getElementById('local-err');
@@ -225,13 +276,13 @@ async function ensureReauth(methods){
   }
 
   if(methods && methods.totp){
-    const code = prompt('Enter your 6-digit authenticator code');
+    const code = prompt(STR.enterTotp);
     if(!code) return false;
     const r = await post('api/totp.php', {action:'reauth', code});
     return !!r.success;
   }
 
-  show(localErr, 'Enable TOTP or add a passkey in Account to use backups.');
+  show(localErr, STR.enableTotpOrPasskey);
   return false;
 }
 
@@ -296,10 +347,10 @@ function age(ts){
   const m = Math.floor(secs/60);
   const h = Math.floor(m/60);
   const days = Math.floor(h/24);
-  if(days > 0) return days + 'd ago';
-  if(h > 0) return h + 'h ago';
-  if(m > 0) return m + 'm ago';
-  return secs + 's ago';
+  if(days > 0) return STR.ageDays.replace('{count}', String(days));
+  if(h > 0) return STR.ageHours.replace('{count}', String(h));
+  if(m > 0) return STR.ageMinutes.replace('{count}', String(m));
+  return STR.ageSeconds.replace('{count}', String(secs));
 }
 
 document.getElementById('btn-export').addEventListener('click', async ()=>{
@@ -309,36 +360,38 @@ document.getElementById('btn-export').addEventListener('click', async ()=>{
   btn.disabled=true; txt.innerHTML='<span class="spin"></span>';
   try{
     const j=await getStrong('api/backup.php?action=export');
-    if(!j.success){show(localErr,j.error||'Export failed');return;}
+    if(!j.success){show(localErr,j.error||STR.exportFailed);return;}
     const ts = new Date().toISOString().slice(0,10).replace(/-/g,'');
     downloadJson(APP_SLUG + '_export_' + ts + '.json', j.export);
 
-    show(localOk,'Export downloaded.');
+    show(localOk, STR.exportDownloaded);
   }catch{
-    show(localErr,'Network error');
+    show(localErr, STR.networkError);
   }finally{
-    btn.disabled=false; txt.textContent='Download export';
+    btn.disabled=false; txt.textContent=STR.downloadExport;
   }
 });
 
 document.getElementById('btn-import').addEventListener('click', async ()=>{
   clearMsgs();
   const fileInput=document.getElementById('import-file');
-  if(!fileInput.files || !fileInput.files[0]){show(localErr,'Select a backup JSON file.');return;}
+  if(!fileInput.files || !fileInput.files[0]){show(localErr, STR.selectBackupJson);return;}
 
   const btn=document.getElementById('btn-import');
-  btn.disabled=true; btn.innerHTML='<span class="spin"></span> Importing…';
+  btn.disabled=true; btn.innerHTML='<span class="spin"></span> ' + STR.importing;
 
   try{
     const txt=await fileInput.files[0].text();
     const exportObj=JSON.parse(txt);
     const r=await postStrong('api/backup.php',{action:'import',export:exportObj});
-    if(!r.success){show(localErr,r.error||'Import failed');return;}
-    show(localOk,'Imported ' + (r.imported||0) + ' codes.');
+    if(!r.success){show(localErr,r.error||STR.importFailed);return;}
+
+    show(localOk, STR.importedCount.replace('{count}', String(r.imported||0)));
   }catch(e){
-    show(localErr,'Import failed: ' + (e && e.message ? e.message : 'error'));
+    const msg = (e && e.message) ? String(e.message) : STR.failed;
+    show(localErr, STR.importFailedWith.replace('{error}', msg));
   }finally{
-    btn.disabled=false; btn.textContent='Import into this account';
+    btn.disabled=false; btn.textContent=STR.importIntoAccount;
   }
 });
 
@@ -347,27 +400,27 @@ async function refreshCloud(){
   cloudSummary.textContent='';
 
   const j=await getStrong('api/backup.php?action=cloud_list');
-  if(!j.success){show(cloudErr,j.error||'Could not load cloud backups');return;}
+  if(!j.success){show(cloudErr,j.error||STR.cloudCouldNotLoad);return;}
 
   const items=j.backups||[];
   cloudItemsCache = items;
 
   if(items.length===0){
-    cloudSummary.textContent='Cloud backups: 0';
-    cloudList.innerHTML='<div class="small" style="padding:6px 2px;">No cloud backups yet.</div>';
+    cloudSummary.textContent = STR.cloudCount.replace('{count}', '0');
+    cloudList.innerHTML = '<div class="small" style="padding:6px 2px;">' + esc(STR.noCloudBackupsYet) + '</div>';
     return;
   }
 
   const latest = items[0];
   const latestLocal = fmtLocal(latest.created_at || '');
   const latestAge = age(latest.created_at || '');
-  cloudSummary.textContent = `Cloud backups: ${items.length} · Latest: ${latestLocal} (${latest.created_at} UTC)${latestAge ? ' · ' + latestAge : ''}`;
+  cloudSummary.textContent = `${STR.cloudCount.replace('{count}', String(items.length))} · ${STR.latest}: ${latestLocal} (${latest.created_at} UTC)${latestAge ? ' · ' + latestAge : ''}`;
 
   for(const b of items){
     const el=document.createElement('div');
     el.className='item';
 
-    const label=(b.label && b.label.trim()) ? b.label : ('Backup #' + b.id);
+    const label=(b.label && b.label.trim()) ? b.label : STR.backupNumber.replace('{id}', String(b.id));
     const size=(b.bytes!==null && b.bytes!==undefined) ? (Math.round((b.bytes/1024)*10)/10 + ' KB') : '';
 
     const local = fmtLocal(b.created_at || '');
@@ -385,9 +438,9 @@ async function refreshCloud(){
           <div class="item-meta">${esc(metaBits.join(' • '))}</div>
         </div>
         <div class="item-actions">
-          <button class="btn btn-ghost" data-act="dl" data-id="${esc(b.id)}">Download</button>
-          <button class="btn btn-ghost" data-act="restore" data-id="${esc(b.id)}">Restore</button>
-          <button class="btn btn-red" data-act="del" data-id="${esc(b.id)}">Delete</button>
+          <button class="btn btn-ghost" data-act="dl" data-id="${esc(b.id)}">${esc(STR.download)}</button>
+          <button class="btn btn-ghost" data-act="restore" data-id="${esc(b.id)}">${esc(STR.restore)}</button>
+          <button class="btn btn-red" data-act="del" data-id="${esc(b.id)}">${esc(STR.delete)}</button>
         </div>
       </div>
     `;
@@ -398,12 +451,12 @@ async function refreshCloud(){
 
 async function downloadCloudId(id){
   const j=await getStrong('api/backup.php?action=cloud_get&id='+encodeURIComponent(id));
-  if(!j.success){show(cloudErr,j.error||'Download failed');return false;}
+  if(!j.success){show(cloudErr,j.error||STR.downloadFailed);return false;}
   const backup=j.backup;
   const label=(backup.label && backup.label.trim()) ? backup.label : ('backup_'+id);
   const safe=label.replace(/[^a-z0-9_\-]+/gi,'_').slice(0,60);
   downloadJson(APP_SLUG + '_cloud_' + safe + '_' + id + '.json', backup.backup_blob);
-  show(cloudOk,'Downloaded cloud backup.');
+  show(cloudOk, STR.downloadedCloudBackup);
   return true;
 }
 
@@ -420,36 +473,36 @@ cloudList.addEventListener('click', async (e)=>{
   if(act==='dl'){
     btn.disabled=true; btn.innerHTML='<span class="spin"></span>';
     try{ await downloadCloudId(id); }
-    catch{ show(cloudErr,'Network error'); }
-    finally{ btn.disabled=false; btn.textContent='Download'; }
+    catch{ show(cloudErr, STR.networkError); }
+    finally{ btn.disabled=false; btn.textContent=STR.download; }
   }
 
   if(act==='restore'){
-    if(!confirm('Restore this backup into your account? This will import codes and may create duplicates.')) return;
+    if(!confirm(STR.confirmRestore)) return;
     btn.disabled=true; btn.innerHTML='<span class="spin"></span>';
     try{
       const r=await postStrong('api/backup.php',{action:'cloud_restore',id});
-      if(!r.success){show(cloudErr,r.error||'Restore failed');return;}
-      show(cloudOk,'Restored. Imported ' + (r.imported||0) + ' codes.');
+      if(!r.success){show(cloudErr,r.error||STR.restoreFailed);return;}
+      show(cloudOk, STR.restoredImported.replace('{count}', String(r.imported||0)));
     }catch{
-      show(cloudErr,'Network error');
+      show(cloudErr, STR.networkError);
     }finally{
-      btn.disabled=false; btn.textContent='Restore';
+      btn.disabled=false; btn.textContent=STR.restore;
     }
   }
 
   if(act==='del'){
-    if(!confirm('Delete this cloud backup?')) return;
+    if(!confirm(STR.confirmDelete)) return;
     btn.disabled=true; btn.innerHTML='<span class="spin"></span>';
     try{
       const r=await postStrong('api/backup.php',{action:'cloud_delete',id});
-      if(!r.success){show(cloudErr,r.error||'Delete failed');return;}
-      show(cloudOk,'Cloud backup deleted.');
+      if(!r.success){show(cloudErr,r.error||STR.deleteFailed);return;}
+      show(cloudOk, STR.cloudBackupDeleted);
       await refreshCloud();
     }catch{
-      show(cloudErr,'Network error');
+      show(cloudErr, STR.networkError);
     }finally{
-      btn.disabled=false; btn.textContent='Delete';
+      btn.disabled=false; btn.textContent=STR.delete;
     }
   }
 });
@@ -462,14 +515,14 @@ document.getElementById('btn-cloud-save').addEventListener('click', async ()=>{
   try{
     const label=document.getElementById('cloud-label').value.trim();
     const r=await postStrong('api/backup.php',{action:'cloud_save',label});
-    if(!r.success){show(cloudErr,r.error||'Cloud backup failed');return;}
+    if(!r.success){show(cloudErr,r.error||STR.cloudBackupFailed);return;}
     document.getElementById('cloud-label').value='';
-    show(cloudOk,'Cloud backup saved.');
+    show(cloudOk, STR.cloudBackupSaved);
     await refreshCloud();
   }catch{
-    show(cloudErr,'Network error');
+    show(cloudErr, STR.networkError);
   }finally{
-    btn.disabled=false; txt.textContent='Create cloud backup';
+    btn.disabled=false; txt.textContent=STR.createCloudBackup;
   }
 });
 
@@ -482,15 +535,15 @@ document.getElementById('btn-cloud-latest').addEventListener('click', async ()=>
 
   const latest = cloudItemsCache && cloudItemsCache.length ? cloudItemsCache[0] : null;
   if(!latest || !latest.id){
-    show(cloudErr, 'No cloud backups to download.');
+    show(cloudErr, STR.noCloudToDownload);
     return;
   }
 
   const btn=document.getElementById('btn-cloud-latest');
   btn.disabled=true; btn.innerHTML='<span class="spin"></span>';
   try{ await downloadCloudId(parseInt(latest.id,10)); }
-  catch{ show(cloudErr,'Network error'); }
-  finally{ btn.disabled=false; btn.textContent='Download latest'; }
+  catch{ show(cloudErr, STR.networkError); }
+  finally{ btn.disabled=false; btn.textContent=STR.downloadLatest; }
 });
 
 refreshCloud();

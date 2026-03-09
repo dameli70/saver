@@ -98,18 +98,19 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9998;o
 
   <div class="card">
     <div class="card-title">
-      <span>Inbox</span>
+      <span><?php e('notifications.inbox'); ?></span>
       <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;">
-        <button class="btn btn-blue btn-sm" onclick="refresh()">↻ Refresh</button>
-        <button class="btn btn-primary btn-sm" onclick="markAllRead()">Mark all read</button>
+        <button class="btn btn-blue btn-sm" onclick="refresh()">↻ <?php e('common.refresh'); ?></button>
+        <button class="btn btn-primary btn-sm" onclick="markAllRead()"><?php e('notifications.mark_all_read'); ?></button>
       </div>
     </div>
 
-    <div class="k" id="meta">Loading…</div>
+    <div class="k" id="meta"><?php e('common.loading'); ?></div>
     <div class="list" id="list" style="margin-top:12px;"></div>
 
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
-      <button class="btn btn-ghost btn-sm" id="more" onclick="loadMore()" style="display:none;">Load more</button>
+      <button class="btn btn-ghost btn-sm" id="more" onclick="loadMore()" style="display:none;"><?php e('common.load_more' ?></);button>
+on>
     </div>
 
     <div id="msg" class="msg"></div>
@@ -120,6 +121,14 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9998;o
 const CSRF = <?= json_encode($csrf) ?>;
 let cursor = 0;
 let loading = false;
+
+const STR = {
+  unread: <?= json_encode(t('notifications.unread')) ?>,
+  none: <?= json_encode(t('notifications.none')) ?>,
+  openRoom: <?= json_encode(t('notifications.open_room')) ?>,
+  markRead: <?= json_encode(t('notifications.mark_read')) ?>,
+  failed: <?= json_encode(t('common.failed')) ?>,
+};
 
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function parseUtcDate(ts){
@@ -172,11 +181,11 @@ function roomLinkFromData(data){
 
 function render(items, unreadCount){
   const meta = document.getElementById('meta');
-  meta.textContent = `Unread: ${unreadCount}`;
+  meta.textContent = `${STR.unread}: ${unreadCount}`;
 
   const list = document.getElementById('list');
   if(!items.length && !cursor){
-    list.innerHTML = '<div class="k">No notifications.</div>';
+    list.innerHTML = '<div class="k">'+esc(STR.none)+'</div>';
     document.getElementById('more').style.display='none';
     return;
   }
@@ -199,8 +208,8 @@ function render(items, unreadCount){
       <div class="meta">
         <div class="ts">${fmt(n.created_at)}</div>
         <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;">
-          ${link ? `<a class="btn btn-ghost btn-sm" href="${link}">Open room</a>` : ''}
-          ${read ? '' : `<button class="btn btn-blue btn-sm" data-id="${n.id}">Mark read</button>`}
+          ${link ? `<a class="btn btn-ghost btn-sm" href="${link}">${esc(STR.openRoom)}</a>` : ''}
+          ${read ? '' : `<button class="btn btn-blue btn-sm" data-id="${n.id}">${esc(STR.markRead)}</button>`}
         </div>
       </div>
     `;
@@ -236,10 +245,11 @@ async function load(reset){
   try{
     const url = 'api/notifications.php?action=list&limit=50' + (cursor ? '&before_id=' + encodeURIComponent(cursor) : '');
     const r = await get(url);
-    if(!r.success) throw new Error(r.error || 'Failed');
+    if(!r.success) throw new Error(r.error || STR.failed);
+
     render(r.notifications || [], r.unread_count || 0);
   }catch(e){
-    setMsg(e.message || 'Failed', false);
+    setMsg(e.message || STR.failed, false);
   }finally{
     loading = false;
   }
@@ -248,20 +258,20 @@ async function load(reset){
 async function markRead(ids){
   try{
     const r = await post('api/notifications.php', {action:'mark_read', ids});
-    if(!r.success) throw new Error(r.error || 'Failed');
+    if(!r.success) throw new Error(r.error || STR.failed);
     await load(true);
   }catch(e){
-    setMsg(e.message || 'Failed', false);
+    setMsg(e.message || STR.failed, false);
   }
 }
 
 async function markAllRead(){
   try{
     const r = await post('api/notifications.php', {action:'mark_read', all:1});
-    if(!r.success) throw new Error(r.error || 'Failed');
+    if(!r.success) throw new Error(r.error || STR.failed);
     await load(true);
   }catch(e){
-    setMsg(e.message || 'Failed', false);
+    setMsg(e.message || STR.failed, false);
   }
 }
 

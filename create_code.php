@@ -103,118 +103,118 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
 
   <div class="app-body">
     <div class="card" id="vault-unlock-card" style="display:none">
-      <div class="card-title"><div class="dot" style="background:var(--orange)"></div><span style="color:var(--orange)">Vault</span></div>
+      <div class="card-title"><div class="dot" style="background:var(--orange)"></div><span style="color:var(--orange)"><?php e('nav.vault'); ?></span></div>
       <div style="font-size:12px;color:var(--muted);line-height:1.7;margin-bottom:14px;">
-        Your vault passphrase is used to derive encryption keys in your browser. It is never sent to the server. Code creation is hidden until your vault is unlocked.
+        <?php e('create_code.vault_intro'); ?>
       </div>
 
       <div id="vp-setup-note" class="msg msg-warn"></div>
 
-      <div class="field"><label>Vault Passphrase</label>
-        <input type="password" id="vp-input" placeholder="Your vault passphrase…" autocomplete="current-password">
+      <div class="field"><label><?php e('create_code.vault_passphrase_label'); ?></label>
+        <input type="password" id="vp-input" placeholder="<?= htmlspecialchars(t('create_code.vault_passphrase_placeholder'), ENT_QUOTES, 'UTF-8') ?>" autocomplete="current-password">
       </div>
 
-      <div class="field" id="vp2-field" style="display:none"><label>Confirm Vault Passphrase</label>
-        <input type="password" id="vp-input2" placeholder="Confirm passphrase…" autocomplete="current-password">
+      <div class="field" id="vp2-field" style="display:none"><label><?php e('create_code.vault_confirm_label'); ?></label>
+        <input type="password" id="vp-input2" placeholder="<?= htmlspecialchars(t('create_code.vault_confirm_placeholder'), ENT_QUOTES, 'UTF-8') ?>" autocomplete="current-password">
       </div>
 
       <div id="vp-err" class="msg msg-err"></div>
-      <button class="btn btn-primary" id="vp-btn" onclick="unlockVault()"><span id="vp-txt">Unlock Vault</span></button>
+      <button class="btn btn-primary" id="vp-btn" onclick="unlockVault()"><span id="vp-txt"><?php e('create_code.vault_unlock_btn'); ?></span></button>
     </div>
 
     <div class="card" id="create-mode-card" style="display:none">
-      <div class="card-title"><div class="dot"></div>Create mode</div>
+      <div class="card-title"><div class="dot"></div><?php e('create_code.mode_title'); ?></div>
       <div class="type-grid" id="mode-grid">
-        <button class="type-opt sel" data-mode="scratch" type="button">From scratch</button>
-        <button class="type-opt" data-mode="wallet" type="button">Mobile money wallet</button>
+        <button class="type-opt sel" data-mode="scratch" type="button"><?php e('create_code.mode_scratch'); ?></button>
+        <button class="type-opt" data-mode="wallet" type="button"><?php e('create_code.mode_wallet'); ?></button>
       </div>
     </div>
 
     <div class="card" id="wallet-card" style="display:none">
-      <div class="card-title"><div class="dot" style="background:var(--blue)"></div>Mobile Money Wallet</div>
+      <div class="card-title"><div class="dot" style="background:var(--blue)"></div><?php e('create_code.wallet_title'); ?></div>
       <div style="font-size:12px;color:var(--muted);line-height:1.7;margin-bottom:14px;">
-        Use a carrier template to change your wallet PIN via USSD, then store the new PIN encrypted and time-locked.
+        <?php e('create_code.wallet_intro'); ?>
       </div>
 
-      <div class="field"><label>Template</label>
+      <div class="field"><label><?php e('create_code.wallet.template_label'); ?></label>
         <select id="w-carrier"></select>
       </div>
 
-      <div class="field"><label>Label <span style="color:var(--muted);font-size:10px;">(optional)</span></label>
-        <input id="w-label" type="text" placeholder="e.g. Moov Money wallet" maxlength="120">
+      <div class="field"><label><?php e('create_code.wallet.label_label'); ?> <span style="color:var(--muted);font-size:10px;">(<?php e('common.optional'); ?>)</span></label>
+        <input id="w-label" type="text" placeholder="<?= htmlspecialchars(t('create_code.wallet.label_placeholder'), ENT_QUOTES, 'UTF-8') ?>" maxlength="120">
       </div>
 
-      <div class="field"><label>Your current wallet PIN</label>
-        <input id="w-oldpin" type="password" inputmode="numeric" autocomplete="off" placeholder="4-digit PIN">
+      <div class="field"><label><?php e('create_code.wallet.current_pin_label'); ?></label>
+        <input id="w-oldpin" type="password" inputmode="numeric" autocomplete="off" placeholder="<?= htmlspecialchars(t('create_code.wallet.current_pin_placeholder', ['n' => 4]), ENT_QUOTES, 'UTF-8') ?>">
       </div>
 
-      <div class="field"><label>Wallet setup action</label>
+      <div class="field"><label><?php e('create_code.wallet.setup_action_label'); ?></label>
         <div class="type-grid" id="wallet-action-grid">
-          <button class="type-opt" data-action="open_dialer" type="button">Send to phone app</button>
-          <button class="type-opt" data-action="copy_ussd" type="button">Copy USSD</button>
+          <button class="type-opt" data-action="open_dialer" type="button"><?php e('create_code.wallet.action_open_dialer'); ?></button>
+          <button class="type-opt" data-action="copy_ussd" type="button"><?php e('create_code.wallet.action_copy_ussd'); ?></button>
         </div>
       </div>
 
-      <div class="field"><label>Reveal Date &amp; Time</label>
+      <div class="field"><label><?php e('create_code.reveal_dt_label'); ?></label>
         <input type="datetime-local" id="w-date">
       </div>
 
       <div id="w-err" class="msg msg-err"></div>
 
       <button class="btn btn-primary" id="w-btn" onclick="doWalletSetup()" style="margin-top:10px;">
-        <span id="w-txt">Generate &amp; Copy USSD</span>
+        <span id="w-txt"><?php e('create_code.wallet.btn_copy_ussd'); ?></span>
       </button>
 
       <div class="hr" style="border-top:1px solid var(--b1);margin:16px 0;"></div>
-      <div class="card-title" style="margin-bottom:10px;">Pending wallet setups</div>
+      <div class="card-title" style="margin-bottom:10px;"><?php e('create_code.wallet.pending_title'); ?></div>
       <div id="wallet-pending-msg" class="msg"></div>
       <div id="wallet-pending-wrap" style="display:flex;flex-direction:column;gap:10px;"></div>
     </div>
 
     <div class="card" id="gen-card" style="display:none">
-      <div class="card-title"><div class="dot"></div>Create a Code</div>
+      <div class="card-title"><div class="dot"></div><?php e('create_code.gen.title'); ?></div>
 
-      <div class="field"><label>Label</label>
-        <input id="g-label" type="text" placeholder="e.g. Bank PIN" maxlength="120">
+      <div class="field"><label><?php e('create_code.gen.label_label'); ?></label>
+        <input id="g-label" type="text" placeholder="<?= htmlspecialchars(t('create_code.gen.label_placeholder'), ENT_QUOTES, 'UTF-8') ?>" maxlength="120">
       </div>
 
-      <div class="field"><label>Type</label>
+      <div class="field"><label><?php e('create_code.gen.type_label'); ?></label>
         <div class="type-grid" id="type-grid">
-          <button class="type-opt sel" data-type="alphanumeric" type="button">A-Z0-9</button>
-          <button class="type-opt" data-type="alpha" type="button">A-Z</button>
-          <button class="type-opt" data-type="numeric" type="button">0-9</button>
-          <button class="type-opt" data-type="custom" type="button">Custom</button>
+          <button class="type-opt sel" data-type="alphanumeric" type="button"><?php e('create_code.gen.type_alphanumeric'); ?></button>
+          <button class="type-opt" data-type="alpha" type="button"><?php e('create_code.gen.type_alpha'); ?></button>
+          <button class="type-opt" data-type="numeric" type="button"><?php e('create_code.gen.type_numeric'); ?></button>
+          <button class="type-opt" data-type="custom" type="button"><?php e('create_code.gen.type_custom'); ?></button>
         </div>
       </div>
 
-      <div class="field"><label>Length</label>
+      <div class="field"><label><?php e('create_code.gen.length_label'); ?></label>
         <div class="slider-row">
           <input type="range" min="4" max="64" value="16" id="g-len" oninput="document.getElementById('len-val').textContent=this.value;">
           <div class="slider-val" id="len-val">16</div>
         </div>
       </div>
 
-      <div class="field"><label>Reveal Date &amp; Time</label>
+      <div class="field"><label><?php e('create_code.reveal_dt_label'); ?></label>
         <input type="datetime-local" id="g-date">
       </div>
 
-      <div class="field"><label>Memory Hint <span style="color:var(--muted);font-size:10px;">(optional — never the code)</span></label>
-        <input type="text" id="g-hint" placeholder="e.g. Set before my summer trip" maxlength="500">
+      <div class="field"><label><?php e('create_code.gen.hint_label'); ?> <span style="color:var(--muted);font-size:10px;">(<?php e('create_code.gen.hint_optional_note'); ?>)</span></label>
+        <input type="text" id="g-hint" placeholder="<?= htmlspecialchars(t('create_code.gen.hint_placeholder'), ENT_QUOTES, 'UTF-8') ?>" maxlength="500">
       </div>
 
       <div id="g-err" class="msg msg-err"></div>
 
       <div class="kdf-progress" id="kdf-progress">
         <div class="kdf-bar-wrap"><div class="kdf-bar" id="kdf-bar"></div></div>
-        <div class="kdf-label" id="kdf-label">Deriving encryption key in your browser…</div>
+        <div class="kdf-label" id="kdf-label"><?php e('create_code.gen.kdf_label'); ?></div>
       </div>
 
       <button class="btn btn-primary" id="g-btn" onclick="doGenerate()" style="margin-top:10px;">
-        <span id="g-txt">Generate &amp; Lock</span>
+        <span id="g-txt"><?php e('create_code.gen.btn'); ?></span>
       </button>
 
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
-        <a class="btn btn-ghost btn-sm" href="my_codes.php">View my codes</a>
+        <a class="btn btn-ghost btn-sm" href="my_codes.php"><?php e('create_code.gen.view_codes'); ?></a>
       </div>
     </div>
   </div>
@@ -223,17 +223,17 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
 <!-- confirm overlay -->
 <div id="confirm-overlay" onclick="closeConfirm(event)">
   <div class="confirm-sheet">
-    <div class="confirm-title" id="confirm-title">Did you save the code?</div>
-    <div class="confirm-sub" id="cs-sub">Code was copied to your clipboard.</div>
-    <div class="msg msg-warn" id="autosave-bar" style="display:none">Auto-saved. Code stored but not time-locked until you confirm.</div>
+    <div class="confirm-title" id="confirm-title"><?php e('create_code.confirm.title_lock'); ?></div>
+    <div class="confirm-sub" id="cs-sub"><?php e('create_code.confirm.sub_copied'); ?></div>
+    <div class="msg msg-warn" id="autosave-bar" style="display:none"><?php e('create_code.confirm.autosave'); ?></div>
 
     <div class="confirm-btns" id="confirm-btns">
-      <button class="btn btn-green" id="confirm-yes-btn" onclick="doConfirm('confirm')">✓ Yes, I saved it</button>
-      <button class="btn btn-red" id="confirm-no-btn" onclick="doConfirm('reject')">✗ No, discard</button>
+      <button class="btn btn-green" id="confirm-yes-btn" onclick="doConfirm('confirm')"><?php e('create_code.confirm.yes_saved'); ?></button>
+      <button class="btn btn-red" id="confirm-no-btn" onclick="doConfirm('reject')"><?php e('create_code.confirm.no_discard'); ?></button>
     </div>
 
     <div id="confirm-wallet-actions" style="display:none;margin-top:10px;">
-      <a class="btn btn-ghost btn-sm" id="confirm-open-dialer-again" href="#" onclick="openDialerAgain(event)">Open dialer again</a>
+      <a class="btn btn-ghost btn-sm" id="confirm-open-dialer-again" href="#" onclick="openDialerAgain(event)"><?php e('create_code.confirm.open_dialer_again'); ?></a>
     </div>
 
     <div id="confirm-done" style="display:none;margin-top:12px;font-size:12px;color:var(--muted);line-height:1.6;"><div id="confirm-done-msg"></div></div>
@@ -258,6 +258,100 @@ let confirmMode = 'lock';
 let createMode = (localStorage.getItem('create_mode') || 'scratch');
 let carriers = [];
 let walletAction = (localStorage.getItem('wallet_action') || 'copy_ussd');
+
+const I18N = (window.LS_I18N && window.LS_I18N.strings) ? window.LS_I18N.strings : {};
+function tr(key, fallback){
+  return (I18N && typeof I18N[key] === 'string') ? I18N[key] : fallback;
+}
+function fmt(s, vars){
+  return String(s||'').replace(/\{(\w+)\}/g, (m, k) => (vars && Object.prototype.hasOwnProperty.call(vars, k)) ? String(vars[k]) : m);
+}
+function tf(key, vars, fallback){
+  return fmt(tr(key, fallback), vars);
+}
+
+const STR = {
+  failed: tr('common.failed', 'Failed'),
+  loading: tr('common.loading', 'Loading…'),
+
+  enter_6_digit_code: tr('js.enter_6_digit_code', 'Enter your 6-digit authenticator code'),
+  enable_totp_or_passkey: tr('js.enable_totp_or_passkey', 'Enable TOTP or add a passkey in Account'),
+
+  crypto_unavailable: tr('crypto.unavailable', 'Secure cryptography is unavailable in this browser.'),
+  crypto_webcrypto_unavailable: tr('crypto.webcrypto_unavailable', 'Web Crypto API is unavailable. Use HTTPS (or localhost) to use the vault.'),
+
+  sealing: tr('create_code.sealing', 'Sealing…'),
+
+  vault_note_no_passphrase: tr('create_code.vault.note_no_passphrase', 'No vault passphrase is set yet. Choose one now (min 10 chars). If you lose it, your codes cannot be recovered.'),
+  vault_note_validation_unavailable: tr('create_code.vault.note_validation_unavailable', 'Vault validation is unavailable (missing migrations). You can still unlock and use the app, but it cannot validate your passphrase.'),
+  vault_btn_set: tr('create_code.vault_set_btn', 'Set Vault'),
+  vault_btn_unlock: tr('create_code.vault_unlock_btn', 'Unlock Vault'),
+  vault_err_min: tr('create_code.vault.err_min', 'Passphrase must be at least 10 characters'),
+  vault_err_mismatch: tr('create_code.vault.err_mismatch', 'Passphrases do not match'),
+  vault_setting: tr('create_code.vault.setting', 'Setting…'),
+  vault_unlocking: tr('create_code.vault.unlocking', 'Unlocking…'),
+  vault_err_set_failed: tr('create_code.vault.err_set_failed', 'Failed to set vault passphrase'),
+  vault_err_incorrect: tr('create_code.vault.err_incorrect', 'Incorrect vault passphrase'),
+  vault_toast_set_unlocked: tr('create_code.vault.toast_set_unlocked', 'Vault passphrase set and unlocked'),
+  vault_toast_unlocked_memory: tr('create_code.vault.toast_unlocked_memory', 'Vault unlocked — passphrase held in memory only'),
+  vault_err_incorrect_or_tampered: tr('create_code.vault.err_incorrect_or_tampered', 'Incorrect vault passphrase or tampered data'),
+  vault_err_unlock_failed: tr('create_code.vault.err_unlock_failed', 'Unlock failed'),
+
+  gen_need_vault: tr('create_code.gen.toast_need_vault', 'Enter your vault passphrase first'),
+  gen_err_label_required: tr('create_code.gen.err_label_required', 'Label is required'),
+  gen_err_reveal_required: tr('create_code.gen.err_reveal_required', 'Reveal date required'),
+  gen_err_kdf_salt: tr('create_code.gen.err_kdf_salt', 'Failed to get KDF salt'),
+  gen_err_generation_failed: tr('create_code.gen.err_generation_failed', 'Generation failed'),
+  gen_err_during_generation: tr('create_code.gen.err_during_generation', 'Error during generation'),
+  gen_btn: tr('create_code.gen.btn', 'Generate & Lock'),
+
+  confirm_title_lock: tr('create_code.confirm.title_lock', 'Did you save the code?'),
+  confirm_yes_saved: tr('create_code.confirm.yes_saved', '✓ Yes, I saved it'),
+  confirm_yes_entered: tr('create_code.confirm.yes_entered', '✓ Yes, I entered it'),
+  confirm_no_discard: tr('create_code.confirm.no_discard', '✗ No, discard'),
+  confirm_title_wallet: tr('create_code.confirm.title_wallet', 'Did you complete the USSD PIN change?'),
+  confirm_toast_wallet_must_confirm: tr('create_code.confirm.toast_wallet_must_confirm', 'Please confirm or discard to finish wallet setup (this will clear your clipboard).'),
+  confirm_err_no_pending_wallet: tr('create_code.confirm.err_no_pending_wallet', 'No pending wallet setup'),
+  confirm_err_no_pending_lock: tr('create_code.confirm.err_no_pending_lock', 'No pending lock'),
+  confirm_err_failed_confirm: tr('create_code.confirm.err_failed_confirm', 'Failed to confirm'),
+  confirm_err_failed_discard: tr('create_code.confirm.err_failed_discard', 'Failed to discard'),
+  confirm_done_wallet_locked: tr('create_code.confirm.done_wallet_locked', '✓ Wallet PIN locked and time-gated.'),
+  confirm_done_lock_activated: tr('create_code.confirm.done_lock_activated', '✓ Lock activated.'),
+  confirm_done_discarded: tr('create_code.confirm.done_discarded', '✗ Discarded.'),
+
+  wallet_primary_btn_send: tr('create_code.wallet.btn_send_phone', 'Generate & Send to phone app'),
+  wallet_primary_btn_copy: tr('create_code.wallet.btn_copy_ussd', 'Generate & Copy USSD'),
+
+  wallet_templates_loading: tr('create_code.wallet.templates_loading', 'Loading…'),
+  wallet_templates_none: tr('create_code.wallet.templates_none', 'No templates available'),
+  wallet_templates_select: tr('create_code.wallet.templates_select', 'Select a template…'),
+  wallet_err_load_templates: tr('create_code.wallet.err_load_templates', 'Failed to load templates'),
+
+  wallet_pending_none: tr('create_code.wallet.pending_none', 'No pending setups.'),
+  wallet_pending_failed_load: tr('create_code.wallet.pending_failed_load', 'Failed to load.'),
+  wallet_pending_btn_confirm: tr('create_code.wallet.pending_btn_confirm', 'Confirm setup'),
+  wallet_pending_btn_fail: tr('create_code.wallet.pending_btn_fail', 'Mark failed'),
+  wallet_pending_confirm_fail: tr('create_code.wallet.pending_confirm_fail', 'Mark this setup as failed?'),
+  wallet_pending_toast_confirmed: tr('create_code.wallet.pending_toast_confirmed', 'Setup confirmed'),
+  wallet_pending_toast_marked_failed: tr('create_code.wallet.pending_toast_marked_failed', 'Marked failed'),
+
+  wallet_err_select_template: tr('create_code.wallet.err_select_template', 'Select a template'),
+  wallet_err_reveal_required: tr('create_code.wallet.err_reveal_required', 'Reveal date required'),
+  wallet_err_pin_digits: tr('create_code.wallet.err_pin_digits', 'Current PIN must be {n} digits'),
+  wallet_err_actions_disabled: tr('create_code.wallet.err_actions_disabled', 'Wallet setup actions are disabled for this template.'),
+  wallet_err_load_wallet_locks: tr('create_code.wallet.err_load_wallet_locks', 'Failed to load wallet locks'),
+  wallet_err_create_failed: tr('create_code.wallet.err_create_failed', 'Failed to create wallet lock'),
+  wallet_err_tpl_not_configured: tr('create_code.wallet.err_tpl_not_configured', 'This template is not configured yet. Ask an admin to set the USSD code.'),
+  wallet_err_tpl_misconfig_copy: tr('create_code.wallet.err_tpl_misconfig_copy', 'This template is misconfigured for “Copy USSD”: it must include {old_pin} and {new_pin}.'),
+  wallet_err_tpl_misconfig_send: tr('create_code.wallet.err_tpl_misconfig_send', 'This template is misconfigured for “Send to phone app”: it must NOT include {new_pin}. Use “Copy USSD” instead, or ask an admin to provide an interactive USSD template that prompts for the new PIN.'),
+  wallet_err_invalid_response: tr('create_code.wallet.err_invalid_response', 'Invalid response'),
+  wallet_err_clipboard_blocked: tr('create_code.wallet.err_clipboard_blocked', 'Clipboard write blocked. Use HTTPS and allow clipboard access.'),
+  wallet_default_name: tr('create_code.wallet.default_name', 'Wallet'),
+
+  wallet_status_setup_pending: tr('create_code.wallet.status_setup_pending', 'setup pending'),
+  wallet_status_confirmed: tr('create_code.wallet.status_confirmed', 'confirmed'),
+  wallet_status_failed: tr('create_code.wallet.status_failed', 'failed'),
+};
 
 function apiUrl(url){return url.startsWith('/') ? url.slice(1) : url;}
 async function get(url){const r=await fetch(apiUrl(url),{credentials:'same-origin'});return r.json();}
@@ -312,13 +406,13 @@ async function ensureReauth(methods){
   }
 
   if(methods && methods.totp){
-    const code = prompt('Enter your 6-digit authenticator code');
+    const code = prompt(STR.enter_6_digit_code);
     if(!code) return false;
     const r = await postCsrf('api/totp.php', {action:'reauth', code});
     return !!r.success;
   }
 
-  toast('Enable TOTP or add a passkey in Account', 'warn');
+  toast(STR.enable_totp_or_passkey, 'warn');
   return false;
 }
 
@@ -366,10 +460,10 @@ function b64ToBytes(b64){return Uint8Array.from(atob(b64), c => c.charCodeAt(0))
 
 function requireWebCrypto(){
   if (!window.crypto || !window.crypto.getRandomValues) {
-    throw new Error('Secure cryptography is unavailable in this browser.');
+    throw new Error(STR.crypto_unavailable);
   }
   if (!window.isSecureContext || !window.crypto.subtle) {
-    throw new Error('Web Crypto API is unavailable. Use HTTPS (or localhost) to use the vault.');
+    throw new Error(STR.crypto_webcrypto_unavailable);
   }
   return window.crypto;
 }
@@ -477,25 +571,25 @@ async function loadVaultSetup(){
 
     if(vaultCheckAvailable && !vaultCheckInitialized){
       if(note){
-        note.textContent = 'No vault passphrase is set yet. Choose one now (min 10 chars). If you lose it, your codes cannot be recovered.';
+        note.textContent = STR.vault_note_no_passphrase;
         note.classList.add('show');
         note.style.display='block';
       }
       if(vp2Field) vp2Field.style.display = 'block';
-      if(btnTxt) btnTxt.textContent = 'Set Vault';
+      if(btnTxt) btnTxt.textContent = STR.vault_btn_set;
       return;
     }
 
     if(!vaultCheckAvailable){
       if(note){
-        note.textContent = 'Vault validation is unavailable (missing migrations). You can still unlock and use the app, but it cannot validate your passphrase.';
+        note.textContent = STR.vault_note_validation_unavailable;
         note.classList.add('show');
         note.style.display='block';
       }
     }
 
     if(vp2Field) vp2Field.style.display = 'none';
-    if(btnTxt) btnTxt.textContent = 'Unlock Vault';
+    if(btnTxt) btnTxt.textContent = STR.vault_btn_unlock;
   }catch{}
 }
 
@@ -505,15 +599,15 @@ async function unlockVault() {
   const errEl = document.getElementById('vp-err');
   errEl.classList.remove('show');
 
-  if (!vp || vp.length < 10) { errEl.textContent='Passphrase must be at least 10 characters'; errEl.classList.add('show'); return; }
+  if (!vp || vp.length < 10) { errEl.textContent=STR.vault_err_min; errEl.classList.add('show'); return; }
 
   const setMode = (vaultCheckAvailable && !vaultCheckInitialized);
   if (setMode) {
-    if (vp !== vp2) { errEl.textContent='Passphrases do not match'; errEl.classList.add('show'); return; }
+    if (vp !== vp2) { errEl.textContent=STR.vault_err_mismatch; errEl.classList.add('show'); return; }
   }
 
   const btnTxt = document.getElementById('vp-txt');
-  btnTxt.innerHTML = '<span class="spin light"></span> ' + (setMode ? 'Setting…' : 'Unlocking…');
+  btnTxt.innerHTML = '<span class="spin light"></span> ' + (setMode ? STR.vault_setting : STR.vault_unlocking);
 
   try {
     if (setMode) {
@@ -535,7 +629,7 @@ async function unlockVault() {
       });
 
       if(!j.success){
-        throw new Error(j.error || 'Failed to set vault passphrase');
+        throw new Error(j.error || STR.vault_err_set_failed);
       }
 
       vaultCheckAvailable = true;
@@ -554,12 +648,12 @@ async function unlockVault() {
     if (vaultCheckAvailable && vaultCheckInitialized && vaultCheck) {
       const key = await deriveKey(vp, vaultCheck.kdf_salt, vaultCheck.kdf_iterations);
       const plain = await aesDecrypt(vaultCheck.cipher_blob, vaultCheck.iv, vaultCheck.auth_tag, key);
-      if (plain !== VAULT_CHECK_PLAIN) throw new Error('Incorrect vault passphrase');
+      if (plain !== VAULT_CHECK_PLAIN) throw new Error(STR.vault_err_incorrect);
     }
 
     vaultPhraseSession = vp;
 
-    toast(setMode ? 'Vault passphrase set and unlocked' : 'Vault unlocked — passphrase held in memory only', 'ok');
+    toast(setMode ? STR.vault_toast_set_unlocked : STR.vault_toast_unlocked_memory, 'ok');
     await loadVaultSetup();
     checkVaultUnlock();
 
@@ -569,11 +663,11 @@ async function unlockVault() {
     }, 150);
 
   } catch (e) {
-    if (e && e.name === 'OperationError') errEl.textContent = 'Incorrect vault passphrase or tampered data';
-    else errEl.textContent = e.message || 'Unlock failed';
+    if (e && e.name === 'OperationError') errEl.textContent = STR.vault_err_incorrect_or_tampered;
+    else errEl.textContent = e.message || STR.vault_err_unlock_failed;
     errEl.classList.add('show');
   } finally {
-    btnTxt.textContent = setMode ? 'Set Vault' : 'Unlock Vault';
+    btnTxt.textContent = setMode ? STR.vault_btn_set : STR.vault_btn_unlock;
   }
 }
 
@@ -581,7 +675,7 @@ async function doGenerate(){
   const errEl=document.getElementById('g-err');
   errEl.classList.remove('show');
 
-  if(!vaultPhraseSession){toast('Enter your vault passphrase first','err');return;}
+  if(!vaultPhraseSession){toast(STR.gen_need_vault,'err');return;}
 
   const label=document.getElementById('g-label').value.trim();
   const typeEl=document.querySelector('#type-grid .type-opt.sel');
@@ -590,19 +684,19 @@ async function doGenerate(){
   const revealDate=document.getElementById('g-date').value;
   const hint=document.getElementById('g-hint').value.trim();
 
-  if(!label){errEl.textContent='Label is required';errEl.classList.add('show');return;}
-  if(!revealDate){errEl.textContent='Reveal date required';errEl.classList.add('show');return;}
+  if(!label){errEl.textContent=STR.gen_err_label_required;errEl.classList.add('show');return;}
+  if(!revealDate){errEl.textContent=STR.gen_err_reveal_required;errEl.classList.add('show');return;}
 
   const btn=document.getElementById('g-btn');
   const txt=document.getElementById('g-txt');
   btn.disabled=true;
-  txt.innerHTML='<span class="spin light"></span> Sealing…';
+  txt.innerHTML='<span class="spin light"></span> ' + STR.sealing;
 
   try{
     const plainPwd = genPassword(type, length);
 
     const saltResp = await get('api/salt.php');
-    if(!saltResp.success) throw new Error(saltResp.error||'Failed to get KDF salt');
+    if(!saltResp.success) throw new Error(saltResp.error||STR.gen_err_kdf_salt);
 
     const kdf_salt = saltResp.kdf_salt;
     const kdf_iterations = saltResp.kdf_iterations;
@@ -628,7 +722,8 @@ async function doGenerate(){
       kdf_salt,
     });
 
-    if(!r.success){throw new Error(r.error||'Generation failed');}
+    if(!r.success){throw new Error(r.error||STR.gen_err_generation_failed);}
+
 
     let copied=false;
     try{await navigator.clipboard.writeText(plainPwd);copied=true;}catch{}
@@ -648,21 +743,21 @@ async function doGenerate(){
     openConfirmSheet(r.lock_id, r.label);
 
   }catch(e){
-    errEl.textContent=e.message||'Error during generation';
+    errEl.textContent = e.message || STR.gen_err_during_generation;
     errEl.classList.add('show');
   }finally{
-    txt.textContent='Generate & Lock';
-    btn.disabled=false;
+    txt.textContent = STR.gen_btn;
+    btn.disabled = false;
     showKdfProgress(false);
   }
 }
 
 function openConfirmSheet(lockId, label){
   confirmMode = 'lock';
-  document.getElementById('confirm-title').textContent = 'Did you save the code?';
-  document.getElementById('cs-sub').textContent=`"${label}" — blind-copied to clipboard.`;
-  document.getElementById('confirm-yes-btn').textContent='✓ Yes, I saved it';
-  document.getElementById('confirm-no-btn').textContent='✗ No, discard';
+  document.getElementById('confirm-title').textContent = STR.confirm_title_lock;
+  document.getElementById('cs-sub').textContent = tf('create_code.confirm.sub_lock', {label}, `"${label}" — blind-copied to clipboard.`);
+  document.getElementById('confirm-yes-btn').textContent = STR.confirm_yes_saved;
+  document.getElementById('confirm-no-btn').textContent = STR.confirm_no_discard;
   document.getElementById('confirm-btns').style.display='grid';
   document.getElementById('confirm-done').style.display='none';
 
@@ -682,28 +777,28 @@ function openConfirmSheet(lockId, label){
 }
 
 function openConfirmSheetWallet(opts){
-  const carrierName = (opts && opts.carrierName) ? opts.carrierName : 'Wallet';
+  const carrierName = (opts && opts.carrierName) ? opts.carrierName : STR.wallet_default_name;
   const action = normalizeWalletAction(opts && opts.action);
   const telUri = (opts && opts.telUri) ? String(opts.telUri) : '';
 
   confirmMode = 'wallet';
-  document.getElementById('confirm-title').textContent = 'Did you complete the USSD PIN change?';
+  document.getElementById('confirm-title').textContent = STR.confirm_title_wallet;
 
   const wa = document.getElementById('confirm-wallet-actions');
   const dialAgain = document.getElementById('confirm-open-dialer-again');
 
   if(action === 'open_dialer'){
-    document.getElementById('cs-sub').textContent = `${carrierName} — new PIN blind-copied to clipboard. Your dialer should open with the USSD command. Finish the change, then confirm here.`;
+    document.getElementById('cs-sub').textContent = tf('create_code.confirm.sub_wallet_open_dialer', {carrier: carrierName}, `${carrierName} — new PIN blind-copied to clipboard. Your dialer should open with the USSD command. Finish the change, then confirm here.`);
     if(dialAgain) dialAgain.href = telUri || '#';
     if(wa) wa.style.display = 'block';
   } else {
-    document.getElementById('cs-sub').textContent = `${carrierName} — USSD command copied to your clipboard. Paste it into your phone dialer, finish the change, then confirm here.`;
+    document.getElementById('cs-sub').textContent = tf('create_code.confirm.sub_wallet_copy_ussd', {carrier: carrierName}, `${carrierName} — USSD command copied to your clipboard. Paste it into your phone dialer, finish the change, then confirm here.`);
     if(dialAgain) dialAgain.href = '#';
     if(wa) wa.style.display = 'none';
   }
 
-  document.getElementById('confirm-yes-btn').textContent='✓ Yes, I entered it';
-  document.getElementById('confirm-no-btn').textContent='✗ No, discard';
+  document.getElementById('confirm-yes-btn').textContent = STR.confirm_yes_entered;
+  document.getElementById('confirm-no-btn').textContent = STR.confirm_no_discard;
   document.getElementById('confirm-btns').style.display='grid';
   document.getElementById('confirm-done').style.display='none';
   document.getElementById('autosave-bar').style.display='none';
@@ -722,7 +817,7 @@ function closeConfirm(e){
   // In wallet mode, avoid letting users dismiss the sheet while the clipboard
   // may still contain sensitive material.
   if(confirmMode === 'wallet'){
-    toast('Please confirm or discard to finish wallet setup (this will clear your clipboard).', 'err');
+    toast(STR.confirm_toast_wallet_must_confirm, 'err');
     return;
   }
 
@@ -742,17 +837,17 @@ async function doConfirm(action){
 
   try{
     if(confirmMode === 'wallet'){
-      if(!pendingWallet) throw new Error('No pending wallet setup');
+      if(!pendingWallet) throw new Error(STR.confirm_err_no_pending_wallet);
       const walletLockId = pendingWallet.wallet_lock_id;
 
       if(action === 'confirm'){
         const r = await postCsrfWithReauth('api/wallet_confirm.php', {wallet_lock_id: walletLockId});
-        if(!r.success) throw new Error(r.error || 'Failed to confirm');
-        msg.textContent='✓ Wallet PIN locked and time-gated.';
+        if(!r.success) throw new Error(r.error || STR.confirm_err_failed_confirm);
+        msg.textContent = STR.confirm_done_wallet_locked;
       } else {
         const r = await postCsrfWithReauth('api/wallet_fail.php', {wallet_lock_id: walletLockId});
-        if(!r.success) throw new Error(r.error || 'Failed to discard');
-        msg.textContent='✗ Discarded.';
+        if(!r.success) throw new Error(r.error || STR.confirm_err_failed_discard);
+        msg.textContent = STR.confirm_done_discarded;
       }
 
       await wipeClipboard();
@@ -766,12 +861,12 @@ async function doConfirm(action){
       return;
     }
 
-    if(!pendingLock) throw new Error('No pending lock');
+    if(!pendingLock) throw new Error(STR.confirm_err_no_pending_lock);
     const r=await postCsrf('api/confirm.php',{lock_id:pendingLock.lock_id,action});
-    if(!r.success) throw new Error(r.error||'Failed');
+    if(!r.success) throw new Error(r.error||STR.failed);
 
-    if(action==='confirm') msg.textContent='✓ Lock activated.';
-    else msg.textContent='✗ Discarded.';
+    if(action==='confirm') msg.textContent = STR.confirm_done_lock_activated;
+    else msg.textContent = STR.confirm_done_discarded;
 
     await wipeClipboard();
     pendingLock=null;
@@ -779,7 +874,7 @@ async function doConfirm(action){
     document.getElementById('confirm-overlay').classList.remove('show');
 
   }catch(e){
-    msg.textContent = e.message || 'Failed';
+    msg.textContent = e.message || STR.failed;
     btns.style.display='grid';
   }
 }
@@ -855,7 +950,7 @@ function getCarrierWalletPolicy(carrier){
 function syncWalletPrimaryButtonText(){
   const txt = document.getElementById('w-txt');
   if(!txt) return;
-  txt.textContent = (walletAction === 'open_dialer') ? 'Generate & Send to phone app' : 'Generate & Copy USSD';
+  txt.textContent = (walletAction === 'open_dialer') ? STR.wallet_primary_btn_send : STR.wallet_primary_btn_copy;
 }
 
 function setWalletAction(action){
@@ -918,24 +1013,24 @@ async function loadCarriersForWallet(){
   if(errEl) errEl.classList.remove('show');
 
   if(!sel) return;
-  sel.innerHTML = '<option value="">Loading…</option>';
+  sel.innerHTML = `<option value="">${STR.wallet_templates_loading}</option>`;
 
   try{
     const r = await get('api/carriers.php');
     if(!r.success){
-      sel.innerHTML = '<option value="">No templates available</option>';
-      if(errEl){ errEl.textContent = r.error || 'Failed to load templates'; errEl.classList.add('show'); }
+      sel.innerHTML = `<option value="">${STR.wallet_templates_none}</option>`;
+      if(errEl){ errEl.textContent = r.error || STR.wallet_err_load_templates; errEl.classList.add('show'); }
       carriers = [];
       return;
     }
 
     carriers = r.carriers || [];
     if(!carriers.length){
-      sel.innerHTML = '<option value="">No templates available</option>';
+      sel.innerHTML = `<option value="">${STR.wallet_templates_none}</option>`;
       return;
     }
 
-    sel.innerHTML = '<option value="">Select a template…</option>';
+    sel.innerHTML = `<option value="">${STR.wallet_templates_select}</option>`;
     carriers.forEach(c => {
       const opt = document.createElement('option');
       opt.value = String(c.id);
@@ -944,10 +1039,18 @@ async function loadCarriersForWallet(){
     });
 
   }catch(e){
-    sel.innerHTML = '<option value="">No templates available</option>';
-    if(errEl){ errEl.textContent = e.message || 'Failed to load templates'; errEl.classList.add('show'); }
+    sel.innerHTML = `<option value="">${STR.wallet_templates_none}</option>`;
+    if(errEl){ errEl.textContent = e.message || STR.wallet_err_load_templates; errEl.classList.add('show'); }
     carriers = [];
   }
+}
+
+function humanWalletStatus(status){
+  const s = String(status||'');
+  if(s === 'setup_pending') return STR.wallet_status_setup_pending;
+  if(s === 'confirmed') return STR.wallet_status_confirmed;
+  if(s === 'failed') return STR.wallet_status_failed;
+  return s;
 }
 
 function renderWalletPending(list){
@@ -958,7 +1061,7 @@ function renderWalletPending(list){
 
   wrap.innerHTML = '';
   if(!list.length){
-    wrap.innerHTML = '<div style="font-size:12px;color:var(--muted);">No pending setups.</div>';
+    wrap.innerHTML = `<div style="font-size:12px;color:var(--muted);">${STR.wallet_pending_none}</div>`;
     return;
   }
 
@@ -975,12 +1078,14 @@ function renderWalletPending(list){
     title.style.fontFamily = 'var(--display)';
     title.style.fontSize = '13px';
     title.style.fontWeight = '700';
-    title.textContent = (w.label || w.carrier_name || 'Wallet') + ' · ' + (w.display_status || 'setup_pending');
+    const displayName = (w.label || w.carrier_name || STR.wallet_default_name);
+    const status = humanWalletStatus(w.display_status || w.setup_status || 'setup_pending');
+    title.textContent = displayName + ' · ' + status;
 
     const meta = document.createElement('div');
     meta.style.fontSize = '11px';
     meta.style.color = 'var(--muted)';
-    meta.textContent = `Unlock at: ${w.unlock_at} · Carrier: ${w.carrier_name}`;
+    meta.textContent = tf('create_code.wallet.pending_meta', {unlock_at: w.unlock_at, carrier: w.carrier_name}, `Unlock at: ${w.unlock_at} · Carrier: ${w.carrier_name}`);
 
     const actions = document.createElement('div');
     actions.style.display = 'flex';
@@ -990,34 +1095,34 @@ function renderWalletPending(list){
     const btnOk = document.createElement('button');
     btnOk.className = 'btn btn-green btn-sm';
     btnOk.type = 'button';
-    btnOk.textContent = 'Confirm setup';
+    btnOk.textContent = STR.wallet_pending_btn_confirm;
     btnOk.onclick = async () => {
       try{
         const r = await postCsrfWithReauth('api/wallet_confirm.php', {wallet_lock_id: w.id});
-        if(!r.success) throw new Error(r.error||'Failed');
+        if(!r.success) throw new Error(r.error||STR.failed);
         await wipeClipboard();
-        toast('Setup confirmed', 'ok');
+        toast(STR.wallet_pending_toast_confirmed, 'ok');
         await loadWalletPending(true);
       }catch(e){
-        toast(e.message||'Failed', 'err');
+        toast(e.message||STR.failed, 'err');
       }
     };
 
     const btnFail = document.createElement('button');
     btnFail.className = 'btn btn-red btn-sm';
     btnFail.type = 'button';
-    btnFail.textContent = 'Mark failed';
+    btnFail.textContent = STR.wallet_pending_btn_fail;
     btnFail.onclick = async () => {
-      const ok = confirm('Mark this setup as failed?');
+      const ok = confirm(STR.wallet_pending_confirm_fail);
       if(!ok) return;
       try{
         const r = await postCsrfWithReauth('api/wallet_fail.php', {wallet_lock_id: w.id});
-        if(!r.success) throw new Error(r.error||'Failed');
+        if(!r.success) throw new Error(r.error||STR.failed);
         await wipeClipboard();
-        toast('Marked failed', 'ok');
+        toast(STR.wallet_pending_toast_marked_failed, 'ok');
         await loadWalletPending(true);
       }catch(e){
-        toast(e.message||'Failed', 'err');
+        toast(e.message||STR.failed, 'err');
       }
     };
 
@@ -1037,7 +1142,7 @@ async function loadWalletPending(force=false){
 
   try{
     const r = await get('api/wallet_locks.php');
-    if(!r.success) throw new Error(r.error||'Failed to load wallet locks');
+    if(!r.success) throw new Error(r.error||STR.wallet_err_load_wallet_locks);
 
     const rows = r.wallet_locks || [];
     const pending = rows.filter(x => x.display_status === 'setup_pending' || x.setup_status === 'pending');
@@ -1045,8 +1150,8 @@ async function loadWalletPending(force=false){
 
   }catch(e){
     const wrap = document.getElementById('wallet-pending-wrap');
-    if(wrap) wrap.innerHTML = '<div style="font-size:12px;color:var(--muted);">Failed to load.</div>';
-    if(msg){ msg.className='msg msg-err show'; msg.textContent = e.message||'Failed'; }
+    if(wrap) wrap.innerHTML = `<div style="font-size:12px;color:var(--muted);">${STR.wallet_pending_failed_load}</div>`;
+    if(msg){ msg.className='msg msg-err show'; msg.textContent = e.message||STR.failed; }
   }
 }
 
@@ -1054,7 +1159,7 @@ async function doWalletSetup(){
   const errEl=document.getElementById('w-err');
   errEl.classList.remove('show');
 
-  if(!vaultPhraseSession){toast('Enter your vault passphrase first','err');return;}
+  if(!vaultPhraseSession){toast(STR.gen_need_vault,'err');return;}
 
   const carrierId = parseInt((document.getElementById('w-carrier')||{}).value || '0', 10);
   const carrier = carriers.find(c => parseInt(c.id,10) === carrierId);
@@ -1063,12 +1168,12 @@ async function doWalletSetup(){
   const oldPin = (document.getElementById('w-oldpin')||{}).value?.trim() || '';
   const revealDate = (document.getElementById('w-date')||{}).value || '';
 
-  if(!carrier){ errEl.textContent='Select a template'; errEl.classList.add('show'); return; }
-  if(!revealDate){ errEl.textContent='Reveal date required'; errEl.classList.add('show'); return; }
+  if(!carrier){ errEl.textContent=STR.wallet_err_select_template; errEl.classList.add('show'); return; }
+  if(!revealDate){ errEl.textContent=STR.wallet_err_reveal_required; errEl.classList.add('show'); return; }
 
   const requiredLen = parseInt((carrier.pin_length ?? carrier.pinLength ?? '4'), 10) || 4;
   if(!/^[0-9]+$/.test(oldPin) || oldPin.length !== requiredLen){
-    errEl.textContent = `Current PIN must be ${requiredLen} digits`;
+    errEl.textContent = tf('create_code.wallet.err_pin_digits', {n: requiredLen}, `Current PIN must be ${requiredLen} digits`);
     errEl.classList.add('show');
     return;
   }
@@ -1079,7 +1184,7 @@ async function doWalletSetup(){
   if(policy.allowCopyUssd) allowed.push('copy_ussd');
 
   if(!allowed.length){
-    errEl.textContent = 'Wallet setup actions are disabled for this template.';
+    errEl.textContent = STR.wallet_err_actions_disabled;
     errEl.classList.add('show');
     return;
   }
@@ -1092,29 +1197,30 @@ async function doWalletSetup(){
   const btn=document.getElementById('w-btn');
   const txt=document.getElementById('w-txt');
   btn.disabled=true;
-  txt.innerHTML='<span class="spin light"></span> Sealing…';
+  txt.innerHTML='<span class="spin light"></span> ' + STR.sealing;
 
   try{
     const tpl = String(carrier.ussd_change_pin_template || carrier.ussdChangePinTemplate || '');
-    if(!tpl.trim()) throw new Error('This template is not configured yet. Ask an admin to set the USSD code.');
+    if(!tpl.trim()) throw new Error(STR.wallet_err_tpl_not_configured);
 
     // Template validation depends on flow:
     // - copy_ussd: must embed both old and new PIN
     // - open_dialer: should NOT embed the new PIN (it will be copied separately)
     if(action === 'copy_ussd'){
       if(!tpl.includes('{old_pin}') || !tpl.includes('{new_pin}')){
-        throw new Error('This template is misconfigured for “Copy USSD”: it must include {old_pin} and {new_pin}.');
+        throw new Error(STR.wallet_err_tpl_misconfig_copy);
       }
     } else {
       if(tpl.includes('{new_pin}')){
-        throw new Error('This template is misconfigured for “Send to phone app”: it must NOT include {new_pin}. Use “Copy USSD” instead, or ask an admin to provide an interactive USSD template that prompts for the new PIN.');
+        throw new Error(STR.wallet_err_tpl_misconfig_send);
       }
     }
 
     const newPin = genPassword((carrier.pin_type || carrier.pinType || 'numeric'), requiredLen);
 
     const saltResp = await get('api/salt.php');
-    if(!saltResp.success) throw new Error(saltResp.error||'Failed to get KDF salt');
+    if(!saltResp.success) throw new Error(saltResp.error||STR.gen_err_kdf_salt);
+');
 
     const kdf_salt = saltResp.kdf_salt;
     const kdf_iterations = saltResp.kdf_iterations;
@@ -1133,10 +1239,10 @@ async function doWalletSetup(){
       kdf_iterations,
     });
 
-    if(!createRes.success) throw new Error(createRes.error || 'Failed to create wallet lock');
+    if(!createRes.success) throw new Error(createRes.error || STR.wallet_err_create_failed);
 
     const walletLockId = createRes.wallet_lock_id;
-    if(!walletLockId) throw new Error('Invalid response');
+    if(!walletLockId) throw new Error(STR.wallet_err_invalid_response);
 
     // Build USSD command locally (never send PINs to server)
     const ussdDial = tpl.replace(/\{old_pin\}/g, oldPin);
@@ -1156,7 +1262,8 @@ async function doWalletSetup(){
     }catch{
       // We cannot display the PIN, so we must abort if clipboard isn't available.
       await postCsrfWithReauth('api/wallet_fail.php', {wallet_lock_id: walletLockId});
-      throw new Error('Clipboard write blocked. Use HTTPS and allow clipboard access.');
+      throw new Error(STR.wallet_err_clipboard_blocked);
+ and allow clipboard access.');
     }
 
     if(action === 'open_dialer'){
@@ -1165,12 +1272,12 @@ async function doWalletSetup(){
 
     pendingWallet = {
       wallet_lock_id: walletLockId,
-      carrier_name: carrier.name || 'Wallet',
+      carrier_name: carrier.name || STR.wallet_default_name,
       unlock_at: createRes.unlock_at || '',
       action,
       tel_uri: telUri,
     };
-    openConfirmSheetWallet({carrierName: carrier.name || 'Wallet', action, telUri});
+    openConfirmSheetWallet({carrierName: carrier.name || STR.wallet_default_name, action, telUri});
 
     document.getElementById('w-label').value='';
     document.getElementById('w-oldpin').value='';
@@ -1178,11 +1285,11 @@ async function doWalletSetup(){
     await loadWalletPending(true);
 
   }catch(e){
-    errEl.textContent=e.message||'Failed';
+    errEl.textContent = e.message || STR.failed;
     errEl.classList.add('show');
   }finally{
     syncWalletPrimaryButtonText();
-    btn.disabled=false;
+    btn.disabled = false;
   }
 }
 
@@ -1230,7 +1337,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if(carrier){
         const requiredLen = parseInt((carrier.pin_length ?? carrier.pinLength ?? '4'), 10) || 4;
         const inp = document.getElementById('w-oldpin');
-        if(inp) inp.placeholder = `${requiredLen}-digit PIN`;
+        if(inp) inp.placeholder = tf('create_code.wallet.current_pin_placeholder', {n: requiredLen}, `${requiredLen}-digit PIN`);
       }
     });
   }

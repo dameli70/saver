@@ -157,7 +157,11 @@ function i18nDefaultJsKeys(): array {
 function emitI18nJsGlobals(?array $keys = null): void {
     i18nBootstrap();
 
-    $keys = $keys ?? i18nDefaultJsKeys();
+    // If no key list is provided, emit the entire dictionary so inline page scripts
+    // can always call LS.t('some.key') without needing to maintain a per-page key list.
+    if ($keys === null) {
+        $keys = array_keys($GLOBALS['I18N_DICT'] ?? []);
+    }
 
     $strings = [];
     foreach ($keys as $k) {
