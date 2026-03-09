@@ -43,18 +43,20 @@ $verified = !empty($u['email_verified_at']);
 $_SESSION['email_verified'] = $verified ? 1 : 0;
 $isAdmin = isAdmin();
 $csrf    = getCsrfToken();
+$lang    = getCurrentLang();
 
 header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none';");
 header("X-Frame-Options: DENY");
 header("X-Content-Type-Options: nosniff");
 header("Referrer-Policy: no-referrer");
+header("Permissions-Policy: clipboard-write=(self)");
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="<?= htmlspecialchars(getCurrentLang()) ?>">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Account — <?= htmlspecialchars(APP_NAME) ?></title>
+<title><?= htmlspecialchars(t('nav.account')) ?> — <?= htmlspecialchars(APP_NAME) ?></title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
 <script src="assets/theme.js"></script>
@@ -94,18 +96,20 @@ code{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);pad
     <a class="logo" href="index.php"><?= htmlspecialchars(APP_NAME) ?></a>
     <div class="nav-r">
       <?php if ($verified): ?>
-        <a class="btn btn-ghost" href="dashboard.php">Dashboard</a>
-        <a class="btn btn-ghost" href="create_code.php">Create Code</a>
-        <a class="btn btn-ghost" href="my_codes.php">My Codes</a>
-        <a class="btn btn-ghost" href="rooms.php">Rooms</a>
-        <a class="btn btn-ghost" href="notifications.php">Notifications</a>
-        <a class="btn btn-ghost" href="backup.php">Backups</a>
+        <a class="btn btn-ghost" href="dashboard.php"><?= htmlspecialchars(t('nav.dashboard')) ?></a>
+        <a class="btn btn-ghost" href="create_code.php"><?= htmlspecialchars(t('nav.create_code')) ?></a>
+        <a class="btn btn-ghost" href="my_codes.php"><?= htmlspecialchars(t('nav.my_codes')) ?></a>
+        <a class="btn btn-ghost" href="rooms.php"><?= htmlspecialchars(t('nav.rooms')) ?></a>
+        <a class="btn btn-ghost" href="notifications.php"><?= htmlspecialchars(t('nav.notifications')) ?></a>
+        <a class="btn btn-ghost" href="backup.php"><?= htmlspecialchars(t('nav.backup')) ?></a>
         <?php if ($isAdmin): ?>
-          <a class="btn btn-ghost" href="admin.php">Admin</a>
+          <a class="btn btn-ghost" href="admin.php"><?= htmlspecialchars(t('nav.admin')) ?></a>
         <?php endif; ?>
       <?php endif; ?>
-      <button class="btn btn-ghost btn-theme" type="button" data-theme-toggle>Theme</button>
-      <a class="btn btn-ghost" href="logout.php">Logout</a>
+      <button class="btn btn-ghost btn-theme" type="button" data-theme-toggle><?= htmlspecialchars(t('nav.theme')) ?></button>
+      <a class="btn btn-ghost <?= ($lang === 'fr') ? 'btn-lang-active' : '' ?>" href="<?= htmlspecialchars(langUrl('fr')) ?>">FR</a>
+      <a class="btn btn-ghost <?= ($lang === 'en') ? 'btn-lang-active' : '' ?>" href="<?= htmlspecialchars(langUrl('en')) ?>">EN</a>
+      <a class="btn btn-ghost" href="logout.php"><?= htmlspecialchars(t('nav.logout')) ?></a>
     </div>
   </div>
 

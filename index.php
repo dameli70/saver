@@ -9,6 +9,7 @@ $loggedIn = isLoggedIn();
 $verified = $loggedIn ? isEmailVerified() : false;
 $isAdmin  = $loggedIn ? isAdmin() : false;
 $userEmail = getCurrentUserEmail() ?? '';
+$lang      = getCurrentLang();
 
 header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none';");
 header("X-Frame-Options: DENY");
@@ -16,7 +17,7 @@ header("X-Content-Type-Options: nosniff");
 header("Referrer-Policy: no-referrer");
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="<?= htmlspecialchars(getCurrentLang()) ?>">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -93,25 +94,27 @@ a{color:inherit;}
   <div class="nav">
     <a class="logo" href="index.php"><?= htmlspecialchars(APP_NAME) ?></a>
     <div class="nav-r">
-      <button class="btn btn-ghost btn-theme" type="button" data-theme-toggle>Theme</button>
-      <a class="btn btn-ghost" href="#faq">FAQ</a>
+      <button class="btn btn-ghost btn-theme" type="button" data-theme-toggle><?= htmlspecialchars(t('nav.theme')) ?></button>
+      <a class="btn btn-ghost <?= ($lang === 'fr') ? 'btn-lang-active' : '' ?>" href="<?= htmlspecialchars(langUrl('fr')) ?>">FR</a>
+      <a class="btn btn-ghost <?= ($lang === 'en') ? 'btn-lang-active' : '' ?>" href="<?= htmlspecialchars(langUrl('en')) ?>">EN</a>
+      <a class="btn btn-ghost" href="#faq"><?= htmlspecialchars(t('nav.faq')) ?></a>
       <?php if ($loggedIn): ?>
         <span class="pill"><?= htmlspecialchars($userEmail) ?></span>
         <?php if ($verified): ?>
-          <a class="btn btn-ghost" href="dashboard.php">Dashboard</a>
-          <a class="btn btn-ghost" href="create_code.php">Create Code</a>
-          <a class="btn btn-ghost" href="my_codes.php">My Codes</a>
-          <a class="btn btn-ghost" href="rooms.php">Rooms</a>
+          <a class="btn btn-ghost" href="dashboard.php"><?= htmlspecialchars(t('nav.dashboard')) ?></a>
+          <a class="btn btn-ghost" href="create_code.php"><?= htmlspecialchars(t('nav.create_code')) ?></a>
+          <a class="btn btn-ghost" href="my_codes.php"><?= htmlspecialchars(t('nav.my_codes')) ?></a>
+          <a class="btn btn-ghost" href="rooms.php"><?= htmlspecialchars(t('nav.rooms')) ?></a>
           <?php if ($isAdmin): ?>
-            <a class="btn btn-ghost" href="admin.php">Admin</a>
+            <a class="btn btn-ghost" href="admin.php"><?= htmlspecialchars(t('nav.admin')) ?></a>
           <?php endif; ?>
         <?php else: ?>
-          <a class="btn btn-ghost" href="account.php">Verify Email</a>
+          <a class="btn btn-ghost" href="account.php"><?= htmlspecialchars(t('nav.account')) ?></a>
         <?php endif; ?>
-        <a class="btn btn-ghost" href="logout.php">Logout</a>
+        <a class="btn btn-ghost" href="logout.php"><?= htmlspecialchars(t('nav.logout')) ?></a>
       <?php else: ?>
-        <a class="btn btn-ghost" href="login.php">Login</a>
-        <a class="btn btn-primary" href="signup.php">Create account</a>
+        <a class="btn btn-ghost" href="login.php"><?= htmlspecialchars(t('auth.login.title')) ?></a>
+        <a class="btn btn-primary" href="signup.php"><?= htmlspecialchars(t('auth.signup.title')) ?></a>
       <?php endif; ?>
     </div>
   </div>

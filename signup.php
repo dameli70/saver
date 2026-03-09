@@ -20,11 +20,11 @@ header("X-Content-Type-Options: nosniff");
 header("Referrer-Policy: no-referrer");
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="<?= htmlspecialchars(getCurrentLang()) ?>">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Create account — <?= htmlspecialchars(APP_NAME) ?></title>
+<title><?= htmlspecialchars(t('auth.signup.title')) ?> — <?= htmlspecialchars(APP_NAME) ?></title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
 <script src="assets/theme.js"></script>
@@ -41,41 +41,46 @@ header("Referrer-Policy: no-referrer");
 </style>
 </head>
 <body>
-  <button class="theme-toggle" type="button" data-theme-toggle>Theme</button>
+  <button class="theme-toggle" type="button" data-theme-toggle><?= htmlspecialchars(t('nav.theme')) ?></button>
   <div class="box">
     <div class="logo"><?= htmlspecialchars(APP_NAME) ?></div>
-    <div class="sub">// Create account</div>
+    <div class="sub">// <?= htmlspecialchars(t('auth.signup.title')) ?></div>
 
     <div class="callout">
-      Your <strong>login password</strong> authenticates you to this site.<br>
-      Your <strong>vault passphrase</strong> is used only in your browser to encrypt/decrypt codes and is never stored by the server — you will enter it when you generate or reveal codes.
+      <?= t('auth.signup.callout') ?>
     </div>
 
     <div id="err" class="msg msg-err"></div>
     <div id="ok" class="msg msg-ok"></div>
 
     <form id="f">
-      <div class="field"><label>Email</label>
-        <input type="email" id="email" autocomplete="email" inputmode="email" placeholder="you@example.com" required>
+      <div class="field"><label><?= htmlspecialchars(t('field.email')) ?></label>
+        <input type="email" id="email" autocomplete="email" inputmode="email" placeholder="<?= htmlspecialchars(t('placeholder.email')) ?>" required>
       </div>
-      <div class="field"><label>Login Password <span style="color:var(--muted)">(min 8 chars)</span></label>
-        <input type="password" id="pwd" autocomplete="new-password" placeholder="••••••••" required>
+      <div class="field"><label><?= htmlspecialchars(t('field.login_password')) ?> <span style="color:var(--muted)"><?= htmlspecialchars(t('hint.min_8_chars')) ?></span></label>
+        <input type="password" id="pwd" autocomplete="new-password" placeholder="<?= htmlspecialchars(t('placeholder.pass')) ?>" required>
       </div>
-      <div class="field"><label>Vault Passphrase <span style="color:var(--muted)">(min 10 chars)</span></label>
-        <input type="password" id="vault" autocomplete="new-password" placeholder="Something memorable only you know" required>
-        <div class="note">Write this down somewhere physical. If you lose it, your codes cannot be recovered.</div>
+      <div class="field"><label><?= htmlspecialchars(t('field.vault_passphrase')) ?> <span style="color:var(--muted)"><?= htmlspecialchars(t('hint.min_10_chars')) ?></span></label>
+        <input type="password" id="vault" autocomplete="new-password" placeholder="<?= htmlspecialchars(t('placeholder.vault')) ?>" required>
+        <div class="note"><?= htmlspecialchars(t('auth.signup.vault_note')) ?></div>
       </div>
-      <div class="field"><label>Confirm Vault Passphrase</label>
-        <input type="password" id="vault2" autocomplete="new-password" placeholder="Confirm passphrase" required>
+      <div class="field"><label><?= htmlspecialchars(t('field.confirm_vault_passphrase')) ?></label>
+        <input type="password" id="vault2" autocomplete="new-password" placeholder="<?= htmlspecialchars(t('placeholder.confirm_passphrase')) ?>" required>
       </div>
-      <button class="btn btn-primary" id="btn" type="submit"><span id="btn-txt">Create account</span></button>
+      <button class="btn btn-primary" id="btn" type="submit"><span id="btn-txt"><?= htmlspecialchars(t('auth.signup.button')) ?></span></button>
     </form>
 
     <div id="dev" class="dev" style="display:none"></div>
 
     <div class="links">
-      <a href="index.php">Home</a>
-      <a href="login.php">I already have an account</a>
+      <a href="index.php"><?= htmlspecialchars(t('nav.home')) ?></a>
+      <a href="login.php"><?= htmlspecialchars(t('auth.signup.have_account')) ?></a>
+    </div>
+
+    <div class="links" style="justify-content:center;gap:14px;">
+      <?php $lang = getCurrentLang(); ?>
+      <a href="<?= htmlspecialchars(langUrl('fr')) ?>" class="<?= ($lang === 'fr') ? 'btn-lang-active' : '' ?>">FR</a>
+      <a href="<?= htmlspecialchars(langUrl('en')) ?>" class="<?= ($lang === 'en') ? 'btn-lang-active' : '' ?>">EN</a>
     </div>
   </div>
 
@@ -86,6 +91,19 @@ const ok=document.getElementById('ok');
 const btn=document.getElementById('btn');
 const btnTxt=document.getElementById('btn-txt');
 const dev=document.getElementById('dev');
+
+const TXT = <?= json_encode([
+  'fill_all_fields' => t('js.fill_all_fields'),
+  'login_pwd_min' => t('js.login_pwd_min'),
+  'vault_pwd_min' => t('js.vault_pwd_min'),
+  'vault_mismatch' => t('js.vault_mismatch'),
+  'registration_failed' => t('js.registration_failed'),
+  'account_created_check_email' => t('js.account_created_check_email'),
+  'network_error' => t('js.network_error'),
+  'signup_button' => t('auth.signup.button'),
+  'crypto_unavailable' => t('js.crypto_unavailable'),
+  'crypto_need_https' => t('js.crypto_need_https'),
+], JSON_UNESCAPED_UNICODE) ?>;
 
 const CSRF = <?= json_encode(getCsrfToken()) ?>;
 const PBKDF2_ITERS = <?= (int)PBKDF2_ITERATIONS ?>;
@@ -101,10 +119,10 @@ function b64ToBytes(b64){return Uint8Array.from(atob(b64), c => c.charCodeAt(0))
 function requireWebCrypto(){
   // WebCrypto (crypto.subtle) is only available in secure contexts (HTTPS or localhost).
   if (!window.crypto || !window.crypto.getRandomValues) {
-    throw new Error('Secure cryptography is unavailable in this browser.');
+    throw new Error(TXT.crypto_unavailable);
   }
   if (!window.isSecureContext || !window.crypto.subtle) {
-    throw new Error('Web Crypto API is unavailable. Use HTTPS (or localhost) to set a vault passphrase.');
+    throw new Error(TXT.crypto_need_https);
   }
   return window.crypto;
 }
@@ -167,10 +185,10 @@ f.addEventListener('submit', async (e)=>{
   const vault=document.getElementById('vault').value;
   const vault2=document.getElementById('vault2').value;
 
-  if(!email||!pwd||!vault||!vault2){showErr('Fill in all fields');return;}
-  if(pwd.length<8){showErr('Login password must be at least 8 characters');return;}
-  if(vault.length<10){showErr('Vault passphrase must be at least 10 characters');return;}
-  if(vault!==vault2){showErr('Vault passphrases do not match');return;}
+  if(!email||!pwd||!vault||!vault2){showErr(TXT.fill_all_fields);return;}
+  if(pwd.length<8){showErr(TXT.login_pwd_min);return;}
+  if(vault.length<10){showErr(TXT.vault_pwd_min);return;}
+  if(vault!==vault2){showErr(TXT.vault_mismatch);return;}
 
   btn.disabled=true;
   btnTxt.innerHTML='<span class="spin"></span>';
@@ -179,9 +197,9 @@ f.addEventListener('submit', async (e)=>{
     const r=await fetch('api/auth.php',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({action:'register',email,login_password:pwd})});
     const j=await r.json();
-    if(!j.success){showErr(j.error||'Registration failed');return;}
+    if(!j.success){showErr(j.error||TXT.registration_failed);return;}
 
-    showOk('Account created. Check your email to verify before using the dashboard.');
+    showOk(TXT.account_created_check_email);
 
     // Initialize vault passphrase check so you can unlock on any device.
     try{
@@ -202,12 +220,13 @@ f.addEventListener('submit', async (e)=>{
     setTimeout(()=>{window.location='account.php';}, 900);
 
   }catch{
-    showErr('Network error');
+    showErr(TXT.network_error);
   }finally{
     btn.disabled=false;
-    btnTxt.textContent='Create account';
+    btnTxt.textContent=TXT.signup_button;
   }
 });
+
 </script>
 </body>
 </html>

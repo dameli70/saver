@@ -18,6 +18,7 @@ $userId = (int)(getCurrentUserId() ?? 0);
 $userEmail = getCurrentUserEmail() ?? '';
 $isAdmin   = isAdmin();
 $csrf      = getCsrfToken();
+$lang      = getCurrentLang();
 
 $hasTotp    = userHasTotp($userId);
 $hasPasskey = userHasPasskeys($userId);
@@ -57,46 +58,48 @@ if ($backupCount > 0) $setupDone++;
 if ($lockCount > 0) $setupDone++;
 $setupPercent = (int)floor(($setupDone / $setupStepsTotal) * 100);
 
-$nextSetupText = 'Next: review your setup.';
-$nextSetupLabel = 'Continue';
+$nextSetupText = t('setup.next.review');
+$nextSetupLabel = t('action.continue');
 $nextSetupHref = 'setup.php';
 
 if (!$hasVault) {
-    $nextSetupText = 'Next: set your vault passphrase.';
-    $nextSetupLabel = 'Open vault';
+    $nextSetupText = t('setup.next.vault');
+    $nextSetupLabel = t('action.open_vault');
     $nextSetupHref = 'vault_settings.php';
 } elseif (!$hasTotp && !$hasPasskey) {
-    $nextSetupText = 'Next: add a passkey or authenticator app.';
-    $nextSetupLabel = 'Add confirmation';
+    $nextSetupText = t('setup.next.confirmation');
+    $nextSetupLabel = t('action.add_confirmation');
     $nextSetupHref = 'account.php#passkeys-card';
 } elseif ($backupCount <= 0) {
-    $nextSetupText = 'Next: download an encrypted backup.';
-    $nextSetupLabel = 'Open backup';
+    $nextSetupText = t('setup.next.backup');
+    $nextSetupLabel = t('action.open_backup');
     $nextSetupHref = 'backup.php';
 } elseif ($lockCount <= 0) {
-    $nextSetupText = 'Next: create your first time lock.';
-    $nextSetupLabel = 'Create a time lock';
+    $nextSetupText = t('setup.next.first_lock');
+    $nextSetupLabel = t('action.create_time_lock');
     $nextSetupHref = 'create_code.php';
 } else {
-    $nextSetupText = 'You’re ready.';
-    $nextSetupLabel = 'Go to dashboard';
+    $nextSetupText = t('setup.next.ready');
+    $nextSetupLabel = t('action.go_dashboard');
     $nextSetupHref = 'dashboard.php';
 }
 
 $onboardingAvailable = hasOnboardingColumns();
 $onboardingDone = isOnboardingComplete($userId);
 
+// Strict security headers
 header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none';");
 header("X-Frame-Options: DENY");
 header("X-Content-Type-Options: nosniff");
 header("Referrer-Policy: no-referrer");
+header("Permissions-Policy: clipboard-write=(self)");
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="<?= htmlspecialchars(getCurrentLang()) ?>">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Setup — <?= htmlspecialchars(APP_NAME) ?></title>
+<title><?= htmlspecialchars(t('nav.setup')) ?> — <?= htmlspecialchars(APP_NAME) ?></title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
 <script src="assets/theme.js"></script>
@@ -127,24 +130,26 @@ header("Referrer-Policy: no-referrer");
   <a class="logo" href="index.php"><?= htmlspecialchars(APP_NAME) ?></a>
   <div class="nav-r">
     <span class="pill" style="display:none;"><?= htmlspecialchars($userEmail) ?></span>
-    <button class="btn btn-ghost btn-sm btn-theme" type="button" data-theme-toggle>Theme</button>
-    <a class="btn btn-ghost btn-sm" href="dashboard.php">Dashboard</a>
-    <a class="btn btn-ghost btn-sm" href="account.php">Account</a>
-    <?php if ($isAdmin): ?><a class="btn btn-ghost btn-sm" href="admin.php">Admin</a><?php endif; ?>
-    <a class="btn btn-ghost btn-sm" href="logout.php">Logout</a>
+    <button class="btn btn-ghost btn-sm btn-theme" type="button" data-theme-toggle><?= htmlspecialchars(t('nav.theme')) ?></button>
+    <a class="btn btn-ghost btn-sm <?= ($lang === 'fr') ? 'btn-lang-active' : '' ?>" href="<?= htmlspecialchars(langUrl('fr')) ?>">FR</a>
+    <a class="btn btn-ghost btn-sm <?= ($lang === 'en') ? 'btn-lang-active' : '' ?>" href="<?= htmlspecialchars(langUrl('en')) ?>">EN</a>
+    <a class="btn btn-ghost btn-sm" href="dashboard.php"><?= htmlspecialchars(t('nav.dashboard')) ?></a>
+    <a class="btn btn-ghost btn-sm" href="account.php"><?= htmlspecialchars(t('nav.account')) ?></a>
+    <?php if ($isAdmin): ?><a class="btn btn-ghost btn-sm" href="admin.php"><?= htmlspecialchars(t('nav.admin')) ?></a><?php endif; ?>
+    <a class="btn btn-ghost btn-sm" href="logout.php"><?= htmlspecialchars(t('nav.logout')) ?></a>
   </div>
 </div>
 
 <div class="wrap">
-  <div class="h">Setup</div>
+  <div class="h"><?= htmlspecialchars(t('setup.title')) ?></div>
   <div class="p">Get <?= htmlspecialchars(APP_NAME) ?> ready for daily use. This takes a few minutes and makes unlocking and backups safer.</div>
 
   <div class="card" style="margin-bottom:14px;">
-    <div class="card-title"><div class="dot"></div>Progress</div>
+    <div class="card-title"><div class="dot"></div><?= htmlspecialchars(t('setup.progress')) ?></div>
     <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
       <div style="min-width:220px;flex:1;">
         <div style="font-size:12px;color:var(--muted);line-height:1.7;">
-          <strong style="color:var(--text);font-weight:800;"><?= (int)$setupPercent ?>%</strong> complete — <?= htmlspecialchars($nextSetupText) ?>
+          <strong style="color:var(--text);font-weight:800;"><?= (int)$setupPercent ?>%</strong> <?= htmlspecialchars(t('dashboard.percent_complete')) ?> — <?= htmlspecialchars($nextSetupText) ?>
         </div>
         <div style="height:10px;border:1px solid var(--b1);background:rgba(255,255,255,.02);margin-top:10px;">
           <div style="height:100%;width:<?= (int)$setupPercent ?>%;background:linear-gradient(90deg, var(--accent), rgba(255,255,255,.12));"></div>
@@ -152,15 +157,16 @@ header("Referrer-Policy: no-referrer");
       </div>
       <a class="btn btn-primary" href="<?= htmlspecialchars($nextSetupHref) ?>" style="width:auto;"><?= htmlspecialchars($nextSetupLabel) ?></a>
     </div>
-    <div class="p" style="margin-top:10px;color:var(--muted);">Vault passphrase + confirmation + backup + first time lock.</div>
+    <div class="p" style="margin-top:10px;color:var(--muted);"><?= htmlspecialchars(t('setup.progress_note')) ?></div>
   </div>
+
   <?php if ($onboardingAvailable && $onboardingDone): ?>
     <div class="card" style="margin-bottom:14px;">
       <div class="card-title">You’re all set</div>
       <div class="p" style="margin-top:-6px;">You can revisit this page anytime.</div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;">
-        <a class="btn btn-primary" href="dashboard.php" style="width:auto;">Go to dashboard</a>
-        <a class="btn btn-ghost" href="create_code.php" style="width:auto;">Create a time lock</a>
+        <a class="btn btn-primary" href="dashboard.php" style="width:auto;"><?= htmlspecialchars(t('action.go_dashboard')) ?></a>
+        <a class="btn btn-ghost" href="create_code.php" style="width:auto;"><?= htmlspecialchars(t('action.create_time_lock')) ?></a>
       </div>
     </div>
   <?php endif; ?>
@@ -176,8 +182,8 @@ header("Referrer-Policy: no-referrer");
         <div class="badge <?= $hasVault ? 'ok' : '' ?>"><?= $hasVault ? '✓ set' : 'not set' ?></div>
       </div>
       <div class="actions">
-        <a class="btn btn-primary" href="vault_settings.php" style="width:auto;">Open vault</a>
-        <a class="btn btn-ghost" href="account.php#vault-passphrase-card" style="width:auto;">Manage in account</a>
+        <a class="btn btn-primary" href="vault_settings.php" style="width:auto;"><?= htmlspecialchars(t('action.open_vault')) ?></a>
+        <a class="btn btn-ghost" href="account.php#vault-passphrase-card" style="width:auto;"><?= htmlspecialchars(t('nav.account')) ?></a>
       </div>
     </div>
 
@@ -204,8 +210,8 @@ header("Referrer-Policy: no-referrer");
         <div class="badge <?= $backupCount > 0 ? 'ok' : '' ?>"><?= $backupCount > 0 ? ('✓ ' . (int)$backupCount) : 'none yet' ?></div>
       </div>
       <div class="actions">
-        <a class="btn btn-primary" href="backup.php" style="width:auto;">Open backup</a>
-        <?php if ($lastBackupAt): ?><span class="utc-pill" title="Stored in UTC" style="align-self:center;">Last: <?= htmlspecialchars($lastBackupAt) ?> UTC</span><?php endif; ?>
+        <a class="btn btn-primary" href="backup.php" style="width:auto;"><?= htmlspecialchars(t('action.open_backup')) ?></a>
+        <?php if ($lastBackupAt): ?><span class="utc-pill" title="<?= htmlspecialchars(t('checklist.backup.utc_title')) ?>" style="align-self:center;"><?= htmlspecialchars(t('checklist.backup.last', ['at' => (string)$lastBackupAt])) ?></span><?php endif; ?>
       </div>
     </div>
 
@@ -218,8 +224,8 @@ header("Referrer-Policy: no-referrer");
         <div class="badge <?= $lockCount > 0 ? 'ok' : '' ?>"><?= $lockCount > 0 ? ('✓ ' . (int)$lockCount) : 'todo' ?></div>
       </div>
       <div class="actions">
-        <a class="btn btn-primary" href="create_code.php" style="width:auto;">Create a time lock</a>
-        <a class="btn btn-ghost" href="my_codes.php" style="width:auto;">View my time locks</a>
+        <a class="btn btn-primary" href="create_code.php" style="width:auto;"><?= htmlspecialchars(t('action.create_time_lock')) ?></a>
+        <a class="btn btn-ghost" href="my_codes.php" style="width:auto;"><?= htmlspecialchars(t('nav.my_codes')) ?></a>
       </div>
     </div>
 
@@ -233,19 +239,19 @@ header("Referrer-Policy: no-referrer");
       </div>
       <div class="actions">
         <a class="btn btn-primary" href="rooms.php" style="width:auto;">Open Saving Rooms</a>
-        <a class="btn btn-ghost" href="notifications.php" style="width:auto;">Notifications</a>
+        <a class="btn btn-ghost" href="notifications.php" style="width:auto;"><?= htmlspecialchars(t('nav.notifications')) ?></a>
       </div>
     </div>
 
   </div>
 
   <div class="card" style="margin-top:14px;">
-    <div class="card-title">Continue</div>
+    <div class="card-title"><?= htmlspecialchars(t('action.continue')) ?></div>
     <div class="p" style="margin-top:-6px;">You can always come back to this page from Dashboard → Setup.</div>
 
     <div style="display:flex;gap:10px;flex-wrap:wrap;">
-      <button class="btn btn-primary" id="finish" type="button" style="width:auto;">Go to dashboard</button>
-      <a class="btn btn-ghost" href="dashboard.php?skip_setup=1" style="width:auto;">Remind me next time</a>
+      <button class="btn btn-primary" id="finish" type="button" style="width:auto;"><?= htmlspecialchars(t('action.go_dashboard')) ?></button>
+      <a class="btn btn-ghost" href="dashboard.php?skip_setup=1" style="width:auto;"><?= htmlspecialchars(t('action.remind_next_time')) ?></a>
     </div>
 
     <div id="msg" class="msg"></div>
@@ -259,6 +265,8 @@ header("Referrer-Policy: no-referrer");
 <script>
 const CSRF = <?= json_encode($csrf) ?>;
 const ONBOARDING_AVAILABLE = <?= $onboardingAvailable ? 'true' : 'false' ?>;
+const NETWORK_ERROR = <?= json_encode(t('js.network_error')) ?>;
+const REQUEST_FAILED = <?= json_encode(t('js.request_failed')) ?>;
 
 function setMsg(text, ok){
   const el=document.getElementById('msg');
@@ -280,10 +288,10 @@ document.getElementById('finish').addEventListener('click', async ()=>{
 
   try{
     const j = await postCsrf('api/onboarding.php', {action:'complete'});
-    if(!j.success){setMsg(j.error||'Failed', false);return;}
+    if(!j.success){setMsg(j.error||REQUEST_FAILED, false);return;}
     window.location.href='dashboard.php';
   }catch{
-    setMsg('Network error', false);
+    setMsg(NETWORK_ERROR, false);
   }
 });
 </script>

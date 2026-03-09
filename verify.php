@@ -17,15 +17,20 @@ function page(string $title, string $msg, bool $ok = false): void {
     $msgClass = $ok ? 'msg msg-ok show' : 'msg msg-warn show';
     $appName = htmlspecialchars(APP_NAME);
 
-    echo "<!doctype html><html lang=\"en\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1,viewport-fit=cover\">";
+    $lang = htmlspecialchars(getCurrentLang());
+
+    echo "<!doctype html><html lang=\"{$lang}\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1,viewport-fit=cover\">";
     echo "<title>" . htmlspecialchars($title) . " — {$appName}</title>";
     echo "<link rel=\"preconnect\" href=\"https://fonts.googleapis.com\"><link href=\"https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap\" rel=\"stylesheet\">";
     echo "<script src=\"assets/theme.js\"></script>";
     echo "<link rel=\"stylesheet\" href=\"assets/base.css\">";
     echo "<link rel=\"stylesheet\" href=\"assets/auth.css\">";
+    $themeLabel = htmlspecialchars(t('nav.theme'));
+    $continueLabel = htmlspecialchars(t('action.continue'));
+
     echo "</head><body>";
-    echo "<button class=\"theme-toggle\" type=\"button\" data-theme-toggle>Theme</button>";
-    echo "<div class=\"box\"><div class=\"logo\">{$appName}</div><div class=\"{$msgClass}\">{$msg}</div><a class=\"btn btn-primary\" href=\"login.php\">Continue</a></div></body></html>";
+    echo "<button class=\"theme-toggle\" type=\"button\" data-theme-toggle>{$themeLabel}</button>";
+    echo "<div class=\"box\"><div class=\"logo\">{$appName}</div><div class=\"{$msgClass}\">{$msg}</div><a class=\"btn btn-primary\" href=\"login.php\">{$continueLabel}</a></div></body></html>";
 }
 
 if (!filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($token) < 10) {

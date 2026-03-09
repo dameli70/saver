@@ -26,6 +26,8 @@ define('APP_ENV', 'development'); // 'production' in prod
 
 define('APP_NAME', 'Controle');
 
+define('APP_DEFAULT_LANG', 'fr'); // 'fr' (default) or 'en'
+
 // Optional: display logo image URL/path (e.g. /assets/logo.png). Leave empty to use text-only branding.
 define('APP_LOGO_URL', '');
 

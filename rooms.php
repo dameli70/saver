@@ -17,6 +17,7 @@ if (!isEmailVerified()) {
 $userEmail = getCurrentUserEmail() ?? '';
 $isAdmin   = isAdmin();
 $csrf      = getCsrfToken();
+$lang      = getCurrentLang();
 
 header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none';");
 header("X-Frame-Options: DENY");
@@ -24,7 +25,7 @@ header("X-Content-Type-Options: nosniff");
 header("Referrer-Policy: no-referrer");
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="<?= htmlspecialchars(getCurrentLang()) ?>">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -69,14 +70,16 @@ header("Referrer-Policy: no-referrer");
   <a class="logo" href="index.php"><?= htmlspecialchars(APP_NAME) ?></a>
   <div class="nav-r">
     <span class="pill"><?= htmlspecialchars($userEmail) ?></span>
-    <button class="btn btn-ghost btn-sm btn-theme" type="button" data-theme-toggle>Theme</button>
-    <?php if ($isAdmin): ?><a class="btn btn-ghost btn-sm" href="admin.php">Admin</a><?php endif; ?>
-    <a class="btn btn-ghost btn-sm" href="dashboard.php">Dashboard</a>
-    <a class="btn btn-ghost btn-sm" href="create_code.php">Create Code</a>
-    <a class="btn btn-ghost btn-sm" href="my_codes.php">My Codes</a>
-    <a class="btn btn-ghost btn-sm" href="notifications.php">Notifications</a>
-    <a class="btn btn-ghost btn-sm" href="account.php">Account</a>
-    <a class="btn btn-ghost btn-sm" href="logout.php">Logout</a>
+    <button class="btn btn-ghost btn-sm btn-theme" type="button" data-theme-toggle><?= htmlspecialchars(t('nav.theme')) ?></button>
+    <a class="btn btn-ghost btn-sm <?= ($lang === 'fr') ? 'btn-lang-active' : '' ?>" href="<?= htmlspecialchars(langUrl('fr')) ?>">FR</a>
+    <a class="btn btn-ghost btn-sm <?= ($lang === 'en') ? 'btn-lang-active' : '' ?>" href="<?= htmlspecialchars(langUrl('en')) ?>">EN</a>
+    <?php if ($isAdmin): ?><a class="btn btn-ghost btn-sm" href="admin.php"><?= htmlspecialchars(t('nav.admin')) ?></a><?php endif; ?>
+    <a class="btn btn-ghost btn-sm" href="dashboard.php"><?= htmlspecialchars(t('nav.dashboard')) ?></a>
+    <a class="btn btn-ghost btn-sm" href="create_code.php"><?= htmlspecialchars(t('nav.create_code')) ?></a>
+    <a class="btn btn-ghost btn-sm" href="my_codes.php"><?= htmlspecialchars(t('nav.my_codes')) ?></a>
+    <a class="btn btn-ghost btn-sm" href="notifications.php"><?= htmlspecialchars(t('nav.notifications')) ?></a>
+    <a class="btn btn-ghost btn-sm" href="account.php"><?= htmlspecialchars(t('nav.account')) ?></a>
+    <a class="btn btn-ghost btn-sm" href="logout.php"><?= htmlspecialchars(t('nav.logout')) ?></a>
   </div>
 </div>
 

@@ -18,6 +18,103 @@
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/smtp.php';
 
+// ── I18n / Locale ───────────────────────────────────────────
+function supportedLangs(): array {
+    return ['fr', 'en'];
+}
+
+function normalizeLang(?string $lang): ?string {
+    if ($lang === null) return null;
+    $l = strtolower(trim($lang));
+    if ($l === 'fr' || $l === 'fr-fr') return 'fr';
+    if ($l === 'en' || $l === 'en-us' || $l === 'en-gb') return 'en';
+    return in_array($l, supportedLangs(), true) ? $l : null;
+}
+
+function setCurrentLang(string $lang): void {
+    startSecureSession();
+    $l = normalizeLang($lang);
+    if (!$l) return;
+    $_SESSION['lang'] = $l;
+
+    $secure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
+    setcookie('lang', $l, [
+        'expires' => time() + (3600 * 24 * 365),
+        'path' => '/',
+        'secure' => $secure,
+        'httponly' => false,
+        'samesite' => 'Lax',
+    ]);
+}
+
+function initLangFromRequest(): void {
+    if (!empty($_GET['lang'])) {
+        setCurrentLang((string)$_GET['lang']);
+        return;
+    }
+
+    startSecureSession();
+    if (!empty($_SESSION['lang'])) return;
+
+    $cookie = normalizeLang($_COOKIE['lang'] ?? null);
+    if ($cookie) {
+        $_SESSION['lang'] = $cookie;
+        return;
+    }
+
+    $default = normalizeLang(defined('APP_DEFAULT_LANG') ? APP_DEFAULT_LANG : 'fr') ?? 'fr';
+    $_SESSION['lang'] = $default;
+}
+
+function getCurrentLang(): string {
+    initLangFromRequest();
+    $l = normalizeLang($_SESSION['lang'] ?? null);
+    return $l ?: 'fr';
+}
+
+function langUrl(string $lang): string {
+    $l = normalizeLang($lang);
+    if (!$l) $l = 'fr';
+
+    $uri = (string)($_SERVER['REQUEST_URI'] ?? '');
+    if ($uri === '') {
+        return '?lang=' . rawurlencode($l);
+    }
+
+    $parts = parse_url($uri);
+    $path = $parts['path'] ?? '';
+    $qs = [];
+    if (!empty($parts['query'])) {
+        parse_str($parts['query'], $qs);
+    }
+    $qs['lang'] = $l;
+
+    $q = http_build_query($qs);
+    return $path . ($q ? ('?' . $q) : '');
+}
+
+function t(string $key, array $vars = []): string {
+    static $dict = null;
+    if ($dict === null) {
+        $dict = require __DIR__ . '/i18n.php';
+    }
+
+    $lang = getCurrentLang();
+    $fallback = 'en';
+
+    $s = $dict[$lang][$key] ?? $dict[$fallback][$key] ?? $key;
+
+    if ($vars) {
+        $repl = [];
+        foreach ($vars as $k => $v) {
+            $repl['{' . $k . '}'] = (string)$v;
+        }
+        $s = strtr($s, $repl);
+    }
+
+    return $s;
+}
+
 // ── Session ──────────────────────────────────────────────────
 function startSecureSession(): void {
     if (session_status() === PHP_SESSION_NONE) {
@@ -27,6 +124,7 @@ function startSecureSession(): void {
         ini_set('session.use_strict_mode', 1);
         ini_set('session.gc_maxlifetime', 3600);
         session_start();
+        initLangFromRequest();
     }
 }
 
@@ -318,8 +416,10 @@ function issueEmailVerification(int $userId, string $email): ?string {
     $base = getAppBaseUrl();
     $url  = $base . '/verify.php?email=' . rawurlencode($email) . '&token=' . rawurlencode($token);
 
-    sendEmail($email, APP_NAME . ' — Verify your email',
-        "Welcome to " . APP_NAME . "\n\nVerify your email to unlock your dashboard:\n\n" . $url . "\n\nThis link expires in " . EMAIL_VERIFY_TTL_HOURS . " hours.\n"
+    sendEmail(
+        $email,
+        t('email.verify.subject', ['app' => APP_NAME]),
+        t('email.verify.body', ['app' => APP_NAME, 'url' => $url, 'hours' => (string)EMAIL_VERIFY_TTL_HOURS])
     );
 
     return (APP_ENV === 'development') ? $url : null;
@@ -341,8 +441,10 @@ function issuePasswordReset(int $userId, string $email): ?string {
     $base = getAppBaseUrl();
     $url  = $base . '/reset.php?email=' . rawurlencode($email) . '&token=' . rawurlencode($token);
 
-    sendEmail($email, APP_NAME . ' — Reset your login password',
-        "A password reset was requested for " . APP_NAME . ".\n\nReset your login password here:\n\n" . $url . "\n\nIf you did not request this, you can ignore this email.\n"
+    sendEmail(
+        $email,
+        t('email.reset.subject', ['app' => APP_NAME]),
+        t('email.reset.body', ['app' => APP_NAME, 'url' => $url])
     );
 
     return (APP_ENV === 'development') ? $url : null;

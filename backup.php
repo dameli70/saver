@@ -16,6 +16,7 @@ if (!isEmailVerified()) {
 
 $isAdmin = isAdmin();
 $csrf    = getCsrfToken();
+$lang    = getCurrentLang();
 
 $userId = (int)(getCurrentUserId() ?? 0);
 $showSecurityBanner = !userHasTotp($userId) && !userHasPasskeys($userId);
@@ -30,11 +31,11 @@ header("X-Content-Type-Options: nosniff");
 header("Referrer-Policy: no-referrer");
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="<?= htmlspecialchars(getCurrentLang()) ?>">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Backups — <?= htmlspecialchars(APP_NAME) ?></title>
+<title><?= htmlspecialchars(t('nav.backup')) ?> — <?= htmlspecialchars(APP_NAME) ?></title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
 <script src="assets/theme.js"></script>
@@ -71,16 +72,18 @@ header("Referrer-Policy: no-referrer");
   <div class="nav">
     <a class="logo" href="index.php"><?= htmlspecialchars(APP_NAME) ?></a>
     <div class="nav-r">
-      <button class="btn btn-ghost btn-theme" type="button" data-theme-toggle>Theme</button>
-      <a class="btn btn-ghost" href="dashboard.php">Dashboard</a>
-      <a class="btn btn-ghost" href="create_code.php">Create Code</a>
-      <a class="btn btn-ghost" href="my_codes.php">My Codes</a>
-      <a class="btn btn-ghost" href="notifications.php">Notifications</a>
-      <a class="btn btn-ghost" href="account.php">Account</a>
+      <button class="btn btn-ghost btn-theme" type="button" data-theme-toggle><?= htmlspecialchars(t('nav.theme')) ?></button>
+      <a class="btn btn-ghost <?= ($lang === 'fr') ? 'btn-lang-active' : '' ?>" href="<?= htmlspecialchars(langUrl('fr')) ?>">FR</a>
+      <a class="btn btn-ghost <?= ($lang === 'en') ? 'btn-lang-active' : '' ?>" href="<?= htmlspecialchars(langUrl('en')) ?>">EN</a>
+      <a class="btn btn-ghost" href="dashboard.php"><?= htmlspecialchars(t('nav.dashboard')) ?></a>
+      <a class="btn btn-ghost" href="create_code.php"><?= htmlspecialchars(t('nav.create_code')) ?></a>
+      <a class="btn btn-ghost" href="my_codes.php"><?= htmlspecialchars(t('nav.my_codes')) ?></a>
+      <a class="btn btn-ghost" href="notifications.php"><?= htmlspecialchars(t('nav.notifications')) ?></a>
+      <a class="btn btn-ghost" href="account.php"><?= htmlspecialchars(t('nav.account')) ?></a>
       <?php if ($isAdmin): ?>
-        <a class="btn btn-ghost" href="admin.php">Admin</a>
+        <a class="btn btn-ghost" href="admin.php"><?= htmlspecialchars(t('nav.admin')) ?></a>
       <?php endif; ?>
-      <a class="btn btn-ghost" href="logout.php">Logout</a>
+      <a class="btn btn-ghost" href="logout.php"><?= htmlspecialchars(t('nav.logout')) ?></a>
     </div>
   </div>
 

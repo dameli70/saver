@@ -17,6 +17,7 @@ if (!isEmailVerified()) {
 $userEmail = getCurrentUserEmail() ?? '';
 $isAdmin   = isAdmin();
 $csrf      = getCsrfToken();
+$lang      = getCurrentLang();
 
 header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none';");
 header("X-Frame-Options: DENY");
@@ -25,11 +26,11 @@ header("Referrer-Policy: no-referrer");
 header("Permissions-Policy: clipboard-write=(self)");
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="<?= htmlspecialchars(getCurrentLang()) ?>">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title><?= htmlspecialchars(APP_NAME) ?> — My Codes</title>
+<title><?= htmlspecialchars(APP_NAME) ?> — <?= htmlspecialchars(t('nav.my_codes')) ?></title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
 <script src="assets/theme.js"></script>
@@ -109,22 +110,24 @@ header("Permissions-Policy: clipboard-write=(self)");
     <div class="topbar-logo"><?= htmlspecialchars(APP_NAME) ?></div>
     <div class="topbar-r">
       <span class="user-pill"><?= htmlspecialchars($userEmail) ?></span>
-      <button class="btn btn-ghost btn-sm btn-theme" type="button" data-theme-toggle>Theme</button>
-      <a class="btn btn-ghost btn-sm" href="create_code.php">Create Code</a>
-      <a class="btn btn-ghost btn-sm" href="dashboard.php">Dashboard</a>
-      <a class="btn btn-ghost btn-sm" href="rooms.php">Rooms</a>
-      <a class="btn btn-ghost btn-sm" href="notifications.php">Notifications</a>
-      <a class="btn btn-ghost btn-sm" href="backup.php">Backup</a>
-      <a class="btn btn-ghost btn-sm" href="vault_settings.php">Vault</a>
-      <a class="btn btn-ghost btn-sm" href="account.php">Account</a>
-      <?php if ($isAdmin): ?><a class="btn btn-ghost btn-sm" href="admin.php">Admin</a><?php endif; ?>
-      <a class="btn btn-ghost btn-sm" href="logout.php">Logout</a>
+      <button class="btn btn-ghost btn-sm btn-theme" type="button" data-theme-toggle><?= htmlspecialchars(t('nav.theme')) ?></button>
+      <a class="btn btn-ghost btn-sm <?= ($lang === 'fr') ? 'btn-lang-active' : '' ?>" href="<?= htmlspecialchars(langUrl('fr')) ?>">FR</a>
+      <a class="btn btn-ghost btn-sm <?= ($lang === 'en') ? 'btn-lang-active' : '' ?>" href="<?= htmlspecialchars(langUrl('en')) ?>">EN</a>
+      <a class="btn btn-ghost btn-sm" href="create_code.php"><?= htmlspecialchars(t('nav.create_code')) ?></a>
+      <a class="btn btn-ghost btn-sm" href="dashboard.php"><?= htmlspecialchars(t('nav.dashboard')) ?></a>
+      <a class="btn btn-ghost btn-sm" href="rooms.php"><?= htmlspecialchars(t('nav.rooms')) ?></a>
+      <a class="btn btn-ghost btn-sm" href="notifications.php"><?= htmlspecialchars(t('nav.notifications')) ?></a>
+      <a class="btn btn-ghost btn-sm" href="backup.php"><?= htmlspecialchars(t('nav.backup')) ?></a>
+      <a class="btn btn-ghost btn-sm" href="vault_settings.php"><?= htmlspecialchars(t('nav.vault')) ?></a>
+      <a class="btn btn-ghost btn-sm" href="account.php"><?= htmlspecialchars(t('nav.account')) ?></a>
+      <?php if ($isAdmin): ?><a class="btn btn-ghost btn-sm" href="admin.php"><?= htmlspecialchars(t('nav.admin')) ?></a><?php endif; ?>
+      <a class="btn btn-ghost btn-sm" href="logout.php"><?= htmlspecialchars(t('nav.logout')) ?></a>
     </div>
   </div>
 
   <div class="app-body">
     <div class="card">
-      <div class="card-title"><div class="dot"></div>My Codes</div>
+      <div class="card-title"><div class="dot"></div><?= htmlspecialchars(t('nav.my_codes')) ?></div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:space-between;align-items:center;">
         <div style="font-size:12px;color:var(--muted);line-height:1.7;">View your sealed codes. Unlocking/decryption happens in your browser.</div>
         <button class="btn btn-ghost btn-sm" onclick="loadLocks()">↻ Refresh</button>
