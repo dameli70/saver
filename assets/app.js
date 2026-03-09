@@ -601,7 +601,10 @@
     if(prefs.length){
       const prefsDd = mkDropdown('⚙', LS.t('common.settings') || 'Settings');
       prefs.forEach(el => {
-        // Keep language buttons and theme button readable.
+        if(isLangLink(el)){
+          decorateNavBtn(el, '🌐', el.textContent);
+          el.classList.add('nav-chip');
+        }
         prefsDd.panel.appendChild(el);
       });
       nav.appendChild(prefsDd.d);
