@@ -24,7 +24,7 @@ php install/install.php
 ```bash
 php install/install.php --non-interactive --init-db=1 --apply-migrations=1 \
   --db-host=localhost --db-name=locksmith --db-user=root --db-pass='' \
-  --app-env=development --app-name=Controle --mail-from=no-reply@localhost \
+  --app-env=development --app-name=Controle --app-logo-url='' --mail-from=no-reply@localhost \
   --email-verify-ttl-hours=24 \
   --smtp-host=smtp.example.com --smtp-port=587 --smtp-secure=tls \
   --smtp-user=user --smtp-pass=pass --smtp-verify-peer=1 \

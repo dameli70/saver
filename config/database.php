@@ -26,6 +26,9 @@ define('APP_ENV', 'development'); // 'production' in prod
 
 define('APP_NAME', 'Controle');
 
+// Optional: display logo image URL/path (e.g. /assets/logo.png). Leave empty to use text-only branding.
+define('APP_LOGO_URL', '');
+
 // Canonical base URL used for emailed links (verification + password reset).
 // Recommended in production to prevent Host header injection.
 // Example: https://controle.example.com

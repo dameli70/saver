@@ -8,7 +8,7 @@
 //  Usage (non-interactive):
 //    php install/install.php --non-interactive --init-db=1 --apply-migrations=1 \
 //      --db-host=localhost --db-name=locksmith --db-user=root --db-pass='' \
-//      --app-env=development --app-name=Controle --mail-from=no-reply@localhost \
+//      --app-env=development --app-name=Controle --app-logo-url='' --mail-from=no-reply@localhost \
 //      --email-verify-ttl-hours=24 \
 //      --smtp-host=smtp.example.com --smtp-port=587 --smtp-secure=tls \
 //      --smtp-user=user --smtp-pass=pass --smtp-verify-peer=1 \
@@ -72,6 +72,7 @@ if (!in_array($vals['app_env'], ['development', 'production'], true)) {
 }
 
 $vals['app_name'] = $get('app-name', 'Controle');
+$vals['app_logo_url'] = $get('app-logo-url', '');
 $vals['mail_from'] = $get('mail-from', 'no-reply@localhost');
 
 $ttl = $get('email-verify-ttl-hours', '24');
@@ -193,12 +194,12 @@ Run:
   php install/install.php
 
 Non-interactive example:
-  php install/install.php --non-interactive --init-db=1 --apply-migrations=1 \\
-    --db-host=localhost --db-name=locksmith --db-user=root --db-pass='' \\
-    --app-env=development --app-name=Controle --mail-from=no-reply@localhost \\
-    --email-verify-ttl-hours=24 \\
-    --smtp-host=smtp.example.com --smtp-port=587 --smtp-secure=tls \\
-    --smtp-user=user --smtp-pass=pass --smtp-verify-peer=1 \\
+  php install/install.php --non-interactive --init-db=1 --apply-migrations=1 \
+    --db-host=localhost --db-name=locksmith --db-user=root --db-pass='' \
+    --app-env=development --app-name=Controle --app-logo-url='' --mail-from=no-reply@localhost \
+    --email-verify-ttl-hours=24 \
+    --smtp-host=smtp.example.com --smtp-port=587 --smtp-secure=tls \
+    --smtp-user=user --smtp-pass=pass --smtp-verify-peer=1 \
     --admin-email=admin@example.com --admin-pass='change_me_please'
 
 TXT;
@@ -287,11 +288,9 @@ function splitSqlStatements(string $sql): array {
         if ($inStr) {
             $buf .= $ch;
             if ($ch === $strCh) {
-                // Handle escaped quotes: '' or \'.
                 $prev = $i > 0 ? $sql[$i - 1] : '';
                 $next = ($i + 1) < $len ? $sql[$i + 1] : '';
                 if ($strCh === "'" && $next === "'") {
-                    // SQL escaped single quote.
                     $buf .= $next;
                     $i++;
                     continue;
@@ -304,9 +303,7 @@ function splitSqlStatements(string $sql): array {
             continue;
         }
 
-        // Line comments.
         if ($ch === '-' && ($i + 1) < $len && $sql[$i + 1] === '-') {
-            // consume until newline
             while ($i < $len && $sql[$i] !== "\n") $i++;
             $buf .= "\n";
             continue;
@@ -349,7 +346,6 @@ function applySqlFile(PDO $db, string $path, bool $ignoreDuplicateErrors): void 
         $trim = ltrim($stmt);
         if ($trim === '') continue;
 
-        // schema.sql includes CREATE DATABASE/USE statements for convenience; ignore here.
         if (preg_match('/^CREATE\s+DATABASE/i', $trim)) continue;
         if (preg_match('/^USE\s+/i', $trim)) continue;
 
@@ -407,7 +403,6 @@ function createInitialAdmin(PDO $db, string $email, string $loginPwd): void {
         throw new RuntimeException('Admin password must be at least 8 characters.');
     }
 
-    // Legacy schema requires verifier fields, but the vault passphrase is browser-only.
     $vaultVerifierSalt = bin2hex(random_bytes(32));
     $vaultVerifier = hashVaultVerifier(bin2hex(random_bytes(32)) . $vaultVerifierSalt);
 
@@ -430,6 +425,7 @@ function renderConfigPhp(array $vals): string {
     $appSecret = addslashes($vals['app_hmac_secret']);
     $appEnv = addslashes($vals['app_env']);
     $appName = addslashes($vals['app_name']);
+    $appLogoUrl = addslashes($vals['app_logo_url'] ?? '');
 
     $mailFrom = addslashes($vals['mail_from']);
     $ttl = (int)$vals['email_verify_ttl_hours'];
@@ -453,7 +449,8 @@ function renderConfigPhp(array $vals): string {
         . "define('DB_CHARSET', '" . $dbCharset . "');\n\n"
         . "define('APP_HMAC_SECRET', '" . $appSecret . "');\n\n"
         . "define('APP_ENV', '" . $appEnv . "');\n\n"
-        . "define('APP_NAME', '" . $appName . "');\n\n"
+        . "define('APP_NAME', '" . $appName . "');\n"
+        . "define('APP_LOGO_URL', '" . $appLogoUrl . "');\n\n"
         . "define('APP_BASE_URL', '');\n\n"
         . "define('MAIL_FROM', '" . $mailFrom . "');\n"
         . "define('EMAIL_VERIFY_TTL_HOURS', " . $ttl . ");\n\n"
@@ -466,28 +463,28 @@ function renderConfigPhp(array $vals): string {
         . "define('PBKDF2_ITERATIONS', 310000);\n\n"
         . "date_default_timezone_set('UTC');\n\n"
         . "function getDB(): PDO {\n"
-        . "    static \$pdo = null;\n"
-        . "    if (\$pdo === null) {\n"
-        . "        \$dsn = \"mysql:host=\".DB_HOST.\";dbname=\".DB_NAME.\";charset=\".DB_CHARSET;\n"
-        . "        \$opts = [\n"
+        . "    static \\\$pdo = null;\n"
+        . "    if (\\\$pdo === null) {\n"
+        . "        \\\$dsn = \"mysql:host=\".DB_HOST.\";dbname=\".DB_NAME.\";charset=\".DB_CHARSET;\n"
+        . "        \\\$opts = [\n"
         . "            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,\n"
         . "            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,\n"
         . "            PDO::ATTR_EMULATE_PREPARES   => false,\n"
         . "        ];\n"
         . "        try {\n"
-        . "            \$pdo = new PDO(\$dsn, DB_USER, DB_PASS, \$opts);\n"
+        . "            \\\$pdo = new PDO(\\\$dsn, DB_USER, DB_PASS, \\\$opts);\n"
         . "            try {\n"
-        . "                \$pdo->exec(\"SET time_zone = '+00:00'\");\n"
+        . "                \\\$pdo->exec(\"SET time_zone = '+00:00'\");\n"
         . "            } catch (Throwable) {\n"
         . "            }\n"
-        . "        } catch (PDOException \$e) {\n"
+        . "        } catch (PDOException \\\$e) {\n"
         . "            if (APP_ENV === 'development') {\n"
-        . "                die(json_encode(['error' => 'DB: ' . \$e->getMessage()]));\n"
+        . "                die(json_encode(['error' => 'DB: ' . \\\$e->getMessage()]));\n"
         . "            }\n"
         . "            die(json_encode(['error' => 'Database unavailable']));\n"
         . "        }\n"
         . "    }\n"
-        . "    return \$pdo;\n"
+        . "    return \\\$pdo;\n"
         . "}\n";
 }
 
