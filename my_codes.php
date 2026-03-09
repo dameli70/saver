@@ -163,7 +163,7 @@ let vaultPhraseSession = null;
 let vaultSlotSession   = 1;
 
 let revealedPwd = null;
-let currentRevealLockId = null;
+let currentReveal = null; // {kind:'lock'|'wallet', id:string}
 
 function apiUrl(url){return url.startsWith('/') ? url.slice(1) : url;}
 async function get(url){const r=await fetch(apiUrl(url),{credentials:'same-origin'});return r.json();}
@@ -217,14 +217,58 @@ async function aesDecrypt(cipherBlobB64, ivB64, tagB64, key){
 async function loadLocks(){
   const wrap=document.getElementById('locks-wrap');
   wrap.innerHTML='<div style="text-align:center;padding:40px;color:var(--muted);font-size:11px;letter-spacing:2px">LOADING…</div>';
+
   try{
-    const r=await get('api/locks.php');
-    if(!r.success||!r.locks||!r.locks.length){
+    const [a,b] = await Promise.allSettled([
+      get('api/locks.php'),
+      get('api/wallet_locks.php'),
+    ]);
+
+    const locks = (a.status==='fulfilled' && a.value && a.value.success) ? (a.value.locks||[]) : [];
+    const walletLocks = (b.status==='fulfilled' && b.value && b.value.success) ? (b.value.wallet_locks||[]) : [];
+
+    const mapped = [];
+
+    locks.forEach(l => mapped.push(Object.assign({kind:'lock'}, l)));
+
+    walletLocks.forEach(w => {
+      const stRaw = String(w.display_status||'');
+      const st = (stRaw === 'setup_pending') ? 'pending'
+              : (stRaw === 'setup_failed') ? 'rejected'
+              : (stRaw === 'inactive') ? 'rejected'
+              : stRaw;
+
+      mapped.push({
+        kind: 'wallet',
+        id: w.id,
+        label: w.label || (w.carrier_name ? (w.carrier_name + ' wallet PIN') : 'Wallet PIN'),
+        hint: null,
+        password_type: w.carrier_pin_type || 'numeric',
+        password_length: parseInt(w.carrier_pin_length||'4',10) || 4,
+        reveal_date: w.unlock_at,
+        created_at: w.created_at,
+        copied_at: null,
+        revealed_at: w.revealed_at,
+        display_status: st,
+        time_remaining: w.time_remaining || null,
+        carrier_name: w.carrier_name || '',
+      });
+    });
+
+    mapped.sort((x,y) => {
+      const ax = Date.parse(x.created_at || x.reveal_date || '') || 0;
+      const ay = Date.parse(y.created_at || y.reveal_date || '') || 0;
+      return ay - ax;
+    });
+
+    if(!mapped.length){
       wrap.innerHTML='<div class="empty"><div class="empty-icon">🔒</div><h3>No codes yet</h3><p>Create one from the Create Code page.</p></div>';
       return;
     }
+
     wrap.innerHTML='<div class="locks-grid" id="locks-grid"></div>';
-    r.locks.forEach(l=>document.getElementById('locks-grid').appendChild(buildCard(l)));
+    mapped.forEach(l=>document.getElementById('locks-grid').appendChild(buildCard(l)));
+
   }catch{
     wrap.innerHTML='<div class="empty"><p>Failed to load.</p></div>';
   }
@@ -278,8 +322,14 @@ function buildCard(lock){
   const meta=document.createElement('div');
   meta.className='lc-meta';
 
-  const copied = lock.copied_at ? '<span style="color:var(--green)">✓</span>' : '<span style="color:var(--red)">not copied</span>';
-  meta.innerHTML=`Type: <span>${esc(lock.password_type)} · ${esc(lock.password_length)} chars</span><br>Reveal: <span>${esc(rd)}</span><br>Copied: ${copied}`;
+  if(lock.kind === 'wallet'){
+    const revealed = lock.revealed_at ? '<span style="color:var(--green)">✓</span>' : '<span style="color:var(--muted)">—</span>';
+    meta.innerHTML=`Type: <span>Wallet PIN · ${esc(lock.password_length)} chars</span><br>Carrier: <span>${esc(lock.carrier_name||'')}</span><br>Unlock: <span>${esc(rd)}</span><br>Revealed: ${revealed}`;
+  } else {
+    const copied = lock.copied_at ? '<span style="color:var(--green)">✓</span>' : '<span style="color:var(--red)">not copied</span>';
+    meta.innerHTML=`Type: <span>${esc(lock.password_type)} · ${esc(lock.password_length)} chars</span><br>Reveal: <span>${esc(rd)}</span><br>Copied: ${copied}`;
+  }
+
   el.appendChild(meta);
 
   const actions=document.createElement('div');
@@ -290,7 +340,7 @@ function buildCard(lock){
     b.className='btn btn-green btn-sm';
     b.type='button';
     b.textContent='Reveal';
-    b.addEventListener('click', ()=>openReveal(lock.id, lock.label, lock.hint||''));
+    b.addEventListener('click', ()=>openReveal(lock.kind, lock.id,, lock.hint||''));
     actions.appendChild(b);
   } else if(st==='auto_saved'){
     const b=document.createElement('button');
@@ -322,15 +372,15 @@ function buildCard(lock){
   del.className='btn btn-red btn-sm';
   del.type='button';
   del.textContent='Delete';
-  del.addEventListener('click', ()=>delLock(lock.id));
+  del.addEventListener('click', ()=>delLock(lock.kind, lock.id));
   actions.appendChild(del);
 
   el.appendChild(actions);
   return el;
 }
 
-function openReveal(lockId, label, hint){
-  currentRevealLockId=lockId;
+function openReveal(kind, id, label, hint){
+  currentReveal = {kind, id};
   document.getElementById('rv-label').textContent=label;
   document.getElementById('rv-vault').value=vaultPhraseSession||'';
   document.getElementById('rv-pwd').style.display='none';
@@ -406,19 +456,28 @@ async function doReveal(){
   const errEl=document.getElementById('rv-err');
   errEl.classList.remove('show');
   if(!vault){errEl.textContent='Enter your vault passphrase';errEl.classList.add('show');return;}
+  if(!currentReveal || !currentReveal.id){errEl.textContent='No code selected';errEl.classList.add('show');return;}
+
   document.getElementById('rv-btn-txt').innerHTML='<span class="spin"></span>';
 
   try{
-    let r=await postCsrf('api/reveal.php',{lock_id:currentRevealLockId});
+    const endpoint = (currentReveal.kind === 'wallet') ? 'api/wallet_reveal.php' : 'api/reveal.php';
+    const body = (currentReveal.kind === 'wallet')
+      ? {wallet_lock_id: currentReveal.id}
+      : {lock_id: currentReveal.id};
+
+    let r=await postCsrf(endpoint, body);
     if(!r.success && (r.error_code==='reauth_required' || r.error_code==='security_setup_required')){
       const ok = await ensureReauth(r.methods||{});
       if(!ok){errEl.textContent=r.error||'Re-authentication required';errEl.classList.add('show');return;}
-      r=await postCsrf('api/reveal.php',{lock_id:currentRevealLockId});
+      r=await postCsrf(endpoint, body);
     }
     if(!r.success){errEl.textContent=r.error||'Cannot reveal';errEl.classList.add('show');return;}
 
-    const key=await deriveKey(vault, r.kdf_salt, r.kdf_iterations);
-    const plain=await aesDecrypt(r.cipher_blob, r.iv, r.auth_tag, key);
+    const payload = (currentReveal.kind === 'wallet') ? (r.wallet_lock || {}) : r;
+
+    const key=await deriveKey(vault, payload.kdf_salt, payload.kdf_iterations);
+    const plain=await aesDecrypt(payload.cipher_blob, payload.iv, payload.auth_tag, key);
 
     revealedPwd=plain;
     document.getElementById('rv-pwd').textContent=plain;
@@ -428,8 +487,11 @@ async function doReveal(){
     document.getElementById('rv-btn').style.display='none';
 
     vaultPhraseSession=vault;
-    vaultSlotSession=parseInt(r.vault_verifier_slot||1,10)||1;
-    localStorage.setItem('vault_slot', String(vaultSlotSession));
+
+    if(currentReveal.kind !== 'wallet'){
+      vaultSlotSession=parseInt(r.vault_verifier_slot||1,10)||1;
+      localStorage.setItem('vault_slot', String(vaultSlotSession));
+    }
 
   }catch(e){
     if(e.name==='OperationError') errEl.textContent='Decryption failed — wrong vault passphrase or tampered data';
@@ -444,14 +506,16 @@ function closeReveal(e){
   if(e&&e.target!==document.getElementById('reveal-overlay'))return;
   document.getElementById('reveal-overlay').classList.remove('show');
   revealedPwd=null;
-  currentRevealLockId=null;
+  currentReveal=null;
 }
 
 async function copyRevealed(){
-  if(!revealedPwd || !currentRevealLockId) return;
+  if(!revealedPwd || !currentReveal || !currentReveal.id) return;
   try{
     await navigator.clipboard.writeText(revealedPwd);
-    await postCsrf('api/copied.php',{lock_id:currentRevealLockId});
+    if(currentReveal.kind !== 'wallet'){
+      await postCsrf('api/copied.php',{lock_id:currentReveal.id});
+    }
     toast('Copied!','ok');
     loadLocks();
   }catch{
@@ -464,9 +528,17 @@ async function reConfirm(id){
   if(r.success){toast('Lock activated!','ok');loadLocks();}
   else toast(r.error||'Failed','err');
 }
-async function delLock(id){
-  if(!confirm('Permanently delete this lock? Encrypted data will be removed.'))return;
-  const r=await postCsrf('api/delete.php',{lock_id:id});
+async function delLock(kind, id){
+  const msg = (kind === 'wallet')
+    ? 'Permanently delete this wallet code? Encrypted data will be removed.'
+    : 'Permanently delete this lock? Encrypted data will be removed.';
+
+  if(!confirm(msg))return;
+
+  const endpoint = (kind === 'wallet') ? 'api/wallet_delete.php' : 'api/delete.php';
+  const body = (kind === 'wallet') ? {wallet_lock_id:id} : {lock_id:id};
+
+  const r=await postCsrf(endpoint, body);
   if(r.success){toast('Deleted','ok');loadLocks();}
   else toast(r.error||'Delete failed','err');
 }

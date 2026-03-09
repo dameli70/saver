@@ -179,22 +179,22 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--code-bg);border:
   <div class="card" style="margin-top:14px;">
     <div class="card-title">Carriers (Mobile Money)</div>
 
-    <div class="p">Define carrier PIN policy and USSD templates (used by the mobile app and by <em>Create Code → Mobile money wallet</em>). Placeholders: <code>{old_pin}</code>, <code>{new_pin}</code>.</div>
+    <div class="p">Define carrier PIN policy and USSD templates (used by the mobile app and by <em>Create Code → Mobile money wallet</em>). The wallet flow is designed for templates that prompt for the new PIN in the dialer, so <strong>Change PIN</strong> should include <code>{old_pin}</code> but not <code>{new_pin}</code>. The <strong>Balance</strong> template should include <code>{new_pin}</code>.</div>
 
     <div style="display:grid;grid-template-columns:1fr;gap:12px;margin-bottom:12px;">
       <div class="field"><label>Name</label><input id="car-name" placeholder="e.g. MTN MoMo"></div>
       <div class="field"><label>Country (optional)</label><input id="car-country" placeholder="e.g. GH"></div>
       <div class="field"><label>PIN type</label><input id="car-pin-type" placeholder="numeric or alphanumeric" value="numeric"></div>
       <div class="field"><label>PIN length</label><input id="car-pin-len" placeholder="e.g. 4" value="4"></div>
-      <div class="field"><label>USSD: Change PIN template</label><input id="car-ussd-change" placeholder="e.g. *170*00*{old_pin}*{new_pin}#"></div>
-      <div class="field"><label>USSD: Balance template</label><input id="car-ussd-balance" placeholder="e.g. *170#"></div>
+      <div class="field"><label>USSD: Change PIN template</label><input id="car-ussd-change" placeholder="e.g. *145*7*4*1*{old_pin}#"></div>
+      <div class="field"><label>USSD: Balance template</label><input id="car-ussd-balance" placeholder="e.g. *145*7*1*{new_pin}#"></div>
 
       <div class="wallet-box">
         <div class="wallet-title">Wallet flow options</div>
         <div class="p" style="margin:0 0 10px 0;">Controls what the wallet flow can do when it generates a USSD for this carrier.</div>
 
         <label class="chk" style="margin:0 0 8px 0;"><input type="checkbox" id="car-wallet-open-dialer" checked> <span><strong>Send to phone app (tel:)</strong> — opens the dialer with the USSD pre-filled.</span></label>
-        <label class="chk" style="margin:0 0 10px 0;"><input type="checkbox" id="car-wallet-copy-ussd" checked> <span><strong>Copy USSD</strong> — copies the USSD to clipboard for manual dialing.</span></label>
+        <label class="chk" style="margin:0 0 10px 0;"><input type="checkbox" id="car-wallet-copy-ussd"> <span><strong>Copy USSD</strong> — copies the USSD to clipboard for manual dialing.</span></label>
 
         <div class="field" style="margin:0;">
           <label>Default wallet action</label>
@@ -423,8 +423,8 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--code-bg);border:
     <div class="field"><label>Country (optional)</label><input id="car-edit-country"></div>
     <div class="field"><label>PIN type</label><input id="car-edit-pin-type" placeholder="numeric or alphanumeric"></div>
     <div class="field"><label>PIN length</label><input id="car-edit-pin-len"></div>
-    <div class="field"><label>USSD: Change PIN template</label><input id="car-edit-ussd-change"></div>
-    <div class="field"><label>USSD: Balance template</label><input id="car-edit-ussd-balance"></div>
+    <div class="field"><label>USSD: Change PIN template</label><input id="car-edit-ussd-change" placeholder="e.g. *145*7*4*1*{old_pin}#"></div>
+    <div class="field"><label>USSD: Balance template</label><input id="car-edit-ussd-balance" placeholder="e.g. *145*7*1*{new_pin}#"></div>
 
     <div class="wallet-box" style="margin:12px 0;">
       <div class="wallet-title">Wallet flow options</div>
@@ -476,13 +476,60 @@ async function postCsrf(url, body){
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function fmt(ts){
   if(!ts) return '';
-  try{ return new Date(ts).toLocaleString(); }catch{ return String(ts); }
-}
-function setMsg(id, text, ok){
+  try{ return new Date(ts).toLocaleString(); }catch{ re</old_code><new_code>function setMsg(id, text, ok){
   const el = document.getElementById(id);
   if(!el) return;
   el.className = 'msg ' + (ok ? 'msg-ok' : 'msg-err') + ' show';
   el.textContent = text;
+}
+
+function normalizeUssdTemplate(raw, requiredPlaceholder){
+  const ph = (requiredPlaceholder === 'new_pin') ? '{new_pin}' : '{old_pin}';
+  let s = String(raw || '').trim();
+  if(!s) return '';
+
+  // USSD templates should not contain whitespace.
+  s = s.replace(/\s+/g, '');
+
+  // Strip any placeholders the admin typed; we re-append the required one at the end.
+  s = s.replace(/\{old_pin\}|\{new_pin\}/g, '');
+
+  // Normalize trailing separators.
+  s = s.replace(/#+$/g, '');
+  s = s.replace(/\*+$/g, '');
+
+  return s + '*' + ph + '#';
+}
+
+function validateCarrierTemplates(ussdChange, ussdBalance){
+  if(!ussdChange) return 'USSD: Change PIN template is required.';
+  if(!ussdBalance) return 'USSD: Balance template is required.';
+
+  if(ussdChange.includes('{new_pin}')) return 'Change PIN template must not include {new_pin}.';
+  if(!ussdChange.includes('{old_pin}')) return 'Change PIN template must include {old_pin}.';
+
+  if(ussdBalance.includes('{old_pin}')) return 'Balance template must not include {old_pin}.';
+  if(!ussdBalance.includes('{new_pin}')) return 'Balance template must include {new_pin}.';
+
+  return '';
+}
+
+function initCarrierTemplateUi(){
+  const pairs = [
+    ['car-ussd-change', 'old_pin'],
+    ['car-ussd-balance', 'new_pin'],
+    ['car-edit-ussd-change', 'old_pin'],
+    ['car-edit-ussd-balance', 'new_pin'],
+  ];
+
+  pairs.forEach(([id, ph]) => {
+    const el = document.getElementById(id);
+    if(!el) return;
+    el.addEventListener('blur', () => {
+      const next = normalizeUssdTemplate(el.value, ph);
+      if(next) el.value = next;
+    });
+  });
 }
 
 function walletEls(prefix){
@@ -803,15 +850,40 @@ async function createCarrier(){
   const country = document.getElementById('car-country').value.trim();
   const pinType = document.getElementById('car-pin-type').value.trim() || 'numeric';
   const pinLen = parseInt(document.getElementById('car-pin-len').value || '0', 10);
-  const ussdChange = document.getElementById('car-ussd-change').value.trim();
-  const ussdBalance = document.getElementById('car-ussd-balance').value.trim();
+
+  const ussdChange = normalizeUssdTemplate(document.getElementById('car-ussd-change').value, 'old_pin');
+  const ussdBalance = normalizeUssdTemplate(document.getElementById('car-ussd-balance').value, 'new_pin');
+  document.getElementById('car-ussd-change').value = ussdChange;
+  document.getElementById('car-ussd-balance').value = ussdBalance;
+
   const isActive = document.getElementById('car-active').checked ? 1 : 0;
 
   syncWalletDefaultSelect('car');
   const walletCfg = readWalletConfig('car');
+
+  // Template compatibility: if the change-PIN template does not embed {new_pin},
+  // the wallet flow cannot safely support "Copy USSD" (it would overwrite the PIN in clipboard).
+  if(!String(ussdChange||'').includes('{new_pin}')){
+    walletCfg.wallet_allow_open_dialer = 1;
+    walletCfg.wallet_allow_copy_ussd = 0;
+    walletCfg.wallet_default_action = 'open_dialer';
+    const open = document.getElementById('car-wallet-open-dialer');
+    const copy = document.getElementById('car-wallet-copy-ussd');
+    const def = document.getElementById('car-wallet-default');
+    if(open) open.checked = true;
+    if(copy) copy.checked = false;
+    if(def) def.value = 'open_dialer';
+    syncWalletDefaultSelect('car');
+  }
+
   const walletErr = validateWalletConfig(walletCfg);
 
   document.getElementById('car-msg').className = 'msg';
+  const tplErr = validateCarrierTemplates(ussdChange, ussdBalance);
+  if(tplErr){
+    setMsg('car-msg', tplErr, false);
+    return;
+  }
   if(walletErr){
     setMsg('car-msg', walletErr, false);
     return;
@@ -840,7 +912,7 @@ async function createCarrier(){
     document.getElementById('car-ussd-balance').value='';
 
     document.getElementById('car-wallet-open-dialer').checked = true;
-    document.getElementById('car-wallet-copy-ussd').checked = true;
+    document.getElementById('car-wallet-copy-ussd').checked = false;
     document.getElementById('car-wallet-default').value = 'open_dialer';
     syncWalletDefaultSelect('car');
 
@@ -886,15 +958,38 @@ async function saveCarrierEdit(){
   const country = document.getElementById('car-edit-country').value.trim();
   const pinType = document.getElementById('car-edit-pin-type').value.trim() || 'numeric';
   const pinLen = parseInt(document.getElementById('car-edit-pin-len').value || '0', 10);
-  const ussdChange = document.getElementById('car-edit-ussd-change').value.trim();
-  const ussdBalance = document.getElementById('car-edit-ussd-balance').value.trim();
+
+  const ussdChange = normalizeUssdTemplate(document.getElementById('car-edit-ussd-change').value, 'old_pin');
+  const ussdBalance = normalizeUssdTemplate(document.getElementById('car-edit-ussd-balance').value, 'new_pin');
+  document.getElementById('car-edit-ussd-change').value = ussdChange;
+  document.getElementById('car-edit-ussd-balance').value = ussdBalance;
+
   const isActive = document.getElementById('car-edit-active').checked ? 1 : 0;
 
   syncWalletDefaultSelect('car-edit');
   const walletCfg = readWalletConfig('car-edit');
+
+  if(!String(ussdChange||'').includes('{new_pin}')){
+    walletCfg.wallet_allow_open_dialer = 1;
+    walletCfg.wallet_allow_copy_ussd = 0;
+    walletCfg.wallet_default_action = 'open_dialer';
+    const open = document.getElementById('car-edit-wallet-open-dialer');
+    const copy = document.getElementById('car-edit-wallet-copy-ussd');
+    const def = document.getElementById('car-edit-wallet-default');
+    if(open) open.checked = true;
+    if(copy) copy.checked = false;
+    if(def) def.value = 'open_dialer';
+    syncWalletDefaultSelect('car-edit');
+  }
+
   const walletErr = validateWalletConfig(walletCfg);
 
   document.getElementById('car-edit-msg').className = 'msg';
+  const tplErr = validateCarrierTemplates(ussdChange, ussdBalance);
+  if(tplErr){
+    setMsg('car-edit-msg', tplErr, false);
+    return;
+  }
   if(walletErr){
     setMsg('car-edit-msg', walletErr, false);
     return;
@@ -1231,6 +1326,7 @@ async function loadAudit(){
 }
 
 initCarrierWalletUi();
+initCarrierTemplateUi();
 
 loadUsers();
 loadCodes();

@@ -41,6 +41,8 @@ $stmt = $db->prepare("
         w.is_active,
         c.id AS carrier_id,
         c.name AS carrier_name,
+        c.pin_type AS carrier_pin_type,
+        c.pin_length AS carrier_pin_length,
         CASE
             WHEN w.is_active = 1 AND w.setup_status = 'pending' THEN 'setup_pending'
             WHEN w.is_active = 1 AND w.setup_status = 'failed'  THEN 'setup_failed'
