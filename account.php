@@ -59,12 +59,11 @@ header("Referrer-Policy: no-referrer");
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
 <?php emitI18nJsGlobals(); ?>
 <script src="assets/theme.js"></script>
+<script src="assets/app.js"></script>
 <link rel="stylesheet" href="assets/base.css">
-<link rel="stylesheet" href="assets/panel.css">
-<link rel="stylesheet" href="assets/panel_components.css">
+<link rel="stylesheet" href="assets/app.css">
 <style> 
-.wrap{max-width:760px;}
-.h{font-size:18px;}
+
 .card{margin-bottom:14px;}
 .row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
 .k{color:var(--muted);font-size:10px;letter-spacing:2px;text-transform:uppercase;}
@@ -91,29 +90,31 @@ code{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);pad
 </style>
 </head>
 <body>
-  <div class="nav">
-    <a class="logo" href="index.php"><?= htmlspecialchars(APP_NAME) ?></a>
-    <div class="nav-r">
-      <?php if ($verified): ?>
-        <a class="btn btn-ghost" href="dashboard.php"><?php e('nav.dashboard'); ?></a>
-        <a class="btn btn-ghost" href="create_code.php"><?php e('nav.create_code'); ?></a>
-        <a class="btn btn-ghost" href="my_codes.php"><?php e('nav.my_codes'); ?></a>
-        <a class="btn btn-ghost" href="rooms.php"><?php e('nav.rooms'); ?></a>
-        <a class="btn btn-ghost" href="notifications.php"><?php e('nav.notifications'); ?></a>
-        <a class="btn btn-ghost" href="backup.php"><?php e('nav.backups'); ?></a>
-        <?php if ($isAdmin): ?>
-          <a class="btn btn-ghost" href="admin.php"><?php e('nav.admin'); ?></a>
-        <?php endif; ?>
-      <?php endif; ?>
-      <button class="btn btn-ghost btn-theme" type="button" data-theme-toggle><?php e('common.theme'); ?></button>
+<div id="app">
+  <div class="topbar">
+    <div class="topbar-logo"><?= htmlspecialchars(APP_NAME) ?></div>
+    <div class="topbar-r">
+      <span class="user-pill"><?= htmlspecialchars(getCurrentUserEmail() ?? '') ?></span>
+      <button class="btn btn-ghost btn-sm btn-theme" type="button" data-theme-toggle><?php e('common.theme'); ?></button>
       <?php $curLang = currentLang(); ?>
-      <a class="<?= $curLang === 'fr' ? 'btn btn-primary' : 'btn btn-ghost' ?>" href="<?= htmlspecialchars(langSwitchUrl('fr')) ?>"><?php e('common.lang_fr'); ?></a>
-      <a class="<?= $curLang === 'en' ? 'btn btn-primary' : 'btn btn-ghost' ?>" href="<?= htmlspecialchars(langSwitchUrl('en')) ?>"><?php e('common.lang_en'); ?></a>
-      <a class="btn btn-ghost" href="logout.php"><?php e('common.logout'); ?></a>
+      <a class="<?= $curLang === 'fr' ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm' ?>" href="<?= htmlspecialchars(langSwitchUrl('fr')) ?>"><?php e('common.lang_fr'); ?></a>
+      <a class="<?= $curLang === 'en' ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm' ?>" href="<?= htmlspecialchars(langSwitchUrl('en')) ?>"><?php e('common.lang_en'); ?></a>
+      <?php if ($verified): ?>
+        <a class="btn btn-ghost btn-sm" href="dashboard.php"><?php e('nav.dashboard'); ?></a>
+        <a class="btn btn-ghost btn-sm" href="create_code.php"><?php e('nav.create_code'); ?></a>
+        <a class="btn btn-ghost btn-sm" href="my_codes.php"><?php e('nav.my_codes'); ?></a>
+        <a class="btn btn-ghost btn-sm" href="rooms.php"><?php e('nav.rooms'); ?></a>
+        <a class="btn btn-ghost btn-sm" href="notifications.php"><?php e('nav.notifications'); ?></a>
+        <a class="btn btn-ghost btn-sm" href="backup.php"><?php e('nav.backups'); ?></a>
+        <a class="btn btn-ghost btn-sm" href="vault_settings.php"><?php e('nav.vault'); ?></a>
+        <a class="btn btn-ghost btn-sm" href="setup.php"><?php e('nav.setup'); ?></a>
+        <?php if ($isAdmin): ?><a class="btn btn-ghost btn-sm" href="admin.php"><?php e('nav.admin'); ?></a><?php endif; ?>
+      <?php endif; ?>
+      <a class="btn btn-ghost btn-sm" href="logout.php"><?php e('common.logout'); ?></a>
     </div>
   </div>
 
-  <div class="wrap">
+  <div class="app-body">
     <div class="h"><?php e('heading.account'); ?></div>
     <div class="p"><?= $verified ? t('account.sub_verified') : t('account.sub_unverified') ?></div>
 
@@ -1049,5 +1050,6 @@ btn.addEventListener('click', async ()=>{
   loadSessions();
 })();
 </script>
+</div>
 </body>
 </html>
