@@ -17,6 +17,9 @@ return [
     'common.cancel' => 'Cancel',
     'common.confirm' => 'Confirm',
     'common.close' => 'Close',
+    'common.menu' => 'Menu',
+    'common.more' => 'More',
+    'common.settings' => 'Settings',
     'common.network_error' => 'Network error',
 
     // Theme toggle (assets/theme.js)
