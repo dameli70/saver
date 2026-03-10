@@ -44,20 +44,14 @@ header("Referrer-Policy: no-referrer");
 <script src="assets/theme.js"></script>
 <script src="assets/app.js"></script>
 <link rel="stylesheet" href="assets/base.css">
-<link rel="stylesheet" href="assets/panel.css">
-<link rel="stylesheet" href="assets/panel_components.css">
-<link rel="stylesheet" href="assets/ls_shared.css">
+<link rel="stylesheet" href="assets/app.css">
 <style>
 .orb{filter:blur(120px);}
 .orb1{width:520px;height:520px;top:-170px;right:-120px;}
 .orb2{width:360px;height:360px;bottom:40px;left:-90px;}
 
 .pill{font-size:10px;color:var(--muted);letter-spacing:1px;border:1px solid rgba(255,255,255,.13);padding:6px 10px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:none;}
-@media(min-width:560px){.pill{display:block;}}
-
-
-
-.wrap{max-width:1100px;}
+@media(min-width:560px){.pill</old_code><new_code>.k{color:var(--muted);} 
 .h{font-size:18px;}
 
 .k{color:var(--muted);} 
@@ -77,27 +71,32 @@ header("Referrer-Policy: no-referrer");
 <body>
 <div class="orb orb1"></div><div class="orb orb2"></div>
 
-<div class="nav">
-  <a class="logo" href="index.php"><?= htmlspecialchars(APP_NAME) ?></a>
-  <div class="nav-r">
-    <span class="pill"><?= htmlspecialchars($userEmail) ?></span>
-    <button class="btn btn-ghost btn-sm btn-theme" type="button" data-theme-toggle><?php e('common.theme'); ?></button>
-    <?php $curLang = currentLang(); ?>
-    <a class="<?= $curLang === 'fr' ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm' ?>" href="<?= htmlspecialchars(langSwitchUrl('fr')) ?>"><?php e('common.lang_fr'); ?></a>
-    <a class="<?= $curLang === 'en' ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm' ?>" href="<?= htmlspecialchars(langSwitchUrl('en')) ?>"><?php e('common.lang_en'); ?></a>
-    <?php if ($isAdmin): ?><a class="btn btn-ghost btn-sm" href="admin.php"><?php e('nav.admin'); ?></a><?php endif; ?>
-    <a class="btn btn-ghost btn-sm" href="dashboard.php"><?php e('nav.dashboard'); ?></a>
-    <a class="btn btn-ghost btn-sm" href="create_code.php"><?php e('nav.create_code'); ?></a>
-    <a class="btn btn-ghost btn-sm" href="my_codes.php"><?php e('nav.my_codes'); ?></a>
-    <a class="btn btn-ghost btn-sm" href="rooms.php"><?php e('nav.rooms'); ?></a>
-    <a class="btn btn-ghost btn-sm" href="notifications.php"><?php e('nav.notifications'); ?></a>
-    <a class="btn btn-ghost btn-sm" href="logout.php"><?php e('common.logout'); ?></a>
+<div id="app">
+  <div class="topbar">
+    <div class="topbar-logo"><?= htmlspecialchars(APP_NAME) ?></div>
+    <div class="topbar-r">
+      <span class="user-pill"><?= htmlspecialchars($userEmail) ?></span>
+      <button class="btn btn-ghost btn-sm btn-theme" type="button" data-theme-toggle><?php e('common.theme'); ?></button>
+      <?php $curLang = currentLang(); ?>
+      <a class="<?= $curLang === 'fr' ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm' ?>" href="<?= htmlspecialchars(langSwitchUrl('fr')) ?>"><?php e('common.lang_fr'); ?></a>
+      <a class="<?= $curLang === 'en' ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm' ?>" href="<?= htmlspecialchars(langSwitchUrl('en')) ?>"><?php e('common.lang_en'); ?></a>
+      <a class="btn btn-ghost btn-sm" href="dashboard.php"><?php e('nav.dashboard'); ?></a>
+      <a class="btn btn-ghost btn-sm" href="create_code.php"><?php e('nav.create_code'); ?></a>
+      <a class="btn btn-ghost btn-sm" href="my_codes.php"><?php e('nav.my_codes'); ?></a>
+      <a class="btn btn-ghost btn-sm" href="rooms.php"><?php e('nav.rooms'); ?></a>
+      <a class="btn btn-ghost btn-sm" href="notifications.php"><?php e('nav.notifications'); ?></a>
+      <a class="btn btn-ghost btn-sm" href="backup.php"><?php e('nav.backups'); ?></a>
+      <a class="btn btn-ghost btn-sm" href="vault_settings.php"><?php e('nav.vault'); ?></a>
+      <a class="btn btn-ghost btn-sm" href="setup.php"><?php e('nav.setup'); ?></a>
+      <a class="btn btn-ghost btn-sm" href="account.php"><?php e('nav.account'); ?></a>
+      <?php if ($isAdmin): ?><a class="btn btn-ghost btn-sm" href="admin.php"><?php e('nav.admin'); ?></a><?php endif; ?>
+      <a class="btn btn-ghost btn-sm" href="logout.php"><?php e('common.logout'); ?></a>
+    </div>
   </div>
-</div>
 
-<div class="wrap">
-  <div class="h" id="room-title"><?php e('page.room'); ?></div>
-  <div class="p" id="room-sub">Loading…</div>
+  <div class="app-body wide">
+    <div class="h" id="room-title"><?php e('page.room'); ?></div>
+    <div class="p" id="room-sub">Loading…</div>
 
   <div class="grid">
     <div class="card">
@@ -384,7 +383,7 @@ header("Referrer-Policy: no-referrer");
     </div>
 
   </div>
-</div>
+  </div>
 
 <script>
 const CSRF = <?= json_encode($csrf) ?>;
@@ -1668,5 +1667,6 @@ loadRoom().then(async ()=>{
   startSseFeed();
 });
 </script>
+</div>
 </body>
 </html> 

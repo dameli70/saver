@@ -523,13 +523,42 @@
     const primary = rest.filter(isPrimary);
     const secondary = rest.filter(el => !primary.includes(el));
 
-    function mkDropdown(label){
+    function decorateNavBtn(el, icon, label){
+      if(!el) return;
+
+      const lbl = (label == null ? '' : String(label)).trim();
+
+      if(el.tagName === 'A' && el.getAttribute('href')){
+        el.setAttribute('aria-label', lbl);
+      }
+
+      el.classList.add('nav-btn');
+      el.innerHTML = `<span class="nav-ico" aria-hidden="true">${LS.esc(icon)}</span><span class="nav-lbl">${LS.esc(lbl)}</span>`;
+    }
+
+    function iconForHref(href){
+      const h = String(href||'').trim();
+      if(h === 'dashboard.php') return '⌂';
+      if(h === 'create_code.php') return '✚';
+      if(h === 'my_codes.php') return '⧉';
+      if(h === 'rooms.php') return '◻';
+      if(h === 'notifications.php') return '✉';
+      if(h === 'backup.php') return '⤓';
+      if(h === 'vault_settings.php') return '⌁';
+      if(h === 'setup.php') return '✓';
+      if(h === 'account.php') return '◎';
+      if(h === 'admin.php') return '⚑';
+      if(h === 'logout.php') return '⎋';
+      return '•';
+    }
+
+    function mkDropdown(icon, label){
       const d = document.createElement('details');
       d.className = 'nav-dd';
 
       const s = document.createElement('summary');
       s.className = 'btn btn-ghost btn-sm';
-      s.textContent = label;
+      decorateNavBtn(s, icon, label);
 
       const panel = document.createElement('div');
       panel.className = 'nav-dd-panel';
@@ -555,17 +584,29 @@
     nav.innerHTML = '';
     if(user) nav.appendChild(user);
 
-    primary.forEach(el => nav.appendChild(el));
+    primary.forEach(el => {
+      if(el.tagName === 'A') decorateNavBtn(el, iconForHref(el.getAttribute('href')), el.textContent);
+      nav.appendChild(el);
+    });
 
     if(secondary.length){
-      const more = mkDropdown(LS.t('common.more') || 'More');
-      secondary.forEach(el => more.panel.appendChild(el));
+      const more = mkDropdown('⋯', LS.t('common.more') || 'More');
+      secondary.forEach(el => {
+        if(el.tagName === 'A') decorateNavBtn(el, iconForHref(el.getAttribute('href')), el.textContent);
+        more.panel.appendChild(el);
+      });
       nav.appendChild(more.d);
     }
 
     if(prefs.length){
-      const prefsDd = mkDropdown(LS.t('common.settings') || 'Settings');
-      prefs.forEach(el => prefsDd.panel.appendChild(el));
+      const prefsDd = mkDropdown('⚙', LS.t('common.settings') || 'Settings');
+      prefs.forEach(el => {
+        if(isLangLink(el)){
+          decorateNavBtn(el, '🌐', el.textContent);
+          el.classList.add('nav-chip');
+        }
+        prefsDd.panel.appendChild(el);
+      });
       nav.appendChild(prefsDd.d);
     }
 
@@ -589,9 +630,9 @@
     if(!btn){
       btn = document.createElement('button');
       btn.type = 'button';
-      btn.className = 'btn btn-ghost btn-sm topbar-menu-btn';
-      btn.textContent = LS.t('common.menu') || 'Menu';
+      btn.className = 'btn btn-ghost btn-sm topbar-menu-btn nav-btn';
       btn.setAttribute('aria-label', LS.t('common.menu') || 'Menu');
+      btn.innerHTML = `<span class="nav-ico" aria-hidden="true">☰</span><span class="nav-lbl">${LS.esc(LS.t('common.menu') || 'Menu')}</span>`;
       topbar.appendChild(btn);
     }
 
@@ -680,9 +721,65 @@
     });
   }
 
+  function initBottomNav(){
+    const app = document.getElementById('app');
+    if(!app) return;
+    const topbar = app.querySelector('.topbar');
+    if(!topbar) return;
+
+    if(document.querySelector('.bottom-nav')) return;
+
+    function iconForHref(href){
+      const h = String(href||'').trim();
+      if(h === 'dashboard.php') return '⌂';
+      if(h === 'create_code.php') return '✚';
+      if(h === 'my_codes.php') return '⧉';
+      if(h === 'rooms.php') return '◻';
+      if(h === 'notifications.php') return '✉';
+      return '•';
+    }
+
+    const items = [
+      {href:'dashboard.php', label: LS.t('nav.dashboard') || 'Dashboard'},
+      {href:'create_code.php', label: LS.t('nav.create_code') || 'Create'},
+      {href:'my_codes.php', label: LS.t('nav.my_codes') || 'Codes'},
+      {href:'rooms.php', label: LS.t('nav.rooms') || 'Rooms'},
+      {href:'notifications.php', label: LS.t('nav.notifications') || 'Inbox'},
+    ];
+
+    const cur = (()=>{
+      try{
+        const p = window.location && window.location.pathname ? window.location.pathname : '';
+        const parts = p.split('/');
+        return parts[parts.length - 1] || '';
+      }catch{ return ''; }
+    })();
+
+    const nav = document.createElement('nav');
+    nav.className = 'bottom-nav';
+
+    items.forEach(it => {
+      const a = document.createElement('a');
+      a.href = it.href;
+
+      const b = document.createElement('span');
+      b.className = 'btn bn-btn nav-btn btn-ghost btn-sm';
+      if(cur === it.href) b.classList.add('active');
+
+      b.innerHTML = `<span class="nav-ico" aria-hidden="true">${LS.esc(iconForHref(it.href))}</span><span class="nav-lbl">${LS.esc(it.label)}</span>`;
+      a.setAttribute('aria-label', it.label);
+      a.appendChild(b);
+
+      nav.appendChild(a);
+    });
+
+    document.body.appendChild(nav);
+  }
+
   document.addEventListener('DOMContentLoaded', ()=>{
     initNavGroups();
     initMobileNav();
+    initBottomNav();
   });
 
   window.LS = LS;

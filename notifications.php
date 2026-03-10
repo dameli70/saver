@@ -35,9 +35,9 @@ header("Permissions-Policy: clipboard-write=(self)");
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
 <?php emitI18nJsGlobals(); ?>
 <script src="assets/theme.js"></script>
+<script src="assets/app.js"></script>
 <link rel="stylesheet" href="assets/base.css">
-<link rel="stylesheet" href="assets/panel.css">
-<link rel="stylesheet" href="assets/panel_components.css">
+<link rel="stylesheet" href="assets/app.css">
 <style>
 body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9998;opacity:.5;
   background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.035'/%3E%3C/svg%3E");}
@@ -45,12 +45,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9998;o
 .orb2{width:360px;height:360px;bottom:40px;left:-90px;}
 
 
-.pill{font-size:10px;color:var(--muted);letter-spacing:1px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:none;}
-@media(min-width:560px){.pill{display:block;}}
-
-.wrap{position:relative;z-index:1;max-width:860px;margin:0 auto;padding:22px 16px 40px;}
-.h{font-family:var(--display);font-weight:900;font-size:22px;letter-spacing:-.5px;margin:0 0 8px 0;}
-.p{color:var(--muted);line-height:1.65;margin:0 0 18px 0;font-size:12px;}
+/* page-specific */
 .card-title{display:flex;align-items:center;justify-content:space-between;gap:10px;}
 
 
@@ -74,27 +69,32 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9998;o
 <body>
 <div class="orb orb1"></div><div class="orb orb2"></div>
 
-<div class="nav">
-  <a class="logo" href="dashboard.php"><?= htmlspecialchars(APP_NAME) ?></a>
-  <div class="nav-r">
-    <span class="pill"><?= htmlspecialchars($userEmail) ?></span>
-    <button class="btn btn-ghost btn-sm btn-theme" type="button" data-theme-toggle><?php e('common.theme'); ?></button>
-    <?php $curLang = currentLang(); ?>
-    <a class="<?= $curLang === 'fr' ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm' ?>" href="<?= htmlspecialchars(langSwitchUrl('fr')) ?>"><?php e('common.lang_fr'); ?></a>
-    <a class="<?= $curLang === 'en' ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm' ?>" href="<?= htmlspecialchars(langSwitchUrl('en')) ?>"><?php e('common.lang_en'); ?></a>
-    <?php if ($isAdmin): ?><a class="btn btn-ghost btn-sm" href="admin.php"><?php e('nav.admin'); ?></a><?php endif; ?>
-    <a class="btn btn-ghost btn-sm" href="dashboard.php"><?php e('nav.dashboard'); ?></a>
-    <a class="btn btn-ghost btn-sm" href="create_code.php"><?php e('nav.create_code'); ?></a>
-    <a class="btn btn-ghost btn-sm" href="my_codes.php"><?php e('nav.my_codes'); ?></a>
-    <a class="btn btn-ghost btn-sm" href="rooms.php"><?php e('nav.rooms'); ?></a>
-    <a class="btn btn-ghost btn-sm" href="account.php"><?php e('nav.account'); ?></a>
-    <a class="btn btn-ghost btn-sm" href="logout.php"><?php e('common.logout'); ?></a>
+<div id="app">
+  <div class="topbar">
+    <div class="topbar-logo"><?= htmlspecialchars(APP_NAME) ?></div>
+    <div class="topbar-r">
+      <span class="user-pill"><?= htmlspecialchars($userEmail) ?></span>
+      <button class="btn btn-ghost btn-sm btn-theme" type="button" data-theme-toggle><?php e('common.theme'); ?></button>
+      <?php $curLang = currentLang(); ?>
+      <a class="<?= $curLang === 'fr' ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm' ?>" href="<?= htmlspecialchars(langSwitchUrl('fr')) ?>"><?php e('common.lang_fr'); ?></a>
+      <a class="<?= $curLang === 'en' ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm' ?>" href="<?= htmlspecialchars(langSwitchUrl('en')) ?>"><?php e('common.lang_en'); ?></a>
+      <a class="btn btn-ghost btn-sm" href="dashboard.php"><?php e('nav.dashboard'); ?></a>
+      <a class="btn btn-ghost btn-sm" href="create_code.php"><?php e('nav.create_code'); ?></a>
+      <a class="btn btn-ghost btn-sm" href="my_codes.php"><?php e('nav.my_codes'); ?></a>
+      <a class="btn btn-ghost btn-sm" href="rooms.php"><?php e('nav.rooms'); ?></a>
+      <a class="btn btn-ghost btn-sm" href="notifications.php"><?php e('nav.notifications'); ?></a>
+      <a class="btn btn-ghost btn-sm" href="backup.php"><?php e('nav.backups'); ?></a>
+      <a class="btn btn-ghost btn-sm" href="vault_settings.php"><?php e('nav.vault'); ?></a>
+      <a class="btn btn-ghost btn-sm" href="setup.php"><?php e('nav.setup'); ?></a>
+      <a class="btn btn-ghost btn-sm" href="account.php"><?php e('nav.account'); ?></a>
+      <?php if ($isAdmin): ?><a class="btn btn-ghost btn-sm" href="admin.php"><?php e('nav.admin'); ?></a><?php endif; ?>
+      <a class="btn btn-ghost btn-sm" href="logout.php"><?php e('common.logout'); ?></a>
+    </div>
   </div>
-</div>
 
-<div class="wrap">
-  <div class="h"><?php e('page.notifications'); ?></div>
-  <div class="p"><?php e('notifications.intro'); ?></div>
+  <div class="app-body">
+    <div class="h"><?php e('page.notifications'); ?></div>
+    <div class="p"><?php e('notifications.intro'); ?></div>
 
   <div class="card">
     <div class="card-title">
@@ -109,13 +109,12 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9998;o
     <div class="list" id="list" style="margin-top:12px;"></div>
 
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
-      <button class="btn btn-ghost btn-sm" id="more" onclick="loadMore()" style="display:none;"><?php e('common.load_more' ?></);button>
-on>
+      <button class="btn btn-ghost btn-sm" id="more" onclick="loadMore()" style="display:none;"><?php e('common.load_more'); ?></button>
     </div>
 
     <div id="msg" class="msg"></div>
   </div>
-</div>
+  </div>
 
 <script>
 const CSRF = <?= json_encode($csrf) ?>;
@@ -280,5 +279,6 @@ function loadMore(){ load(false); }
 
 load(true);
 </script>
+</div>
 </body>
-</html> 
+</html>
