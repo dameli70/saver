@@ -172,8 +172,8 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--code-bg);border:
   <?php endif; ?>
 
   <?php if ($adminPage === 'codes'): ?>
- <=div class="card" style="margin-top:14px;">
-   < div class="card-title">Cod</esdiv>
+  <div class="card" style="margin-top:14px;">
+    <div class="card-title">Codes</div>
 
 
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">

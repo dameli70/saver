@@ -153,7 +153,8 @@ try {
         sort($files, SORT_NATURAL);
 
         foreach ($files as $f) {
-            if (migrationApplied($dbPdo, $f)) continue;
+            // Always attempt to apply migrations (idempotent with ignoreDuplicateErrors).
+            // This avoids getting stuck if schema_migrations is out of sync.
             $path = $migrationsDir . '/' . $f;
             fwrite(STDOUT, "Applying migration {$f}...\n");
             applySqlFile($dbPdo, $path, true);

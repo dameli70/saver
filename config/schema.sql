@@ -118,6 +118,8 @@ CREATE TABLE IF NOT EXISTS lock_shares (
     share_kdf_salt       VARCHAR(64) NOT NULL,
     share_kdf_iterations INT UNSIGNED NOT NULL DEFAULT 310000,
 
+    allow_reveal_after_date TINYINT(1) NOT NULL DEFAULT 1,
+
     created_at           DATETIME DEFAULT CURRENT_TIMESTAMP,
     revoked_at           DATETIME NULL,
     last_accessed_at     DATETIME NULL,

@@ -4,7 +4,7 @@
 //  Authenticated share management for time locks.
 //
 //  POST actions:
-//   - create: create a public share link for an unlocked lock
+//   - create: create a public share link for a lock
 //   - revoke: revoke a share link
 // ============================================================
 
@@ -49,7 +49,11 @@ if ($action === 'create') {
     if ($shareIters < 50000) $shareIters = 50000;
     if ($shareIters > 2000000) $shareIters = 2000000;
 
-    // Ensure lock belongs to user and is currently eligible to reveal.
+    $allowRevealAfter = array_key_exists('allow_reveal_after_date', $body)
+        ? (!empty($body['allow_reveal_after_date']) ? 1 : 0)
+        : 1;
+
+    // Ensure lock belongs to user.
     $stmt = $db->prepare("SELECT id, label, reveal_date, confirmation_status
                           FROM locks
                           WHERE id = ? AND user_id = ? AND is_active = 1
@@ -62,12 +66,6 @@ if ($action === 'create') {
         jsonResponse(['error' => 'This lock is not confirmed'], 403);
     }
 
-    $now = new DateTime('now', new DateTimeZone('UTC'));
-    $reveal = new DateTime((string)$lock['reveal_date'], new DateTimeZone('UTC'));
-    if ($now < $reveal) {
-        jsonResponse(['error' => 'This lock is still sealed. Sharing becomes available once it is eligible to reveal.'], 403);
-    }
-
     // Sharing is sensitive: enforce strong re-auth.
     requireStrongAuth();
 
@@ -75,17 +73,28 @@ if ($action === 'create') {
     $tokenHash = null;
 
     $tries = 0;
+    $hasAllowCol = hasLockSharesAllowRevealAfterDateColumn();
+
     while ($tries < 5) {
         $tries++;
         $token = bin2hex(random_bytes(32));
         $tokenHash = hash('sha256', $token);
 
         try {
-            $db->prepare("INSERT INTO lock_shares
-                          (lock_id, created_by_user_id, token_hash,
-                           share_cipher_blob, share_iv, share_auth_tag, share_kdf_salt, share_kdf_iterations)
-                          VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
-               ->execute([$lockId, $userId, $tokenHash, $shareCipher, $shareIv, $shareTag, $shareSalt, $shareIters]);
+            if ($hasAllowCol) {
+                $db->prepare("INSERT INTO lock_shares
+                              (lock_id, created_by_user_id, token_hash,
+                               share_cipher_blob, share_iv, share_auth_tag, share_kdf_salt, share_kdf_iterations,
+                               allow_reveal_after_date)
+                              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+                   ->execute([$lockId, $userId, $tokenHash, $shareCipher, $shareIv, $shareTag, $shareSalt, $shareIters, $allowRevealAfter]);
+            } else {
+                $db->prepare("INSERT INTO lock_shares
+                              (lock_id, created_by_user_id, token_hash,
+                               share_cipher_blob, share_iv, share_auth_tag, share_kdf_salt, share_kdf_iterations)
+                              VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+                   ->execute([$lockId, $userId, $tokenHash, $shareCipher, $shareIv, $shareTag, $shareSalt, $shareIters]);
+            }
             break;
         } catch (Throwable $e) {
             // Token collision (extremely unlikely) — retry.
