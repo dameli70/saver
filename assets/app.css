@@ -173,6 +173,9 @@
 /* Small/inline primary buttons should not expand */
 .btn-primary.btn-sm{width:auto;}
 
+/* Opt-in for buttons/links that should size to content */
+.btn-inline{width:auto;}
+
 .btn-ghost{background:rgba(255,255,255,.04);border:1px solid var(--b1);color:var(--text);
   backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
 }

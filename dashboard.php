@@ -124,10 +124,7 @@ header("Permissions-Policy: clipboard-write=(self)");
 <script src="assets/app.js"></script>
 <link rel="stylesheet" href="assets/base.css">
 <link rel="stylesheet" href="assets/app.css">
-<style>
-body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9998;opacity:.5;
-  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.035'/%3E%3C/svg%3E");}
-</style>
+<link rel="stylesheet" href="assets/dashboard_page.css">
 </head>
 <body>
 <div class="orb orb1"></div><div class="orb orb2"></div>
@@ -157,18 +154,18 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9998;o
 
   <div class="app-body">
 
-    <div class="card" style="margin-top:0;">
+    <div class="card dash-onboard-card">
       <div class="card-title"><div class="dot"></div><?php e('dashboard.onboarding'); ?></div>
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
-        <div style="min-width:220px;flex:1;">
-          <div style="font-size:12px;color:var(--muted);line-height:1.7;">
+      <div class="dash-progress-row">
+        <div class="dash-progress-main">
+          <div class="dash-progress-meta">
             <strong style="color:var(--text);font-weight:800;"><?= (int)$setupPercent ?>%</strong> <?php e('dashboard.progress_suffix', ['next' => $nextSetupText]); ?>
           </div>
-          <div style="height:10px;border:1px solid var(--b1);background:rgba(255,255,255,.02);margin-top:10px;">
-            <div style="height:100%;width:<?= (int)$setupPercent ?>%;background:linear-gradient(90deg, var(--accent), rgba(255,255,255,.12));"></div>
+          <div class="dash-progress-track">
+            <div class="dash-progress-fill" style="width:<?= (int)$setupPercent ?>%;"></div>
           </div>
         </div>
-        <a class="btn btn-primary" href="<?= htmlspecialchars($nextSetupHref) ?>" style="width:auto;"><?= htmlspecialchars($nextSetupLabel) ?></a>
+        <a class="btn btn-primary btn-inline" href="<?= htmlspecialchars($nextSetupHref) ?>"><?= htmlspecialchars($nextSetupLabel) ?></a>
       </div>
     </div>
 
@@ -184,80 +181,80 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9998;o
 
     <div class="card">
       <div class="card-title"><div class="dot"></div><?php e('dashboard.quick_actions'); ?></div>
-      <div style="display:flex;gap:10px;flex-wrap:wrap;">
-        <a class="btn btn-primary" href="create_code.php" style="width:auto;"><?php e('dashboard.create_time_lock'); ?></a>
-        <a class="btn btn-ghost" href="my_codes.php" style="width:auto;"><?php e('dashboard.my_time_locks'); ?></a>
-        <a class="btn btn-ghost" href="rooms.php" style="width:auto;"><?php e('nav.rooms'); ?></a>
-        <a class="btn btn-ghost" href="notifications.php" style="width:auto;"><?php e('nav.notifications'); ?></a>
-        <a class="btn btn-ghost" href="backup.php" style="width:auto;"><?php e('nav.backups'); ?></a>
-        <a class="btn btn-ghost" href="vault_settings.php" style="width:auto;"><?php e('nav.vault'); ?></a>
+      <div class="dash-actions">
+        <a class="btn btn-primary btn-inline" href="create_code.php"><?php e('dashboard.create_time_lock'); ?></a>
+        <a class="btn btn-ghost btn-inline" href="my_codes.php"><?php e('dashboard.my_time_locks'); ?></a>
+        <a class="btn btn-ghost btn-inline" href="rooms.php"><?php e('nav.rooms'); ?></a>
+        <a class="btn btn-ghost btn-inline" href="notifications.php"><?php e('nav.notifications'); ?></a>
+        <a class="btn btn-ghost btn-inline" href="backup.php"><?php e('nav.backups'); ?></a>
+        <a class="btn btn-ghost btn-inline" href="vault_settings.php"><?php e('nav.vault'); ?></a>
       </div>
-      <div style="margin-top:12px;font-size:12px;color:var(--muted);line-height:1.7;">
+      <div class="dash-actions-sub">
         <?php e('dashboard.quick_actions_sub'); ?>
       </div>
     </div>
 
     <div class="card">
       <div class="card-title"><div class="dot"></div><?php e('dashboard.setup_checklist'); ?></div>
-      <div style="display:flex;flex-direction:column;gap:10px;font-size:12px;">
+      <div class="dash-checklist">
 
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px;border:1px solid var(--b1);background:rgba(255,255,255,.02);">
-          <div style="display:flex;align-items:center;gap:10px;min-width:0;">
-            <div style="font-size:12px;color:<?= $hasVault ? 'var(--green)' : 'var(--orange)' ?>;"> <?= $hasVault ? '✓' : '•' ?> </div>
-            <div style="min-width:0;">
-              <div style="font-family:var(--display);font-weight:800;font-size:12px;"><?php e('dashboard.check.vault_title'); ?></div>
-              <div style="color:var(--muted);font-size:11px;line-height:1.6;"><?php e('dashboard.check.vault_sub'); ?></div>
+        <div class="dash-check-item">
+          <div class="dash-check-left">
+            <div class="dash-check-ico <?= $hasVault ? 'ok' : 'todo' ?>"><?= $hasVault ? '✓' : '•' ?></div>
+            <div class="dash-check-text">
+              <div class="dash-check-title"><?php e('dashboard.check.vault_title'); ?></div>
+              <div class="dash-check-sub"><?php e('dashboard.check.vault_sub'); ?></div>
             </div>
           </div>
-          <a class="btn btn-ghost btn-sm" href="vault_settings.php" style="width:auto;"><?php e('common.open'); ?></a>
+          <a class="btn btn-ghost btn-sm btn-inline" href="vault_settings.php"><?php e('common.open'); ?></a>
         </div>
 
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px;border:1px solid var(--b1);background:rgba(255,255,255,.02);">
-          <div style="display:flex;align-items:center;gap:10px;min-width:0;">
-            <div style="font-size:12px;color:<?= ($hasTotp || $hasPasskey) ? 'var(--green)' : 'var(--orange)' ?>;"> <?= ($hasTotp || $hasPasskey) ? '✓' : '•' ?> </div>
-            <div style="min-width:0;">
-              <div style="font-family:var(--display);font-weight:800;font-size:12px;"><?php e('dashboard.check.confirm_title'); ?></div>
-              <div style="color:var(--muted);font-size:11px;line-height:1.6;"><?php e('dashboard.check.confirm_sub'); ?></div>
+        <div class="dash-check-item">
+          <div class="dash-check-left">
+            <div class="dash-check-ico <?= ($hasTotp || $hasPasskey) ? 'ok' : 'todo' ?>"><?= ($hasTotp || $hasPasskey) ? '✓' : '•' ?></div>
+            <div class="dash-check-text">
+              <div class="dash-check-title"><?php e('dashboard.check.confirm_title'); ?></div>
+              <div class="dash-check-sub"><?php e('dashboard.check.confirm_sub'); ?></div>
             </div>
           </div>
-          <a class="btn btn-ghost btn-sm" href="account.php#totp-card" style="width:auto;"><?php e('common.open'); ?></a>
+          <a class="btn btn-ghost btn-sm btn-inline" href="account.php#totp-card"><?php e('common.open'); ?></a>
         </div>
 
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px;border:1px solid var(--b1);background:rgba(255,255,255,.02);">
-          <div style="display:flex;align-items:center;gap:10px;min-width:0;">
-            <div style="font-size:12px;color:<?= $backupCount > 0 ? 'var(--green)' : 'var(--orange)' ?>;"> <?= $backupCount > 0 ? '✓' : '•' ?> </div>
-            <div style="min-width:0;">
-              <div style="font-family:var(--display);font-weight:800;font-size:12px;"><?php e('dashboard.check.backup_title'); ?></div>
-              <div style="color:var(--muted);font-size:11px;line-height:1.6;">
+        <div class="dash-check-item">
+          <div class="dash-check-left">
+            <div class="dash-check-ico <?= $backupCount > 0 ? 'ok' : 'todo' ?>"><?= $backupCount > 0 ? '✓' : '•' ?></div>
+            <div class="dash-check-text">
+              <div class="dash-check-title"><?php e('dashboard.check.backup_title'); ?></div>
+              <div class="dash-check-sub">
                 <?php if ($backupCount > 0): ?>
-                  <?php e('dashboard.backups_count_label'); ?> <span style="color:var(--text);"><?= (int)$backupCount ?></span>
+                  <?php e('dashboard.backups_count_label'); ?> <span><?= (int)$backupCount ?></span>
                 <?php else: ?>
                   <?php e('dashboard.check.backup_sub'); ?>
                 <?php endif; ?>
                 <?php if ($lastBackupAt): ?>
-                  <span class="utc-pill" title="<?= htmlspecialchars(t('dashboard.stored_in_utc'), ENT_QUOTES, 'UTF-8') ?>" style="margin-left:8px;"><?php e('dashboard.last_backup', ['ts' => $lastBackupAt]); ?></span>
+                  <span class="utc-pill" title="<?= htmlspecialchars(t('dashboard.stored_in_utc'), ENT_QUOTES, 'UTF-8') ?>"><?php e('dashboard.last_backup', ['ts' => $lastBackupAt]); ?></span>
                 <?php endif; ?>
               </div>
             </div>
           </div>
-          <a class="btn btn-ghost btn-sm" href="backup.php" style="width:auto;"><?php e('common.open'); ?></a>
+          <a class="btn btn-ghost btn-sm btn-inline" href="backup.php"><?php e('common.open'); ?></a>
         </div>
 
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px;border:1px solid var(--b1);background:rgba(255,255,255,.02);">
-          <div style="display:flex;align-items:center;gap:10px;min-width:0;">
-            <div style="font-size:12px;color:<?= $lockCount > 0 ? 'var(--green)' : 'var(--orange)' ?>;"> <?= $lockCount > 0 ? '✓' : '•' ?> </div>
-            <div style="min-width:0;">
-              <div style="font-family:var(--display);font-weight:800;font-size:12px;"><?php e('dashboard.check.first_lock_title'); ?></div>
-              <div style="color:var(--muted);font-size:11px;line-height:1.6;">
+        <div class="dash-check-item">
+          <div class="dash-check-left">
+            <div class="dash-check-ico <?= $lockCount > 0 ? 'ok' : 'todo' ?>"><?= $lockCount > 0 ? '✓' : '•' ?></div>
+            <div class="dash-check-text">
+              <div class="dash-check-title"><?php e('dashboard.check.first_lock_title'); ?></div>
+              <div class="dash-check-sub">
                 <?php if ($lockCount > 0): ?>
-                  <?php e('dashboard.time_locks_created_label'); ?> <span style="color:var(--text);"><?= (int)$lockCount ?></span>
+                  <?php e('dashboard.time_locks_created_label'); ?> <span><?= (int)$lockCount ?></span>
                 <?php else: ?>
                   <?php e('dashboard.check.first_lock_sub'); ?>
                 <?php endif; ?>
               </div>
             </div>
           </div>
-          <a class="btn btn-ghost btn-sm" href="create_code.php" style="width:auto;"><?php e('common.create'); ?></a>
+          <a class="btn btn-ghost btn-sm btn-inline" href="create_code.php"><?php e('common.create'); ?></a>
         </div>
 
       </div>
@@ -265,7 +262,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9998;o
 
     <div class="card">
       <div class="card-title"><div class="dot"></div><?php e('dashboard.security'); ?></div>
-      <div style="font-size:12px;color:var(--muted);line-height:1.7;">
+      <div class="dash-actions-sub">
         <?= t('dashboard.security_sub_html', ['account_link' => '<a href="account.php" style="color:var(--text);">' . htmlspecialchars(t('nav.account'), ENT_QUOTES, 'UTF-8') . '</a>']) ?>
       </div>
     </div>

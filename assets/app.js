@@ -763,7 +763,8 @@
       try{
         const p = window.location && window.location.pathname ? window.location.pathname : '';
         const parts = p.split('/');
-        return parts[parts.length - 1] || '';
+        const c = parts[parts.length - 1] || '';
+        return (c === 'room.php') ? 'rooms.php' : c;
       }catch{ return ''; }
     })();
 
@@ -786,6 +787,47 @@
     });
 
     document.body.appendChild(nav);
+
+    // Optional: hide the dock while scrolling down (mobile only).
+    try{
+      const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const mq = window.matchMedia ? window.matchMedia('(max-width: 720px)') : null;
+      const isMobile = () => mq ? mq.matches : false;
+      if(!reduce){
+        let lastY = window.scrollY || 0;
+        let hidden = false;
+        let ticking = false;
+
+        function show(){
+          if(hidden){ nav.removeAttribute('data-hidden'); hidden = false; }
+        }
+        function hide(){
+          if(!hidden){ nav.setAttribute('data-hidden','1'); hidden = true; }
+        }
+
+        function onScroll(){
+          if(!isMobile()) return;
+          const y = window.scrollY || 0;
+          const dy = y - lastY;
+          if(Math.abs(dy) < 12) return;
+          if(dy > 0 && y > 80) hide();
+          else show();
+          lastY = y;
+        }
+
+        window.addEventListener('scroll', ()=>{
+          if(ticking) return;
+          ticking = true;
+          requestAnimationFrame(()=>{ onScroll(); ticking = false; });
+        }, {passive:true});
+
+        document.addEventListener('focusin', show);
+        if(mq){
+          try{ mq.addEventListener('change', ()=>show()); }
+          catch{ mq.addListener(()=>show()); }
+        }
+      }
+    }catch{}
   }
 
   function initDesktopSidebar(){
