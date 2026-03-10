@@ -647,7 +647,9 @@ async function unlockVault() {
     setActionState(btn, 'success');
     if(ico) ico.textContent = '☺';
 
-    toast(setMode ? STR.vault_toast_set_unlocked    await loadVaultSetup();
+    toast(setMode ? STR.vault_toast_set_unlocked : STR.vault_toast_unlocked_memory, 'ok');
+
+    await loadVaultSetup();
     checkVaultUnlock();
 
     setTimeout(() => {
