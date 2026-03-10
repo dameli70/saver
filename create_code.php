@@ -80,7 +80,7 @@ header("Permissions-Policy: clipboard-write=(self)");
       </div>
 
       <div id="vp-err" class="msg msg-err"></div>
-      <button class="btn btn-primary" id="vp-btn" onclick="unlockVault()"><span id="vp-txt"><?php e('create_code.vault_unlock_btn'); ?></span></button>
+      <button class="btn btn-primary" id="vp-btn" onclick="unlockVault()"><span class="btn-ico" id="vp-ico" aria-hidden="true">🔑</span><span class="btn-txt" id="vp-txt"><?php e('create_code.vault_unlock_btn'); ?></span></button>
     </div>
 
     <div class="card" id="create-mode-card" style="display:none">
@@ -123,20 +123,19 @@ header("Permissions-Policy: clipboard-write=(self)");
       <div id="w-err" class="msg msg-err"></div>
 
       <button class="btn btn-primary" id="w-btn" onclick="doWalletSetup()" style="margin-top:10px;">
-        <span id="w-txt"><?php e('create_code.wallet.btn_copy_ussd'); ?></span>
+        <span class="btn-ico" id="w-ico" aria-hidden="true">📲</span>
+        <span class="btn-txt" id="w-txt"><?php e('create_code.wallet.btn_copy_ussd'); ?></span>
       </button>
 
-      <div class="hr"></div>
-      <div class="card-title" style="margin-bottom:10px;"><?php e('create_code.wallet.pending_title'); ?></div>
       <div id="wallet-pending-msg" class="msg"></div>
-      <div id="wallet-pending-wrap" style="display:flex;flex-direction:column;gap:10px;"></div>
+      <div id="wallet-pending-wrap" style="display:flex;flex-direction:column;gap:10px;margin-top:14px;"></div>
     </div>
 
     <div class="card" id="gen-card" style="display:none">
       <div class="card-title"><div class="dot"></div><?php e('create_code.gen.title'); ?></div>
 
       <div class="field"><label><?php e('create_code.gen.label_label'); ?></label>
-        <input id="g-label" type="text" placeholder="<?= htmlspecialchars(t('create_code.gen.label_placeholder'), ENT_QUOTES, 'UTF-8') ?>" maxlength="120">
+        <input type="text" id="g-label" placeholder="<?= htmlspecialchars(t('create_code.gen.label_placeholder'), ENT_QUOTES, 'UTF-8') ?>" maxlength="120">
       </div>
 
       <div class="field"><label><?php e('create_code.gen.type_label'); ?></label>
@@ -171,7 +170,8 @@ header("Permissions-Policy: clipboard-write=(self)");
       </div>
 
       <button class="btn btn-primary" id="g-btn" onclick="doGenerate()" style="margin-top:10px;">
-        <span id="g-txt"><?php e('create_code.gen.btn'); ?></span>
+        <span class="btn-ico" id="g-ico" aria-hidden="true">🔒</span>
+        <span class="btn-txt" id="g-txt"><?php e('create_code.gen.btn'); ?></span>
       </button>
 
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
@@ -417,6 +417,29 @@ function openDialerAgain(e){
 
 function toast(msg,type='ok'){const t=document.createElement('div');t.className=`toast ${type}`;t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),3200);} 
 
+const REDUCE_MOTION = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+function setActionState(el, state){
+  if(!el) return;
+  if(state) el.setAttribute('data-state', state);
+  else el.removeAttribute('data-state');
+}
+
+function actionResetLater(el, icoEl, icoIdle, ms=1100){
+  window.setTimeout(()=>{
+    if(el) el.removeAttribute('data-state');
+    if(icoEl && icoIdle) icoEl.textContent = icoIdle;
+  }, ms);
+}
+
+function flashCard(card, state, ms=850){
+  if(!card) return;
+  card.setAttribute('data-state', state);
+  window.setTimeout(()=>{
+    if(card.getAttribute('data-state') === state) card.removeAttribute('data-state');
+  }, ms);
+}
+
 function bytesToB64(bytes){return btoa(String.fromCharCode(...bytes));}
 function b64ToBytes(b64){return Uint8Array.from(atob(b64), c => c.charCodeAt(0));}
 
@@ -568,8 +591,14 @@ async function unlockVault() {
     if (vp !== vp2) { errEl.textContent=STR.vault_err_mismatch; errEl.classList.add('show'); return; }
   }
 
+  const btn = document.getElementById('vp-btn');
   const btnTxt = document.getElementById('vp-txt');
-  btnTxt.innerHTML = '<span class="spin light"></span> ' + (setMode ? STR.vault_setting : STR.vault_unlocking);
+  const ico = document.getElementById('vp-ico');
+
+  if(btn) btn.disabled = true;
+  setActionState(btn, 'working');
+  if(ico) ico.textContent = '⏳';
+  if(btnTxt) btnTxt.textContent = (setMode ? STR.vault_setting : STR.vault_unlocking);
 
   try {
     if (setMode) {
@@ -615,8 +644,10 @@ async function unlockVault() {
 
     vaultPhraseSession = vp;
 
-    toast(setMode ? STR.vault_toast_set_unlocked : STR.vault_toast_unlocked_memory, 'ok');
-    await loadVaultSetup();
+    setActionState(btn, 'success');
+    if(ico) ico.textContent = '☺';
+
+    toast(setMode ? STR.vault_toast_set_unlocked    await loadVaultSetup();
     checkVaultUnlock();
 
     setTimeout(() => {
@@ -625,11 +656,21 @@ async function unlockVault() {
     }, 150);
 
   } catch (e) {
+    setActionState(btn, 'error');
+    if(ico) ico.textContent = '⚠';
+
     if (e && e.name === 'OperationError') errEl.textContent = STR.vault_err_incorrect_or_tampered;
     else errEl.textContent = e.message || STR.vault_err_unlock_failed;
     errEl.classList.add('show');
+
   } finally {
-    btnTxt.textContent = setMode ? STR.vault_btn_set : STR.vault_btn_unlock;
+    if(btnTxt) btnTxt.textContent = setMode ? STR.vault_btn_set : STR.vault_btn_unlock;
+    if(btn) btn.disabled = false;
+
+    if(btn && btn.getAttribute('data-state') === 'working') setActionState(btn, null);
+    if(btn && btn.getAttribute('data-state') === 'success') actionResetLater(btn, ico, '🔑', 1200);
+    else if(btn && btn.getAttribute('data-state') === 'error') actionResetLater(btn, ico, '🔑', 1400);
+    else if(ico) ico.textContent = '🔑';
   }
 }
 
@@ -651,8 +692,14 @@ async function doGenerate(){
 
   const btn=document.getElementById('g-btn');
   const txt=document.getElementById('g-txt');
-  btn.disabled=true;
-  txt.innerHTML='<span class="spin light"></span> ' + STR.sealing;
+  const ico=document.getElementById('g-ico');
+  const card=document.getElementById('gen-card');
+
+  if(btn) btn.disabled=true;
+  setActionState(btn, 'working');
+  setActionState(card, 'working');
+  if(ico) ico.textContent='⏳';
+  if(txt) txt.textContent = STR.sealing;
 
   try{
     const plainPwd = genPassword(type, length);
@@ -686,7 +733,6 @@ async function doGenerate(){
 
     if(!r.success){throw new Error(r.error||STR.gen_err_generation_failed);}
 
-
     let copied=false;
     try{await navigator.clipboard.writeText(plainPwd);copied=true;}catch{}
     if(copied){
@@ -702,15 +748,33 @@ async function doGenerate(){
     document.getElementById('g-label').value='';
     document.getElementById('g-hint').value='';
 
+    setActionState(btn, 'success');
+    if(ico) ico.textContent = '☺';
+    if(card) flashCard(card, 'success');
+
     openConfirmSheet(r.lock_id, r.label);
 
   }catch(e){
+    setActionState(btn, 'error');
+    if(ico) ico.textContent = '⚠';
+    if(card) flashCard(card, 'error');
+
     errEl.textContent = e.message || STR.gen_err_during_generation;
     errEl.classList.add('show');
+
   }finally{
-    txt.textContent = STR.gen_btn;
-    btn.disabled = false;
+    if(card && card.getAttribute('data-state') === 'working') setActionState(card, null);
+
+    if(txt) txt.textContent = STR.gen_btn;
+    if(btn) btn.disabled = false;
     showKdfProgress(false);
+
+    if(btn && btn.getAttribute('data-state') === 'success') actionResetLater(btn, ico, '🔒', 1200);
+    else if(btn && btn.getAttribute('data-state') === 'error') actionResetLater(btn, ico, '🔒', 1400);
+    else {
+      setActionState(btn, null);
+      if(ico) ico.textContent = '🔒';
+    }
   }
 }
 
@@ -1158,8 +1222,14 @@ async function doWalletSetup(){
 
   const btn=document.getElementById('w-btn');
   const txt=document.getElementById('w-txt');
-  btn.disabled=true;
-  txt.innerHTML='<span class="spin light"></span> ' + STR.sealing;
+  const ico=document.getElementById('w-ico');
+  const card=document.getElementById('wallet-card');
+
+  if(btn) btn.disabled=true;
+  setActionState(btn, 'working');
+  setActionState(card, 'working');
+  if(ico) ico.textContent='⏳';
+  if(txt) txt.textContent = STR.sealing;
 
   try{
     const tpl = String(carrier.ussd_change_pin_template || carrier.ussdChangePinTemplate || '');
@@ -1237,6 +1307,11 @@ async function doWalletSetup(){
       action,
       tel_uri: telUri,
     };
+
+    setActionState(btn, 'success');
+    if(ico) ico.textContent = '☺';
+    if(card) flashCard(card, 'success');
+
     openConfirmSheetWallet({carrierName: carrier.name || STR.wallet_default_name, action, telUri});
 
     document.getElementById('w-label').value='';
@@ -1245,11 +1320,25 @@ async function doWalletSetup(){
     await loadWalletPending(true);
 
   }catch(e){
+    setActionState(btn, 'error');
+    if(ico) ico.textContent = '⚠';
+    if(card) flashCard(card, 'error');
+
     errEl.textContent = e.message || STR.failed;
     errEl.classList.add('show');
+
   }finally{
+    if(card && card.getAttribute('data-state') === 'working') setActionState(card, null);
+
     syncWalletPrimaryButtonText();
-    btn.disabled = false;
+    if(btn) btn.disabled = false;
+
+    if(btn && btn.getAttribute('data-state') === 'success') actionResetLater(btn, ico, '📲', 1200);
+    else if(btn && btn.getAttribute('data-state') === 'error') actionResetLater(btn, ico, '📲', 1400);
+    else {
+      setActionState(btn, null);
+      if(ico) ico.textContent = '📲';
+    }
   }
 }
 

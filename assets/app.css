@@ -22,7 +22,12 @@
 
 @media(max-width:720px){
   .topbar{padding-left:14px;padding-right:14px;}
-  .topbar-menu-btn{display:inline-flex;}
+  .topbar-menu-btn{display:inline-flex;
+    padding:0;min-width:44px;width:44px;min-height:44px;
+    flex-direction:row;justify-content:center;
+  }
+  .topbar-menu-btn .nav-lbl{display:none;}
+  .topbar-menu-btn .nav-ico{font-size:18px;}
   .topbar-r{display:none;}
 }
 
@@ -170,6 +175,10 @@
   #ls-nav-panel, #ls-overflow-sheet{transition:none;}
   .bottom-nav{transition:none;}
   .bottom-nav .bn-btn{transition:none;}
+
+  .btn[data-state] .btn-ico{animation:none !important;}
+  .btn-primary[data-state="working"]{animation:none !important;}
+  .card[data-state]{animation:none !important;}
 }
 
 .nav-dd{position:relative;}
@@ -229,6 +238,24 @@
 }
 .btn:active{transform:scale(.98);}
 
+/* Action icons inside buttons (non-nav) */
+.btn .btn-ico{display:inline-flex;align-items:center;justify-content:center;
+  width:18px;height:18px;flex:0 0 18px;
+  font-size:16px;line-height:1;
+}
+.btn .btn-txt{display:inline-block;}
+
+/* Action feedback states (set via JS with data-state="working|success|error") */
+.btn[data-state="working"]{opacity:.92;}
+.btn[data-state="working"] .btn-ico{animation:ls-ico-spin .9s linear infinite;}
+.btn[data-state="success"] .btn-ico{animation:ls-ico-smile .7s ease-out both;}
+.btn[data-state="error"] .btn-ico{animation:ls-ico-shake .45s ease-in-out both;}
+
+@keyframes ls-ico-spin{to{transform:rotate(360deg);}}
+@keyframes ls-ico-smile{0%{transform:scale(1) rotate(0);}30%{transform:scale(1.22) rotate(-10deg);}60%{transform:scale(1.12) rotate(10deg);}100%{transform:scale(1) rotate(0);}}
+@keyframes ls-ico-shake{0%{transform:translateX(0);}25%{transform:translateX(-3px);}50%{transform:translateX(3px);}75%{transform:translateX(-2px);}100%{transform:translateX(0);}}
+@keyframes ls-primary-sheen{0%{background-position:0% 50%;}50%{background-position:100% 50%;}100%{background-position:0% 50%;}}
+
 .btn.nav-btn{flex-direction:column;gap:5px;padding:10px 12px;min-height:44px;letter-spacing:1.2px;font-size:9px;}
 .btn.nav-btn .nav-ico{font-size:16px;line-height:1;color:inherit;}
 .btn.nav-btn .nav-lbl{line-height:1;white-space:nowrap;}
@@ -239,6 +266,7 @@
 .btn-primary{background:linear-gradient(135deg, var(--accent), var(--accent2));color:#070812;font-weight:700;width:100%;box-shadow:0 10px 30px rgba(124,92,255,.22);}
 .btn-primary:hover{box-shadow:0 14px 38px rgba(124,92,255,.3);}
 .btn-primary:disabled{opacity:.45;pointer-events:none;}
+.btn-primary[data-state="working"]{background-size:220% 220%;animation:ls-primary-sheen 1.25s ease-in-out infinite;}
 
 /* Small/inline primary buttons should not expand */
 .btn-primary.btn-sm{width:auto;}
@@ -321,6 +349,32 @@
   .card:hover{transform:translateY(-2px);border-color:var(--b2);box-shadow:var(--shadow-card-hover);}
 }
 @media(min-width:600px){.card{padding:26px 28px;}}
+
+/* Card action feedback (set via JS with data-state="working|success|error") */
+.card[data-state="working"]{border-color:rgba(124,92,255,.22);
+  animation:ls-card-pulse 1.2s ease-in-out infinite;
+}
+.card[data-state="success"]{border-color:rgba(50,213,131,.22);
+  animation:ls-card-success .7s ease-out both;
+}
+.card[data-state="error"]{border-color:rgba(255,77,109,.22);
+  animation:ls-card-error .55s ease-out both;
+}
+
+@keyframes ls-card-pulse{
+  0%,100%{box-shadow:var(--shadow-card);}
+  50%{box-shadow:0 22px 60px rgba(124,92,255,.16);}
+}
+@keyframes ls-card-success{
+  0%{box-shadow:var(--shadow-card);}
+  45%{box-shadow:0 26px 70px rgba(50,213,131,.14);}
+  100%{box-shadow:var(--shadow-card);}
+}
+@keyframes ls-card-error{
+  0%{box-shadow:var(--shadow-card);}
+  45%{box-shadow:0 26px 70px rgba(255,77,109,.14);}
+  100%{box-shadow:var(--shadow-card);}
+}
 
 .card-title{font-family:var(--mono);
   font-size:10px;
