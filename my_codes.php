@@ -78,50 +78,6 @@ header("Permissions-Policy: clipboard-write=(self)");
   </div>
 </div>
 
-<!-- share overlay (pre-reveal) -->
-<div id="share-overlay" onclick="closeShare(event)">
-  <div class="reveal-sheet">
-    <button class="modal-close" onclick="closeShare()">×</button>
-    <div class="reveal-title" id="ps-title">Share lock</div>
-    <div class="reveal-sub">// anyone with the link can track the countdown</div>
-
-    <div class="small" id="ps-meta" style="margin-bottom:12px;"></div>
-
-    <div class="vault-input-wrap">
-      <label>Code to share</label>
-      <input type="password" id="ps-code" placeholder="Paste the code you saved…" autocomplete="off">
-    </div>
-
-    <label class="chk" style="margin:0 0 12px 0;">
-      <input type="checkbox" id="ps-allow" checked>
-      <span>Reveal after the unlock date to anyone with the link</span>
-    </label>
-
-    <div id="ps-err" class="msg msg-err"></div>
-
-    <button class="btn btn-primary" id="ps-btn" onclick="createShareFromSaved()"><span class="btn-ico" id="ps-ico" aria-hidden="true">🔗</span><span class="btn-txt" id="ps-txt">Create share link</span></button>
-
-    <div id="ps-out" class="rv-share" style="display:none;">
-      <div class="hr"></div>
-      <div class="rv-share-grid" style="margin-top:12px;">
-        <div>
-          <div class="k">Link</div>
-          <input class="ls-input" id="ps-url" readonly value="" style="margin-top:6px;">
-          <button class="btn btn-ghost btn-sm btn-inline" type="button" id="ps-copy-url" style="margin-top:8px;">Copy link</button>
-        </div>
-        <div>
-          <div class="k">Secret (save this)</div>
-          <input class="ls-input" id="ps-secret" readonly value="" style="margin-top:6px;">
-          <button class="btn btn-ghost btn-sm btn-inline" type="button" id="ps-copy-secret" style="margin-top:8px;">Copy secret</button>
-        </div>
-      </div>
-
-      <div class="msg msg-ok" id="ps-ok"></div>
-      <button class="btn btn-red btn-sm btn-inline" type="button" id="ps-revoke" style="display:none;margin-top:12px;">Revoke link</button>
-    </div>
-  </div>
-</div>
-
 <!-- reveal overlay -->
 <div id="reveal-overlay" onclick="closeReveal(event)">
   <div class="reveal-sheet">
@@ -185,11 +141,9 @@ let vaultPhraseSession = null;
 let vaultSlotSession   = 1;
 
 let revealedPwd = null;
-let currentReveal = null; // {kind:'lock'|'wallet', id:string, sh</old_code><new_code>let shareAfterReveal = false;
+let currentReveal = null; // {kind:'lock'|'wallet', id:string, share_after:boolean}
+let shareAfterReveal = false;
 let currentShareId = null;
-
-let currentShareLock = null;
-let currentPreShareId = null;
 
 let countdownTimer = null;
 let countdownRefreshTimer = null;
@@ -629,12 +583,9 @@ function buildCard(lock, opts={}){
       s.className='btn btn-ghost btn-sm';
       s.type='button';
       s.textContent='Share';
-      if(offline){
-        s.disabled = true;
-        s.style.opacity = '.45';
-      }else{
-        s.addEventListener('click', ()=>openShare(lock));
-      }
+      s.disabled = true;
+      s.style.opacity = '.45';
+      s.title = 'Available after unlock date';
       actions.appendChild(s);
     }
   }
@@ -724,7 +675,7 @@ function openReveal(kind, id, label, hint){
   const txt = document.getElementById('rv-btn-txt');
   btn.style.display='block';
   btn.disabled=false;
-  setBtnState(btn, ico, txt, null, '🔒', 'Decrypt & Reveal');
+  setBtnState(btn, ico, txt, null, '🔒', currentReveal.share_after ? 'Decrypt & Share' : 'Decrypt & Reveal');
 
   const errEl = document.getElementById('rv-err');
   errEl.classList.remove('show');
@@ -781,12 +732,22 @@ async function doReveal(){
     const plain=await aesDecrypt(payload.cipher_blob, payload.iv, payload.auth_tag, key);
 
     revealedPwd=plain;
+
     const pwdEl = document.getElementById('rv-pwd');
-    pwdEl.textContent=plain;
-    showRv(pwdEl);
-    showRv(document.getElementById('rv-copy-btn'));
-    if(currentReveal.kind === 'lock') showRv(document.getElementById('rv-share-btn'));
-    showRv(document.getElementById('rv-zk-note'));
+    if(currentReveal && currentReveal.share_after){
+      // Sharing does not require displaying the plaintext to the user.
+      pwdEl.textContent='';
+      hideRv(pwdEl);
+      hideRv(document.getElementById('rv-copy-btn'));
+      hideRv(document.getElementById('rv-share-btn'));
+      showRv(document.getElementById('rv-zk-note'));
+    } else {
+      pwdEl.textContent=plain;
+      showRv(pwdEl);
+      showRv(document.getElementById('rv-copy-btn'));
+      if(currentReveal.kind === 'lock') showRv(document.getElementById('rv-share-btn'));
+      showRv(document.getElementById('rv-zk-note'));
+    }
 
     vaultPhraseSession=vault;
 
@@ -796,7 +757,7 @@ async function doReveal(){
     }
 
     setRevealSheetState('success');
-    setBtnState(btn, ico, txt, 'success', '☺', 'Revealed');
+    setBtnState(btn, ico, txt, 'success', '☺', currentReveal && currentReveal.share_after ? 'Decrypted' : 'Revealed');
 
     setTimeout(()=>{
       btn.style.display='none';
@@ -816,7 +777,7 @@ async function doReveal(){
 
     setTimeout(()=>{
       setRevealSheetState(null);
-      setBtnState(btn, ico, txt, null, '🔒', 'Decrypt & Reveal');
+      setBtnState(btn, ico, txt, null, '🔒', (currentReveal && currentReveal.share_after) ? 'Decrypt & Share' : 'Decrypt & Reveal');
       btn.disabled=false;
     }, 900);
   }
@@ -839,174 +800,6 @@ function closeReveal(e){
   currentReveal=null;
   currentShareId=null;
   shareAfterReveal=false;
-}
-
-function openShare(lock){
-  if(!lock || lock.kind !== 'lock' || !lock.id) return;
-
-  currentShareLock = lock;
-  currentPreShareId = null;
-
-  const overlay = document.getElementById('share-overlay');
-  const errEl = document.getElementById('ps-err');
-  const out = document.getElementById('ps-out');
-  const revokeBtn = document.getElementById('ps-revoke');
-  const okEl = document.getElementById('ps-ok');
-
-  if(errEl) errEl.classList.remove('show');
-  if(okEl) okEl.classList.remove('show');
-  if(out) out.style.display='none';
-  if(revokeBtn) revokeBtn.style.display='none';
-
-  const title = document.getElementById('ps-title');
-  if(title) title.textContent = lock.label || 'Share lock';
-
-  const meta = document.getElementById('ps-meta');
-  if(meta){
-    const localStr = fmtLocalTs(lock.reveal_date);
-    const utcStr = fmtUtcTs(lock.reveal_date);
-    meta.innerHTML = `Unlock: <span>${esc(localStr)}</span> <span class="utc-pill" title="Stored & enforced in UTC">${esc(utcStr)}</span>`;
-  }
-
-  const codeEl = document.getElementById('ps-code');
-  if(codeEl) codeEl.value = '';
-
-  const allowEl = document.getElementById('ps-allow');
-  if(allowEl) allowEl.checked = true;
-
-  const urlEl = document.getElementById('ps-url');
-  const secEl = document.getElementById('ps-secret');
-  if(urlEl) urlEl.value='';
-  if(secEl) secEl.value='';
-
-  if(overlay){
-    overlay.classList.add('show');
-    document.body.style.overflow='hidden';
-    setTimeout(()=>{ if(codeEl) codeEl.focus(); }, 200);
-  }
-}
-
-function closeShare(e){
-  const overlay = document.getElementById('share-overlay');
-  if(!overlay) return;
-  if(e && e.target !== overlay) return;
-
-  overlay.classList.remove('show');
-
-  const navOv = document.getElementById('ls-nav-overlay');
-  const moreOv = document.getElementById('ls-overflow-overlay');
-  if(!(navOv && navOv.classList.contains('show')) && !(moreOv && moreOv.classList.contains('show'))){
-    if(!(document.getElementById('reveal-overlay') && document.getElementById('reveal-overlay').classList.contains('show'))){
-      document.body.style.overflow = '';
-    }
-  }
-
-  currentShareLock = null;
-  currentPreShareId = null;
-}
-
-async function revokePreShare(){
-  if(!currentPreShareId) return;
-  if(!confirm('Revoke this share link? Anyone with it will lose access.')) return;
-
-  const okEl = document.getElementById('ps-ok');
-  const errEl = document.getElementById('ps-err');
-  setShareMsg(okEl, '', true);
-  setShareMsg(errEl, '', false);
-
-  const r = await postCsrf('api/shares.php', {action:'revoke', share_id: currentPreShareId});
-  if(!r.success){
-    setShareMsg(errEl, r.error || 'Failed', false);
-    return;
-  }
-
-  currentPreShareId = null;
-  const revokeBtn = document.getElementById('ps-revoke');
-  if(revokeBtn) revokeBtn.style.display='none';
-  setShareMsg(okEl, 'Link revoked.', true);
-}
-
-async function createShareFromSaved(){
-  if(!currentShareLock || !currentShareLock.id) return;
-
-  const errEl = document.getElementById('ps-err');
-  if(errEl) errEl.classList.remove('show');
-
-  const code = (document.getElementById('ps-code').value||'').trim();
-  if(!code){
-    if(errEl){
-      errEl.textContent='Paste the code you want to share';
-      errEl.classList.add('show');
-    }
-    return;
-  }
-
-  const btn = document.getElementById('ps-btn');
-  const ico = document.getElementById('ps-ico');
-  const txt = document.getElementById('ps-txt');
-
-  setBtnState(btn, ico, txt, 'working', '⏳', 'Creating…');
-  btn.disabled = true;
-
-  const okEl = document.getElementById('ps-ok');
-  setShareMsg(okEl, '', true);
-
-  try{
-    const secret = genShareSecret();
-    const c = requireWebCrypto();
-    const saltBytes = new Uint8Array(16);
-    c.getRandomValues(saltBytes);
-    const saltB64 = bytesToB64(saltBytes);
-
-    const iters = 310000;
-    const key = await deriveKey(secret, saltB64, iters);
-    const enc = await aesEncrypt(code, key);
-
-    const allowEl = document.getElementById('ps-allow');
-    const allow = allowEl ? !!allowEl.checked : true;
-
-    const payload = {
-      action: 'create',
-      lock_id: currentShareLock.id,
-      share_cipher_blob: enc.cipher_blob,
-      share_iv: enc.iv,
-      share_auth_tag: enc.auth_tag,
-      share_kdf_salt: saltB64,
-      share_kdf_iterations: iters,
-      allow_reveal_after_date: allow ? 1 : 0,
-    };
-
-    let r = await postCsrf('api/shares.php', payload);
-    if(!r.success && (r.error_code==='reauth_required' || r.error_code==='security_setup_required')){
-      const ok2 = await ensureReauth(r.methods||{});
-      if(!ok2) throw new Error(r.error||'Re-authentication required');
-      r = await postCsrf('api/shares.php', payload);
-    }
-
-    if(!r.success) throw new Error(r.error || 'Failed');
-
-    currentPreShareId = parseInt(r.share_id||'0', 10) || null;
-
-    const urlEl = document.getElementById('ps-url');
-    const secEl = document.getElementById('ps-secret');
-    if(urlEl) urlEl.value = String(r.share_url||'');
-    if(secEl) secEl.value = secret;
-
-    const out = document.getElementById('ps-out');
-    if(out) out.style.display='block';
-
-    const revokeBtn = document.getElementById('ps-revoke');
-    if(revokeBtn && currentPreShareId) revokeBtn.style.display='inline-flex';
-
-    setShareMsg(okEl, 'Share link created. Copy both the link and the secret.', true);
-
-  }catch(e){
-    setShareMsg(errEl, (e && e.message) ? e.message : 'Failed', false);
-
-  }finally{
-    setBtnState(btn, ico, txt, null, '🔗', 'Create share link');
-    btn.disabled = false;
-  }
 }
 
 async function copyRevealed(){
@@ -1096,7 +889,7 @@ async function startShareFlow(){
     return;
   }
   if(!revealedPwd){
-    toast('Reveal first to generate a share link','warn');
+    toast('Decrypt first to generate a share link','warn');
     return;
   }
 
@@ -1199,13 +992,6 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   if(copyUrl) copyUrl.addEventListener('click', ()=>copyVal('rv-share-url'));
   if(copySecret) copySecret.addEventListener('click', ()=>copyVal('rv-share-secret'));
   if(revokeBtn) revokeBtn.addEventListener('click', revokeShare);
-
-  const psCopyUrl = document.getElementById('ps-copy-url');
-  const psCopySecret = document.getElementById('ps-copy-secret');
-  const psRevoke = document.getElementById('ps-revoke');
-  if(psCopyUrl) psCopyUrl.addEventListener('click', ()=>copyVal('ps-url'));
-  if(psCopySecret) psCopySecret.addEventListener('click', ()=>copyVal('ps-secret'));
-  if(psRevoke) psRevoke.addEventListener('click', revokePreShare);
 
   await loadLocks();
 });
