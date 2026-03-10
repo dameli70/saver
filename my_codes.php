@@ -95,8 +95,8 @@ header("Permissions-Policy: clipboard-write=(self)");
 
     <div id="rv-err" class="msg msg-err"></div>
 
-    <button class="btn btn-primary" id="rv-btn" onclick="doReveal()"><span id="rv-btn-txt">Decrypt &amp; Reveal</span></button>
-    <button class="btn btn-ghost" id="rv-copy-btn" onclick="copyRevealed()" style="display:none;margin-top:10px;">Copy</button>
+    <button class="btn btn-primary" id="rv-btn" onclick="doReveal()"><span class="btn-ico" id="rv-btn-ico" aria-hidden="true">🔒</span><span class="btn-txt" id="rv-btn-txt">Decrypt &amp; Reveal</span></button>
+    <button class="btn btn-ghost" id="rv-copy-btn" onclick="copyRevealed()" style="display:none;margin-top:10px;"><span class="btn-ico" aria-hidden="true">⧉</span><span class="btn-txt">Copy</span></button>
     <div id="rv-zk-note" style="display:none;margin-top:10px;font-size:10px;color:var(--muted);letter-spacing:1px;line-height:1.6;">
       Zero-knowledge: only your browser decrypted this value.
     </div>
@@ -113,6 +113,12 @@ let revealedPwd = null;
 let currentReveal = null; // {kind:'lock'|'wallet', id:string}
 
 let countdownTimer = null;
+let countdownRefreshTimer = null;
+
+const reduceMotion = (()=>{
+  try{ return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches; }
+  catch{ return false; }
+})();
 
 function apiUrl(url){return url.startsWith('/') ? url.slice(1) : url;}
 async function get(url){const r=await fetch(apiUrl(url),{credentials:'same-origin'});return r.json();}
@@ -146,6 +152,15 @@ function fmtLocalTs(ts){
 function fmtUtcTs(ts){
   const d = parseUtc(ts);
   return (window.LS && LS.fmtUtc) ? LS.fmtUtc(d) : (d && !isNaN(d.getTime()) ? d.toUTCString() : '');
+}
+
+function fmtCountdown(seconds){
+  if(window.LS && LS.fmtCountdown) return LS.fmtCountdown(seconds);
+  const s = Math.max(0, parseInt(seconds||'0', 10) || 0);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const ss = s % 60;
+  return (h > 0 ? (String(h).padStart(2,'0') + ':') : '') + String(m).padStart(2,'0') + ':' + String(ss).padStart(2,'0');
 }
 
 function renderLoadingSkeleton(){
@@ -198,19 +213,64 @@ async function aesDecrypt(cipherBlobB64, ivB64, tagB64, key){
 
 function startCountdownTicker(){
   if(countdownTimer) clearInterval(countdownTimer);
-  countdownTimer = setInterval(()=>{
+
+  function tick(){
+    let shouldRefresh = false;
+
     document.querySelectorAll('[data-countdown-until]')
       .forEach(el => {
         const until = parseInt(el.getAttribute('data-countdown-until')||'0', 10) || 0;
+        if(!until) return;
+
         const now = Date.now();
-        const seconds = Math.max(0, Math.floor((until - now)/1000));
-        const label = (window.LS && LS.fmtCountdown) ? LS.fmtCountdown(seconds) : String(seconds);
-        el.textContent = seconds > 0 ? `⏱ Reveals in ${label}` : '⏱ Reveal eligible';
+        const remainingMs = until - now;
+        const seconds = Math.max(0, Math.floor(remainingMs / 1000));
+
+        const totalAttr = parseInt(el.getAttribute('data-countdown-total')||'0', 10) || 0;
+        const totalMs = totalAttr > 0 ? totalAttr : Math.max(1, until - now);
+        if(!totalAttr) el.setAttribute('data-countdown-total', String(totalMs));
+
+        const nextText = seconds > 0 ? `⏱ Reveals in ${fmtCountdown(seconds)}` : '⏱ Reveal eligible';
+        const txtEl = el.querySelector('.cd-txt') || el;
+        if(txtEl.textContent !== nextText){
+          txtEl.textContent = nextText;
+          if(!reduceMotion){
+            txtEl.classList.remove('tick');
+            void txtEl.offsetWidth;
+            txtEl.classList.add('tick');
+          }
+        }
+
+        const clampedRemaining = Math.max(0, remainingMs);
+        const p = totalMs > 0 ? Math.max(0, Math.min(1, 1 - (clampedRemaining / totalMs))) : 1;
+        el.style.setProperty('--p', String(p));
+
+        const urg = (seconds <= 0) ? 0 : (seconds <= 10 ? 3 : (seconds <= 60 ? 2 : 1));
+        el.setAttribute('data-urgency', String(urg));
+
+        if(seconds <= 0 && el.getAttribute('data-hit-zero') !== '1'){
+          el.setAttribute('data-hit-zero', '1');
+          const card = el.closest ? el.closest('.lock-card') : null;
+          if(card && card.classList.contains('st-locked')) shouldRefresh = true;
+        }
       });
-  }, 1000);
+
+    if(shouldRefresh){
+      if(countdownRefreshTimer) clearTimeout(countdownRefreshTimer);
+      countdownRefreshTimer = setTimeout(()=>{ countdownRefreshTimer = null; loadLocks(); }, 1200);
+    }
+  }
+
+  tick();
+  countdownTimer = setInterval(tick, 1000);
 }
 
 async function loadLocks(){
+  if(countdownRefreshTimer){
+    clearTimeout(countdownRefreshTimer);
+    countdownRefreshTimer = null;
+  }
+
   const wrap=document.getElementById('locks-wrap');
   wrap.innerHTML=renderLoadingSkeleton();
 
@@ -318,8 +378,20 @@ function buildCard(lock){
   if((st==='locked' || st==='unlocked') && revealD && !isNaN(revealD.getTime())){
     const cd=document.createElement('div');
     cd.className='lc-countdown';
-    cd.setAttribute('data-countdown-until', String(revealD.getTime()));
-    cd.textContent='⏱';
+
+    const untilMs = revealD.getTime();
+    cd.setAttribute('data-countdown-until', String(untilMs));
+    cd.setAttribute('data-countdown-total', String(Math.max(1, untilMs - Date.now())));
+
+    const txt=document.createElement('span');
+    txt.className='cd-txt';
+    txt.textContent='⏱';
+
+    const bar=document.createElement('div');
+    bar.className='cd-bar';
+
+    cd.appendChild(txt);
+    cd.appendChild(bar);
     el.appendChild(cd);
   }
 
@@ -386,19 +458,69 @@ function buildCard(lock){
   return el;
 }
 
+function setBtnState(btn, icoEl, txtEl, state, ico, txt){
+  if(!btn) return;
+  if(state) btn.setAttribute('data-state', state);
+  else btn.removeAttribute('data-state');
+  if(icoEl) icoEl.textContent = ico || '';
+  if(txtEl) txtEl.textContent = txt || '';
+}
+
+function showRv(el){
+  if(!el) return;
+  el.style.display='block';
+  if(!reduceMotion){
+    el.classList.remove('rv-in');
+    void el.offsetWidth;
+    el.classList.add('rv-in');
+  }
+}
+
+function hideRv(el){
+  if(!el) return;
+  el.style.display='none';
+  el.classList.remove('rv-in');
+}
+
+function setRevealSheetState(state){
+  const sheet = document.querySelector('#reveal-overlay .reveal-sheet');
+  if(!sheet) return;
+  if(state) sheet.setAttribute('data-state', state);
+  else sheet.removeAttribute('data-state');
+}
+
 function openReveal(kind, id, label, hint){
   currentReveal = {kind, id};
+  revealedPwd = null;
+
+  const overlay = document.getElementById('reveal-overlay');
+  const sheet = overlay ? overlay.querySelector('.reveal-sheet') : null;
+  if(sheet) sheet.removeAttribute('data-state');
+
   document.getElementById('rv-label').textContent=label;
   document.getElementById('rv-vault').value=vaultPhraseSession||'';
-  document.getElementById('rv-pwd').style.display='none';
-  document.getElementById('rv-copy-btn').style.display='none';
-  document.getElementById('rv-zk-note').style.display='none';
-  document.getElementById('rv-btn').style.display='block';
-  document.getElementById('rv-btn-txt').textContent='Decrypt & Reveal';
-  document.getElementById('rv-err').classList.remove('show');
+
+  const pwdEl = document.getElementById('rv-pwd');
+  pwdEl.textContent='';
+  hideRv(pwdEl);
+  hideRv(document.getElementById('rv-copy-btn'));
+  hideRv(document.getElementById('rv-zk-note'));
+
+  const btn = document.getElementById('rv-btn');
+  const ico = document.getElementById('rv-btn-ico');
+  const txt = document.getElementById('rv-btn-txt');
+  btn.style.display='block';
+  btn.disabled=false;
+  setBtnState(btn, ico, txt, null, '🔒', 'Decrypt & Reveal');
+
+  const errEl = document.getElementById('rv-err');
+  errEl.classList.remove('show');
+
   const hi=document.getElementById('rv-hint');
   if(hint){hi.textContent=`Hint: "${hint}"`;hi.style.display='block';}else hi.style.display='none';
-  document.getElementById('reveal-overlay').classList.add('show');
+
+  overlay.classList.add('show');
+  document.body.style.overflow='hidden';
   setTimeout(()=>document.getElementById('rv-vault').focus(),200);
 }
 
@@ -411,13 +533,20 @@ async function ensureReauth(methods){
 }
 
 async function doReveal(){
+  const btn = document.getElementById('rv-btn');
+  const ico = document.getElementById('rv-btn-ico');
+  const txt = document.getElementById('rv-btn-txt');
+
   const vault=document.getElementById('rv-vault').value || vaultPhraseSession;
   const errEl=document.getElementById('rv-err');
   errEl.classList.remove('show');
+
   if(!vault){errEl.textContent='Enter your vault passphrase';errEl.classList.add('show');return;}
   if(!currentReveal || !currentReveal.id){errEl.textContent='No code selected';errEl.classList.add('show');return;}
 
-  document.getElementById('rv-btn-txt').innerHTML='<span class="spin"></span>';
+  setBtnState(btn, ico, txt, 'working', '⏳', 'Decrypting…');
+  btn.disabled=true;
+  setRevealSheetState('working');
 
   try{
     const endpoint = (currentReveal.kind === 'wallet') ? 'api/wallet_reveal.php' : 'api/reveal.php';
@@ -428,10 +557,10 @@ async function doReveal(){
     let r=await postCsrf(endpoint, body);
     if(!r.success && (r.error_code==='reauth_required' || r.error_code==='security_setup_required')){
       const ok = await ensureReauth(r.methods||{});
-      if(!ok){errEl.textContent=r.error||'Re-authentication required';errEl.classList.add('show');return;}
+      if(!ok) throw new Error(r.error||'Re-authentication required');
       r=await postCsrf(endpoint, body);
     }
-    if(!r.success){errEl.textContent=r.error||'Cannot reveal';errEl.classList.add('show');return;}
+    if(!r.success) throw new Error(r.error||'Cannot reveal');
 
     const payload = (currentReveal.kind === 'wallet') ? (r.wallet_lock || {}) : r;
 
@@ -439,11 +568,11 @@ async function doReveal(){
     const plain=await aesDecrypt(payload.cipher_blob, payload.iv, payload.auth_tag, key);
 
     revealedPwd=plain;
-    document.getElementById('rv-pwd').textContent=plain;
-    document.getElementById('rv-pwd').style.display='block';
-    document.getElementById('rv-copy-btn').style.display='block';
-    document.getElementById('rv-zk-note').style.display='block';
-    document.getElementById('rv-btn').style.display='none';
+    const pwdEl = document.getElementById('rv-pwd');
+    pwdEl.textContent=plain;
+    showRv(pwdEl);
+    showRv(document.getElementById('rv-copy-btn'));
+    showRv(document.getElementById('rv-zk-note'));
 
     vaultPhraseSession=vault;
 
@@ -452,18 +581,43 @@ async function doReveal(){
       localStorage.setItem('vault_slot', String(vaultSlotSession));
     }
 
+    setRevealSheetState('success');
+    setBtnState(btn, ico, txt, 'success', '☺', 'Revealed');
+
+    setTimeout(()=>{
+      btn.style.display='none';
+      setRevealSheetState(null);
+    }, 700);
+
   }catch(e){
-    if(e.name==='OperationError') errEl.textContent='Decryption failed — wrong vault passphrase or tampered data';
-    else errEl.textContent=e.message||'Decryption failed';
+    if(e && e.name==='OperationError') errEl.textContent='Decryption failed — wrong vault passphrase or tampered data';
+    else errEl.textContent=(e && e.message) ? e.message : 'Decryption failed';
     errEl.classList.add('show');
-  }finally{
-    document.getElementById('rv-btn-txt').textContent='Decrypt & Reveal';
+
+    setRevealSheetState('error');
+    setBtnState(btn, ico, txt, 'error', '⚠', 'Failed');
+
+    setTimeout(()=>{
+      setRevealSheetState(null);
+      setBtnState(btn, ico, txt, null, '🔒', 'Decrypt & Reveal');
+      btn.disabled=false;
+    }, 900);
   }
 }
 
 function closeReveal(e){
-  if(e&&e.target!==document.getElementById('reveal-overlay'))return;
-  document.getElementById('reveal-overlay').classList.remove('show');
+  const overlay = document.getElementById('reveal-overlay');
+  if(e && e.target !== overlay) return;
+
+  overlay.classList.remove('show');
+  setRevealSheetState(null);
+
+  const navOv = document.getElementById('ls-nav-overlay');
+  const moreOv = document.getElementById('ls-overflow-overlay');
+  if(!(navOv && navOv.classList.contains('show')) && !(moreOv && moreOv.classList.contains('show'))){
+    document.body.style.overflow = '';
+  }
+
   revealedPwd=null;
   currentReveal=null;
 }
