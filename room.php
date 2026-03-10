@@ -39,34 +39,13 @@ header("Referrer-Policy: no-referrer");
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title><?= htmlspecialchars(APP_NAME) ?> — <?= htmlspecialchars(t('page.room')) ?></title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <?php emitI18nJsGlobals(); ?>
 <script src="assets/theme.js"></script>
 <script src="assets/app.js"></script>
 <link rel="stylesheet" href="assets/base.css">
 <link rel="stylesheet" href="assets/app.css">
-<style>
-.orb{filter:blur(120px);}
-.orb1{width:520px;height:520px;top:-170px;right:-120px;}
-.orb2{width:360px;height:360px;bottom:40px;left:-90px;}
-
-.pill{font-size:10px;color:var(--muted);letter-spacing:1px;border:1px solid rgba(255,255,255,.13);padding:6px 10px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:none;}
-@media(min-width:560px){.pill</old_code><new_code>.k{color:var(--muted);} 
-.h{font-size:18px;}
-
-.k{color:var(--muted);} 
-
-.table-wrap{overflow:auto;border:1px solid var(--b1);background:rgba(0,0,0,.2);}
-.table{width:100%;border-collapse:collapse;min-width:760px;}
-.table th,.table td{padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.06);text-align:left;font-size:12px;white-space:nowrap;}
-.table th{color:var(--muted);font-size:10px;letter-spacing:2px;text-transform:uppercase;background:rgba(0,0,0,.25);} 
-
-.feed{border:1px solid rgba(255,255,255,.08);background:rgba(0,0,0,.2);padding:12px;max-height:420px;overflow:auto;}
-.feed-item{padding:10px 10px;border-bottom:1px solid rgba(255,255,255,.06);font-size:12px;line-height:1.6;}
-.feed-item:last-child{border-bottom:none;}
-.feed-meta{font-size:10px;color:var(--muted);letter-spacing:1px;margin-top:4px;}
-
-</style>
+<link rel="stylesheet" href="assets/room_page.css">
 </head>
 <body>
 <div class="orb orb1"></div><div class="orb orb2"></div>
@@ -104,7 +83,7 @@ header("Referrer-Policy: no-referrer");
       <div id="room-overview" class="k">Loading…</div>
 
       <div id="contrib-block" style="display:none; margin-top:12px;">
-        <div class="hr" style="border-top:1px solid var(--b1);margin:16px 0;"></div>
+        <div class="hr"></div>
         <div class="card-title" style="margin-bottom:10px;">Contribution</div>
         <div class="p" style="margin-bottom:10px;">Confirm your contribution for the active cycle. (Deposit verification / escrow processing is enforced by the worker milestone.)</div>
 
@@ -122,11 +101,11 @@ header("Referrer-Policy: no-referrer");
         <div style="margin-top:12px;display:grid;grid-template-columns:1fr;gap:10px;">
           <div>
             <div class="k">Amount</div>
-            <input id="contrib-amt" style="margin-top:6px;width:100%;background:var(--s2);border:1px solid var(--b1);color:var(--text);font-family:var(--mono);font-size:14px;padding:12px;outline:none;" placeholder="e.g. 50.00">
+            <input id="contrib-amt" class="ls-input" style="margin-top:6px;" placeholder="e.g. 50.00">
           </div>
           <div>
             <div class="k">Reference (optional)</div>
-            <input id="contrib-ref" style="margin-top:6px;width:100%;background:var(--s2);border:1px solid var(--b1);color:var(--text);font-family:var(--mono);font-size:14px;padding:12px;outline:none;" placeholder="e.g. bank tx id">
+            <input id="contrib-ref" class="ls-input" style="margin-top:6px;" placeholder="e.g. bank tx id">
           </div>
         </div>
 
@@ -137,7 +116,7 @@ header("Referrer-Policy: no-referrer");
       </div>
 
       <div id="unlock-block" style="display:none; margin-top:12px;">
-        <div class="hr" style="border-top:1px solid var(--b1);margin:16px 0;"></div>
+        <div class="hr"></div>
         <div class="card-title" style="margin-bottom:10px;">Unlock (Type A)</div>
         <div class="p" style="margin-bottom:10px;">Requires 100% approval after the reveal date. When revealed, the unlock code is valid for 72 hours.</div>
 
@@ -160,7 +139,7 @@ header("Referrer-Policy: no-referrer");
 
         <div id="unlock-code-wrap" style="display:none;margin-top:12px;">
           <div class="k">Unlock code (auto-clears)</div>
-          <input id="unlock-code" readonly style="margin-top:6px;width:100%;background:var(--s2);border:1px solid var(--b1);color:var(--text);font-family:var(--mono);font-size:14px;padding:12px;outline:none;">
+          <input id="unlock-code" class="ls-input" readonly style="margin-top:6px;">
           <div class="small" id="unlock-code-exp" style="margin-top:6px;"></div>
         </div>
 
@@ -168,7 +147,7 @@ header("Referrer-Policy: no-referrer");
       </div>
 
       <div id="typeb-block" style="display:none; margin-top:12px;">
-        <div class="hr" style="border-top:1px solid var(--b1);margin:16px 0;"></div>
+        <div class="hr"></div>
         <div class="card-title" style="margin-bottom:10px;">Rotation (Type B)</div>
         <div class="p" style="margin-bottom:10px;">Each turn requires maker approval + 50% participant approval. If approved, only the current turn user can reveal the unlock code for 72 hours.</div>
 
@@ -202,18 +181,18 @@ header("Referrer-Policy: no-referrer");
 
         <div id="typeb-code-wrap" style="display:none;margin-top:12px;">
           <div class="k">Unlock code (auto-clears)</div>
-          <input id="typeb-code" readonly style="margin-top:6px;width:100%;background:var(--s2);border:1px solid var(--b1);color:var(--text);font-family:var(--mono);font-size:14px;padding:12px;outline:none;">
+          <input id="typeb-code" class="ls-input" readonly style="margin-top:6px;">
           <div class="small" id="typeb-code-exp" style="margin-top:6px;"></div>
         </div>
 
         <div id="typeb-dispute-wrap" style="display:none;margin-top:12px;">
-          <div class="hr" style="border-top:1px solid var(--b1);margin:16px 0;"></div>
+          <div class="hr"></div>
           <div class="k">Dispute (Type B)</div>
           <div class="v" id="typeb-dispute-meta">—</div>
 
           <div id="typeb-dispute-form" style="display:none;margin-top:10px;">
             <div class="k">Reason (optional)</div>
-            <input id="typeb-dispute-reason" placeholder="e.g. I believe the turn user is not eligible / suspicious activity" style="margin-top:6px;width:100%;background:var(--s2);border:1px solid var(--b1);color:var(--text);font-family:var(--mono);font-size:14px;padding:12px;outline:none;">
+            <input id="typeb-dispute-reason" class="ls-input" placeholder="e.g. I believe the turn user is not eligible / suspicious activity" style="margin-top:6px;">
             <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">
               <button class="btn btn-red btn-sm" onclick="typeBRaiseDispute()">Raise dispute</button>
             </div>
@@ -230,7 +209,7 @@ header("Referrer-Policy: no-referrer");
       </div>
 
       <div id="exit-block" style="display:none; margin-top:12px;">
-        <div class="hr" style="border-top:1px solid var(--b1);margin:16px 0;"></div>
+        <div class="hr"></div>
         <div class="card-title" style="margin-bottom:10px;">Exit request (Type B)</div>
         <div class="p" style="margin-bottom:10px;">After the room starts, exiting requires maker approval + 60% participant approval. A settlement entry is recorded as a refund minus a 20% platform fee.</div>
 
@@ -255,7 +234,7 @@ header("Referrer-Policy: no-referrer");
       </div>
 
       <div id="invite-block" style="display:none; margin-top:12px;">
-        <div class="hr" style="border-top:1px solid var(--b1);margin:16px 0;"></div>
+        <div class="hr"></div>
         <div class="card-title" style="margin-bottom:10px;">Invitation</div>
         <div class="p" style="margin-bottom:10px;">You were invited to this private room. Accepting will add you as an approved participant.</div>
         <div style="display:flex;gap:10px;flex-wrap:wrap;">
@@ -328,7 +307,7 @@ header("Referrer-Policy: no-referrer");
 
       <div id="unlisted-link-wrap" style="display:none;margin-top:12px;">
         <div class="k">Shareable link (shown once)</div>
-        <input id="unlisted-link" readonly style="margin-top:6px;width:100%;background:var(--s2);border:1px solid var(--b1);color:var(--text);font-family:var(--mono);font-size:14px;padding:12px;outline:none;">
+        <input id="unlisted-link" class="ls-input" readonly style="margin-top:6px;">
       </div>
 
       <div class="small" id="unlisted-meta" style="margin-top:10px;"></div>
@@ -340,7 +319,7 @@ header("Referrer-Policy: no-referrer");
       <div class="p">Private rooms require invites. Invite by email; invited users can accept from the room page.</div>
 
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;align-items:center;">
-        <input id="invite-email" placeholder="user@example.com" style="flex:1;min-width:220px;background:var(--s2);border:1px solid var(--b1);color:var(--text);font-family:var(--mono);font-size:14px;padding:12px;outline:none;">
+        <input id="invite-email" class="ls-input" placeholder="user@example.com" style="flex:1;min-width:220px;">
         <button class="btn btn-blue btn-sm" onclick="sendInvite()">Send invite</button>
       </div>
 

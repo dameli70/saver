@@ -30,36 +30,13 @@ header("Referrer-Policy: no-referrer");
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title><?= htmlspecialchars(APP_NAME) ?> — <?= htmlspecialchars(t('page.rooms')) ?></title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <?php emitI18nJsGlobals(); ?>
 <script src="assets/theme.js"></script>
 <script src="assets/app.js"></script>
 <link rel="stylesheet" href="assets/base.css">
 <link rel="stylesheet" href="assets/app.css">
-<style>
-.orb1{width:520px;height:520px;top:-170px;right:-120px;}
-.orb2{width:360px;height:360px;bottom:40px;left:-90px;}
-
-
-.pill{font-size:10px;color:var(--muted);letter-spacing:1px;border:1px solid rgba(255,255,255,.13);padding:6px 10px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:none;}
-@media(min-width:560px){.pill{display:block;}}
-
-.wrap{max-width:1100px;}
-.h{font-size:18px;} 
-
-.rooms{display:grid;grid-template-columns:1fr;gap:12px;}
-@media(min-width:740px){.rooms{grid-template-columns:repeat(2,1fr);} }
-.room{background:rgba(0,0,0,.22);border:1px solid rgba(255,255,255,.08);padding:16px;}
-.room-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px;}
-.room-goal{font-family:var(--display);font-weight:800;font-size:14px;line-height:1.25;}
-.badge{font-size:9px;letter-spacing:2px;text-transform:uppercase;border:1px solid rgba(232,255,71,.25);color:var(--accent);padding:6px 10px;}
-.meta{font-size:12px;line-height:1.7;color:var(--muted);}
-.meta b{color:var(--text);font-weight:500;}
-.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;}
-.cat-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
-.cat-btn{padding:10px 12px;min-height:38px;font-size:10px;}
-.cat-btn.sel{border-color:var(--accent);color:var(--accent);background:rgba(232,255,71,.06);}
-</style>
+<link rel="stylesheet" href="assets/rooms_page.css">
 </head>
 <body>
 <div class="orb orb1"></div><div class="orb orb2"></div>

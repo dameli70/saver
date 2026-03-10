@@ -31,76 +31,13 @@ header("Permissions-Policy: clipboard-write=(self)");
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title><?= htmlspecialchars(APP_NAME) ?> — <?= htmlspecialchars(t('page.my_codes')) ?></title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <?php emitI18nJsGlobals(); ?>
 <script src="assets/theme.js"></script>
 <script src="assets/app.js"></script>
 <link rel="stylesheet" href="assets/base.css">
 <link rel="stylesheet" href="assets/app.css">
-<style>
-.app-body{max-width:820px;}
-
-.locks-grid{display:flex;flex-direction:column;gap:12px;}
-.lock-card{background:var(--s1);border:1px solid var(--b1);padding:16px 18px;position:relative;
-  border-radius:var(--radius-card);box-shadow:var(--shadow-card);
-  transition:transform .18s,box-shadow .18s,border-color .18s;}
-@media(hover:hover){
-  .lock-card:hover{transform:translateY(-2px);border-color:var(--b2);box-shadow:var(--shadow-card-hover);}
-}
-.lock-card.st-locked{border-left:3px solid rgba(255,71,87,.5);}
-.lock-card.st-unlocked{border-left:3px solid rgba(71,255,176,.5);}
-.lock-card.st-pending{border-left:3px solid rgba(255,170,0,.5);}
-.lock-card.st-auto_saved{border-left:3px solid rgba(71,184,255,.4);}
-.lock-card.st-rejected{border-left:3px solid rgba(255,71,87,.2);opacity:.6;}
-.lc-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:10px;}
-.lc-label{font-family:var(--display);font-size:14px;font-weight:700;word-break:break-word;}
-.lc-badge{display:inline-flex;align-items:center;flex-shrink:0;font-size:9px;
-  letter-spacing:1px;text-transform:uppercase;padding:4px 8px;border:1px solid;}
-.lc-badge.locked{background:rgba(255,71,87,.07);border-color:rgba(255,71,87,.2);color:var(--red);}
-.lc-badge.unlocked{background:rgba(71,255,176,.07);border-color:rgba(71,255,176,.2);color:var(--green);}
-.lc-badge.pending{background:rgba(255,170,0,.07);border-color:rgba(255,170,0,.2);color:var(--orange);}
-.lc-badge.auto_saved{background:rgba(71,184,255,.07);border-color:rgba(71,184,255,.2);color:var(--blue);}
-.lc-badge.rejected{background:rgba(255,71,87,.05);border-color:rgba(255,71,87,.1);color:var(--muted);}
-.lc-meta{font-size:11px;color:var(--muted);line-height:1.7;margin-bottom:10px;}
-.lc-meta span{color:var(--text);}
-.lc-hint{font-size:11px;color:var(--muted);font-style:italic;margin-bottom:10px;
-  padding:6px 10px;border-left:2px solid var(--b2);}
-.lc-countdown{font-size:12px;color:var(--accent);margin-bottom:10px;letter-spacing:1px;}
-.lc-actions{display:flex;gap:8px;flex-wrap:wrap;}
-.lc-autosave-note{font-size:10px;color:var(--blue);letter-spacing:.4px;
-  padding:6px 10px;border:1px solid rgba(71,184,255,.15);background:rgba(71,184,255,.05);margin-bottom:8px;line-height:1.5;}
-
-.empty{text-align:center;padding:60px 20px;color:var(--muted);}
-.empty-icon{font-size:44px;margin-bottom:14px;}
-.empty h3{font-family:var(--display);font-size:15px;font-weight:700;color:var(--text);margin-bottom:8px;}
-.empty p{font-size:12px;line-height:1.6;}
-
-#reveal-overlay{position:fixed;inset:0;background:var(--overlay-bg);
-  display:none;align-items:flex-end;justify-content:center;z-index:500;padding:0 0 max(0px,var(--sab)) 0;}
-#reveal-overlay.show{display:flex;}
-.reveal-sheet{background:var(--s1);border:1px solid var(--b2);border-bottom:none;
-  padding:28px 22px max(28px,var(--sab));width:100%;max-width:480px;position:relative;
-  border-radius:var(--radius-card) var(--radius-card) 0 0;box-shadow:var(--shadow-card);}
-@media(min-width:600px){#reveal-overlay{align-items:center;}
-  .reveal-sheet{border:1px solid var(--b2);max-width:480px;padding:32px;border-radius:var(--radius-card);}}
-.modal-close{position:absolute;top:12px;right:14px;background:none;border:none;color:var(--muted);
-  font-size:22px;cursor:pointer;padding:4px;min-width:32px;min-height:32px;
-  display:flex;align-items:center;justify-content:center;}
-.modal-close:hover{color:var(--text);}
-
-.reveal-title{font-family:var(--display);font-size:16px;font-weight:700;margin-bottom:3px;}
-.reveal-sub{font-size:10px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:18px;}
-.reveal-pwd{font-size:clamp(16px,4vw,22px);color:var(--accent);letter-spacing:3px;
-  word-break:break-all;background:var(--code-bg);padding:16px;border:1px solid rgba(232,255,71,.12);
-  margin-bottom:16px;line-height:1.5;user-select:all;-webkit-user-select:all;display:none;}
-.vault-input-wrap{margin-bottom:16px;}
-.vault-input-wrap label{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:6px;}
-.vault-input-wrap input{width:100%;background:var(--code-bg);border:1px solid rgba(232,255,71,.2);
-  color:var(--accent);font-family:var(--mono);font-size:15px;padding:13px;outline:none;
-  border-radius:var(--radius-input);-webkit-appearance:none;}
-
-
-</style>
+<link rel="stylesheet" href="assets/my_codes_page.css">
 </head>
 <body>
 <div class="orb orb1"></div><div class="orb orb2"></div>

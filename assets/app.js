@@ -617,6 +617,18 @@
       }
     });
 
+    // Highlight current page in nav.
+    try{
+      const p = window.location && window.location.pathname ? window.location.pathname : '';
+      const parts = p.split('/');
+      const cur = parts[parts.length - 1] || '';
+      const mapped = (cur === 'room.php') ? 'rooms.php' : cur;
+      nav.querySelectorAll('a[href]').forEach(a => {
+        const href = String(a.getAttribute('href')||'');
+        if(href === mapped) a.classList.add('active');
+      });
+    }catch{}
+
     nav.setAttribute('data-nav-enhanced', '1');
   }
 
@@ -747,13 +759,28 @@
       {href:'notifications.php', label: LS.t('nav.notifications') || 'Inbox'},
     ];
 
+    const overflowItems = [
+      {href:'account.php', label: LS.t('nav.account') || 'Account', ico:'👤'},
+      {href:'backup.php', label: LS.t('nav.backups') || 'Backups', ico:'⛁'},
+      {href:'vault_settings.php', label: LS.t('nav.vault') || 'Vault', ico:'⌁'},
+      {href:'setup.php', label: LS.t('nav.setup') || 'Setup', ico:'⚙'},
+    ];
+    try{
+      if(document.querySelector('a[href="admin.php"]')){
+        overflowItems.push({href:'admin.php', label: LS.t('nav.admin') || 'Admin', ico:'⬡'});
+      }
+    }catch{}
+
     const cur = (()=>{
       try{
         const p = window.location && window.location.pathname ? window.location.pathname : '';
         const parts = p.split('/');
-        return parts[parts.length - 1] || '';
+        const c = parts[parts.length - 1] || '';
+        return (c === 'room.php') ? 'rooms.php' : c;
       }catch{ return ''; }
     })();
+
+    const isOverflowActive = overflowItems.some(it => it.href === cur);
 
     const nav = document.createElement('nav');
     nav.className = 'bottom-nav';
@@ -764,7 +791,10 @@
 
       const b = document.createElement('span');
       b.className = 'btn bn-btn nav-btn btn-ghost btn-sm';
-      if(cur === it.href) b.classList.add('active');
+      if(cur === it.href){
+        b.classList.add('active');
+        a.setAttribute('aria-current', 'page');
+      }
 
       b.innerHTML = `<span class="nav-ico" aria-hidden="true">${LS.esc(iconForHref(it.href))}</span><span class="nav-lbl">${LS.esc(it.label)}</span>`;
       a.setAttribute('aria-label', it.label);
@@ -773,13 +803,282 @@
       nav.appendChild(a);
     });
 
+    function ensureOverflowOverlay(){
+      let ov = document.getElementById('ls-overflow-overlay');
+      if(ov) return ov;
+
+      ov = document.createElement('div');
+      ov.id = 'ls-overflow-overlay';
+      ov.innerHTML = `
+        <div id="ls-overflow-sheet" role="dialog" aria-modal="true" aria-labelledby="ls-overflow-title">
+          <div class="ls-overflow-head">
+            <div class="ls-overflow-title" id="ls-overflow-title">${LS.esc(LS.t('common.more') || 'More')}</div>
+            <button class="btn btn-ghost btn-sm" type="button" id="ls-overflow-close" aria-label="${LS.esc(LS.t('common.close') || 'Close')}">×</button>
+          </div>
+          <div class="ls-overflow-links"></div>
+        </div>
+      `;
+
+      const links = ov.querySelector('.ls-overflow-links');
+      if(links){
+        overflowItems.forEach(it => {
+          const a = document.createElement('a');
+          a.href = it.href;
+          a.className = 'btn btn-ghost nav-chip';
+          if(cur === it.href){
+            a.classList.add('active');
+            a.setAttribute('aria-current', 'page');
+          }
+          a.innerHTML = `<span class="nav-ico" aria-hidden="true">${LS.esc(it.ico || '•')}</span><span class="nav-lbl">${LS.esc(it.label)}</span>`;
+          links.appendChild(a);
+        });
+      }
+
+      function close(){
+        ov.classList.remove('show');
+        try{
+          const navOv = document.getElementById('ls-nav-overlay');
+          if(!navOv || !navOv.classList.contains('show')) document.body.style.overflow = '';
+        }catch{}
+        try{
+          const r = document.getElementById('ls-bottom-more');
+          if(r && r.focus) r.focus();
+        }catch{}
+      }
+
+      ov.addEventListener('click', (e)=>{
+        if(e.target === ov) close();
+        const a = e.target && e.target.closest ? e.target.closest('a') : null;
+        if(a && a.getAttribute('href')) close();
+      });
+
+      const cbtn = ov.querySelector('#ls-overflow-close');
+      if(cbtn) cbtn.addEventListener('click', close);
+
+      document.addEventListener('keydown', (e)=>{
+        if(e && e.key === 'Escape' && ov.classList.contains('show')) close();
+      });
+
+      document.body.appendChild(ov);
+      return ov;
+    }
+
+    const moreBtn = document.createElement('button');
+    moreBtn.type = 'button';
+    moreBtn.id = 'ls-bottom-more';
+    moreBtn.className = 'btn bn-btn nav-btn btn-ghost btn-sm';
+    if(isOverflowActive) moreBtn.classList.add('active');
+    moreBtn.setAttribute('aria-label', LS.t('common.more') || 'More');
+    moreBtn.setAttribute('aria-haspopup', 'dialog');
+    moreBtn.setAttribute('aria-expanded', 'false');
+    moreBtn.innerHTML = `<span class="nav-ico" aria-hidden="true">⋯</span><span class="nav-lbl">${LS.esc(LS.t('common.more') || 'More')}</span>`;
+    moreBtn.addEventListener('click', ()=>{
+      try{ nav.removeAttribute('data-hidden'); }catch{}
+      moreBtn.setAttribute('aria-expanded', 'true');
+      const ov = ensureOverflowOverlay();
+      ov.classList.add('show');
+      document.body.style.overflow = 'hidden';
+
+      setTimeout(()=>{
+        const first = ov.querySelector('a,button');
+        if(first && first.focus) first.focus();
+      }, 10);
+    });
+
+    nav.appendChild(moreBtn);
+
     document.body.appendChild(nav);
+
+    // Optional: hide the dock while scrolling down (mobile only).
+    try{
+      const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const mq = window.matchMedia ? window.matchMedia('(max-width: 720px)') : null;
+      const isMobile = () => mq ? mq.matches : false;
+      if(!reduce){
+        let lastY = window.scrollY || 0;
+        let hidden = false;
+        let ticking = false;
+
+        function show(){
+          if(hidden){ nav.removeAttribute('data-hidden'); hidden = false; }
+        }
+        function hide(){
+          if(!hidden){ nav.setAttribute('data-hidden','1'); hidden = true; }
+        }
+
+        function onScroll(){
+          if(!isMobile()) return;
+          try{
+            const ov = document.getElementById('ls-overflow-overlay');
+            if(ov && ov.classList.contains('show')) return;
+          }catch{}
+          const y = window.scrollY || 0;
+          const dy = y - lastY;
+          if(Math.abs(dy) < 12) return;
+          if(dy > 0 && y > 80) hide();
+          else show();
+          lastY = y;
+        }
+
+        window.addEventListener('scroll', ()=>{
+          if(ticking) return;
+          ticking = true;
+          requestAnimationFrame(()=>{ onScroll(); ticking = false; });
+        }, {passive:true});
+
+        document.addEventListener('focusin', show);
+        if(mq){
+          try{ mq.addEventListener('change', ()=>show()); }
+          catch{ mq.addListener(()=>show()); }
+        }
+      }
+    }catch{}
+  }
+
+  function initDesktopSidebar(){
+    const app = document.getElementById('app');
+    if(!app) return;
+
+    const topbar = app.querySelector('.topbar');
+    const nav = topbar ? topbar.querySelector('.topbar-r') : null;
+    if(!topbar || !nav) return;
+
+    const mq = window.matchMedia ? window.matchMedia('(min-width: 980px)') : null;
+    const isDesktop = () => mq ? mq.matches : false;
+
+    // Wrap all app children in a shell so the sidebar can sit as a sibling.
+    let shell = document.getElementById('app-shell');
+    if(!shell){
+      shell = document.createElement('div');
+      shell.id = 'app-shell';
+      while(app.firstChild){
+        shell.appendChild(app.firstChild);
+      }
+      app.appendChild(shell);
+    }
+
+    let side = document.getElementById('ls-sidebar');
+    if(!side){
+      side = document.createElement('aside');
+      side.id = 'ls-sidebar';
+      side.innerHTML = `
+        <div class="ls-side-head">
+          <div class="ls-side-title">${LS.esc(LS.t('common.menu') || 'Menu')}</div>
+          <button class="btn btn-ghost btn-sm btn-theme" type="button" id="ls-side-toggle" aria-label="${LS.esc(LS.t('common.toggle') || 'Toggle')}">⟷</button>
+        </div>
+        <div class="ls-side-body" id="ls-side-body"></div>
+      `;
+      app.insertBefore(side, shell);
+
+      const stored = localStorage.getItem('ls_sidebar_collapsed');
+      if(stored === '1') side.setAttribute('data-collapsed','1');
+
+      const toggle = side.querySelector('#ls-side-toggle');
+      if(toggle){
+        toggle.addEventListener('click', ()=>{
+          const next = side.getAttribute('data-collapsed') === '1' ? '0' : '1';
+          if(next === '1') side.setAttribute('data-collapsed','1');
+          else side.removeAttribute('data-collapsed');
+          localStorage.setItem('ls_sidebar_collapsed', next === '1' ? '1' : '0');
+        });
+      }
+    }
+
+    function mount(){
+      if(!isDesktop()) return;
+      const body = document.getElementById('ls-side-body');
+      if(!body) return;
+      if(nav.parentNode !== body) body.appendChild(nav);
+    }
+
+    function unmount(){
+      if(isDesktop()) return;
+      // Restore the nav to its original spot in the topbar.
+      const menuBtn = topbar.querySelector('.topbar-menu-btn');
+      if(nav.parentNode !== topbar){
+        if(menuBtn) topbar.insertBefore(nav, menuBtn);
+        else topbar.appendChild(nav);
+      }
+    }
+
+    mount();
+
+    if(mq){
+      try{ mq.addEventListener('change', ()=>{ mount(); unmount(); }); }
+      catch{ mq.addListener(()=>{ mount(); unmount(); }); }
+    }
+  }
+
+  function initRipples(){
+    // Lightweight click ripple for buttons.
+    try{
+      if(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    }catch{}
+
+    document.addEventListener('pointerdown', (e)=>{
+      const btn = e.target && e.target.closest ? e.target.closest('.btn') : null;
+      if(!btn) return;
+      if(btn.disabled) return;
+
+      const r = btn.getBoundingClientRect();
+      const x = e.clientX - r.left;
+      const y = e.clientY - r.top;
+
+      const s = document.createElement('span');
+      s.className = 'ls-ripple';
+      s.style.left = x + 'px';
+      s.style.top = y + 'px';
+      btn.appendChild(s);
+      setTimeout(()=>s.remove(), 700);
+    }, {passive:true});
+  }
+
+  function initRevealOnScroll(){
+    if(!window.IntersectionObserver) return;
+
+    const sel = '.card, .step, .item, .room, .lock-card';
+
+    const io = new IntersectionObserver((entries)=>{
+      entries.forEach(ent => {
+        if(ent.isIntersecting){
+          ent.target.classList.add('is-in');
+          io.unobserve(ent.target);
+        }
+      });
+    }, {rootMargin:'0px 0px -10% 0px', threshold:0.06});
+
+    const seen = new WeakSet();
+    function track(el){
+      if(!el || seen.has(el)) return;
+      seen.add(el);
+      el.classList.add('ls-reveal');
+      io.observe(el);
+    }
+
+    document.querySelectorAll(sel).forEach(track);
+
+    // Observe dynamically-inserted content (rooms, notifications, etc.).
+    try{
+      const mo = new MutationObserver((muts)=>{
+        muts.forEach(m => {
+          (m.addedNodes||[]).forEach(n => {
+            if(!(n instanceof Element)) return;
+            if(n.matches && n.matches(sel)) track(n);
+            if(n.querySelectorAll) n.querySelectorAll(sel).forEach(track);
+          });
+        });
+      });
+      mo.observe(document.body, {childList:true, subtree:true});
+    }catch{}
   }
 
   document.addEventListener('DOMContentLoaded', ()=>{
     initNavGroups();
+    initDesktopSidebar();
     initMobileNav();
     initBottomNav();
+    initRipples();
+    initRevealOnScroll();
   });
 
   window.LS = LS;
