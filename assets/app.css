@@ -170,11 +170,19 @@
 .btn-primary:hover{box-shadow:0 14px 38px rgba(124,92,255,.3);}
 .btn-primary:disabled{opacity:.45;pointer-events:none;}
 
+/* Small/inline primary buttons should not expand */
+.btn-primary.btn-sm{width:auto;}
+
 .btn-ghost{background:rgba(255,255,255,.04);border:1px solid var(--b1);color:var(--text);
   backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
 }
 @media(hover:hover){
   .btn-ghost:hover{border-color:var(--b2);background:rgba(255,255,255,.06);}
+}
+
+/* Active nav item */
+.btn-ghost.active{border-color:rgba(124,92,255,.48);
+  background:linear-gradient(135deg, rgba(124,92,255,.16), rgba(48,208,255,.06));
 }
 
 .btn-theme{padding:0;min-width:46px;width:46px;}
@@ -253,7 +261,7 @@
 .field{margin-bottom:14px;}
 .field label{display:block;font-size:10px;letter-spacing:1.8px;text-transform:uppercase;color:var(--muted);margin-bottom:6px;font-family:var(--mono);}
 .field input,.field select{width:100%;
-  background:rgba(255,255,255,.04);
+  background:var(--s2);
   border:1px solid var(--b1);
   color:var(--text);
   font-family:var(--mono);
@@ -265,6 +273,22 @@
   border-radius:var(--radius-input);
   backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
 }
+
+/* Input helper for inline form layouts (used on room.php, etc.) */
+.ls-input{width:100%;
+  background:var(--s2);
+  border:1px solid var(--b1);
+  color:var(--text);
+  font-family:var(--mono);
+  font-size:14px;
+  padding:14px;
+  outline:none;
+  transition:border-color .18s,background .18s,box-shadow .18s;
+  -webkit-appearance:none;
+  border-radius:var(--radius-input);
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+}
+.ls-input:focus{border-color:color-mix(in srgb, var(--accent) 70%, white);box-shadow:0 0 0 4px rgba(124,92,255,.14);}
 .field input:focus,.field select:focus{border-color:color-mix(in srgb, var(--accent) 70%, white);box-shadow:0 0 0 4px rgba(124,92,255,.14);}
 
 /* ─────────────────────────────
@@ -308,6 +332,38 @@
   background:linear-gradient(90deg, transparent, rgba(255,255,255,.09), transparent);
   animation:skel 1.2s infinite;}
 @keyframes skel{to{transform:translateX(100%);}}
+
+/* Data / table helpers (used by admin.php, room.php, etc.) */
+.k{color:var(--muted);font-size:12px;line-height:1.6;}
+.v{font-family:var(--mono);font-size:14px;line-height:1.4;color:var(--text);}
+.small{font-size:11px;line-height:1.55;color:var(--muted);}
+.hr{border-top:1px solid var(--b1);margin:16px 0;}
+
+.table-wrap{overflow:auto;-webkit-overflow-scrolling:touch;
+  border:1px solid var(--b1);
+  border-radius:var(--radius-card);
+  background:rgba(255,255,255,.02);
+}
+.table{width:100%;border-collapse:collapse;min-width:760px;}
+.table th,.table td{padding:10px 12px;border-bottom:1px solid var(--b1);
+  text-align:left;font-size:12px;white-space:nowrap;}
+.table th{color:var(--muted);font-size:10px;letter-spacing:2px;text-transform:uppercase;
+  background:rgba(255,255,255,.03);
+}
+@media(hover:hover){
+  .table tbody tr:hover td{background:rgba(255,255,255,.02);}
+}
+
+.feed{border:1px solid var(--b1);
+  background:rgba(255,255,255,.02);
+  padding:12px;
+  border-radius:var(--radius-card);
+  max-height:420px;
+  overflow:auto;
+}
+.feed-item{padding:10px 10px;border-bottom:1px solid var(--b1);font-size:12px;line-height:1.6;}
+.feed-item:last-child{border-bottom:none;}
+.feed-meta{font-size:10px;color:var(--muted);letter-spacing:1px;margin-top:4px;}
 
 /* Motion */
 @media(prefers-reduced-motion:no-preference){

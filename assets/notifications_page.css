@@ -1,0 +1,39 @@
+/* Notifications page (notifications.php) */
+
+body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9998;opacity:.5;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.035'/%3E%3C/svg%3E");}
+
+.orb1{width:520px;height:520px;top:-160px;right:-110px;}
+.orb2{width:360px;height:360px;bottom:40px;left:-90px;}
+
+/* page-specific */
+.card-title{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+
+.list{display:flex;flex-direction:column;gap:10px;}
+.item{border:1px solid var(--b1);
+  border-radius:var(--radius-card);
+  background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02));
+  box-shadow:var(--shadow-card);
+  padding:14px;
+  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+  transition:transform .18s,box-shadow .18s,border-color .18s,background .18s;
+}
+@media(hover:hover){
+  .item:hover{border-color:var(--b2);box-shadow:var(--shadow-card-hover);transform:translateY(-1px);}
+}
+
+.item[data-read="0"]{border-color:rgba(124,92,255,.35);}
+
+.item-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;}
+.title{font-family:var(--display);font-weight:700;font-size:12px;line-height:1.25;margin:0 0 6px 0;letter-spacing:-.15px;}
+.body{color:var(--muted);font-size:12px;line-height:1.65;white-space:pre-wrap;}
+.meta{margin-top:10px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;}
+
+.tier{font-size:9px;letter-spacing:2px;text-transform:uppercase;border:1px solid rgba(124,92,255,.28);
+  color:color-mix(in srgb, var(--accent) 85%, white 0%);
+  padding:5px 9px;border-radius:999px;
+  background:rgba(124,92,255,.08);
+}
+.tier.important{border-color:rgba(48,208,255,.28);color:var(--blue);background:rgba(48,208,255,.10);} 
+.tier.critical{border-color:rgba(255,77,109,.28);color:var(--red);background:rgba(255,77,109,.08);} 
+.ts{font-size:10px;color:var(--muted);} 

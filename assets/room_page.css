@@ -1,0 +1,7 @@
+/* Room page (room.php) */
+
+.orb1{width:520px;height:520px;top:-170px;right:-120px;}
+.orb2{width:360px;height:360px;bottom:40px;left:-90px;}
+
+/* Minor layout tweaks */
+.app-body.wide{max-width:1180px;}

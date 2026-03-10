@@ -38,33 +38,7 @@ header("Permissions-Policy: clipboard-write=(self)");
 <script src="assets/app.js"></script>
 <link rel="stylesheet" href="assets/base.css">
 <link rel="stylesheet" href="assets/app.css">
-<style>
-body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9998;opacity:.5;
-  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.035'/%3E%3C/svg%3E");}
-.orb1{width:520px;height:520px;top:-160px;right:-110px;}
-.orb2{width:360px;height:360px;bottom:40px;left:-90px;}
-
-
-/* page-specific */
-.card-title{display:flex;align-items:center;justify-content:space-between;gap:10px;}
-
-
-
- 
-
-.list{display:flex;flex-direction:column;gap:10px;}
-.item{border:1px solid var(--b1);background:rgba(0,0,0,.22);padding:14px;}
-.item-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;}
-.title{font-family:var(--display);font-weight:800;font-size:12px;line-height:1.25;margin:0 0 6px 0;}
-.body{color:var(--muted);font-size:12px;line-height:1.65;white-space:pre-wrap;}
-.meta{margin-top:10px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;}
-.tier{font-size:9px;letter-spacing:2px;text-transform:uppercase;border:1px solid rgba(232,255,71,.25);color:var(--accent);padding:5px 9px;}
-.tier.important{border-color:rgba(71,184,255,.25);color:var(--blue);} 
-.tier.critical{border-color:rgba(255,71,87,.28);color:var(--red);} 
-.ts{font-size:10px;color:var(--muted);} 
-
-.k{color:var(--muted);font-size:12px;line-height:1.6;}
-</style>
+<link rel="stylesheet" href="assets/notifications_page.css">
 </head>
 <body>
 <div class="orb orb1"></div><div class="orb orb2"></div>
@@ -195,6 +169,7 @@ function render(items, unreadCount){
 
     const link = roomLinkFromData(n.data);
     const read = !!n.read_at;
+    div.dataset.read = read ? '1' : '0';
 
     div.innerHTML = `
       <div class="item-top">

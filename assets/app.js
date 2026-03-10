@@ -617,6 +617,18 @@
       }
     });
 
+    // Highlight current page in nav.
+    try{
+      const p = window.location && window.location.pathname ? window.location.pathname : '';
+      const parts = p.split('/');
+      const cur = parts[parts.length - 1] || '';
+      const mapped = (cur === 'room.php') ? 'rooms.php' : cur;
+      nav.querySelectorAll('a[href]').forEach(a => {
+        const href = String(a.getAttribute('href')||'');
+        if(href === mapped) a.classList.add('active');
+      });
+    }catch{}
+
     nav.setAttribute('data-nav-enhanced', '1');
   }
 
@@ -852,6 +864,10 @@
 
   function initRipples(){
     // Lightweight click ripple for buttons.
+    try{
+      if(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    }catch{}
+
     document.addEventListener('pointerdown', (e)=>{
       const btn = e.target && e.target.closest ? e.target.closest('.btn') : null;
       if(!btn) return;
@@ -873,8 +889,7 @@
   function initRevealOnScroll(){
     if(!window.IntersectionObserver) return;
 
-    const els = Array.from(document.querySelectorAll('.card, .step, .item, .room, .lock-card'));
-    els.forEach(el => el.classList.add('ls-reveal'));
+    const sel = '.card, .step, .item, .room, .lock-card';
 
     const io = new IntersectionObserver((entries)=>{
       entries.forEach(ent => {
@@ -885,7 +900,29 @@
       });
     }, {rootMargin:'0px 0px -10% 0px', threshold:0.06});
 
-    els.forEach(el => io.observe(el));
+    const seen = new WeakSet();
+    function track(el){
+      if(!el || seen.has(el)) return;
+      seen.add(el);
+      el.classList.add('ls-reveal');
+      io.observe(el);
+    }
+
+    document.querySelectorAll(sel).forEach(track);
+
+    // Observe dynamically-inserted content (rooms, notifications, etc.).
+    try{
+      const mo = new MutationObserver((muts)=>{
+        muts.forEach(m => {
+          (m.addedNodes||[]).forEach(n => {
+            if(!(n instanceof Element)) return;
+            if(n.matches && n.matches(sel)) track(n);
+            if(n.querySelectorAll) n.querySelectorAll(sel).forEach(track);
+          });
+        });
+      });
+      mo.observe(document.body, {childList:true, subtree:true});
+    }catch{}
   }
 
   document.addEventListener('DOMContentLoaded', ()=>{

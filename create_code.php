@@ -36,46 +36,7 @@ header("Permissions-Policy: clipboard-write=(self)");
 <script src="assets/theme.js"></script>
 <link rel="stylesheet" href="assets/base.css">
 <link rel="stylesheet" href="assets/app.css">
-<style>
-
-.type-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;}
-@media(min-width:380px){.type-grid{grid-template-columns:repeat(4,1fr);}}
-.type-opt{padding:12px 6px;border:1px solid var(--b1);background:transparent;
-  color:var(--muted);font-family:var(--mono);font-size:10px;letter-spacing:1px;
-  text-transform:uppercase;cursor:pointer;text-align:center;transition:all .15s;
-  min-height:44px;display:flex;align-items:center;justify-content:center;}
-.type-opt:hover{border-color:var(--b2);color:var(--text);}
-.type-opt.sel{border-color:var(--accent);color:var(--accent);background:rgba(232,255,71,.06);}
-.type-opt:disabled{opacity:.45;cursor:not-allowed;}
-.type-opt:disabled:hover{border-color:var(--b1);color:var(--muted);}
-
-#wallet-action-grid{grid-template-columns:repeat(2,1fr);}
-
-.slider-row{display:flex;align-items:center;gap:14px;}
-.slider-val{font-family:var(--display);font-size:26px;font-weight:900;color:var(--accent);min-width:40px;text-align:right;}
-input[type=range]{-webkit-appearance:none;flex:1;height:4px;background:var(--b2);outline:none;cursor:pointer;border-radius:2px;}
-input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;background:var(--accent);cursor:pointer;border-radius:0;}
-
-.kdf-progress{display:none;margin-top:12px;}
-.kdf-progress.show{display:block;}
-.kdf-bar-wrap{height:3px;background:var(--b2);overflow:hidden;margin-bottom:6px;}
-.kdf-bar{height:100%;background:var(--accent);transition:width .1s linear;width:0%;}
-.kdf-label{font-size:10px;color:var(--muted);letter-spacing:1px;text-align:center;}
-
-#confirm-overlay{position:fixed;inset:0;background:var(--overlay-bg);
-  display:none;align-items:flex-end;justify-content:center;z-index:500;padding:0 0 max(0px,var(--sab)) 0;}
-#confirm-overlay.show{display:flex;}
-.confirm-sheet{background:var(--s1);border:1px solid var(--b2);border-bottom:none;
-  padding:28px 22px max(28px,var(--sab));width:100%;max-width:480px;position:relative;}
-@media(min-width:600px){#confirm-overlay{align-items:center;}
-  .confirm-sheet{border:1px solid var(--b2);max-width:480px;padding:32px;}}
-.confirm-title{font-family:var(--display);font-size:16px;font-weight:700;margin-bottom:6px;}
-.confirm-sub{font-size:10px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:14px;}
-.confirm-btns{display:grid;grid-template-columns:1fr;gap:10px;}
-@media(min-width:480px){.confirm-btns{grid-template-columns:1fr 1fr;}}
-
-
-</style>
+<link rel="stylesheet" href="assets/create_code_page.css">
 </head>
 <body>
 <div class="orb orb1"></div><div class="orb orb2"></div>
@@ -165,7 +126,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
         <span id="w-txt"><?php e('create_code.wallet.btn_copy_ussd'); ?></span>
       </button>
 
-      <div class="hr" style="border-top:1px solid var(--b1);margin:16px 0;"></div>
+      <div class="hr"></div>
       <div class="card-title" style="margin-bottom:10px;"><?php e('create_code.wallet.pending_title'); ?></div>
       <div id="wallet-pending-msg" class="msg"></div>
       <div id="wallet-pending-wrap" style="display:flex;flex-direction:column;gap:10px;"></div>
