@@ -176,6 +176,7 @@ return [
     'js.unsupported_reauth' => 'Méthode de ré-authentification non prise en charge',
     'js.reauth_failed' => 'Échec de la ré-authentification',
     'js.copy_confirm' => 'Copier dans le presse-papiers ? Le contenu du presse-papiers peut être lisible par d’autres applications jusqu’à ce qu’il soit écrasé.',
+    'js.pwa_install_confirm' => 'Installer l’application ?',
 
     // Installer
     'install.subtitle' => 'Installation',
@@ -321,6 +322,7 @@ return [
     'notifications.unread' => 'Non lus',
     'notifications.none' => 'Aucune notification.',
     'notifications.open_room' => 'Ouvrir la salle',
+    'notifications.open_lock' => 'Ouvrir le code',
     'notifications.mark_read' => 'Marquer comme lu',
 
     // Sauvegardes

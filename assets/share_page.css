@@ -1,0 +1,45 @@
+:root{}
+
+.share-card{max-width:720px;margin:0 auto;}
+
+.share-meta{margin-top:8px;}
+
+.share-countdown{
+  margin-top:14px;
+  border:1px solid var(--b1);
+  background:rgba(19,22,29,.55);
+  padding:10px 12px;
+  border-radius:var(--radius-card);
+  color:var(--text);
+  font-family:var(--mono);
+  font-size:12px;
+}
+
+.share-secret{margin-top:14px;}
+.share-secret label{display:block;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:6px;}
+.share-secret input{
+  width:100%;
+  background:var(--s2);
+  border:1px solid var(--b1);
+  color:var(--text);
+  font-family:var(--mono);
+  font-size:15px;
+  padding:14px;
+  outline:none;
+  transition:border-color .2s;
+  border-radius:var(--radius-input);
+  -webkit-appearance:none;
+}
+.share-secret input:focus{border-color:var(--accent);}
+
+.share-plain{
+  margin-top:14px;
+  border:1px solid rgba(71,255,176,.22);
+  background:rgba(71,255,176,.06);
+  padding:14px;
+  border-radius:var(--radius-card);
+  font-family:var(--mono);
+  font-size:15px;
+  word-break:break-word;
+  white-space:pre-wrap;
+}

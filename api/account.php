@@ -97,4 +97,23 @@ if ($action === 'logout_all_sessions') {
     jsonResponse(['success' => true]);
 }
 
+if ($action === 'set_email_time_lock_reminders') {
+    if (!hasNotificationPreferencesTable()) {
+        jsonResponse(['error' => 'Notification preferences are unavailable on this server. Apply database migrations.'], 409);
+    }
+
+    $enabled = !empty($body['enabled']) ? 1 : 0;
+    setUserNotificationPref((int)$userId, 'important', 'email_time_lock_reminders', $enabled);
+
+    auditLog('set_email_time_lock_reminders', null, (int)$userId);
+    jsonResponse(['success' => true, 'enabled' => $enabled]);
+}
+
+if ($action === 'get_email_time_lock_reminders') {
+    if (!hasNotificationPreferencesTable()) {
+        jsonResponse(['success' => true, 'enabled' => 0]);
+    }
+    jsonResponse(['success' => true, 'enabled' => userWantsEmailTimeLockReminders((int)$userId) ? 1 : 0]);
+}
+
 jsonResponse(['error' => 'Unknown action'], 400);

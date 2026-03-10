@@ -615,6 +615,74 @@ function userHasPasskeys(int $userId): bool {
     return (int)$stmt->fetchColumn() > 0;
 }
 
+function hasNotificationPreferencesTable(): bool {
+    static $cached = null;
+    if ($cached !== null) return $cached;
+
+    try {
+        $db = getDB();
+        $stmt = $db->query("SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'notification_preferences' LIMIT 1");
+        $cached = (bool)$stmt->fetchColumn();
+        return $cached;
+    } catch (Throwable) {
+        $cached = false;
+        return false;
+    }
+}
+
+function getUserNotificationPrefs(int $userId, string $tier = 'important'): array {
+    if (!hasNotificationPreferencesTable()) return [];
+
+    $col = ($tier === 'informational') ? 'informational_json' : 'important_json';
+
+    $db = getDB();
+    $stmt = $db->prepare("SELECT {$col} AS prefs_json FROM notification_preferences WHERE user_id = ?");
+    $stmt->execute([(int)$userId]);
+    $row = $stmt->fetch();
+
+    if (!$row || empty($row['prefs_json'])) return [];
+
+    $decoded = json_decode((string)$row['prefs_json'], true);
+    return is_array($decoded) ? $decoded : [];
+}
+
+function setUserNotificationPref(int $userId, string $tier, string $key, $value): void {
+    if (!hasNotificationPreferencesTable()) return;
+
+    $col = ($tier === 'informational') ? 'informational_json' : 'important_json';
+
+    $prefs = getUserNotificationPrefs($userId, $tier);
+    $prefs[$key] = $value;
+
+    $db = getDB();
+    $json = json_encode($prefs, JSON_UNESCAPED_UNICODE);
+
+    $db->prepare("INSERT INTO notification_preferences (user_id, {$col}, updated_at)
+                  VALUES (?, ?, NOW())
+                  ON DUPLICATE KEY UPDATE {$col} = VALUES({$col}), updated_at = NOW()")
+       ->execute([(int)$userId, $json]);
+}
+
+function userWantsEmailTimeLockReminders(int $userId): bool {
+    $prefs = getUserNotificationPrefs($userId, 'important');
+    return !empty($prefs['email_time_lock_reminders']);
+}
+
+function hasLockSharesTable(): bool {
+    static $cached = null;
+    if ($cached !== null) return $cached;
+
+    try {
+        $db = getDB();
+        $stmt = $db->query("SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'lock_shares' LIMIT 1");
+        $cached = (bool)$stmt->fetchColumn();
+        return $cached;
+    } catch (Throwable) {
+        $cached = false;
+        return false;
+    }
+}
+
 function requireStrongAuth(): void {
     if (hasStrongAuth()) return;
 
