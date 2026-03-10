@@ -185,6 +185,10 @@ async function loadShare(){
 
     if(lock.reveal_date) setCountdown(lock.reveal_date);
 
+    if(j.reveal_allowed === 0 && meta){
+      meta.innerHTML += `<div class="msg msg-err show" style="margin-top:10px;">Reveal via link is disabled by the owner.</div>`;
+    }
+
     if(j.locked){
       return;
     }

@@ -29,9 +29,12 @@ $hash = hash('sha256', $token);
 
 $db = getDB();
 
+$allowSel = hasLockSharesAllowRevealAfterDateColumn() ? 's.allow_reveal_after_date,' : '1 AS allow_reveal_after_date,';
+
 $stmt = $db->prepare("SELECT s.id AS share_id,
                              s.revoked_at,
                              s.share_cipher_blob, s.share_iv, s.share_auth_tag, s.share_kdf_salt, s.share_kdf_iterations,
+                             {$allowSel}
                              l.id AS lock_id, l.label, l.hint, l.reveal_date, l.confirmation_status, l.is_active
                       FROM lock_shares s
                       JOIN locks l ON l.id = s.lock_id
@@ -49,13 +52,17 @@ $db->prepare('UPDATE lock_shares SET last_accessed_at = NOW() WHERE id = ?')->ex
 
 auditLog('share_view', (string)$row['lock_id'], null);
 
+$allowRevealAfter = !empty($row['allow_reveal_after_date']);
+
 $now = new DateTime('now', new DateTimeZone('UTC'));
 $revealDate = new DateTime((string)$row['reveal_date'], new DateTimeZone('UTC'));
-$locked = $now < $revealDate;
+$lockedByTime = $now < $revealDate;
+$locked = $lockedByTime || !$allowRevealAfter;
 
 $out = [
     'success' => true,
     'locked' => $locked ? 1 : 0,
+    'reveal_allowed' => $allowRevealAfter ? 1 : 0,
     'lock' => [
         'id' => (string)$row['lock_id'],
         'label' => normalizeDisplayText($row['label'] ?? null),
@@ -64,7 +71,7 @@ $out = [
     ],
 ];
 
-if (!$locked) {
+if (!$lockedByTime && $allowRevealAfter) {
     $out['share'] = [
         'share_id' => (int)$row['share_id'],
         'share_cipher_blob' => (string)$row['share_cipher_blob'],

@@ -683,6 +683,21 @@ function hasLockSharesTable(): bool {
     }
 }
 
+function hasLockSharesAllowRevealAfterDateColumn(): bool {
+    static $cached = null;
+    if ($cached !== null) return $cached;
+
+    try {
+        $db = getDB();
+        $stmt = $db->query("SELECT 1 FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'lock_shares' AND column_name = 'allow_reveal_after_date' LIMIT 1");
+        $cached = (bool)$stmt->fetchColumn();
+        return $cached;
+    } catch (Throwable) {
+        $cached = false;
+        return false;
+    }
+}
+
 function requireStrongAuth(): void {
     if (hasStrongAuth()) return;
 

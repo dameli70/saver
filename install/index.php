@@ -342,7 +342,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $files = array_values(array_filter(scandir($migrationsDir) ?: [], fn($f) => preg_match('/\\.sql$/i', $f)));
                     sort($files, SORT_NATURAL);
                     foreach ($files as $f) {
-                        if (migrationApplied($dbPdo, $f)) continue;
+                        // Always attempt to apply migrations (idempotent with ignoreDuplicates).
+                        // This avoids getting stuck if schema_migrations is out of sync.
                         applySqlFile($dbPdo, $migrationsDir . '/' . $f, true);
                         markMigrationApplied($dbPdo, $f);
                     }

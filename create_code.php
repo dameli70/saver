@@ -901,6 +901,11 @@ async function doConfirm(action){
 
     document.getElementById('confirm-overlay').classList.remove('show');
 
+    if(action==='confirm'){
+      toast(STR.confirm_done_lock_activated, 'ok');
+      setTimeout(()=>{ window.location.href = 'my_codes.php'; }, 650);
+    }
+
   }catch(e){
     msg.textContent = e.message || STR.failed;
     btns.style.display='grid';

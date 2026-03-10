@@ -351,6 +351,10 @@
 
     if(!methods || (!methods.passkey && !methods.totp)){
       LS.toast(STR.enable_totp_or_passkey, 'warn');
+      const go = window.confirm(STR.enable_totp_or_passkey + '\n\nGo to Account security setup now?');
+      if(go){
+        window.location.href = 'account.php#passkeys-card';
+      }
       return false;
     }
 
