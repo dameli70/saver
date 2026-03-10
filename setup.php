@@ -194,6 +194,7 @@ header("Referrer-Policy: no-referrer");
       </div>
     </div>
 
+    <?php if (!$hasTotp && !$hasPasskey): ?>
     <div class="step">
       <div class="step-top">
         <div>
@@ -207,6 +208,7 @@ header("Referrer-Policy: no-referrer");
         <a class="btn btn-ghost" href="account.php#totp-card" style="width:auto;"><?php e('setup.setup_authenticator'); ?></a>
       </div>
     </div>
+    <?php endif; ?>
 
     <div class="step">
       <div class="step-top">

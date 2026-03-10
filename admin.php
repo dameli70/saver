@@ -23,6 +23,13 @@ if (!isAdmin()) {
 $userEmail = getCurrentUserEmail() ?? '';
 $csrf      = getCsrfToken();
 
+$adminPage = $_GET['p'] ?? 'users';
+$adminPage = preg_replace('/[^a-z_]/', '', (string)$adminPage);
+$adminPages = ['users','codes','carriers','destination_accounts','escrow','disputes','audit'];
+if (!in_array($adminPage, $adminPages, true)) {
+    $adminPage = 'users';
+}
+
 header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none';");
 header("X-Frame-Options: DENY");
 header("X-Content-Type-Options: nosniff");
@@ -105,6 +112,17 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--code-bg);border:
     <div class="h"><?php e('heading.admin'); ?></div>
     <div class="p"><?php e('admin.intro'); ?></div>
 
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin:12px 0 16px 0;">
+      <a class="btn btn-ghost btn-sm <?= $adminPage === 'users' ? 'active' : '' ?>" href="admin.php?p=users">Users</a>
+      <a class="btn btn-ghost btn-sm <?= $adminPage === 'codes' ? 'active' : '' ?>" href="admin.php?p=codes">Codes</a>
+      <a class="btn btn-ghost btn-sm <?= $adminPage === 'carriers' ? 'active' : '' ?>" href="admin.php?p=carriers">Carriers</a>
+      <a class="btn btn-ghost btn-sm <?= $adminPage === 'destination_accounts' ? 'active' : '' ?>" href="admin.php?p=destination_accounts">Destination accounts</a>
+      <a class="btn btn-ghost btn-sm <?= $adminPage === 'escrow' ? 'active' : '' ?>" href="admin.php?p=escrow">Escrow</a>
+      <a class="btn btn-ghost btn-sm <?= $adminPage === 'disputes' ? 'active' : '' ?>" href="admin.php?p=disputes">Disputes</a>
+      <a class="btn btn-ghost btn-sm <?= $adminPage === 'audit' ? 'active' : '' ?>" href="admin.php?p=audit">Audit</a>
+    </div>
+
+  <?php if ($adminPage === 'users'): ?>
   <div class="grid">
     <div class="card">
       <div class="card-title">Users</div>
@@ -151,9 +169,12 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--code-bg);border:
       </div>
     </div>
   </div>
+  <?php endif; ?>
 
-  <div class="card" style="margin-top:14px;">
-    <div class="card-title">Codes</div>
+  <?php if ($adminPage === 'codes'): ?>
+ <=div class="card" style="margin-top:14px;">
+   < div class="card-title">Cod</esdiv>
+
 
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
       <div class="field" style="margin:0;min-width:240px;flex:1;">
@@ -186,7 +207,9 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--code-bg);border:
     </div>
     <div id="codes-msg" class="msg"></div>
   </div>
+  <?php endif; ?>
 
+  <?php if ($adminPage === 'carriers'): ?>
   <div class="card" style="margin-top:14px;">
     <div class="card-title">Carriers (Mobile Money)</div>
 
@@ -246,7 +269,9 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--code-bg);border:
     </div>
     <div id="carriers-msg" class="msg"></div>
   </div>
+  <?php endif; ?>
 
+  <?php if ($adminPage === 'destination_accounts'): ?>
   <div class="card" style="margin-top:14px;">
     <div class="card-title">Destination accounts (Saving Rooms)</div>
     <div class="p">These accounts receive deposits for saving rooms. Unlock codes are stored encrypted and are only revealed to participants after consensus.</div>
@@ -310,7 +335,9 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--code-bg);border:
       </table>
     </div>
   </div>
+  <?php endif; ?>
 
+  <?php if ($adminPage === 'escrow'): ?>
   <div class="card" style="margin-top:14px;">
     <div class="card-title">Escrow settlements (Saving Rooms)</div>
     <div class="p">Operational queue for refunds / redistribution after removals (strikes) or approved exits. Settlements are recorded automatically; mark them processed after handling them off-platform.</div>
@@ -342,7 +369,9 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--code-bg);border:
     </div>
     <div id="esc-msg" class="msg"></div>
   </div>
+  <?php endif; ?>
 
+  <?php if ($adminPage === 'disputes'): ?>
   <div class="card" style="margin-top:14px;">
     <div class="card-title">Disputes (Saving Rooms)</div>
     <div class="p">Type B disputes that reached a review state (or are open). Validated disputes advance the rotation; dismissed disputes apply a false-dispute strike.</div>
@@ -371,7 +400,9 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--code-bg);border:
     </div>
     <div id="disp-msg" class="msg"></div>
   </div>
+  <?php endif; ?>
 
+  <?php if ($adminPage === 'audit'): ?>
   <div class="card" style="margin-top:14px;">
     <div class="card-title">Audit log</div>
 
@@ -400,6 +431,7 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--code-bg);border:
     </div>
     <div id="audit-msg" class="msg"></div>
   </div>
+  <?php endif; ?>
 </div>
 
 <div class="modal" id="detail-modal" onclick="closeDetail(event)">
@@ -466,6 +498,7 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--code-bg);border:
 
 <script>
 const CSRF = <?= json_encode($csrf) ?>;
+const ADMIN_PAGE = <?= json_encode($adminPage) ?>;
 
 function apiUrl(url){
   return url.startsWith('/') ? url.slice(1) : url;
@@ -740,6 +773,7 @@ let destAccountsCache = [];
 
 async function loadUsers(){
   const tbody = document.querySelector('#users-table tbody');
+  if(!tbody) return;
   tbody.innerHTML = '<tr><td colspan="8" class="k">Loading…</td></tr>';
 
   try{
@@ -1142,8 +1176,10 @@ async function toggleCarrierActive(id, cur){
 
 async function loadDestinationAccounts(){
   const tbody = document.querySelector('#da-table tbody');
+  const msg = document.getElementById('da-msg');
+  if(!tbody || !msg) return;
   tbody.innerHTML = '<tr><td colspan="7" class="k">Loading…</td></tr>';
-  document.getElementById('da-msg').className = 'msg';
+  msg.className = 'msg';
 
   try{
     const r = await get('/api/admin.php?action=destination_accounts');
@@ -1440,13 +1476,13 @@ async function loadAudit(){
 initCarrierWalletUi();
 initCarrierTemplateUi();
 
-loadUsers();
-loadCodes();
-loadCarriers();
-loadDestinationAccounts();
-loadEscrowSettlements();
-loadDisputes();
-loadAudit();
+if(ADMIN_PAGE === 'users') loadUsers();
+if(ADMIN_PAGE === 'codes') loadCodes();
+if(ADMIN_PAGE === 'carriers') loadCarriers();
+if(ADMIN_PAGE === 'destination_accounts') loadDestinationAccounts();
+if(ADMIN_PAGE === 'escrow') loadEscrowSettlements();
+if(ADMIN_PAGE === 'disputes') loadDisputes();
+if(ADMIN_PAGE === 'audit') loadAudit();
 </script>
 </div>
 </div>
