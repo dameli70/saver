@@ -791,7 +791,10 @@
 
       const b = document.createElement('span');
       b.className = 'btn bn-btn nav-btn btn-ghost btn-sm';
-      if(cur === it.href) b.classList.add('active');
+      if(cur === it.href){
+        b.classList.add('active');
+        a.setAttribute('aria-current', 'page');
+      }
 
       b.innerHTML = `<span class="nav-ico" aria-hidden="true">${LS.esc(iconForHref(it.href))}</span><span class="nav-lbl">${LS.esc(it.label)}</span>`;
       a.setAttribute('aria-label', it.label);
@@ -807,9 +810,9 @@
       ov = document.createElement('div');
       ov.id = 'ls-overflow-overlay';
       ov.innerHTML = `
-        <div id="ls-overflow-sheet" role="dialog" aria-modal="true">
+        <div id="ls-overflow-sheet" role="dialog" aria-modal="true" aria-labelledby="ls-overflow-title">
           <div class="ls-overflow-head">
-            <div class="ls-overflow-title">${LS.esc(LS.t('common.more') || 'More')}</div>
+            <div class="ls-overflow-title" id="ls-overflow-title">${LS.esc(LS.t('common.more') || 'More')}</div>
             <button class="btn btn-ghost btn-sm" type="button" id="ls-overflow-close" aria-label="${LS.esc(LS.t('common.close') || 'Close')}">×</button>
           </div>
           <div class="ls-overflow-links"></div>
@@ -822,13 +825,26 @@
           const a = document.createElement('a');
           a.href = it.href;
           a.className = 'btn btn-ghost nav-chip';
-          if(cur === it.href) a.classList.add('active');
+          if(cur === it.href){
+            a.classList.add('active');
+            a.setAttribute('aria-current', 'page');
+          }
           a.innerHTML = `<span class="nav-ico" aria-hidden="true">${LS.esc(it.ico || '•')}</span><span class="nav-lbl">${LS.esc(it.label)}</span>`;
           links.appendChild(a);
         });
       }
 
-      function close(){ ov.classList.remove('show'); }
+      function close(){
+        ov.classList.remove('show');
+        try{
+          const navOv = document.getElementById('ls-nav-overlay');
+          if(!navOv || !navOv.classList.contains('show')) document.body.style.overflow = '';
+        }catch{}
+        try{
+          const r = document.getElementById('ls-bottom-more');
+          if(r && r.focus) r.focus();
+        }catch{}
+      }
 
       ov.addEventListener('click', (e)=>{
         if(e.target === ov) close();
@@ -849,14 +865,24 @@
 
     const moreBtn = document.createElement('button');
     moreBtn.type = 'button';
+    moreBtn.id = 'ls-bottom-more';
     moreBtn.className = 'btn bn-btn nav-btn btn-ghost btn-sm';
     if(isOverflowActive) moreBtn.classList.add('active');
     moreBtn.setAttribute('aria-label', LS.t('common.more') || 'More');
+    moreBtn.setAttribute('aria-haspopup', 'dialog');
+    moreBtn.setAttribute('aria-expanded', 'false');
     moreBtn.innerHTML = `<span class="nav-ico" aria-hidden="true">⋯</span><span class="nav-lbl">${LS.esc(LS.t('common.more') || 'More')}</span>`;
     moreBtn.addEventListener('click', ()=>{
       try{ nav.removeAttribute('data-hidden'); }catch{}
+      moreBtn.setAttribute('aria-expanded', 'true');
       const ov = ensureOverflowOverlay();
       ov.classList.add('show');
+      document.body.style.overflow = 'hidden';
+
+      setTimeout(()=>{
+        const first = ov.querySelector('a,button');
+        if(first && first.focus) first.focus();
+      }, 10);
     });
 
     nav.appendChild(moreBtn);
