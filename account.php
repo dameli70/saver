@@ -44,6 +44,11 @@ $_SESSION['email_verified'] = $verified ? 1 : 0;
 $isAdmin = isAdmin();
 $csrf    = getCsrfToken();
 
+$emailLockReminders = false;
+if ($verified && hasNotificationPreferencesTable()) {
+    $emailLockReminders = userWantsEmailTimeLockReminders((int)$userId);
+}
+
 header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none';");
 header("X-Frame-Options: DENY");
 header("X-Content-Type-Options: nosniff");
@@ -201,6 +206,41 @@ code{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);pad
       <div id="trust-active" class="list"></div>
 
       <div id="trust-msg" class="msg msg-err"></div>
+    </div>
+    <?php endif; ?>
+
+    <?php if ($verified): ?>
+    <div class="card" id="notif-prefs-card">
+      <div class="row">
+        <div>
+          <div class="k">Email reminders</div>
+          <div class="v">Time lock notifications</div>
+        </div>
+        <div class="badge <?= $emailLockReminders ? 'ok' : 'wait' ?>" id="email-reminders-badge"><?= $emailLockReminders ? '✓ Email on' : '⏳ Email off' ?></div>
+      </div>
+
+      <div class="small" style="margin-top:12px;">
+        Get optional email reminders for your time locks (24h before, 1h before, and when a lock becomes eligible to reveal).
+      </div>
+
+      <div class="hr"></div>
+
+      <div class="item" style="align-items:center;">
+        <div style="flex:1;min-width:220px;">
+          <div class="k">Time lock email reminders</div>
+          <div class="v">Receive reminders at key moments</div>
+        </div>
+        <label style="display:flex;align-items:center;gap:10px;font-size:12px;color:var(--text);">
+          <input type="checkbox" id="pref-email-lock-reminders" <?= $emailLockReminders ? 'checked' : '' ?> style="width:20px;height:20px;accent-color:var(--accent);">
+          <span><?= $emailLockReminders ? 'On' : 'Off' ?></span>
+        </label>
+      </div>
+
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
+        <button class="btn btn-primary btn-sm" type="button" id="pref-save-email-reminders">Save</button>
+        <div class="msg msg-ok" id="pref-email-ok"></div>
+        <div class="msg msg-err" id="pref-email-err"></div>
+      </div>
     </div>
     <?php endif; ?>
 
@@ -1044,6 +1084,50 @@ btn.addEventListener('click', async ()=>{
     }
 
     loadPasskeys();
+  }
+
+  // ── NOTIFICATION PREFS (time lock email reminders) ─────────────────
+  if(VERIFIED){
+    const cb = document.getElementById('pref-email-lock-reminders');
+    const save = document.getElementById('pref-save-email-reminders');
+    const ok = document.getElementById('pref-email-ok');
+    const err = document.getElementById('pref-email-err');
+    const badge = document.getElementById('email-reminders-badge');
+
+    function showPrefMsg(el, text){
+      if(!el) return;
+      el.textContent = text;
+      el.classList.add('show');
+    }
+
+    if(save && cb){
+      save.addEventListener('click', async ()=>{
+        if(ok) ok.classList.remove('show');
+        if(err) err.classList.remove('show');
+
+        save.disabled = true;
+        const enabled = cb.checked ? 1 : 0;
+
+        const j = await postCsrf('api/account.php', {action:'set_email_time_lock_reminders', enabled});
+        save.disabled = false;
+
+        if(!j.success){
+          showPrefMsg(err, j.error || 'Failed');
+          return;
+        }
+
+        showPrefMsg(ok, 'Saved.');
+        if(badge){
+          badge.textContent = enabled ? '✓ Email on' : '⏳ Email off';
+          badge.className = 'badge ' + (enabled ? 'ok' : 'wait');
+        }
+      });
+
+      cb.addEventListener('change', ()=>{
+        const s = cb.parentNode ? cb.parentNode.querySelector('span') : null;
+        if(s) s.textContent = cb.checked ? 'On' : 'Off';
+      });
+    }
   }
 
   loadTrustPassport();

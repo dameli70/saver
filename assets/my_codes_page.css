@@ -107,6 +107,10 @@
   border-radius:var(--radius-input);-webkit-appearance:none;}
 .vault-input-wrap input:focus{border-color:rgba(124,92,255,.45);box-shadow:0 0 0 4px rgba(124,92,255,.12);}
 
+.rv-share{margin-top:14px;}
+.rv-share-grid{display:grid;grid-template-columns:1fr;gap:12px;}
+@media(min-width:520px){.rv-share-grid{grid-template-columns:1fr 1fr;}}
+
 @media(prefers-reduced-motion: reduce){
   .cd-txt.tick{animation:none;}
   .cd-bar::after{transition:none;}

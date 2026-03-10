@@ -176,6 +176,7 @@ return [
     'js.unsupported_reauth' => 'Unsupported re-auth method',
     'js.reauth_failed' => 'Re-auth failed',
     'js.copy_confirm' => 'Copy to clipboard? Clipboard contents may be readable by other apps until overwritten.',
+    'js.pwa_install_confirm' => 'Install this app?',
 
     // Installer
     'install.subtitle' => 'Installation',
@@ -321,6 +322,7 @@ return [
     'notifications.unread' => 'Unread',
     'notifications.none' => 'No notifications.',
     'notifications.open_room' => 'Open room',
+    'notifications.open_lock' => 'Open code',
     'notifications.mark_read' => 'Mark read',
 
     // Backup

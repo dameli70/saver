@@ -64,6 +64,7 @@
     'js.reauth.failed': 'Re-auth failed',
 
     'js.copy.confirm_sensitive': 'Copy to clipboard? Clipboard contents may be readable by other apps until overwritten.',
+    'js.pwa_install_confirm': 'Install this app?',
   };
 
   LS.getI18n = function(){
@@ -497,6 +498,7 @@
     if(nav.getAttribute('data-nav-enhanced') === '1') return;
 
     const user = nav.querySelector('.user-pill');
+    if(!user) return;
 
     const children = Array.from(nav.children).filter(el => el !== user);
 
@@ -637,6 +639,7 @@
     const topbar = document.querySelector('.topbar');
     const nav = topbar ? topbar.querySelector('.topbar-r') : null;
     if(!topbar || !nav) return;
+    if(!nav.querySelector('.user-pill')) return;
 
     // Create menu button once.
     let btn = topbar.querySelector('.topbar-menu-btn');
@@ -739,6 +742,10 @@
     if(!app) return;
     const topbar = app.querySelector('.topbar');
     if(!topbar) return;
+    try{
+      const navWrap = topbar.querySelector('.topbar-r');
+      if(!navWrap || !navWrap.querySelector('.user-pill')) return;
+    }catch{ return; }
 
     if(document.querySelector('.bottom-nav')) return;
 
@@ -946,6 +953,7 @@
     const topbar = app.querySelector('.topbar');
     const nav = topbar ? topbar.querySelector('.topbar-r') : null;
     if(!topbar || !nav) return;
+    if(!nav.querySelector('.user-pill')) return;
 
     const mq = window.matchMedia ? window.matchMedia('(min-width: 980px)') : null;
     const isDesktop = () => mq ? mq.matches : false;
@@ -1076,7 +1084,56 @@
     }catch{}
   }
 
+  function initPwa(){
+    try{
+      const head = document.head;
+      if(head && !head.querySelector('link[rel="manifest"]')){
+        const l = document.createElement('link');
+        l.rel = 'manifest';
+        l.href = 'manifest.php';
+        head.appendChild(l);
+      }
+
+      if(head && !head.querySelector('meta[name="theme-color"]')){
+        const m = document.createElement('meta');
+        m.name = 'theme-color';
+        m.content = '#0b0d12';
+        head.appendChild(m);
+      }
+    }catch{}
+
+    try{
+      if(!('serviceWorker' in navigator)) return;
+      const isLocal = (location.hostname === 'localhost' || location.hostname === '127.0.0.1');
+      if(location.protocol !== 'https:' && !isLocal) return;
+
+      navigator.serviceWorker.register('sw.js').catch(()=>{});
+
+      let deferred = null;
+      window.addEventListener('beforeinstallprompt', (e)=>{
+        try{ e.preventDefault(); }catch{}
+        deferred = e;
+
+        try{
+          if(sessionStorage.getItem('ls_pwa_prompted') === '1') return;
+          sessionStorage.setItem('ls_pwa_prompted', '1');
+        }catch{}
+
+        setTimeout(async ()=>{
+          if(!deferred) return;
+          const ok = confirm(LS.t('js.pwa_install_confirm') || 'Install this app?');
+          if(!ok) return;
+          deferred.prompt();
+          try{ await deferred.userChoice; }catch{}
+          deferred = null;
+        }, 1200);
+      });
+
+    }catch{}
+  }
+
   document.addEventListener('DOMContentLoaded', ()=>{
+    initPwa();
     initNavGroups();
     initDesktopSidebar();
     initMobileNav();

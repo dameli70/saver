@@ -99,6 +99,7 @@ const STR = {
   unread: <?= json_encode(t('notifications.unread')) ?>,
   none: <?= json_encode(t('notifications.none')) ?>,
   openRoom: <?= json_encode(t('notifications.open_room')) ?>,
+  openLock: <?= json_encode(t('notifications.open_lock')) ?>,
   markRead: <?= json_encode(t('notifications.mark_read')) ?>,
   failed: <?= json_encode(t('common.failed')) ?>,
 };
@@ -146,10 +147,21 @@ function tierClass(t){
   return 'tier';
 }
 
-function roomLinkFromData(data){
+function actionLinkFromData(data){
+  if(data && data.lock_id){
+    const id = String(data.lock_id);
+    if(id && id.length === 36) return {href:'my_codes.php#lock-' + encodeURIComponent(id), label: STR.openLock};
+  }
+
+  if(data && data.wallet_lock_id){
+    const id = String(data.wallet_lock_id);
+    if(id && id.length === 36) return {href:'my_codes.php#wallet-' + encodeURIComponent(id), label: STR.openLock};
+  }
+
   const rid = data && data.room_id ? String(data.room_id) : '';
-  if(rid && rid.length === 36) return 'room.php?id=' + encodeURIComponent(rid);
-  return '';
+  if(rid && rid.length === 36) return {href:'room.php?id=' + encodeURIComponent(rid), label: STR.openRoom};
+
+  return null;
 }
 
 function render(items, unreadCount){
@@ -167,7 +179,7 @@ function render(items, unreadCount){
     const div = document.createElement('div');
     div.className = 'item';
 
-    const link = roomLinkFromData(n.data);
+    const link = actionLinkFromData(n.data);
     const read = !!n.read_at;
     div.dataset.read = read ? '1' : '0';
 
@@ -182,7 +194,7 @@ function render(items, unreadCount){
       <div class="meta">
         <div class="ts">${fmt(n.created_at)}</div>
         <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;">
-          ${link ? `<a class="btn btn-ghost btn-sm" href="${link}">${esc(STR.openRoom)}</a>` : ''}
+          ${link ? `<a class="btn btn-ghost btn-sm" href="${link.href}">${esc(link.label)}</a>` : ''}
           ${read ? '' : `<button class="btn btn-blue btn-sm" data-id="${n.id}">${esc(STR.markRead)}</button>`}
         </div>
       </div>
