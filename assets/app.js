@@ -622,7 +622,8 @@
       const p = window.location && window.location.pathname ? window.location.pathname : '';
       const parts = p.split('/');
       const cur = parts[parts.length - 1] || '';
-      const mapped = (cur === 'room.php') ? 'rooms.php' : cur;
+      const mapped = (cur === 'room.php') ? 'rooms.php' : ((cur === 'admin_legacy.php' || (cur && cur.indexOf('admin_') === 0)) ? 'admin.php' : cur);
+
       nav.querySelectorAll('a[href]').forEach(a => {
         const href = String(a.getAttribute('href')||'');
         if(href === mapped) a.classList.add('active');
@@ -776,7 +777,10 @@
         const p = window.location && window.location.pathname ? window.location.pathname : '';
         const parts = p.split('/');
         const c = parts[parts.length - 1] || '';
-        return (c === 'room.php') ? 'rooms.php' : c;
+        if(c === 'room.php') return 'rooms.php';
+        if(c === 'admin_legacy.php') return 'admin.php';
+        if(c && c.indexOf('admin_') === 0) return 'admin.php';
+        return c;
       }catch{ return ''; }
     })();
 
