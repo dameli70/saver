@@ -759,6 +759,18 @@
       {href:'notifications.php', label: LS.t('nav.notifications') || 'Inbox'},
     ];
 
+    const overflowItems = [
+      {href:'account.php', label: LS.t('nav.account') || 'Account', ico:'👤'},
+      {href:'backup.php', label: LS.t('nav.backups') || 'Backups', ico:'⛁'},
+      {href:'vault_settings.php', label: LS.t('nav.vault') || 'Vault', ico:'⌁'},
+      {href:'setup.php', label: LS.t('nav.setup') || 'Setup', ico:'⚙'},
+    ];
+    try{
+      if(document.querySelector('a[href="admin.php"]')){
+        overflowItems.push({href:'admin.php', label: LS.t('nav.admin') || 'Admin', ico:'⬡'});
+      }
+    }catch{}
+
     const cur = (()=>{
       try{
         const p = window.location && window.location.pathname ? window.location.pathname : '';
@@ -767,6 +779,8 @@
         return (c === 'room.php') ? 'rooms.php' : c;
       }catch{ return ''; }
     })();
+
+    const isOverflowActive = overflowItems.some(it => it.href === cur);
 
     const nav = document.createElement('nav');
     nav.className = 'bottom-nav';
@@ -785,6 +799,67 @@
 
       nav.appendChild(a);
     });
+
+    function ensureOverflowOverlay(){
+      let ov = document.getElementById('ls-overflow-overlay');
+      if(ov) return ov;
+
+      ov = document.createElement('div');
+      ov.id = 'ls-overflow-overlay';
+      ov.innerHTML = `
+        <div id="ls-overflow-sheet" role="dialog" aria-modal="true">
+          <div class="ls-overflow-head">
+            <div class="ls-overflow-title">${LS.esc(LS.t('common.more') || 'More')}</div>
+            <button class="btn btn-ghost btn-sm" type="button" id="ls-overflow-close" aria-label="${LS.esc(LS.t('common.close') || 'Close')}">×</button>
+          </div>
+          <div class="ls-overflow-links"></div>
+        </div>
+      `;
+
+      const links = ov.querySelector('.ls-overflow-links');
+      if(links){
+        overflowItems.forEach(it => {
+          const a = document.createElement('a');
+          a.href = it.href;
+          a.className = 'btn btn-ghost nav-chip';
+          if(cur === it.href) a.classList.add('active');
+          a.innerHTML = `<span class="nav-ico" aria-hidden="true">${LS.esc(it.ico || '•')}</span><span class="nav-lbl">${LS.esc(it.label)}</span>`;
+          links.appendChild(a);
+        });
+      }
+
+      function close(){ ov.classList.remove('show'); }
+
+      ov.addEventListener('click', (e)=>{
+        if(e.target === ov) close();
+        const a = e.target && e.target.closest ? e.target.closest('a') : null;
+        if(a && a.getAttribute('href')) close();
+      });
+
+      const cbtn = ov.querySelector('#ls-overflow-close');
+      if(cbtn) cbtn.addEventListener('click', close);
+
+      document.addEventListener('keydown', (e)=>{
+        if(e && e.key === 'Escape' && ov.classList.contains('show')) close();
+      });
+
+      document.body.appendChild(ov);
+      return ov;
+    }
+
+    const moreBtn = document.createElement('button');
+    moreBtn.type = 'button';
+    moreBtn.className = 'btn bn-btn nav-btn btn-ghost btn-sm';
+    if(isOverflowActive) moreBtn.classList.add('active');
+    moreBtn.setAttribute('aria-label', LS.t('common.more') || 'More');
+    moreBtn.innerHTML = `<span class="nav-ico" aria-hidden="true">⋯</span><span class="nav-lbl">${LS.esc(LS.t('common.more') || 'More')}</span>`;
+    moreBtn.addEventListener('click', ()=>{
+      try{ nav.removeAttribute('data-hidden'); }catch{}
+      const ov = ensureOverflowOverlay();
+      ov.classList.add('show');
+    });
+
+    nav.appendChild(moreBtn);
 
     document.body.appendChild(nav);
 
@@ -807,6 +882,10 @@
 
         function onScroll(){
           if(!isMobile()) return;
+          try{
+            const ov = document.getElementById('ls-overflow-overlay');
+            if(ov && ov.classList.contains('show')) return;
+          }catch{}
           const y = window.scrollY || 0;
           const dy = y - lastY;
           if(Math.abs(dy) < 12) return;
