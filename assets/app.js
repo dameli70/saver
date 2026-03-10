@@ -776,10 +776,125 @@
     document.body.appendChild(nav);
   }
 
+  function initDesktopSidebar(){
+    const app = document.getElementById('app');
+    if(!app) return;
+
+    const topbar = app.querySelector('.topbar');
+    const nav = topbar ? topbar.querySelector('.topbar-r') : null;
+    if(!topbar || !nav) return;
+
+    const mq = window.matchMedia ? window.matchMedia('(min-width: 980px)') : null;
+    const isDesktop = () => mq ? mq.matches : false;
+
+    // Wrap all app children in a shell so the sidebar can sit as a sibling.
+    let shell = document.getElementById('app-shell');
+    if(!shell){
+      shell = document.createElement('div');
+      shell.id = 'app-shell';
+      while(app.firstChild){
+        shell.appendChild(app.firstChild);
+      }
+      app.appendChild(shell);
+    }
+
+    let side = document.getElementById('ls-sidebar');
+    if(!side){
+      side = document.createElement('aside');
+      side.id = 'ls-sidebar';
+      side.innerHTML = `
+        <div class="ls-side-head">
+          <div class="ls-side-title">${LS.esc(LS.t('common.menu') || 'Menu')}</div>
+          <button class="btn btn-ghost btn-sm btn-theme" type="button" id="ls-side-toggle" aria-label="${LS.esc(LS.t('common.toggle') || 'Toggle')}">⟷</button>
+        </div>
+        <div class="ls-side-body" id="ls-side-body"></div>
+      `;
+      app.insertBefore(side, shell);
+
+      const stored = localStorage.getItem('ls_sidebar_collapsed');
+      if(stored === '1') side.setAttribute('data-collapsed','1');
+
+      const toggle = side.querySelector('#ls-side-toggle');
+      if(toggle){
+        toggle.addEventListener('click', ()=>{
+          const next = side.getAttribute('data-collapsed') === '1' ? '0' : '1';
+          if(next === '1') side.setAttribute('data-collapsed','1');
+          else side.removeAttribute('data-collapsed');
+          localStorage.setItem('ls_sidebar_collapsed', next === '1' ? '1' : '0');
+        });
+      }
+    }
+
+    function mount(){
+      if(!isDesktop()) return;
+      const body = document.getElementById('ls-side-body');
+      if(!body) return;
+      if(nav.parentNode !== body) body.appendChild(nav);
+    }
+
+    function unmount(){
+      if(isDesktop()) return;
+      // Restore the nav to its original spot in the topbar.
+      const menuBtn = topbar.querySelector('.topbar-menu-btn');
+      if(nav.parentNode !== topbar){
+        if(menuBtn) topbar.insertBefore(nav, menuBtn);
+        else topbar.appendChild(nav);
+      }
+    }
+
+    mount();
+
+    if(mq){
+      try{ mq.addEventListener('change', ()=>{ mount(); unmount(); }); }
+      catch{ mq.addListener(()=>{ mount(); unmount(); }); }
+    }
+  }
+
+  function initRipples(){
+    // Lightweight click ripple for buttons.
+    document.addEventListener('pointerdown', (e)=>{
+      const btn = e.target && e.target.closest ? e.target.closest('.btn') : null;
+      if(!btn) return;
+      if(btn.disabled) return;
+
+      const r = btn.getBoundingClientRect();
+      const x = e.clientX - r.left;
+      const y = e.clientY - r.top;
+
+      const s = document.createElement('span');
+      s.className = 'ls-ripple';
+      s.style.left = x + 'px';
+      s.style.top = y + 'px';
+      btn.appendChild(s);
+      setTimeout(()=>s.remove(), 700);
+    }, {passive:true});
+  }
+
+  function initRevealOnScroll(){
+    if(!window.IntersectionObserver) return;
+
+    const els = Array.from(document.querySelectorAll('.card, .step, .item, .room, .lock-card'));
+    els.forEach(el => el.classList.add('ls-reveal'));
+
+    const io = new IntersectionObserver((entries)=>{
+      entries.forEach(ent => {
+        if(ent.isIntersecting){
+          ent.target.classList.add('is-in');
+          io.unobserve(ent.target);
+        }
+      });
+    }, {rootMargin:'0px 0px -10% 0px', threshold:0.06});
+
+    els.forEach(el => io.observe(el));
+  }
+
   document.addEventListener('DOMContentLoaded', ()=>{
     initNavGroups();
+    initDesktopSidebar();
     initMobileNav();
     initBottomNav();
+    initRipples();
+    initRevealOnScroll();
   });
 
   window.LS = LS;
