@@ -129,8 +129,16 @@ header("Referrer-Policy: no-referrer");
   <?php include __DIR__ . '/includes/topbar.php'; ?>
 
   <div class="app-body wide">
-    <div class="h"><?php e('page.setup'); ?></div>
-    <div class="p"><?php e('setup.intro', ['app' => APP_NAME]); ?></div>
+
+    <div class="page-head">
+      <div>
+        <div class="page-title"><?php e('page.setup'); ?></div>
+        <div class="page-sub"><?php e('setup.intro', ['app' => APP_NAME]); ?></div>
+      </div>
+      <div class="page-actions">
+        <a class="btn btn-ghost btn-sm" href="dashboard.php?skip_setup=1"><?php e('setup.skip_for_now'); ?></a>
+      </div>
+    </div>
 
   <div class="card" style="margin-bottom:14px;">
     <div class="card-title"><div class="dot"></div><?php e('setup.progress'); ?></div>

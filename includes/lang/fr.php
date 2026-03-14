@@ -45,9 +45,17 @@ return [
 
     // Page titles / headings
     'page.dashboard' => 'Tableau de bord',
-    'page.create_code' => 'Créer un code',
-    'page.my_codes' => 'Mes codes',
+    'page.create_code' => 'Créer un verrou',
+    'page.my_codes' => 'Verrous',
     'page.vault_settings' => 'Paramètres du coffre',
+    'vault_settings.subtitle' => 'Faites tourner la phrase secrète du coffre (ré‑chiffrement côté client).',
+    'vault_settings.rotation_title' => 'Rotation du coffre',
+    'vault_settings.rotation_sub_html' => 'Faites tourner votre phrase secrète en ré‑chiffrant les verrous <strong>déjà déverrouillés</strong> (la date de révélation est passée). Les verrous scellés ne peuvent pas être rotés avant leur déverrouillage.',
+    'vault_settings.current_passphrase_label' => 'Phrase secrète actuelle',
+    'vault_settings.new_passphrase_label' => 'Nouvelle phrase secrète',
+    'vault_settings.confirm_passphrase_label' => 'Confirmer la nouvelle phrase secrète',
+    'vault_settings.rotate_btn' => 'Faire tourner la phrase secrète',
+    'vault_settings.note' => 'Note : la rotation nécessite de déchiffrer les ciphertexts éligibles dans votre navigateur. Le serveur ne connaît jamais votre phrase secrète.',
     'page.rooms' => 'Salles d’épargne',
     'page.room' => 'Salle',
     'page.notifications' => 'Notifications',
@@ -237,6 +245,7 @@ return [
 
     // Tableau de bord
     'dashboard.onboarding' => 'Démarrage',
+    'dashboard.subtitle' => 'Aperçu du coffre, prochain déverrouillage et sécurité.',
     'dashboard.progress_suffix' => 'terminé — {next}',
     'dashboard.security_banner_title' => 'Finalisez votre configuration de sécurité',
     'dashboard.security_banner_sub' => 'Ajoutez une passkey ou un code d’authentification pour confirmer les actions sensibles (déverrouillage, sauvegardes, validations de salle).',
@@ -265,6 +274,7 @@ return [
 
     // Configuration
     'setup.progress' => 'Progression',
+    'setup.skip_for_now' => 'Ignorer pour le moment',
     'setup.progress_sub' => 'Phrase secrète du coffre + confirmation + sauvegarde + premier verrou temporel.',
     'setup.all_set_title' => 'Tout est prêt',
     'setup.all_set_sub' => 'Vous pouvez revenir sur cette page à tout moment.',

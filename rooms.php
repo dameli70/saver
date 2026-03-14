@@ -45,8 +45,17 @@ header("Referrer-Policy: no-referrer");
   <?php include __DIR__ . '/includes/topbar.php'; ?>
 
   <div class="app-body wide">
-    <div class="h"><?php e('page.rooms'); ?></div>
-    <div class="p"><?php e('rooms.intro'); ?></div>
+
+    <div class="page-head">
+      <div>
+        <div class="page-title"><?php e('page.rooms'); ?></div>
+        <div class="page-sub"><?php e('rooms.intro'); ?></div>
+      </div>
+      <div class="page-actions">
+        <a class="btn btn-primary btn-sm" href="#create-room"><?php e('common.create'); ?></a>
+      </div>
+    </div>
+
     <div id="eligibility" style="color:var(--muted);font-size:12px;line-height:1.6;margin:-8px 0 18px 0;"></div>
 
   <div class="card" style="margin-bottom:14px;">
@@ -68,8 +77,8 @@ header("Referrer-Policy: no-referrer");
       <div id="rooms-wrap" class="rooms"></div>
     </div>
 
-    <div class="card">
-      <div class="card-title"><?php e('rooms.create_title'); ?></div>
+    <div class="card" id="create-room">
+     <tdiv class="card-titlecreate_title'); ?></div>
       <div class="p" style="margin-top:-6px;"><?php e('rooms.create_sub'); ?></div>
 
       <div class="field"><label><?php e('rooms.field.purpose'); ?></label>

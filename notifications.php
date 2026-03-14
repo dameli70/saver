@@ -47,14 +47,21 @@ header("Permissions-Policy: clipboard-write=(self)");
   <?php include __DIR__ . '/includes/topbar.php'; ?>
 
   <div class="app-body">
-    <div class="h"><?php e('page.notifications'); ?></div>
-    <div class="p"><?php e('notifications.intro'); ?></div>
+
+    <div class="page-head">
+      <div>
+        <div class="page-title"><?php e('page.notifications'); ?></div>
+        <div class="page-sub"><?php e('notifications.intro'); ?></div>
+      </div>
+      <div class="page-actions">
+        <button class="btn btn-ghost btn-sm" type="button" onclick="refresh()">↻ <?php e('common.refresh'); ?></button>
+      </div>
+    </div>
 
   <div class="card">
     <div class="card-title">
       <span><?php e('notifications.inbox'); ?></span>
       <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;">
-        <button class="btn btn-blue btn-sm" onclick="refresh()">↻ <?php e('common.refresh'); ?></button>
         <button class="btn btn-primary btn-sm" onclick="markAllRead()"><?php e('notifications.mark_all_read'); ?></button>
       </div>
     </div>

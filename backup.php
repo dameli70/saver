@@ -71,8 +71,16 @@ header("Referrer-Policy: no-referrer");
   <?php include __DIR__ . '/includes/topbar.php'; ?>
 
   <div class="app-body">
-    <div class="h"><?php e('page.backups'); ?></div>
-    <div class="p"><?php e('backup.intro'); ?></div>
+
+    <div class="page-head">
+      <div>
+        <div class="page-title"><?php e('page.backups'); ?></div>
+        <div class="page-sub"><?php e('backup.intro'); ?></div>
+      </div>
+      <div class="page-actions">
+        <a class="btn btn-ghost btn-sm" href="vault_settings.php"><?php e('nav.vault'); ?></a>
+      </div>
+    </div>
 
     <?php if ($showSecurityBanner): ?>
     <div class="sec-banner">

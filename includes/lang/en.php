@@ -48,6 +48,14 @@ return [
     'page.create_code' => 'Create Lock',
     'page.my_codes' => 'Time Locks',
     'page.vault_settings' => 'Vault Settings',
+    'vault_settings.subtitle' => 'Rotate your vault passphrase (client-side re-encryption).',
+    'vault_settings.rotation_title' => 'Vault rotation',
+    'vault_settings.rotation_sub_html' => 'Rotate your vault passphrase by re-encrypting <strong>already-unlocked</strong> time locks (reveal date has passed). Sealed locks cannot be rotated until they unlock.',
+    'vault_settings.current_passphrase_label' => 'Current vault passphrase',
+    'vault_settings.new_passphrase_label' => 'New vault passphrase',
+    'vault_settings.confirm_passphrase_label' => 'Confirm new vault passphrase',
+    'vault_settings.rotate_btn' => 'Rotate vault passphrase',
+    'vault_settings.note' => 'Note: rotation requires decrypting eligible ciphertext in your browser. The server never learns your passphrase.',
     'page.rooms' => 'Saving Rooms',
     'page.room' => 'Room',
     'page.notifications' => 'Notifications',
@@ -228,6 +236,7 @@ return [
 
     // Dashboard
     'dashboard.onboarding' => 'Onboarding',
+    'dashboard.subtitle' => 'Vault overview, next unlock, and security status.',
     'dashboard.progress_suffix' => 'complete — {next}',
     'dashboard.security_banner_title' => 'Finish your security setup',
     'dashboard.security_banner_sub' => 'Add a passkey or authenticator code to confirm sensitive actions (unlocking, backups, room approvals).',
@@ -256,6 +265,7 @@ return [
 
     // Setup
     'setup.progress' => 'Progress',
+    'setup.skip_for_now' => 'Skip for now',
     'setup.progress_sub' => 'Vault passphrase + confirmation + backup + first time lock.',
     'setup.all_set_title' => 'You’re all set',
     'setup.all_set_sub' => 'You can revisit this page anytime.',

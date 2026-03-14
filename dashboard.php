@@ -143,7 +143,18 @@ header("Permissions-Policy: clipboard-write=(self)");
 <div id="app">
   <?php include __DIR__ . '/includes/topbar.php'; ?>
 
-  <div class="app-body">
+  <div class="app-body wide">
+
+    <div class="page-head">
+      <div>
+        <div class="page-title"><?php e('page.dashboard'); ?></div>
+        <div class="page-sub"><?php e('dashboard.subtitle'); ?></div>
+      </div>
+      <div class="page-actions">
+        <a class="btn btn-primary btn-sm" href="create_code.php"><?php e('nav.create_code'); ?></a>
+        <a class="btn btn-ghost btn-sm" href="my_codes.php"><?php e('nav.my_codes'); ?></a>
+      </div>
+    </div>
 
     <div class="dash-grid">
 

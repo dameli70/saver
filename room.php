@@ -54,8 +54,16 @@ header("Referrer-Policy: no-referrer");
   <?php include __DIR__ . '/includes/topbar.php'; ?>
 
   <div class="app-body wide">
-    <div class="h" id="room-title"><?php e('page.room'); ?></div>
-    <div class="p" id="room-sub">Loading…</div>
+
+    <div class="page-head">
+      <div>
+        <div class="page-title" id="room-title"><?php e('page.room'); ?></div>
+        <div class="page-sub" id="room-sub">Loading…</div>
+      </div>
+      <div class="page-actions">
+        <a class="btn btn-ghost btn-sm" href="rooms.php"><?php e('nav.rooms'); ?></a>
+      </div>
+    </div>
 
   <div class="grid">
     <div class="card">

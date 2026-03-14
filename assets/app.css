@@ -300,6 +300,9 @@
 .btn-sm{padding:10px 14px;font-size:10px;min-height:38px;}
 .btn-sm.btn-theme{min-width:40px;width:40px;}
 
+/* Compact buttons used in inline card actions (dashboard, etc.). */
+.btn-inline{padding:10px 14px;font-size:10px;min-height:38px;}
+
 .btn-green{background:rgba(50,213,131,.16);border:1px solid rgba(50,213,131,.30);color:var(--green);color:color-mix(in srgb, var(--green) 85%, white 0%);font-weight:700;}
 .btn-red{background:rgba(255,77,109,.10);border:1px solid rgba(255,77,109,.28);color:var(--red);}
 .btn-blue{background:rgba(48,208,255,.12);border:1px solid rgba(48,208,255,.26);color:var(--blue);}
