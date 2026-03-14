@@ -89,6 +89,17 @@ $nextSetupLabel = t($nextSetupLabelKey);
 $onboardingAvailable = hasOnboardingColumns();
 $onboardingDone = isOnboardingComplete($userId);
 
+// If the user has completed all setup steps, hide this page.
+if ($setupDone >= $setupStepsTotal) {
+    if ($onboardingAvailable && !$onboardingDone) {
+        markOnboardingComplete($userId);
+    }
+    // Ensure any persistent "skip setup" preference is cleared once setup is effectively complete.
+    setUserSkipSetupRedirect($userId, false);
+    header('Location: dashboard.php');
+    exit;
+}
+
 header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none';");
 header("X-Frame-Options: DENY");
 header("X-Content-Type-Options: nosniff");
@@ -248,7 +259,7 @@ header("Referrer-Policy: no-referrer");
 
     <div style="display:flex;gap:10px;flex-wrap:wrap;">
       <button class="btn btn-primary" id="finish" type="button" style="width:auto;"><?php e('onboarding.action.go_to_dashboard'); ?></button>
-      <a class="btn btn-ghost" href="dashboard.php?skip_setup=1" style="width:auto;"><?php e('setup.remind_next_time'); ?></a>
+      <a class="btn btn-ghost" href="dashboard.php?unskip_setup=1&skip_setup_once=1" style="width:auto;"><?php e('setup.remind_next_time'); ?></a>
     </div>
 
     <div id="msg" class="msg"></div>

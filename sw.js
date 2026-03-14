@@ -9,7 +9,7 @@
    - keep API requests network-first
 */
 
-const CACHE = 'controle-v2';
+const CACHE = 'controle-v8';
 
 const ASSETS = [
   './',
@@ -49,16 +49,23 @@ self.addEventListener('fetch', (event) => {
   // Never cache API responses.
   if (url.pathname.startsWith('/api/')) return;
 
-  // Cache-first for static assets.
+  // Stale-while-revalidate for static assets.
+  // This avoids users being stuck on old CSS/JS after deploys.
   if (url.pathname.startsWith('/assets/')) {
     event.respondWith(
-      caches.match(req).then((hit) => {
-        if (hit) return hit;
-        return fetch(req).then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put(req, copy));
+      caches.open(CACHE).then(async (cache) => {
+        const cached = await cache.match(req);
+
+        const network = fetch(req).then((res) => {
+          try{ if (res && res.ok) cache.put(req, res.clone()); }catch{}
           return res;
         });
+
+        if (cached) {
+          event.waitUntil(network.catch(()=>{}));
+          return cached;
+        }
+        return network;
       })
     );
     return;

@@ -770,6 +770,9 @@
   }
 
   function initMobileNav(){
+    // If a CSS-only fallback drawer exists (server-rendered), don't also build a JS drawer.
+    if(document.getElementById('ls-mobile-nav-toggle')) return;
+
     const topbar = document.querySelector('.topbar');
     const nav = topbar ? topbar.querySelector('.topbar-r') : null;
     if(!topbar || !nav) return;

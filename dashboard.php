@@ -19,12 +19,32 @@ $isAdmin   = isAdmin();
 $csrf      = getCsrfToken();
 
 $userId = (int)(getCurrentUserId() ?? 0);
-$skipSetup = !empty($_GET['skip_setup']);
-if ($skipSetup) {
+
+$skipSetupPersist = !empty($_GET['skip_setup']);
+$skipSetupOnce    = !empty($_GET['skip_setup_once']);
+$unskipSetup      = !empty($_GET['unskip_setup']);
+
+if ($userId && $unskipSetup) {
+    setUserSkipSetupRedirect($userId, false);
+}
+
+if ($userId && $skipSetupPersist) {
+    setUserSkipSetupRedirect($userId, true);
+}
+
+if ($skipSetupOnce) {
     $_SESSION['onboarding_skip_once'] = 1;
 }
 
-if ($userId && empty($_SESSION['onboarding_skip_once']) && !isOnboardingComplete($userId)) {
+$skipSetup = false;
+if ($userId && userSkipSetupRedirect($userId)) {
+    $skipSetup = true;
+}
+if (!empty($_SESSION['onboarding_skip_once'])) {
+    $skipSetup = true;
+}
+
+if ($userId && !$skipSetup && !isOnboardingComplete($userId)) {
     header('Location: setup.php');
     exit;
 }
@@ -82,6 +102,12 @@ if ($hasTotp || $hasPasskey) $setupDone++;
 if ($backupCount > 0) $setupDone++;
 if ($lockCount > 0) $setupDone++;
 $setupPercent = (int)floor(($setupDone / $setupStepsTotal) * 100);
+
+// If the user completed all steps but never clicked "Finish" on setup,
+// mark onboarding complete automatically so setup disappears.
+if ($userId && hasOnboardingColumns() && $setupDone >= $setupStepsTotal && !isOnboardingComplete($userId)) {
+    markOnboardingComplete($userId);
+}
 
 $nextSetupTextKey = 'onboarding.next.review';
 $nextSetupLabelKey = 'onboarding.action.open_setup';
