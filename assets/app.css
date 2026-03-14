@@ -1,5 +1,5 @@
 #app{min-height:100vh;min-height:100dvh;position:relative;z-index:1;padding-bottom:max(18px,var(--sab));}
-@media(max-width:720px){
+@media(hover:none) and (pointer:coarse){
   #app.has-bottom-nav{padding-bottom:calc(86px + var(--sab));}
 }
 
@@ -39,7 +39,7 @@
 
 .topbar-menu-btn{display:none;}
 
-@media(max-width:720px){
+@media(hover:none) and (pointer:coarse){
   .topbar{padding-left:14px;padding-right:14px;}
   .topbar-menu-btn{display:inline-flex;
     padding:0;min-width:44px;width:44px;min-height:44px;
@@ -55,7 +55,7 @@
 .ls-mobile-nav-toggle{display:none;}
 .ls-mobile-nav-overlay{display:none;}
 
-@media(max-width:720px){
+@media(hover:none) and (pointer:coarse){
   .ls-mobile-nav-toggle{position:absolute;opacity:0;pointer-events:none;}
   .ls-mobile-nav-overlay{position:fixed;inset:0;background:var(--overlay-bg);z-index:760;
     display:block;opacity:0;pointer-events:none;transition:opacity .18s ease;
@@ -212,7 +212,7 @@
   .bottom-nav .bn-btn .nav-lbl{display:none;}
 }
 
-@media(max-width:720px){
+@media(hover:none) and (pointer:coarse){
   .bottom-nav{display:flex;}
 }
 
