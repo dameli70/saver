@@ -90,8 +90,16 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--code-bg);border:
   <?php $topbarBadgeText = 'SUPER ADMIN'; include __DIR__ . '/includes/topbar.php'; ?>
 
   <div class="app-body wide">
-    <div class="h"><?php e('heading.admin'); ?></div>
-    <div class="p"><?php e('admin.intro'); ?></div>
+
+    <div class="page-head">
+      <div>
+        <div class="page-title"><?php e('page.admin'); ?></div>
+        <div class="page-sub"><?php e('admin.intro'); ?></div>
+      </div>
+      <div class="page-actions">
+        <a class="btn btn-ghost btn-sm" href="dashboard.php"><?php e('nav.dashboard'); ?></a>
+      </div>
+    </div>
 
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin:12px 0 16px 0;">
       <a class="btn btn-ghost btn-sm <?= $adminPage === 'users' ? 'active' : '' ?>" href="admin.php?p=users">Users</a>

@@ -58,7 +58,7 @@ header("Referrer-Policy: no-referrer");
     <div class="page-head">
       <div>
         <div class="page-title" id="room-title"><?php e('page.room'); ?></div>
-        <div class="page-sub" id="room-sub">Loading…</div>
+        <div class="page-sub" id="room-sub"><?php e('common.loading'); ?></div>
       </div>
       <div class="page-actions">
         <a class="btn btn-ghost btn-sm" href="rooms.php"><?php e('nav.rooms'); ?></a>
@@ -67,66 +67,66 @@ header("Referrer-Policy: no-referrer");
 
   <div class="grid">
     <div class="card">
-      <div class="card-title">Overview</div>
-      <div id="room-overview" class="k">Loading…</div>
+      <div class="card-title"><?php e('room.overview_title'); ?></div>
+      <div id="room-overview" class="k"><?php e('common.loading'); ?></div>
 
       <div id="contrib-block" style="display:none; margin-top:12px;">
         <div class="hr"></div>
-        <div class="card-title" style="margin-bottom:10px;">Contribution</div>
-        <div class="p" style="margin-bottom:10px;">Confirm your contribution for the active cycle. (Deposit verification / escrow processing is enforced by the worker milestone.)</div>
+        <div class="card-title" style="margin-bottom:10px;"><?php e('room.contribution_title'); ?></div>
+        <div class="p" style="margin-bottom:10px;"><?php e('room.contribution_sub'); ?></div>
 
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
           <div>
-            <div class="k">Cycle</div>
+            <div class="k"><?php e('room.contribution.cycle'); ?></div>
             <div class="v" id="contrib-cycle">—</div>
           </div>
           <div>
-            <div class="k">Due</div>
+            <div class="k"><?php e('room.contribution.due'); ?></div>
             <div class="v" id="contrib-due">—</div>
           </div>
         </div>
 
         <div style="margin-top:12px;display:grid;grid-template-columns:1fr;gap:10px;">
           <div>
-            <div class="k">Amount</div>
-            <input id="contrib-amt" class="ls-input" style="margin-top:6px;" placeholder="e.g. 50.00">
+            <div class="k"><?php e('room.contribution.amount'); ?></div>
+            <input id="contrib-amt" class="ls-input" style="margin-top:6px;" placeholder="<?= htmlspecialchars(t('room.contribution.amount_placeholder'), ENT_QUOTES, 'UTF-8') ?>">
           </div>
           <div>
-            <div class="k">Reference (optional)</div>
-            <input id="contrib-ref" class="ls-input" style="margin-top:6px;" placeholder="e.g. bank tx id">
+            <div class="k"><?php e('room.contribution.reference_optional'); ?></div>
+            <input id="contrib-ref" class="ls-input" style="margin-top:6px;" placeholder="<?= htmlspecialchars(t('room.contribution.reference_placeholder'), ENT_QUOTES, 'UTF-8') ?>">
           </div>
         </div>
 
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
-          <button class="btn btn-primary btn-sm" onclick="confirmContribution()">Confirm contribution</button>
+          <button class="btn btn-primary btn-sm" onclick="confirmContribution()"><?php e('room.contribution.btn_confirm'); ?></button>
         </div>
         <div id="contrib-msg" class="msg"></div>
       </div>
 
       <div id="unlock-block" style="display:none; margin-top:12px;">
         <div class="hr"></div>
-        <div class="card-title" style="margin-bottom:10px;">Unlock (Type A)</div>
-        <div class="p" style="margin-bottom:10px;">Requires 100% approval after the reveal date. When revealed, the unlock code is valid for 72 hours.</div>
+        <div class="card-title" style="margin-bottom:10px;"><?php e('room.unlock_type_a_title'); ?></div>
+        <div class="p" style="margin-bottom:10px;"><?php e('room.unlock_type_a_sub'); ?></div>
 
         <div class="two-col">
           <div>
-            <div class="k">Consensus</div>
+            <div class="k"><?php e('room.unlock.consensus'); ?></div>
             <div class="v" id="unlock-consensus">—</div>
           </div>
           <div>
-            <div class="k">Window</div>
+            <div class="k"><?php e('room.unlock.window'); ?></div>
             <div class="v" id="unlock-window">—</div>
           </div>
         </div>
 
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
-          <button class="btn btn-blue btn-sm" onclick="unlockVote('approve')">Approve unlock</button>
-          <button class="btn btn-red btn-sm" onclick="unlockVote('reject')">Reject</button>
-          <button class="btn btn-primary btn-sm" id="unlock-reveal-btn" onclick="unlockReveal()" style="display:none;">Reveal code</button>
+          <button class="btn btn-blue btn-sm" onclick="unlockVote('approve')"><?php e('room.unlock.btn_approve'); ?></button>
+          <button class="btn btn-red btn-sm" onclick="unlockVote('reject')"><?php e('room.unlock.btn_reject'); ?></button>
+          <button class="btn btn-primary btn-sm" id="unlock-reveal-btn" onclick="unlockReveal()" style="display:none;"><?php e('room.unlock.btn_reveal_code'); ?></button>
         </div>
 
         <div id="unlock-code-wrap" style="display:none;margin-top:12px;">
-          <div class="k">Unlock code (auto-clears)</div>
+          <div class="k"><?php e('room.unlock.code_label'); ?></div>
           <input id="unlock-code" class="ls-input" readonly style="margin-top:6px;">
           <div class="small" id="unlock-code-exp" style="margin-top:6px;"></div>
         </div>
@@ -136,39 +136,39 @@ header("Referrer-Policy: no-referrer");
 
       <div id="typeb-block" style="display:none; margin-top:12px;">
         <div class="hr"></div>
-        <div class="card-title" style="margin-bottom:10px;">Rotation (Type B)</div>
-        <div class="p" style="margin-bottom:10px;">Each turn requires maker approval + 50% participant approval. If approved, only the current turn user can reveal the unlock code for 72 hours.</div>
+        <div class="card-title" style="margin-bottom:10px;"><?php e('room.rotation_type_b_title'); ?></div>
+        <div class="p" style="margin-bottom:10px;"><?php e('room.rotation_type_b_sub'); ?></div>
 
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
           <div>
-            <div class="k">Current turn</div>
+            <div class="k"><?php e('room.rotation.current_turn'); ?></div>
             <div class="v" id="typeb-turn">—</div>
           </div>
           <div>
-            <div class="k">Consensus</div>
+            <div class="k"><?php e('room.rotation.consensus'); ?></div>
             <div class="v" id="typeb-consensus">—</div>
           </div>
         </div>
 
         <div class="two-col" style="margin-top:12px;">
           <div>
-            <div class="k">Window</div>
+            <div class="k"><?php e('room.rotation.window'); ?></div>
             <div class="v" id="typeb-window">—</div>
           </div>
           <div>
-            <div class="k">Maker vote</div>
+            <div class="k"><?php e('room.rotation.maker_vote'); ?></div>
             <div class="v" id="typeb-maker">—</div>
           </div>
         </div>
 
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
-          <button class="btn btn-blue btn-sm" onclick="typeBVote('approve')">Approve</button>
-          <button class="btn btn-red btn-sm" onclick="typeBVote('reject')">Reject</button>
-          <button class="btn btn-primary btn-sm" id="typeb-reveal-btn" onclick="typeBReveal()" style="display:none;">Reveal code</button>
+          <button class="btn btn-blue btn-sm" onclick="typeBVote('approve')"><?php e('room.rotation.btn_approve'); ?></button>
+          <button class="btn btn-red btn-sm" onclick="typeBVote('reject')"><?php e('room.rotation.btn_reject'); ?></button>
+          <button class="btn btn-primary btn-sm" id="typeb-reveal-btn" onclick="typeBReveal()" style="display:none;"><?php e('room.rotation.btn_reveal_code'); ?></button>
         </div>
 
         <div id="typeb-code-wrap" style="display:none;margin-top:12px;">
-          <div class="k">Unlock code (auto-clears)</div>
+          <div class="k"><?php e('room.rotation.code_label'); ?></div>
           <input id="typeb-code" class="ls-input" readonly style="margin-top:6px;">
           <div class="small" id="typeb-code-exp" style="margin-top:6px;"></div>
         </div>
@@ -223,38 +223,38 @@ header("Referrer-Policy: no-referrer");
 
       <div id="invite-block" style="display:none; margin-top:12px;">
         <div class="hr"></div>
-        <div class="card-title" style="margin-bottom:10px;">Invitation</div>
-        <div class="p" style="margin-bottom:10px;">You were invited to this private room. Accepting will add you as an approved participant.</div>
+        <div class="card-title" style="margin-bottom:10px;"><?php e('room.invitation_title'); ?></div>
+        <div class="p" style="margin-bottom:10px;"><?php e('room.invitation_sub'); ?></div>
         <div style="display:flex;gap:10px;flex-wrap:wrap;">
-          <button class="btn btn-blue btn-sm" onclick="respondInvite('accept')">Accept invite</button>
-          <button class="btn btn-red btn-sm" onclick="respondInvite('decline')">Decline</button>
+          <button class="btn btn-blue btn-sm" onclick="respondInvite('accept')"><?php e('room.invitation.accept'); ?></button>
+          <button class="btn btn-red btn-sm" onclick="respondInvite('decline')"><?php e('room.invitation.decline'); ?></button>
         </div>
         <div id="invite-msg" class="msg"></div>
       </div>
 
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
-        <button class="btn btn-primary btn-sm" id="join-btn" onclick="requestJoin()" style="display:none;">Request to join</button>
-        <a class="btn btn-ghost btn-sm" href="rooms.php">Back to discovery</a>
+        <button class="btn btn-primary btn-sm" id="join-btn" onclick="requestJoin()" style="display:none;"><?php e('room.action.request_join'); ?></button>
+        <a class="btn btn-ghost btn-sm" href="rooms.php"><?php e('room.back_to_discovery'); ?></a>
       </div>
       <div id="room-msg" class="msg"></div>
     </div>
 
     <div class="card">
-      <div class="card-title">Activity</div>
+      <div class="card-title"><?php e('room.activity_title'); ?></div>
       <div class="feed" id="feed"></div>
       <div id="feed-msg" class="msg"></div>
     </div>
 
     <div class="card" id="underfill-card" style="display:none;grid-column:1/-1;">
-      <div class="card-title">Underfilled room — action required</div>
-      <div class="p">This room has not reached its minimum participant count 72 hours before start. If no action is taken within 24 hours, it auto-cancels.</div>
+      <div class="card-title"><?php e('room.underfilled_title'); ?></div>
+      <div class="p"><?php e('room.underfilled_sub'); ?></div>
 
       <div id="underfill-meta" class="small"></div>
 
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
-        <button class="btn btn-blue btn-sm" onclick="underfillExtend()">Extend start date</button>
-        <button class="btn btn-blue btn-sm" onclick="underfillLowerMin()">Lower minimum</button>
-        <button class="btn btn-red btn-sm" onclick="underfillCancel()">Cancel room</button>
+        <button class="btn btn-blue btn-sm" onclick="underfillExtend()"><?php e('room.underfilled.extend'); ?></button>
+        <button class="btn btn-blue btn-sm" onclick="underfillLowerMin()"><?php e('room.underfilled.lower_min'); ?></button>
+        <button class="btn btn-red btn-sm" onclick="underfillCancel()"><?php e('room.underfilled.cancel'); ?></button>
       </div>
       <div id="underfill-msg" class="msg"></div>
     </div>
@@ -351,11 +351,25 @@ header("Referrer-Policy: no-referrer");
 
   </div>
   </div>
+</div>
 
 <script>
 const CSRF = <?= json_encode($csrf) ?>;
 const ROOM_ID = <?= json_encode($roomId) ?>;
 const INVITE_TOKEN = <?= json_encode($inviteToken) ?>;
+
+const I18N = (window.LS_I18N && window.LS_I18N.strings) ? window.LS_I18N.strings : {};
+function tr(key, vars, fallback){
+  let s = (I18N && typeof I18N[key] === 'string') ? I18N[key] : fallback;
+  s = String(s == null ? '' : s);
+  if(vars){
+    Object.keys(vars).forEach(k => {
+      s = s.split('{' + k + '}').join(String(vars[k]));
+    });
+  }
+  return s;
+}
+
 function apiUrl(url){return url.startsWith('/') ? url.slice(1) : url;}
 async function get(url){const r=await fetch(apiUrl(url),{credentials:'same-origin'});return r.json();}
 async function postCsrf(url,body){
@@ -651,14 +665,16 @@ function roomCountdownText(r){
   }
 
   if(start && !isNaN(start.getTime()) && now < start.getTime()){
-    return 'Starts in ' + fmtDelta(start.getTime() - now);
+    const delta = fmtDelta(start.getTime() - now);
+    return tr('room.countdown.starts_in', {delta}, 'Starts in ' + delta);
   }
 
   if(reveal && !isNaN(reveal.getTime()) && now < reveal.getTime()){
-    return 'Reveals in ' + fmtDelta(reveal.getTime() - now);
+    const delta = fmtDelta(reveal.getTime() - now);
+    return tr('room.countdown.reveals_in', {delta}, 'Reveals in ' + delta);
   }
 
-  return 'Reveal eligible (server-enforced)';
+  return tr('room.countdown.eligible', null, 'Reveal eligible (server-enforced)');
 }
 
 function updateRoomCountdown(){
@@ -682,22 +698,31 @@ function renderRoom(){
   const revealLocal = fmt(r.reveal_at);
   const revealUtc = fmtUtc(r.reveal_at);
 
-  document.getElementById('room-title').textContent = r.goal_text || 'Room';
-  document.getElementById('room-sub').innerHTML = `Type ${esc(r.saving_type)} · Level ${esc(r.required_trust_level)} · ${esc(r.periodicity)} · Starts <b>${esc(startLocal)}</b> <span class="utc-pill" title="Stored/enforced in UTC">${esc(startUtc)}</span>`;
+  const utcTitle = tr('rooms.utc_title', null, 'Stored/enforced in UTC');
+
+  document.getElementById('room-title').textContent = r.goal_text || tr('page.room', null, 'Room');
+  document.getElementById('room-sub').innerHTML = tr('room.ov.subtitle_html', {
+    type: esc(r.saving_type),
+    level: esc(r.required_trust_level),
+    periodicity: esc(r.periodicity),
+    start_local: esc(startLocal),
+    start_utc: esc(startUtc),
+    utc_title: esc(utcTitle),
+  }, `Type ${esc(r.saving_type)} · Level ${esc(r.required_trust_level)} · ${esc(r.periodicity)} · Starts <b>${esc(startLocal)}</b> <span class="utc-pill" title="${esc(utcTitle)}">${esc(startUtc)}</span>`);
 
   const ov = document.getElementById('room-overview');
   ov.innerHTML = `
     <div style="font-size:12px;line-height:1.7;">
-      <div><span class="k">Purpose:</span> ${esc(r.purpose_category)}</div>
-      <div><span class="k">Visibility:</span> ${esc(r.visibility)}</div>
-      <div><span class="k">Participation amount:</span> ${esc(r.participation_amount)}</div>
-      <div><span class="k">Destination:</span> ${esc(destSummary(r.destination_account))}</div>
-      <div><span class="k">Participants:</span> ${esc(r.approved_count)} / ${esc(r.max_participants)} (min ${esc(r.min_participants)})</div>
-      <div><span class="k">Lobby:</span> ${esc(r.lobby_state)} · <span class="k">State:</span> ${esc(r.room_state)}</div>
-      <div><span class="k">Start date:</span> ${esc(startLocal)} <span class="utc-pill" title="Stored/enforced in UTC">${esc(startUtc)}</span></div>
-      <div><span class="k">Reveal date:</span> ${esc(revealLocal)} <span class="utc-pill" title="Stored/enforced in UTC">${esc(revealUtc)}</span></div>
-      <div><span class="k">Countdown:</span> <span id="room-countdown"></span></div>
-      <div><span class="k">Your status:</span> ${esc(r.my_status||'none')}</div>
+      <div><span class="k">${esc(tr('room.ov.purpose', null, 'Purpose'))}:</span> ${esc(r.purpose_category)}</div>
+      <div><span class="k">${esc(tr('room.ov.visibility', null, 'Visibility'))}:</span> ${esc(r.visibility)}</div>
+      <div><span class="k">${esc(tr('room.ov.participation_amount', null, 'Participation amount'))}:</span> ${esc(r.participation_amount)}</div>
+      <div><span class="k">${esc(tr('room.ov.destination', null, 'Destination'))}:</span> ${esc(destSummary(r.destination_account))}</div>
+      <div><span class="k">${esc(tr('room.ov.participants', null, 'Participants'))}:</span> ${esc(r.approved_count)} / ${esc(r.max_participants)} (min ${esc(r.min_participants)})</div>
+      <div><span class="k">${esc(tr('room.ov.lobby', null, 'Lobby'))}:</span> ${esc(r.lobby_state)} · <span class="k">${esc(tr('room.ov.state', null, 'State'))}:</span> ${esc(r.room_state)}</div>
+      <div><span class="k">${esc(tr('room.ov.start_date', null, 'Start date'))}:</span> ${esc(startLocal)} <span class="utc-pill" title="${esc(utcTitle)}">${esc(startUtc)}</span></div>
+      <div><span class="k">${esc(tr('room.ov.reveal_date', null, 'Reveal date'))}:</span> ${esc(revealLocal)} <span class="utc-pill" title="${esc(utcTitle)}">${esc(revealUtc)}</span></div>
+      <div><span class="k">${esc(tr('room.ov.countdown', null, 'Countdown'))}:</span> <span id="room-countdown"></span></div>
+      <div><span class="k">${esc(tr('room.ov.your_status', null, 'Your status'))}:</span> ${esc(r.my_status||'none')}</div>
     </div>
   `;
 
