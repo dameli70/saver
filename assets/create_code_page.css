@@ -1,5 +1,7 @@
 /* Create Code page (create_code.php) */
 
+.app-body{max-width:920px;}
+
 .type-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;}
 @media(min-width:380px){.type-grid{grid-template-columns:repeat(4,1fr);}}
 

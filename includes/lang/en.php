@@ -32,8 +32,8 @@ return [
 
     // Navigation
     'nav.dashboard' => 'Dashboard',
-    'nav.create_code' => 'Create Code',
-    'nav.my_codes' => 'My Codes',
+    'nav.create_code' => 'Create Lock',
+    'nav.my_codes' => 'Time Locks',
     'nav.rooms' => 'Rooms',
     'nav.notifications' => 'Notifications',
     'nav.backups' => 'Backups',
@@ -251,6 +251,8 @@ return [
     'dashboard.check.first_lock_sub' => 'Create your first time lock to start building a cool-off period before spending.',
     'dashboard.security' => 'Security',
     'dashboard.security_sub_html' => 'Sensitive actions may ask for an extra confirmation (passkey or authenticator code). Set this up in {account_link}.',
+    'dashboard.next_unlock_label' => 'Next unlock:',
+    'dashboard.no_upcoming_unlock' => 'No upcoming unlocks.',
 
     // Setup
     'setup.progress' => 'Progress',
@@ -388,6 +390,7 @@ return [
     // Create code
     'create_code.sealing' => 'Sealing…',
 
+    'create_code.page_intro' => 'Generate a secret in your browser and lock it until a date you choose.',
     'create_code.vault_intro' => 'Your vault passphrase is used to derive encryption keys in your browser. It is never sent to the server. Code creation is hidden until your vault is unlocked.',
     'create_code.vault_passphrase_label' => 'Vault Passphrase',
     'create_code.vault_passphrase_placeholder' => 'Your vault passphrase…',
@@ -447,7 +450,7 @@ return [
 
     'create_code.reveal_dt_label' => 'Reveal Date & Time',
 
-    'create_code.gen.title' => 'Create a Code',
+    'create_code.gen.title' => 'Create a Lock',
     'create_code.gen.label_label' => 'Label',
     'create_code.gen.label_placeholder' => 'e.g. Bank PIN',
     'create_code.gen.type_label' => 'Type',

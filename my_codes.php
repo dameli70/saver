@@ -46,11 +46,29 @@ header("Permissions-Policy: clipboard-write=(self)");
   <?php include __DIR__ . '/includes/topbar.php'; ?>
 
   <div class="app-body">
-    <div class="card">
-      <div class="card-title"><div class="dot"></div><?php e('page.my_codes'); ?></div>
-      <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:space-between;align-items:center;">
-        <div style="font-size:12px;color:var(--muted);line-height:1.7;">View your sealed codes. Unlocking/decryption happens in your browser.</div>
-        <button class="btn btn-ghost btn-sm" onclick="loadLocks()">↻ Refresh</button>
+
+    <div class="page-head">
+      <div>
+        <div class="page-title"><?php e('page.my_codes'); ?></div>
+        <div class="page-sub"><?php e('my_codes.intro'); ?></div>
+      </div>
+      <div class="page-actions">
+        <a class="btn btn-primary btn-sm" href="create_code.php"><?php e('nav.create_code'); ?></a>
+        <button class="btn btn-ghost btn-sm" type="button" onclick="loadLocks(true)">↻ <?php e('common.refresh'); ?></button>
+      </div>
+    </div>
+
+    <div class="card locks-toolbar">
+      <div class="toolbar">
+        <div class="search">
+          <input class="ls-input" id="locks-search" type="search" placeholder="<?= htmlspecialchars(t('my_codes.search_placeholder'), ENT_QUOTES, 'UTF-8') ?>" autocomplete="off">
+        </div>
+        <div class="seg" id="locks-seg" role="tablist" aria-label="<?= htmlspecialchars(t('page.my_codes'), ENT_QUOTES, 'UTF-8') ?>">
+          <button type="button" class="active" data-filter="all" role="tab" aria-selected="true"><?php e('my_codes.filter_all'); ?></button>
+          <button type="button" data-filter="sealed" role="tab" aria-selected="false"><?php e('my_codes.filter_sealed'); ?></button>
+          <button type="button" data-filter="ready" role="tab" aria-selected="false"><?php e('my_codes.filter_ready'); ?></button>
+          <button type="button" data-filter="wallet" role="tab" aria-selected="false"><?php e('my_codes.filter_wallet'); ?></button>
+        </div>
       </div>
     </div>
 
@@ -190,62 +208,111 @@ let currentPreShareId = null;
 let countdownTimer = null;
 let countdownRefreshTimer = null;
 
+let allLocksSession = [];
+let locksOffline = false;
+let locksLoading = false;
+
+let locksFilter = 'all'; // all|sealed|ready|wallet
+let locksQuery = '';
+
 const reduceMotion = (()=>{
   try{ return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches; }
   catch{ return false; }
 })();
 
 function apiUrl(url){return url.startsWith('/') ? url.slice(1) : url;}
-async function get(url){const r=await fetch(apiUrl(url),{credentials:'same-origin'});return r.json();}
-async function postCsrf(url,body){
-  const r=await fetch(apiUrl(url),{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRF-Token':CSRF},body:JSON.stringify(body)});
-  return r.json();
+function getFilteredLocks(){
+  return (allLocksSession || []).filter(l => matchesFilter(l) && matchesQuery(l));
 }
 
-function esc(s){
-  if(window.LS && LS.esc) return LS.esc(s);
-  return String(s||'')
-    .replace(/&/g,'&amp;')
-    .replace(/</g,'&lt;')
-    .replace(/>/g,'&gt;')
-    .replace(/"/g,'&quot;');
-}
-function toast(msg,type='ok'){
-  if(window.LS && LS.toast) return LS.toast(msg, type);
-  const t=document.createElement('div');t.className=`toast ${type}`;t.textContent=String(msg||'');document.body.appendChild(t);setTimeout(()=>t.remove(),3200);
+function renderLocks(){
+  const wrap = document.getElementById('locks-wrap');
+  if(!wrap) return;
+
+  if(locksLoading && !(allLocksSession && allLocksSession.length) && !locksOffline){
+    wrap.innerHTML = renderLoadingSkeleton();
+    return;
+  }
+
+  const list = getFilteredLocks();
+
+  if(locksOffline){
+    wrap.innerHTML = '<div class="card" style="margin-bottom:12px;"><div class="small">Offline mode: showing cached metadata. Reveal is disabled until you’re back online.</div></div>';
+    const holder = document.createElement('div');
+    holder.innerHTML = '<div class="locks-grid" id="locks-grid"></div>';
+    wrap.appendChild(holder.firstChild);
+    const grid = document.getElementById('locks-grid');
+    list.forEach(l => grid.appendChild(buildCard(l, {offline:true})));
+    startCountdownTicker();
+    return;
+  }
+
+  if(!list.length){
+    const t1 = (window.LS && LS.t) ? LS.t('my_codes.empty_title') : '';
+    const t2 = (window.LS && LS.t) ? LS.t('my_codes.empty_sub') : '';
+    wrap.innerHTML = `<div class="empty"><div class="empty-icon">🔒</div><h3>${esc(t1 || 'No time locks yet')}</h3><p>${esc(t2 || 'Create one from “Create Lock”.')}</p></div>`;
+    return;
+  }
+
+  wrap.innerHTML = '<div class="locks-grid" id="locks-grid"></div>';
+  const grid = document.getElementById('locks-grid');
+  list.forEach(l => grid.appendChild(buildCard(l, {offline:locksOffline})));
+
+  startCountdownTicker();
 }
 
-function parseUtc(ts){
-  return (window.LS && LS.parseUtc) ? LS.parseUtc(ts) : new Date(ts);
+function setLocksFilter(next){
+  locksFilter = String(next || 'all');
+
+  const seg = document.getElementById('locks-seg');
+  if(seg){
+    seg.querySelectorAll('button[data-filter]').forEach(b => {
+      const isActive = (b.getAttribute('data-filter') === locksFilter);
+      if(isActive) b.classList.add('active');
+      else b.classList.remove('active');
+      b.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    });
+  }
+
+  renderLocks();
 }
 
-function fmtLocalTs(ts){
-  const d = parseUtc(ts);
-  return (window.LS && LS.fmtLocal) ? LS.fmtLocal(d) : (d && !isNaN(d.getTime()) ? d.toLocaleString() : '');
+function matchesFilter(l){
+  if(locksFilter === 'wallet') return l.kind === 'wallet';
+  if(locksFilter === 'ready') return String(l.display_status||'') === 'unlocked';
+  if(locksFilter === 'sealed'){
+    const st = String(l.display_status||'');
+    return (st === 'locked' || st === 'pending' || st === 'auto_saved');
+  }
+  return true;
 }
 
-function fmtUtcTs(ts){
-  const d = parseUtc(ts);
-  return (window.LS && LS.fmtUtc) ? LS.fmtUtc(d) : (d && !isNaN(d.getTime()) ? d.toUTCString() : '');
+function matchesQuery(l){
+  const q = String(locksQuery||'').trim().toLowerCase();
+  if(!q) return true;
+  const label = String(l.label||'').toLowerCase();
+  return label.indexOf(q) !== -1;
 }
 
-function fmtCountdown(seconds){
-  if(window.LS && LS.fmtCountdown) return LS.fmtCountdown(seconds);
-  const s = Math.max(0, parseInt(seconds||'0', 10) || 0);
-  const h = Math.floor(s / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  const ss = s % 60;
-  return (h > 0 ? (String(h).padStart(2,'0') + ':') : '') + String(m).padStart(2,'0') + ':' + String(ss).padStart(2,'0');
-}
+function initLocksToolbar(){
+  const seg = document.getElementById('locks-seg');
+  if(seg && !seg.getAttribute('data-init')){
+    seg.setAttribute('data-init','1');
+    seg.addEventListener('click', (e)=>{
+      const b = e.target && e.target.closest ? e.target.closest('button[data-filter]') : null;
+      if(!b) return;
+      setLocksFilter(b.getAttribute('data-filter') || 'all');
+    });
+  }
 
-function renderLoadingSkeleton(){
-  return `
-    <div class="locks-grid">
-      <div class="skel" style="height:120px;"></div>
-      <div class="skel" style="height:120px;"></div>
-      <div class="skel" style="height:120px;"></div>
-    </div>
-  `;
+  const search = document.getElementById('locks-search');
+  if(search && !search.getAttribute('data-init')){
+    search.setAttribute('data-init','1');
+    search.addEventListener('input', ()=>{
+      locksQuery = String(search.value || '');
+      renderLocks();
+    });
+  }
 }
 
 function b64ToBytes(b64){return Uint8Array.from(atob(b64), c => c.charCodeAt(0));}
@@ -352,14 +419,22 @@ function startCountdownTicker(){
   countdownTimer = setInterval(tick, 1000);
 }
 
-async function loadLocks(){
+async function loadLocks(force=false){
   if(countdownRefreshTimer){
     clearTimeout(countdownRefreshTimer);
     countdownRefreshTimer = null;
   }
 
+  initLocksToolbar();
+
   const wrap=document.getElementById('locks-wrap');
-  wrap.innerHTML=renderLoadingSkeleton();
+  if(!wrap) return;
+
+  if(force || !(allLocksSession && allLocksSession.length)){
+    wrap.innerHTML = renderLoadingSkeleton();
+  }
+
+  locksLoading = true;
 
   try{
     const [a,b] = await Promise.allSettled([
@@ -410,16 +485,11 @@ async function loadLocks(){
       return ay - ax;
     });
 
-    if(!mapped.length){
-      wrap.innerHTML='<div class="empty"><div class="empty-icon">🔒</div><h3>No codes yet</h3><p>Create one from the Create Code page.</p></div>';
-      return;
-    }
+    allLocksSession = mapped;
+    locksOffline = false;
+    locksLoading = false;
 
-    wrap.innerHTML='<div class="locks-grid" id="locks-grid"></div>';
-    const grid = document.getElementById('locks-grid');
-    mapped.forEach(l=>grid.appendChild(buildCard(l)));
-
-    startCountdownTicker();
+    renderLocks();
 
   }catch{
     try{
@@ -462,16 +532,17 @@ async function loadLocks(){
       });
 
       if(mapped.length){
-        wrap.innerHTML = '<div class="card" style="margin-bottom:12px;"><div class="small">Offline mode: showing cached metadata. Reveal is disabled until you’re back online.</div></div>';
-        const holder = document.createElement('div');
-        holder.innerHTML = '<div class="locks-grid" id="locks-grid"></div>';
-        wrap.appendChild(holder.firstChild);
-        const grid = document.getElementById('locks-grid');
-        mapped.forEach(l=>grid.appendChild(buildCard(l, {offline:true})));
-        startCountdownTicker();
+        allLocksSession = mapped;
+        locksOffline = true;
+        locksLoading = false;
+        renderLocks();
         return;
       }
     }catch{}
+
+    locksOffline = false;
+    locksLoading = false;
+    allLocksSession = [];
 
     wrap.innerHTML='<div class="empty"><p>Failed to load.</p></div>';
   }
@@ -1313,6 +1384,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   if(psCopySecret) psCopySecret.addEventListener('click', ()=>copyVal('ps-secret'));
   if(psRevoke) psRevoke.addEventListener('click', revokePreShare);
 
+  initLocksToolbar();
   await loadLocks();
 });
 </script>

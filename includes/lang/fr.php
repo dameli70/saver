@@ -72,6 +72,15 @@ return [
 
     'notifications.intro' => 'Vos notifications dans l’application (critiques / importantes / info). Utilisez « Tout marquer comme lu » pour vider la boîte.',
 
+    'my_codes.intro' => 'Vos verrous temporels scellés. Le déchiffrement se fait uniquement dans votre navigateur.',
+    'my_codes.search_placeholder' => 'Rechercher…',
+    'my_codes.filter_all' => 'Tous',
+    'my_codes.filter_sealed' => 'Scellés',
+    'my_codes.filter_ready' => 'Disponibles',
+    'my_codes.filter_wallet' => 'Portefeuille',
+    'my_codes.empty_title' => 'Aucun verrou pour le moment',
+    'my_codes.empty_sub' => 'Créez-en un depuis « Créer un verrou ».',
+
     'account.sub_verified' => 'Gérez votre clé de coffre, votre sécurité et l’accès aux salles.',
     'account.sub_unverified' => 'Vérifiez votre e-mail pour commencer à créer des verrous temporels et rejoindre des salles d’épargne.',
 
@@ -251,6 +260,8 @@ return [
     'dashboard.check.first_lock_sub' => 'Créez votre premier verrou temporel pour instaurer une période de refroidissement avant de dépenser.',
     'dashboard.security' => 'Sécurité',
     'dashboard.security_sub_html' => 'Les actions sensibles peuvent demander une confirmation supplémentaire (passkey ou code d’authentification). Configurez cela dans {account_link}.',
+    'dashboard.next_unlock_label' => 'Prochain déverrouillage :',
+    'dashboard.no_upcoming_unlock' => 'Aucun déverrouillage à venir.',
 
     // Configuration
     'setup.progress' => 'Progression',
@@ -388,6 +399,7 @@ return [
     // Créer un code
     'create_code.sealing' => 'Scellage…',
 
+    'create_code.page_intro' => 'Générez un secret dans votre navigateur et verrouillez-le jusqu’à la date de votre choix.',
     'create_code.vault_intro' => 'Votre phrase secrète de coffre sert à dériver des clés de chiffrement dans votre navigateur. Elle n’est jamais envoyée au serveur. La création de codes est masquée tant que le coffre n’est pas déverrouillé.',
     'create_code.vault_passphrase_label' => 'Phrase secrète du coffre',
     'create_code.vault_passphrase_placeholder' => 'Votre phrase secrète…',
@@ -447,7 +459,7 @@ return [
 
     'create_code.reveal_dt_label' => 'Date et heure de révélation',
 
-    'create_code.gen.title' => 'Créer un code',
+    'create_code.gen.title' => 'Créer un verrou',
     'create_code.gen.label_label' => 'Libellé',
     'create_code.gen.label_placeholder' => 'ex. PIN bancaire',
     'create_code.gen.type_label' => 'Type',
@@ -461,7 +473,7 @@ return [
     'create_code.gen.hint_placeholder' => 'ex. Défini avant mon voyage d’été',
     'create_code.gen.kdf_label' => 'Dérivation de la clé de chiffrement dans votre navigateur…',
     'create_code.gen.btn' => 'Générer et verrouiller',
-    'create_code.gen.view_codes' => 'Voir mes codes',
+    'create_code.gen.view_codes' => 'Voir mes verrous',
 
     'create_code.gen.toast_need_vault' => 'Saisissez d’abord votre phrase secrète de coffre',
     'create_code.gen.err_label_required' => 'Libellé requis',

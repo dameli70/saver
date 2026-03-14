@@ -46,6 +46,17 @@ header("Permissions-Policy: clipboard-write=(self)");
   <?php include __DIR__ . '/includes/topbar.php'; ?>
 
   <div class="app-body">
+
+    <div class="page-head">
+      <div>
+        <div class="page-title"><?php e('page.create_code'); ?></div>
+        <div class="page-sub"><?php e('create_code.page_intro'); ?></div>
+      </div>
+      <div class="page-actions">
+        <a class="btn btn-ghost btn-sm" href="my_codes.php"><?php e('nav.my_codes'); ?></a>
+      </div>
+    </div>
+
     <div class="card" id="vault-unlock-card" style="display:none">
       <div class="card-title"><div class="dot" style="background:var(--orange)"></div><span style="color:var(--orange)"><?php e('nav.vault'); ?></span></div>
       <div style="font-size:12px;color:var(--muted);line-height:1.7;margin-bottom:14px;">

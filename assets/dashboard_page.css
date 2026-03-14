@@ -1,7 +1,15 @@
 /* Dashboard page (dashboard.php) */
 
+.app-body{max-width:1040px;}
+
 body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9998;opacity:.5;
   background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.035'/%3E%3C/svg%3E");}
+
+.dash-grid{display:grid;grid-template-columns:1fr;gap:16px;align-items:start;}
+@media(min-width:980px){.dash-grid{grid-template-columns:1.25fr .75fr;gap:18px;}}
+
+.dash-col .card{margin-bottom:16px;}
+.dash-col .card:last-child{margin-bottom:0;}
 
 .dash-onboard-card{margin-top:0;}
 
@@ -11,6 +19,18 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9998;o
 .dash-progress-track{height:10px;border:1px solid var(--b1);background:rgba(255,255,255,.02);margin-top:10px;
   border-radius:999px;overflow:hidden;}
 .dash-progress-fill{height:100%;background:linear-gradient(90deg, var(--accent), rgba(255,255,255,.12));}
+
+.dash-stats{display:grid;grid-template-columns:1fr;gap:10px;}
+@media(min-width:520px){.dash-stats{grid-template-columns:repeat(3, 1fr);}}
+.dash-stat{border:1px solid var(--b1);background:rgba(255,255,255,.02);padding:14px;
+  border-radius:18px;
+}
+.dash-stat-k{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);font-family:var(--mono);}
+.dash-stat-v{font-family:var(--display);font-weight:900;font-size:22px;letter-spacing:-.5px;margin-top:10px;}
+.dash-stat-v.dash-stat-date{font-family:var(--mono);font-weight:700;font-size:12px;letter-spacing:.2px;}
+.dash-stat-s{margin-top:10px;font-size:11px;color:var(--muted);line-height:1.6;}
+.dash-stat-link{color:var(--text);text-decoration:none;}
+.dash-stat-link:hover{text-decoration:underline;}
 
 .dash-actions{display:flex;gap:10px;flex-wrap:wrap;}
 .dash-actions-sub{margin-top:12px;font-size:12px;color:var(--muted);line-height:1.7;}
