@@ -198,6 +198,7 @@ return [
     'account.trust.active_rooms_title' => 'Salles actives',
     'account.trust.active_rooms_sub' => 'Accès rapide à vos salles et aux compteurs.',
     'account.trust.active_rooms_none' => 'Aucune salle active.',
+    'account.trust.failed_to_load' => 'Impossible de charger le passeport de confiance.',
     'account.trust.level_fmt' => 'NIVEAU {level}',
     'account.trust.restricted_until_fmt' => 'Jusqu’au {ts}',
     'account.trust.starts_in_minutes' => 'Démarre dans {n} min',

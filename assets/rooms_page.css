@@ -9,7 +9,7 @@
 .room{
   border:1px solid var(--b1);
   border-radius:var(--radius-card);
-  background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.025));
+  background:linear-gradient(180deg, var(--s2), var(--s1));
   box-shadow:var(--shadow-card);
   padding:16px;
   backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);

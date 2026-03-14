@@ -812,7 +812,7 @@
     }
 
     function isMobile(){
-      return window.matchMedia && window.matchMedia('(max-width: 979px) and (hover:none) and (pointer:coarse)').matches;
+      return window.matchMedia && window.matchMedia('(max-width: 980px) and (hover:none) and (pointer:coarse)').matches;
     }
 
     let releaseTrap = null;
@@ -1107,7 +1107,7 @@
     // Optional: hide the dock while scrolling down (mobile only).
     try{
       const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      const mq = window.matchMedia ? window.matchMedia('(max-width: 979px) and (hover:none) and (pointer:coarse)') : null;
+      const mq = window.matchMedia ? window.matchMedia('(max-width: 980px) and (hover:none) and (pointer:coarse)') : null;
       const isMobile = () => mq ? mq.matches : false;
       if(!reduce){
         let lastY = window.scrollY || 0;
@@ -1159,7 +1159,7 @@
     if(!topbar || !nav) return;
     if(!nav.querySelector('.user-pill')) return;
 
-    const mq = window.matchMedia ? window.matchMedia('(min-width: 980px)') : null;
+    const mq = window.matchMedia ? window.matchMedia('(min-width: 981px)') : null;
     const isDesktop = () => mq ? mq.matches : false;
 
     // Wrap all app children in a shell so the sidebar can sit as a sibling.

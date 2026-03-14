@@ -8,13 +8,14 @@ body{padding:0;}
 }
 
 .box{width:100%;max-width:460px;
-  background:linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.03));
+  background:linear-gradient(180deg, var(--s2), var(--s1));
   border:1px solid var(--b1);
   padding:26px 22px 20px;
   border-radius:var(--radius-card);
   box-shadow:var(--shadow-card);
   backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
 }
+@media(hover:hover){.box:hover{background:linear-gradient(180deg, var(--s3), var(--s2));border-color:var(--b2);box-shadow:var(--shadow-card-hover);}}
 
 .logo{font-family:var(--display);font-weight:700;letter-spacing:-.8px;font-size:30px;margin-bottom:6px;line-height:1.05;}
 .logo span{color:var(--accent);}
@@ -24,7 +25,7 @@ body{padding:0;}
 .field{margin-bottom:14px;}
 .field label{display:block;font-size:10px;letter-spacing:1.8px;text-transform:uppercase;color:var(--muted);margin-bottom:6px;font-family:var(--mono);}
 .field input{width:100%;
-  background:rgba(255,255,255,.04);
+  background:linear-gradient(180deg, var(--s2), var(--s1));
   border:1px solid var(--b1);
   color:var(--text);
   font-family:var(--mono);
@@ -48,7 +49,7 @@ body{padding:0;}
 .box .btn-primary:disabled{opacity:.45;pointer-events:none;}
 
 .box .msg{display:none;margin-bottom:12px;padding:12px 14px;font-size:12px;line-height:1.6;letter-spacing:.2px;border-radius:var(--radius-card);
-  border:1px solid var(--b1);background:rgba(255,255,255,.04);
+  border:1px solid var(--b1);background:linear-gradient(180deg, var(--s2), var(--s1));
 }
 .box .msg.show{display:block;}
 .box .msg-err{border-color:rgba(255,77,109,.25);background:rgba(255,77,109,.08);color:var(--red);}

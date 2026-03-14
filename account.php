@@ -74,10 +74,10 @@ header("Referrer-Policy: no-referrer");
 .k{color:var(--muted);font-size:10px;letter-spacing:2px;text-transform:uppercase;}
 .v{color:var(--text);font-size:12px;letter-spacing:.4px;}
 .badge{display:inline-flex;align-items:center;gap:8px;font-size:10px;letter-spacing:1px;text-transform:uppercase;padding:5px 10px;border:1px solid;border-radius:var(--radius-pill);}
-.badge.ok{background:rgba(71,255,176,.07);border-color:rgba(71,255,176,.2);color:var(--green);} 
-.badge.wait{background:rgba(255,170,0,.07);border-color:rgba(255,170,0,.2);color:var(--orange);} 
+.badge.ok{background:color-mix(in srgb, var(--green) 7%, transparent);border-color:color-mix(in srgb, var(--green) 20%, transparent);color:var(--green);} 
+.badge.wait{background:color-mix(in srgb, var(--orange) 7%, transparent);border-color:color-mix(in srgb, var(--orange) 20%, transparent);color:var(--orange);} 
  
-.dev{margin-top:12px;border:1px dashed rgba(255,170,0,.35);background:rgba(255,170,0,.06);padding:10px 12px;font-size:11px;color:var(--muted);line-height:1.6;display:none;}
+.dev{margin-top:12px;border:1px dashed color-mix(in srgb, var(--orange) 35%, transparent);background:color-mix(in srgb, var(--orange) 6%, transparent);padding:10px 12px;font-size:11px;color:var(--muted);line-height:1.6;display:none;}
 .dev a{color:var(--orange);} 
 .field{margin-top:14px;margin-bottom:0;}
 .field label{display:block;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:6px;}
@@ -86,11 +86,11 @@ header("Referrer-Policy: no-referrer");
 .field input:focus{border-color:var(--accent);} 
 .hr{border-top:1px solid var(--b1);margin:16px 0;}
 .list{margin-top:10px;display:flex;flex-direction:column;gap:10px;}
-.item{border:1px solid var(--b1);background:rgba(19,22,29,.55);padding:12px 14px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;border-radius:var(--radius-card);}
+.item{border:1px solid var(--b1);background:linear-gradient(180deg, var(--s2), var(--s1));padding:12px 14px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;border-radius:var(--radius-card);}
 .small{font-size:11px;color:var(--muted);line-height:1.6;}
-.btn-red{background:rgba(255,71,87,.08);border:1px solid rgba(255,71,87,.2);color:var(--red);} 
-.btn-red:hover{background:rgba(255,71,87,.14);} 
-code{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);padding:2px 6px;border-radius:10px;}
+.btn-red{background:color-mix(in srgb, var(--red) 10%, transparent);border:1px solid color-mix(in srgb, var(--red) 28%, transparent);color:var(--red);} 
+.btn-red:hover{background:color-mix(in srgb, var(--red) 16%, transparent);} 
+code{background:var(--s2);border:1px solid var(--b1);padding:2px 6px;border-radius:10px;}
 
 </style>
 </head>
@@ -460,6 +460,16 @@ btn.addEventListener('click', async ()=>{
   const PBKDF2_ITERS = <?= (int)PBKDF2_ITERATIONS ?>;
   const VAULT_CHECK_PLAIN = 'LOCKSMITH_VAULT_CHECK_v1';
 
+  const I18N = (window.LS_I18N && window.LS_I18N.strings) ? window.LS_I18N.strings : {};
+  function tr(key, fallback){
+    return (Object.prototype.hasOwnProperty.call(I18N, key) ? I18N[key] : null) || fallback || key;
+  }
+  function tf(key, vars, fallback){
+    let s = tr(key, fallback);
+    Object.keys(vars||{}).forEach(k => { s = String(s).split('{' + k + '}').join(String(vars[k])); });
+    return s;
+  }
+
   function showMsg(el,m){el.textContent=m;el.classList.add('show');}
   function clearMsg(el){el.textContent='';el.classList.remove('show');}
 
@@ -493,15 +503,17 @@ btn.addEventListener('click', async ()=>{
 
     try{
       const j = await getJson('api/trust.php?action=passport');
-      if(!j.success) throw new Error(j.error||'Failed to load trust passport');
+      if(!j.success) throw new Error(j.error||tr('account.trust.failed_to_load', 'Failed to load trust passport'));
 
       const t = j.trust || {};
       const level = parseInt(t.level||'1',10) || 1;
-      badge.textContent = 'LEVEL ' + level;
+      badge.textContent = tf('account.trust.level_fmt', {level}, `LEVEL ${level}`);
       badge.className = 'badge ' + (level >= 2 ? 'ok' : 'wait');
 
       strikes.textContent = String(t.strike_count_6m ?? '0');
-      restricted.textContent = t.restricted_until ? ('Until ' + String(t.restricted_until)) : '—';
+      restricted.textContent = t.restricted_until
+        ? tf('account.trust.restricted_until_fmt', {ts: String(t.restricted_until)}, `Until ${String(t.restricted_until)}`)
+        : '—';
       next.textContent = String(t.next_level_hint || '—');
 
       const cr = j.completed_reveals || [];
@@ -509,14 +521,14 @@ btn.addEventListener('click', async ()=>{
       if(!cr.length){
         const d = document.createElement('div');
         d.className = 'small';
-        d.textContent = 'No completed time locks yet.';
+        d.textContent = tr('account.trust.completed_none', 'No completed time locks yet.');
         completed.appendChild(d);
       } else {
         cr.forEach(x => {
           const b = document.createElement('div');
-          b.className = 'badge ok';
-          b.style.borderColor = 'rgba(255,255,255,.13)';
-          b.style.background = 'rgba(0,0,0,.2)';
+          b.className = 'badge';
+          b.style.borderColor = 'var(--b2)';
+          b.style.background = 'var(--s1)';
           b.style.color = 'var(--text)';
           b.textContent = '🔒 ' + (x.duration_days ? (String(x.duration_days) + 'd') : 'sealed');
           b.title = 'Unlocked at ' + (x.unlocked_at || '');
@@ -529,7 +541,7 @@ btn.addEventListener('click', async ()=>{
       if(!ar.length){
         const d = document.createElement('div');
         d.className = 'small';
-        d.textContent = 'No active rooms.';
+        d.textContent = tr('account.trust.active_rooms_none', 'No active rooms.');
         active.appendChild(d);
       } else {
         ar.forEach(r => {
@@ -543,20 +555,22 @@ btn.addEventListener('click', async ()=>{
           let cd = '';
           if(r.room_state === 'lobby' && startAt){
             const ms = Math.max(0, startAt - now);
-            cd = 'Starts in ' + Math.ceil(ms/1000/60) + ' min';
+            const n = Math.ceil(ms/1000/60);
+            cd = tf('account.trust.starts_in_minutes', {n}, `Starts in ${n} min`);
           } else if(r.room_state === 'active' && revealAt){
             const ms = Math.max(0, revealAt - now);
-            cd = 'Reveal in ' + Math.ceil(ms/1000/60) + ' min';
+            const n = Math.ceil(ms/1000/60);
+            cd = tf('account.trust.reveal_in_minutes', {n}, `Reveal in ${n} min`);
           }
 
           it.innerHTML = `
             <div>
-              <div class="k">Saving Room</div>
+              <div class="k">${tr('account.trust.saving_room_label', 'Saving Room')}</div>
               <div class="v">${String(r.goal_text||r.id||'Room')}</div>
               <div class="small">${String(cd||'')}</div>
             </div>
             <div>
-              <a class="btn btn-ghost btn-sm" href="room.php?id=${encodeURIComponent(r.id)}">Open</a>
+              <a class="btn btn-ghost btn-sm" href="room.php?id=${encodeURIComponent(r.id)}">${tr('common.open', 'Open')}</a>
             </div>
           `;
           active.appendChild(it);
@@ -564,7 +578,7 @@ btn.addEventListener('click', async ()=>{
       }
 
     }catch(e){
-      msg.textContent = (e && e.message) ? e.message : 'Failed to load trust passport';
+      msg.textContent = (e && e.message) ? e.message : tr('account.trust.failed_to_load', 'Failed to load trust passport');
       msg.classList.add('show');
     }
   }
@@ -751,7 +765,7 @@ btn.addEventListener('click', async ()=>{
     }
 
     if(methods && methods.totp){
-      const code = prompt('Enter your 6-digit authenticator code');
+      const code = prompt(tr('login.enter_totp', 'Enter your 6-digit authenticator code'));
       if(!code) return false;
       const r = await postCsrf('api/totp.php', {action:'reauth', code});
       return !!r.success;
@@ -947,7 +961,7 @@ btn.addEventListener('click', async ()=>{
 
     document.getElementById('totp-reauth').addEventListener('click', async ()=>{
       clearMsg(ok); clearMsg(err);
-      const code=prompt('Enter your 6-digit authenticator code');
+      const code=prompt(tr('login.enter_totp', 'Enter your 6-digit authenticator code'));
       if(!code) return;
       const j=await postCsrf('api/totp.php', {action:'reauth', code});
       if(!j.success){showMsg(err,j.error||'Failed');return;}

@@ -214,7 +214,7 @@ async function ensureReauth(methods){
   }
 
   if(methods && methods.totp){
-    const code = prompt('Enter your 6-digit authenticator code');
+    const code = prompt(<?= json_encode(t('login.enter_totp')) ?>);
     if(!code) return false;
     const r = await postCsrf('api/totp.php', {action:'reauth', code});
     return !!r.success;

@@ -9,7 +9,7 @@
    - keep API requests network-first
 */
 
-const CACHE = 'controle-v11';
+const CACHE = 'controle-v12';
 
 const ASSETS = [
   './',

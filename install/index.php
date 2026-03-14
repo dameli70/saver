@@ -402,11 +402,11 @@ header("Referrer-Policy: no-referrer");
 .orb2{width:360px;height:360px;bottom:40px;left:-90px;}
 .wrap{position:relative;z-index:1;max-width:980px;margin:0 auto;padding:max(24px,var(--sat)) 18px 60px;}
 .logo{display:flex;align-items:center;gap:12px;margin-bottom:4px;}
-.logo img{display:block;max-height:44px;max-width:220px;object-fit:contain;border:1px solid rgba(255,255,255,.08);background:rgba(0,0,0,.12);padding:6px;}
+.logo img{display:block;max-height:44px;max-width:220px;object-fit:contain;border:1px solid var(--b1);background:var(--s1);padding:6px;}
 .logo-text{font-family:var(--display);font-weight:900;letter-spacing:-1px;font-size:28px;line-height:1;}
 .logo-text span{color:var(--accent);} 
 .sub{color:var(--muted);font-size:11px;letter-spacing:2px;text-transform:uppercase;margin-bottom:18px;}
-.card{background:rgba(13,15,20,.9);border:1px solid var(--b1);padding:18px;border-radius:var(--radius-card);box-shadow:var(--shadow-card);}
+.card{background:var(--s2);border:1px solid var(--b1);padding:18px;border-radius:var(--radius-card);box-shadow:var(--shadow-card);}
 .grid{display:grid;grid-template-columns:1fr;gap:12px;}
 @media(min-width:840px){.grid{grid-template-columns:1fr 1fr;}}
 .field{margin-bottom:12px;}
