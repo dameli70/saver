@@ -19,12 +19,32 @@ $isAdmin   = isAdmin();
 $csrf      = getCsrfToken();
 
 $userId = (int)(getCurrentUserId() ?? 0);
-$skipSetup = !empty($_GET['skip_setup']);
-if ($skipSetup) {
+
+$skipSetupPersist = !empty($_GET['skip_setup']);
+$skipSetupOnce    = !empty($_GET['skip_setup_once']);
+$unskipSetup      = !empty($_GET['unskip_setup']);
+
+if ($userId && $unskipSetup) {
+    setUserSkipSetupRedirect($userId, false);
+}
+
+if ($userId && $skipSetupPersist) {
+    setUserSkipSetupRedirect($userId, true);
+}
+
+if ($skipSetupOnce) {
     $_SESSION['onboarding_skip_once'] = 1;
 }
 
-if ($userId && empty($_SESSION['onboarding_skip_once']) && !isOnboardingComplete($userId)) {
+$skipSetup = false;
+if ($userId && userSkipSetupRedirect($userId)) {
+    $skipSetup = true;
+}
+if (!empty($_SESSION['onboarding_skip_once'])) {
+    $skipSetup = true;
+}
+
+if ($userId && !$skipSetup && !isOnboardingComplete($userId)) {
     header('Location: setup.php');
     exit;
 }

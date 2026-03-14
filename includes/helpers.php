@@ -205,9 +205,25 @@ function markOnboardingComplete(int $userId): void {
     $db = getDB();
     $db->prepare('UPDATE users SET onboarding_completed_at = NOW() WHERE id = ?')->execute([(int)$userId]);
 
+    // Clear any "skip setup" preference once onboarding is complete.
+    if (function_exists('setUserSkipSetupRedirect')) {
+        setUserSkipSetupRedirect((int)$userId, false);
+    }
+
     if ($userId === getCurrentUserId()) {
         $_SESSION['onboarding_complete'] = 1;
     }
+}
+
+function userSkipSetupRedirect(int $userId): bool {
+    if (!hasNotificationPreferencesTable()) return false;
+    $prefs = getUserNotificationPrefs((int)$userId, 'informational');
+    return !empty($prefs['skip_setup']);
+}
+
+function setUserSkipSetupRedirect(int $userId, bool $skip): void {
+    if (!hasNotificationPreferencesTable()) return;
+    setUserNotificationPref((int)$userId, 'informational', 'skip_setup', $skip ? 1 : 0);
 }
 
 function currentSessionIdHash(): string {

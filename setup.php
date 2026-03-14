@@ -248,7 +248,7 @@ header("Referrer-Policy: no-referrer");
 
     <div style="display:flex;gap:10px;flex-wrap:wrap;">
       <button class="btn btn-primary" id="finish" type="button" style="width:auto;"><?php e('onboarding.action.go_to_dashboard'); ?></button>
-      <a class="btn btn-ghost" href="dashboard.php?skip_setup=1" style="width:auto;"><?php e('setup.remind_next_time'); ?></a>
+      <a class="btn btn-ghost" href="dashboard.php?unskip_setup=1&skipstyle="width:auto;"><?php e('setup.remind_next_time'); ?></a>
     </div>
 
     <div id="msg" class="msg"></div>
