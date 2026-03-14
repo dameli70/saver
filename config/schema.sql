@@ -132,6 +132,33 @@ CREATE TABLE IF NOT EXISTS lock_shares (
     FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
+-- Precomputed share ciphertext + vault-wrapped share secret per lock.
+-- Allows creating share links even while the lock is still sealed.
+CREATE TABLE IF NOT EXISTS lock_share_preps (
+    lock_id                 CHAR(36) PRIMARY KEY,
+    user_id                 INT UNSIGNED NOT NULL,
+
+    -- Share secret wrapped with a key derived from the user's vault passphrase.
+    share_secret_cipher_blob TEXT NOT NULL,
+    share_secret_iv          VARCHAR(64) NOT NULL,
+    share_secret_auth_tag    VARCHAR(64) NOT NULL,
+    share_secret_kdf_salt    VARCHAR(64) NOT NULL,
+    share_secret_kdf_iterations INT UNSIGNED NOT NULL DEFAULT 310000,
+
+    -- Ciphertext encrypted with a key derived from the share secret.
+    share_cipher_blob        MEDIUMTEXT NOT NULL,
+    share_iv                 VARCHAR(64) NOT NULL,
+    share_auth_tag           VARCHAR(64) NOT NULL,
+    share_kdf_salt           VARCHAR(64) NOT NULL,
+    share_kdf_iterations     INT UNSIGNED NOT NULL DEFAULT 310000,
+
+    created_at               DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (lock_id) REFERENCES locks(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_user (user_id)
+) ENGINE=InnoDB;
+
 -- Mobile Money carriers
 CREATE TABLE IF NOT EXISTS carriers (
     id                      INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,

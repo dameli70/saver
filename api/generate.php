@@ -31,6 +31,22 @@ $iv         = trim((string)($body['iv'] ?? ''));
 $authTag    = trim((string)($body['auth_tag'] ?? ''));
 $kdfSalt    = trim((string)($body['kdf_salt'] ?? ''));
 
+// Optional: precomputed share ciphertext + vault-wrapped share secret.
+// This enables creating share links while the lock is still sealed.
+$prepShareCipher = trim((string)($body['prep_share_cipher_blob'] ?? ''));
+$prepShareIv     = trim((string)($body['prep_share_iv'] ?? ''));
+$prepShareTag    = trim((string)($body['prep_share_auth_tag'] ?? ''));
+$prepShareSalt   = trim((string)($body['prep_share_kdf_salt'] ?? ''));
+$prepShareIters  = (int)($body['prep_share_kdf_iterations'] ?? 310000);
+
+$prepWrapCipher = trim((string)($body['prep_share_secret_cipher_blob'] ?? ''));
+$prepWrapIv     = trim((string)($body['prep_share_secret_iv'] ?? ''));
+$prepWrapTag    = trim((string)($body['prep_share_secret_auth_tag'] ?? ''));
+$prepWrapSalt   = trim((string)($body['prep_share_secret_kdf_salt'] ?? ''));
+$prepWrapIters  = (int)($body['prep_share_secret_kdf_iterations'] ?? 310000);
+
+$hasPrepPayload = ($prepShareCipher !== '' || $prepWrapCipher !== '');
+
 if ($label === '')      jsonResponse(['error' => 'Label is required'], 400);
 if ($cipherBlob === '') jsonResponse(['error' => 'cipher_blob missing'], 400);
 if ($iv === '')         jsonResponse(['error' => 'iv missing'], 400);
@@ -79,12 +95,34 @@ try {
 }
 
 // Basic sanity checks on cipher material (base64 format, expected sizes)
-if (base64_decode($iv, true) === false || strlen(base64_decode($iv)) !== 12)
+if (base64_decode($iv, true) === false || strlen(base64_decode($iv, true)) !== 12)
     jsonResponse(['error' => 'IV must be 12 bytes (base64)'], 400);
-if (base64_decode($authTag, true) === false || strlen(base64_decode($authTag)) !== 16)
+if (base64_decode($authTag, true) === false || strlen(base64_decode($authTag, true)) !== 16)
     jsonResponse(['error' => 'auth_tag must be 16 bytes (base64)'], 400);
-if (base64_decode($kdfSalt, true) === false || strlen(base64_decode($kdfSalt)) !== 32)
+if (base64_decode($kdfSalt, true) === false || strlen(base64_decode($kdfSalt, true)) !== 32)
     jsonResponse(['error' => 'kdf_salt must be 32 bytes (base64)'], 400);
+
+if ($hasPrepPayload) {
+    // Treat the prep as all-or-nothing.
+    if ($prepShareCipher === '' || $prepShareIv === '' || $prepShareTag === '' || $prepShareSalt === '' ||
+        $prepWrapCipher === '' || $prepWrapIv === '' || $prepWrapTag === '' || $prepWrapSalt === '') {
+        jsonResponse(['error' => 'Invalid share prep payload'], 400);
+    }
+
+    if (base64_decode($prepShareIv, true) === false || strlen(base64_decode($prepShareIv, true)) !== 12)
+        jsonResponse(['error' => 'prep_share_iv must be 12 bytes (base64)'], 400);
+    if (base64_decode($prepShareTag, true) === false || strlen(base64_decode($prepShareTag, true)) !== 16)
+        jsonResponse(['error' => 'prep_share_auth_tag must be 16 bytes (base64)'], 400);
+    if (base64_decode($prepWrapIv, true) === false || strlen(base64_decode($prepWrapIv, true)) !== 12)
+        jsonResponse(['error' => 'prep_share_secret_iv must be 12 bytes (base64)'], 400);
+    if (base64_decode($prepWrapTag, true) === false || strlen(base64_decode($prepWrapTag, true)) !== 16)
+        jsonResponse(['error' => 'prep_share_secret_auth_tag must be 16 bytes (base64)'], 400);
+
+    if ($prepShareIters < 50000) $prepShareIters = 50000;
+    if ($prepShareIters > 2000000) $prepShareIters = 2000000;
+    if ($prepWrapIters < 50000) $prepWrapIters = 50000;
+    if ($prepWrapIters > 2000000) $prepWrapIters = 2000000;
+}
 
 // ── Store — server never touches key material ─────────────────
 try {
@@ -138,6 +176,33 @@ try {
     }
 
     $db->prepare($sql)->execute($params);
+
+    // Optional share precomputation storage.
+    if ($hasPrepPayload && hasLockSharePrepsTable()) {
+        try {
+            $db->prepare("INSERT INTO lock_share_preps
+                          (lock_id, user_id,
+                           share_secret_cipher_blob, share_secret_iv, share_secret_auth_tag, share_secret_kdf_salt, share_secret_kdf_iterations,
+                           share_cipher_blob, share_iv, share_auth_tag, share_kdf_salt, share_kdf_iterations)
+                          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+               ->execute([
+                   $lockId,
+                   (int)$userId,
+                   $prepWrapCipher,
+                   $prepWrapIv,
+                   $prepWrapTag,
+                   $prepWrapSalt,
+                   (int)$prepWrapIters,
+                   $prepShareCipher,
+                   $prepShareIv,
+                   $prepShareTag,
+                   $prepShareSalt,
+                   (int)$prepShareIters,
+               ]);
+        } catch (Throwable) {
+            // Never fail lock creation if share prep storage fails.
+        }
+    }
 
     auditLog('generate', $lockId);
 

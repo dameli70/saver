@@ -88,11 +88,21 @@ header("Permissions-Policy: clipboard-write=(self)");
     <div class="small" id="ps-meta" style="margin-bottom:12px;"></div>
 
     <div class="vault-input-wrap">
-      <label>Code to share</label>
-      <input type="password" id="ps-code" placeholder="Paste the code you saved…" autocomplete="off">
-      <div class="small" style="margin-top:8px;">Because this lock is still sealed, the app can’t decrypt it yet. To share before unlock, paste the code you saved earlier.</div>
+      <label>Vault Passphrase</label>
+      <input type="password" id="ps-vault" placeholder="Your vault passphrase…" autocomplete="current-password">
+      <div class="small" style="margin-top:8px;">We’ll use your passphrase to unlock the share secret. The code itself stays sealed until the unlock date.</div>
     </div>
 
+    <div id="ps-legacy" style="display:none;">
+      <div class="hr" style="margin:14px 0;"></div>
+      <div class="vault-input-wrap" style="margin:0;">
+        <label>Code to share (legacy)</label>
+        <input type="password" id="ps-code" placeholder="Paste the code you saved…" autocomplete="off">
+        <div class="small" style="margin-top:8px;">If this lock was created before sealed sharing was initialized, you can still share by pasting the code you saved earlier.</div>
+      </div>
+    </div>
+
+   
     <label class="chk" style="margin:0 0 12px 0;">
       <input type="checkbox" id="ps-allow" checked>
       <span>Reveal after the unlock date to anyone with the link</span>
@@ -100,7 +110,7 @@ header("Permissions-Policy: clipboard-write=(self)");
 
     <div id="ps-err" class="msg msg-err"></div>
 
-    <button class="btn btn-primary" id="ps-btn" onclick="createShareFromSaved()"><span class="btn-ico" id="ps-ico" aria-hidden="true">🔗</span><span class="btn-txt" id="ps-txt">Create share link</span></button>
+    <button class="btn btn-primary" id="ps-btn" onclick="createShareFromPrep()"><span class="btn-ico" id="ps-ico" aria-hidden="true">🔗</span><span class="btn-txt" id="ps-txt">Create share link</span></button>
 
     <div id="ps-out" class="rv-share" style="display:none;">
       <div class="hr"></div>
@@ -639,7 +649,7 @@ function buildCard(lock, opts={}){
         s.title = 'Offline';
       }else{
         s.addEventListener('click', ()=>openShare(lock));
-        s.title = 'Create a share link (requires the saved code while sealed)';
+        s.title = 'Create a share link (requires vault passphrase; legacy: paste saved code)';
       }
       actions.appendChild(s);
     }
@@ -884,6 +894,11 @@ function openShare(lock){
     meta.innerHTML = `Sealed until <span>${esc(localStr)}</span> <span class="utc-pill" title="Stored & enforced in UTC">${esc(utcStr)}</span>`;
   }
 
+  const vp = document.getElementById('ps-vault');
+  if(vp) vp.value = vaultPhraseSession || '';
+
+  const legacy = document.getElementById('ps-legacy');
+  if(legacy) legacy.style.display = 'none';
   const code = document.getElementById('ps-code');
   if(code) code.value = '';
 
@@ -910,7 +925,7 @@ function openShare(lock){
   if(overlay){
     overlay.classList.add('show');
     document.body.style.overflow='hidden';
-    setTimeout(()=>{ if(code) code.focus(); }, 150);
+    setTimeout(()=>{ if(vp) vp.focus(); }, 150);
   }
 }
 
@@ -965,16 +980,19 @@ async function revokePreShare(){
   setPreShareMsg(okEl, 'Link revoked.', true);
 }
 
-async function createShareFromSaved(){
+async function createShareFromPrep(){
   if(!currentShareLock || currentShareLock.kind !== 'lock' || !currentShareLock.id){
     toast('Select a lock first','err');
     return;
   }
 
+  const legacyWrap = document.getElementById('ps-legacy');
   const code = (document.getElementById('ps-code').value || '').trim();
-  if(!code){
+  const vp = (document.getElementById('ps-vault').value || vaultPhraseSession || '').trim();
+
+  if(!vp && !code){
     const err = document.getElementById('ps-err');
-    if(err){ err.textContent = 'Paste the saved code to share while sealed.'; err.classList.add('show'); }
+    if(err){ err.textContent = 'Enter your vault passphrase (or paste the saved code in legacy mode).'; err.classList.add('show'); }
     return;
   }
 
@@ -992,27 +1010,63 @@ async function createShareFromSaved(){
   setShareSheetState('working');
 
   try{
-    const secret = genShareSecret();
-    const c = requireWebCrypto();
-    const saltBytes = new Uint8Array(16);
-    c.getRandomValues(saltBytes);
-    const saltB64 = bytesToB64(saltBytes);
-
-    const iters = 310000;
-    const key = await deriveKey(secret, saltB64, iters);
-    const enc = await aesEncrypt(code, key);
-
     const allowEl = document.getElementById('ps-allow');
     const allow = allowEl ? !!allowEl.checked : true;
 
+    // Legacy path: paste the plaintext code (for locks created before share precomputation).
+    if(code){
+      const secret = genShareSecret();
+      const c = requireWebCrypto();
+      const saltBytes = new Uint8Array(16);
+      c.getRandomValues(saltBytes);
+      const saltB64 = bytesToB64(saltBytes);
+
+      const iters = 310000;
+      const key = await deriveKey(secret, saltB64, iters);
+      const enc = await aesEncrypt(code, key);
+
+      const payloadLegacy = {
+        action: 'create',
+        lock_id: currentShareLock.id,
+        share_cipher_blob: enc.cipher_blob,
+        share_iv: enc.iv,
+        share_auth_tag: enc.auth_tag,
+        share_kdf_salt: saltB64,
+        share_kdf_iterations: iters,
+        allow_reveal_after_date: allow ? 1 : 0,
+      };
+
+      let r = await postCsrf('api/shares.php', payloadLegacy);
+      if(!r.success && (r.error_code==='reauth_required' || r.error_code==='security_setup_required')){
+        const ok2 = await ensureReauth(r.methods||{});
+        if(!ok2) throw new Error(r.error||'Re-authentication required');
+        r = await postCsrf('api/shares.php', payloadLegacy);
+      }
+      if(!r.success) throw new Error(r.error || 'Failed');
+
+      currentPreShareId = parseInt(r.share_id||'0', 10) || null;
+
+      const out = document.getElementById('ps-out');
+      if(out) out.style.display = 'block';
+
+      const urlEl = document.getElementById('ps-url');
+      const secEl = document.getElementById('ps-secret');
+      if(urlEl) urlEl.value = String(r.share_url||'');
+      if(secEl) secEl.value = secret;
+
+      const revokeBtn = document.getElementById('ps-revoke');
+      if(revokeBtn && currentPreShareId) revokeBtn.style.display = 'inline-flex';
+
+      setShareSheetState('success');
+      setBtnState(btn, ico, txt, 'success', '☺', 'Created');
+      setPreShareMsg(okEl, 'Share link created. Copy both the link and the secret.', true);
+      return;
+    }
+
+    // Preferred path: create from server-stored precomputation (no plaintext).
     const payload = {
-      action: 'create',
+      action: 'create_from_prep',
       lock_id: currentShareLock.id,
-      share_cipher_blob: enc.cipher_blob,
-      share_iv: enc.iv,
-      share_auth_tag: enc.auth_tag,
-      share_kdf_salt: saltB64,
-      share_kdf_iterations: iters,
       allow_reveal_after_date: allow ? 1 : 0,
     };
 
@@ -1023,7 +1077,25 @@ async function createShareFromSaved(){
       r = await postCsrf('api/shares.php', payload);
     }
 
-    if(!r.success) throw new Error(r.error || 'Failed');
+    if(!r.success){
+      const m = String(r.error||'Failed');
+      if(legacyWrap && (m.includes('not initialized') || m.includes('precomputation') || m.includes('unavailable'))){
+        legacyWrap.style.display = 'block';
+        throw new Error('This lock can’t be shared without unlock. Paste the saved code below to create a legacy share link.');
+      }
+      throw new Error(m);
+    }
+
+    const wrap = r.share_secret_wrap || null;
+    if(!wrap || !wrap.cipher_blob || !wrap.iv || !wrap.auth_tag || !wrap.kdf_salt){
+      throw new Error('Missing share secret');
+    }
+
+    const iters = parseInt(wrap.kdf_iterations||310000, 10) || 310000;
+    const key = await deriveKey(vp, wrap.kdf_salt, iters);
+    const secret = await aesDecrypt(wrap.cipher_blob, wrap.iv, wrap.auth_tag, key);
+
+    vaultPhraseSession = vp;
 
     currentPreShareId = parseInt(r.share_id||'0', 10) || null;
 
@@ -1033,7 +1105,7 @@ async function createShareFromSaved(){
     const urlEl = document.getElementById('ps-url');
     const secEl = document.getElementById('ps-secret');
     if(urlEl) urlEl.value = String(r.share_url||'');
-    if(secEl) secEl.value = secret;
+    if(secEl) secEl.value = String(secret||'');
 
     const revokeBtn = document.getElementById('ps-revoke');
     if(revokeBtn && currentPreShareId) revokeBtn.style.display = 'inline-flex';
@@ -1044,7 +1116,12 @@ async function createShareFromSaved(){
 
   }catch(e){
     setShareSheetState('error');
-    if(errEl){ errEl.textContent = (e && e.message) ? e.message : 'Failed'; errEl.classList.add('show'); }
+
+    const msg = (e && e.name==='OperationError')
+      ? 'Incorrect vault passphrase or tampered data'
+      : ((e && e.message) ? e.message : 'Failed');
+
+    if(errEl){ errEl.textContent = msg; errEl.classList.add('show'); }
     setBtnState(btn, ico, txt, 'error', '⚠', 'Failed');
 
   }finally{
