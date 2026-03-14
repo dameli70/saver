@@ -252,11 +252,23 @@ function renderLocks(){
   const list = getFilteredLocks();
 
   if(locksOffline){
-    wrap.innerHTML  '<<div class="card" style="margin-bottom:12p;"><<div class="small">' + esc(tr('my_codes.offline_banner', 'Offline mode: showing cached metadata. Reveal is disabled until you’re back online.')) '</ +d></ivdiv>';
-;
+    wrap.innerHTML = '';
+
+    const banner = document.createElement('div');
+    banner.className = 'card';
+    banner.style.marginBottom = '12px';
+
+    const msg = document.createElement('div');
+    msg.className = 'small';
+    msg.textContent = tr('my_codes.offline_banner', 'Offline mode: showing cached metadata. Reveal is disabled until you’re back online.');
+
+    banner.appendChild(msg);
+    wrap.appendChild(banner);
+
     const holder = document.createElement('div');
     holder.innerHTML = '<div class="locks-grid" id="locks-grid"></div>';
     wrap.appendChild(holder.firstChild);
+
     const grid = document.getElementById('locks-grid');
     list.forEach(l => grid.appendChild(buildCard(l, {offline:true})));
     startCountdownTicker();
@@ -911,7 +923,17 @@ async function doReveal(){
 
     setTimeout(()=>{
       setRevealSheetState(null);
-      setBtnState(btn, ico, txt, null, '🔒', (currentReveal && currentReveal.share_after) ? tr('my_codes.btn_decrypt_share', 'Decrypt & Share') :      btn.disabled=false;
+      setBtnState(
+        btn,
+        ico,
+        txt,
+        null,
+        '🔒',
+        (currentReveal && currentReveal.share_after)
+          ? tr('my_codes.btn_decrypt_share', 'Decrypt & Share')
+          : tr('my_codes.btn_decrypt_reveal', 'Decrypt & Reveal')
+      );
+      btn.disabled=false;
     }, 900);
   }
 }
