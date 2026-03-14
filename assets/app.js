@@ -595,20 +595,83 @@
       nav.appendChild(el);
     });
 
+    function groupKeyForHref(href){
+      const h = String(href||'').trim();
+      const base = h.split('#')[0];
+      if(base === 'vault_settings.php' || base === 'backup.php') return 'vault';
+      if(base === 'rooms.php' || base === 'notifications.php') return 'community';
+      if(base === 'account.php' || base === 'setup.php') return 'security';
+      if(base === 'admin.php') return 'admin';
+      if(base === 'logout.php') return 'session';
+      if(h.indexOf('index.php#faq') === 0) return 'help';
+      return 'other';
+    }
+
+    function groupTitle(key){
+      if(key === 'vault') return LS.t('nav.vault') || 'Vault';
+      if(key === 'community') return LS.t('nav.rooms') || 'Community';
+      if(key === 'security') return LS.t('dashboard.security') || 'Security';
+      if(key === 'admin') return LS.t('nav.admin') || 'Admin';
+      if(key === 'help') return LS.t('common.help') || 'Help';
+      if(key === 'session') return LS.t('common.session') || 'Session';
+      return LS.t('common.other') || 'Other';
+    }
+
+    function appendGroup(panel, key, els){
+      if(!els || !els.length) return;
+      const title = document.createElement('div');
+      title.className = 'nav-group-title';
+      title.textContent = groupTitle(key);
+      panel.appendChild(title);
+
+      els.forEach(el => {
+        if(el.tagName === 'A') decorateNavBtn(el, iconForHref(el.getAttribute('href')), el.getAttribute('data-label') || el.textContent);
+        if(el.tagName === 'A' && (el.getAttribute('href')||'').trim().split('#')[0] === 'logout.php'){
+          el.classList.remove('btn-ghost');
+          el.classList.add('btn-red');
+        }
+        panel.appendChild(el);
+      });
+    }
+
     if(secondary.length){
       const more = mkDropdown('⋯', LS.t('common.more') || 'More');
+
+      const byGroup = {vault:[], community:[], security:[], admin:[], help:[], session:[], other:[]};
       secondary.forEach(el => {
-        if(el.tagName === 'A') decorateNavBtn(el, iconForHref(el.getAttribute('href')), el.textContent);
-        more.panel.appendChild(el);
+        const href = el.tagName === 'A' ? (el.getAttribute('href') || '') : '';
+        const key = groupKeyForHref(href);
+        if(!el.getAttribute('data-label')) el.setAttribute('data-label', (el.textContent || '').trim());
+        (byGroup[key] || byGroup.other).push(el);
       });
+
+      appendGroup(more.panel, 'vault', byGroup.vault);
+      appendGroup(more.panel, 'community', byGroup.community);
+      appendGroup(more.panel, 'security', byGroup.security);
+      appendGroup(more.panel, 'admin', byGroup.admin);
+      appendGroup(more.panel, 'help', byGroup.help);
+      appendGroup(more.panel, 'session', byGroup.session);
+      appendGroup(more.panel, 'other', byGroup.other);
+
       nav.appendChild(more.d);
     }
 
     if(prefs.length){
       const prefsDd = mkDropdown('⚙', LS.t('common.settings') || 'Settings');
-      prefs.forEach(el => {
+
+      const title = document.createElement('div');
+      title.className = 'nav-group-title';
+      title.textContent = LS.t('common.preferences') || 'Preferences';
+      prefsDd.panel.appendChild(title);
+
+      // Theme first, then language.
+      prefs.sort((a, b) => {
+        const at = isThemeBtn(a) ? 0 : 1;
+        const bt = isThemeBtn(b) ? 0 : 1;
+        return at - bt;
+      }).forEach(el => {
         if(isLangLink(el)){
-          decorateNavBtn(el, '🌐', el.textContent);
+          decorateNavBtn(el, '🌐', el.getAttribute('data-label') || el.textContent);
           el.classList.add('nav-chip');
         }
         prefsDd.panel.appendChild(el);

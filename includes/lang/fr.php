@@ -20,6 +20,10 @@ return [
     'common.menu' => 'Menu',
     'common.more' => 'Plus',
     'common.settings' => 'Paramètres',
+    'common.preferences' => 'Préférences',
+    'common.help' => 'Aide',
+    'common.session' => 'Session',
+    'common.other' => 'Autre',
     'common.network_error' => 'Erreur réseau',
 
     // Theme toggle (assets/theme.js)
