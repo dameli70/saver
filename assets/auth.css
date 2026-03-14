@@ -36,20 +36,15 @@ body{padding:0;}
   -webkit-appearance:none;
   backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
 }
-@media(max-width:520px){.field input{font-size:16px;}}
-.field input:focus{border-color:color-mix(in srgb, var(--accent) 70%, white);box-shadow:0 0 0 4px rgba(124,92,255,.14);}
-
-/* Auth layout uses app.css buttons in the topbar; scope auth box button styles. */
-.box .btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;width:100%;
-  padding:13px 18px;font-family:var(--mono);font-size:11px;letter-spacing:1.4px;text-transform:uppercase;
-  cursor:pointer;border:none;transition:transform .15s,background .15s,border-color .15s,box-shadow .15s,color .15s;
-  border-radius:var(--radius-btn);-webkit-appearance:none;min-height:46px;text-decoration:none;
-  position:relative;overflow:hidden;
-}
 @media(hover:hover){.box .btn:hover{transform:translateY(-1px);}}
 .box .btn:active{transform:scale(.98);}
 
-.box .btn-primary{background:linear-gradient(135deg, var(--accent), var(--accent2));color:#070812;font-weight:700;box-shadow:0 10px 30px rgba(124,92,255,.22);}
+.box .btn-primary{background:linear-gradient(135deg, var(--accent), var(--accent2));
+  color:#070812;
+  font-weight:700;
+  border:1px solid rgb(var(--accent-rgb) / .25);
+  box-shadow:0 10px 30px rgb(var(--accent-rgb) / .22);
+}
 .box .btn-primary:disabled{opacity:.45;pointer-events:none;}
 
 .box .msg{display:none;margin-bottom:12px;padding:12px 14px;font-size:12px;line-height:1.6;letter-spacing:.2px;border-radius:var(--radius-card);

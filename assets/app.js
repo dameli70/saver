@@ -812,7 +812,7 @@
     }
 
     function isMobile(){
-      return window.matchMedia && window.matchMedia('(max-width: 720px)').matches;
+      return window.matchMedia && window.matchMedia('(max-width: 979px) and (hover:none) and (pointer:coarse)').matches;
     }
 
     let releaseTrap = null;
@@ -951,6 +951,25 @@
       }
     }catch{}
 
+    let releaseOverflowTrap = null;
+    let overflowPrevFocus = null;
+
+    function closeOverflow(){
+      const ov = document.getElementById('ls-overflow-overlay');
+      if(!ov) return;
+
+      ov.classList.remove('show');
+
+      const mb = document.getElementById('ls-bottom-more');
+      if(mb) mb.setAttribute('aria-expanded', 'false');
+
+      if(releaseOverflowTrap){
+        releaseOverflowTrap();
+        releaseOverflowTrap = null;
+      }
+
+      document.body.style.overflow = '';
+
       const f = overflowPrevFocus || mb;
       if(f && f.focus) f.focus();
       overflowPrevFocus = null;
@@ -1088,7 +1107,7 @@
     // Optional: hide the dock while scrolling down (mobile only).
     try{
       const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      const mq = window.matchMedia ? window.matchMedia('(max-width: 720px)') : null;
+      const mq = window.matchMedia ? window.matchMedia('(max-width: 979px) and (hover:none) and (pointer:coarse)') : null;
       const isMobile = () => mq ? mq.matches : false;
       if(!reduce){
         let lastY = window.scrollY || 0;

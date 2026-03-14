@@ -54,7 +54,7 @@ $topbarActive = function(string $href) use ($topbarCurPage): bool {
         <label class="btn btn-ghost btn-sm" for="ls-mobile-nav-toggle" aria-label="<?= htmlspecialchars(t('common.close'), ENT_QUOTES, 'UTF-8') ?>">×</label>
       </div>
 
-      <div class="topbar-r" style="display:flex;flex-direction:column;gap:10px;">
+      <div class="ls-mobile-nav-links" style="display:flex;flex-direction:column;gap:10px;">
         <?php if (isset($topbarBadgeText) && trim((string)$topbarBadgeText) !== ''): ?>
           <span class="topbar-badge"><?= htmlspecialchars((string)$topbarBadgeText) ?></span>
         <?php endif; ?>

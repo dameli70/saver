@@ -22,7 +22,7 @@ header("Referrer-Policy: no-referrer");
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title><?php e('index.title', ['app' => APP_NAME]); ?></title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700;800;900&family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
 <?php emitI18nJsGlobals(); ?>
 <script src="assets/theme.js"></script>
 <link rel="stylesheet" href="assets/base.css">
@@ -39,8 +39,8 @@ a{color:inherit;}
  
 .hero{max-width:960px;margin:0 auto;padding:54px 18px 34px;}
 .kicker{display:inline-flex;align-items:center;gap:10px;color:var(--text);font-size:10px;letter-spacing:2.2px;text-transform:uppercase;
-  background:linear-gradient(135deg, rgba(124,92,255,.20), rgba(48,208,255,.10));
-  border:1px solid rgba(124,92,255,.28);
+  background:linear-gradient(135deg, rgb(var(--accent-rgb) / .20), rgb(var(--accent2-rgb) / .10));
+  border:1px solid rgb(var(--accent-rgb) / .28);
   padding:8px 14px;margin-bottom:18px;border-radius:var(--radius-pill);
   backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
 }
