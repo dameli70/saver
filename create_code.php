@@ -182,10 +182,11 @@ header("Permissions-Policy: clipboard-write=(self)");
 </div>
 
 <!-- confirm overlay -->
-<div id="confirm-overlay" onclick="closeConfirm(event)">
-  <div class="confirm-sheet">
-    <div class="confirm-title" id="confirm-title"><?php e('create_code.confirm.title_lock'); ?></div>
-    <div class="confirm-sub" id="cs-sub"><?php e('create_code.confirm.sub_copied'); ?></div>
+<div id="confirm-overlay" class="ls-modal-overlay ls-sheet" onclick="closeConfirm(event)">
+  <div class="ls-modal confirm-sheet" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+    <button class="ls-modal-x" type="button" aria-label="<?= htmlspecialchars(t('common.close'), ENT_QUOTES, 'UTF-8') ?>" onclick="closeConfirm();event.stopPropagation();">×</button>
+    <div class="ls-modal-title" id="confirm-title"><?php e('create_code.confirm.title_lock'); ?></div>
+    <div class="ls-modal-sub" id="cs-sub"><?php e('create_code.confirm.sub_copied'); ?></div>
     <div class="msg msg-warn" id="autosave-bar" style="display:none"><?php e('create_code.confirm.autosave'); ?></div>
 
     <div class="confirm-btns" id="confirm-btns">

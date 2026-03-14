@@ -79,11 +79,11 @@ header("Permissions-Policy: clipboard-write=(self)");
 </div>
 
 <!-- share overlay (pre-unlock) -->
-<div id="share-overlay" onclick="closeShare(event)">
-  <div class="reveal-sheet">
-    <button class="modal-close" onclick="closeShare()">×</button>
-    <div class="reveal-title" id="ps-title">Share lock</div>
-    <div class="reveal-sub">// create a share link even while sealed</div>
+<div id="share-overlay" class="ls-modal-overlay ls-sheet" onclick="closeShare(event)">
+  <div class="ls-modal reveal-sheet" role="dialog" aria-modal="true" aria-labelledby="ps-title">
+    <button class="ls-modal-x" type="button" aria-label="<?= htmlspecialchars(t('common.close'), ENT_QUOTES, 'UTF-8') ?>" onclick="closeShare();event.stopPropagation();">×</button>
+    <div class="ls-modal-title" id="ps-title">Share lock</div>
+    <div class="ls-modal-sub">// create a share link even while sealed</div>
 
     <div class="small" id="ps-meta" style="margin-bottom:12px;"></div>
 
@@ -134,11 +134,11 @@ header("Permissions-Policy: clipboard-write=(self)");
 </div>
 
 <!-- reveal overlay -->
-<div id="reveal-overlay" onclick="closeReveal(event)">
-  <div class="reveal-sheet">
-    <button class="modal-close" onclick="closeReveal()">×</button>
-    <div class="reveal-title" id="rv-label">Reveal</div>
-    <div class="reveal-sub">// enter vault passphrase to decrypt</div>
+<div id="reveal-overlay" class="ls-modal-overlay ls-sheet" onclick="closeReveal(event)">
+  <div class="ls-modal reveal-sheet" role="dialog" aria-modal="true" aria-labelledby="rv-label">
+    <button class="ls-modal-x" type="button" aria-label="<?= htmlspecialchars(t('common.close'), ENT_QUOTES, 'UTF-8') ?>" onclick="closeReveal();event.stopPropagation();">×</button>
+    <div class="ls-modal-title" id="rv-label">Reveal</div>
+    <div class="ls-modal-sub">// enter vault passphrase to decrypt</div>
     <div id="rv-hint" style="display:none;font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:12px;"></div>
 
     <div class="vault-input-wrap">
