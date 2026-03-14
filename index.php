@@ -26,7 +26,7 @@ header("Referrer-Policy: no-referrer");
 <?php emitI18nJsGlobals(); ?>
 <script src="assets/theme.js"></script>
 <link rel="stylesheet" href="assets/base.css">
-<link rel="stylesheet" href="assets/panel.css">
+<link rel="stylesheet" href="assets/app.css">
 <style>
 a{color:inherit;}
 .orb{filter:blur(120px);}
@@ -97,34 +97,8 @@ a{color:inherit;}
 </head>
 <body>
 <div class="orb orb1"></div><div class="orb orb2"></div>
-<div class="wrap">
-  <div class="nav">
-    <a class="logo" href="index.php"><?= htmlspecialchars(APP_NAME) ?></a>
-    <div class="nav-r">
-      <button class="btn btn-ghost btn-theme" type="button" data-theme-toggle><?php e('common.theme'); ?></button>
-      <a class="btn btn-ghost btn-theme" href="<?= htmlspecialchars(langSwitchUrl('fr'), ENT_QUOTES, 'UTF-8') ?>" style="<?= currentLang() === 'fr' ? '' : 'opacity:.6' ?>"><?php e('common.lang_fr'); ?></a>
-      <a class="btn btn-ghost btn-theme" href="<?= htmlspecialchars(langSwitchUrl('en'), ENT_QUOTES, 'UTF-8') ?>" style="<?= currentLang() === 'en' ? '' : 'opacity:.6' ?>"><?php e('common.lang_en'); ?></a>
-      <a class="btn btn-ghost" href="#faq"><?php e('common.faq'); ?></a>
-      <?php if ($loggedIn): ?>
-        <span class="pill"><?= htmlspecialchars($userEmail) ?></span>
-        <?php if ($verified): ?>
-          <a class="btn btn-ghost" href="dashboard.php"><?php e('nav.dashboard'); ?></a>
-          <a class="btn btn-ghost" href="create_code.php"><?php e('nav.create_code'); ?></a>
-          <a class="btn btn-ghost" href="my_codes.php"><?php e('nav.my_codes'); ?></a>
-          <a class="btn btn-ghost" href="rooms.php"><?php e('nav.rooms'); ?></a>
-          <?php if ($isAdmin): ?>
-            <a class="btn btn-ghost" href="admin.php"><?php e('nav.admin'); ?></a>
-          <?php endif; ?>
-        <?php else: ?>
-          <a class="btn btn-ghost" href="account.php"><?php e('nav.verify_email'); ?></a>
-        <?php endif; ?>
-        <a class="btn btn-ghost" href="logout.php"><?php e('common.logout'); ?></a>
-      <?php else: ?>
-        <a class="btn btn-ghost" href="login.php"><?php e('common.login'); ?></a>
-        <a class="btn btn-primary" href="signup.php"><?php e('common.create_account'); ?></a>
-      <?php endif; ?>
-    </div>
-  </div>
+<div id="app" class="wrap">
+  <?php include __DIR__ . '/includes/topbar_public.php'; ?>
 
   <?php if ($loggedIn && !$verified): ?>
   <div class="notice">

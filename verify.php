@@ -35,12 +35,18 @@ function renderVerifyPage(string $titleKey, string $msgKey, bool $ok = false): v
     echo $i18nScript;
     echo "<script src=\"assets/theme.js\"></script>";
     echo "<link rel=\"stylesheet\" href=\"assets/base.css\">";
+    echo "<link rel=\"stylesheet\" href=\"assets/app.css\">";
     echo "<link rel=\"stylesheet\" href=\"assets/auth.css\">";
     echo "</head><body>";
 
-    echo '<a class="lang-toggle fr' . ($curLang === 'fr' ? ' active' : '') . '" href="' . $frUrl . '">' . htmlspecialchars(t('common.lang_fr'), ENT_QUOTES, 'UTF-8') . '</a>';
-    echo '<a class="lang-toggle en' . ($curLang === 'en' ? ' active' : '') . '" href="' . $enUrl . '">' . htmlspecialchars(t('common.lang_en'), ENT_QUOTES, 'UTF-8') . '</a>';
-    echo '<button class="theme-toggle" type="button" data-theme-toggle>' . htmlspecialchars(t('common.theme'), ENT_QUOTES, 'UTF-8') . '</button>';
+    ob_start();
+    include __DIR__ . '/includes/topbar_public.php';
+    $topbar = ob_get_clean();
+
+    echo '<div class="orb orb1"></div><div class="orb orb2"></div>';
+    echo '<div id="app">';
+    echo $topbar;
+    echo '<div class="auth-wrap">';
 
     echo '<div class="box">'
         . '<div class="logo">' . $appNameEsc . '</div>'
@@ -48,6 +54,8 @@ function renderVerifyPage(string $titleKey, string $msgKey, bool $ok = false): v
         . '<a class="btn btn-primary" href="login.php">' . htmlspecialchars(t('verify.continue'), ENT_QUOTES, 'UTF-8') . '</a>'
         . '</div>';
 
+    echo '</div>';
+    echo '</div>';
     echo '</body></html>';
 }
 

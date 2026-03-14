@@ -1,4 +1,11 @@
-body{display:flex;align-items:center;justify-content:center;padding:max(40px,var(--sat)) 18px max(40px,var(--sab));}
+body{padding:0;}
+
+#app{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;}
+
+.auth-wrap{flex:1;min-height:0;
+  display:flex;align-items:center;justify-content:center;
+  padding:40px 18px max(40px,var(--sab));
+}
 
 .box{width:100%;max-width:460px;
   background:linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.03));
@@ -32,30 +39,30 @@ body{display:flex;align-items:center;justify-content:center;padding:max(40px,var
 @media(max-width:520px){.field input{font-size:16px;}}
 .field input:focus{border-color:color-mix(in srgb, var(--accent) 70%, white);box-shadow:0 0 0 4px rgba(124,92,255,.14);}
 
-/* Buttons are shared with app.css, but auth pages do not always load it. */
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;width:100%;
+/* Auth layout uses app.css buttons in the topbar; scope auth box button styles. */
+.box .btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;width:100%;
   padding:13px 18px;font-family:var(--mono);font-size:11px;letter-spacing:1.4px;text-transform:uppercase;
   cursor:pointer;border:none;transition:transform .15s,background .15s,border-color .15s,box-shadow .15s,color .15s;
   border-radius:var(--radius-btn);-webkit-appearance:none;min-height:46px;text-decoration:none;
   position:relative;overflow:hidden;
 }
-@media(hover:hover){.btn:hover{transform:translateY(-1px);}}
-.btn:active{transform:scale(.98);}
+@media(hover:hover){.box .btn:hover{transform:translateY(-1px);}}
+.box .btn:active{transform:scale(.98);}
 
-.btn-primary{background:linear-gradient(135deg, var(--accent), var(--accent2));color:#070812;font-weight:700;box-shadow:0 10px 30px rgba(124,92,255,.22);}
-.btn-primary:disabled{opacity:.45;pointer-events:none;}
+.box .btn-primary{background:linear-gradient(135deg, var(--accent), var(--accent2));color:#070812;font-weight:700;box-shadow:0 10px 30px rgba(124,92,255,.22);}
+.box .btn-primary:disabled{opacity:.45;pointer-events:none;}
 
-.msg{display:none;margin-bottom:12px;padding:12px 14px;font-size:12px;line-height:1.6;letter-spacing:.2px;border-radius:var(--radius-card);
+.box .msg{display:none;margin-bottom:12px;padding:12px 14px;font-size:12px;line-height:1.6;letter-spacing:.2px;border-radius:var(--radius-card);
   border:1px solid var(--b1);background:rgba(255,255,255,.04);
 }
-.msg.show{display:block;}
-.msg-err{border-color:rgba(255,77,109,.25);background:rgba(255,77,109,.08);color:var(--red);}
-.msg-ok{border-color:rgba(50,213,131,.22);background:rgba(50,213,131,.08);color:var(--green);}
-.msg-warn{border-color:rgba(255,176,32,.26);background:rgba(255,176,32,.08);color:var(--orange);}
+.box .msg.show{display:block;}
+.box .msg-err{border-color:rgba(255,77,109,.25);background:rgba(255,77,109,.08);color:var(--red);}
+.box .msg-ok{border-color:rgba(50,213,131,.22);background:rgba(50,213,131,.08);color:var(--green);}
+.box .msg-warn{border-color:rgba(255,176,32,.26);background:rgba(255,176,32,.08);color:var(--orange);}
 
-.links{display:flex;justify-content:space-between;gap:10px;margin-top:14px;font-size:11px;color:var(--muted);font-family:var(--mono);}
-.links a{color:var(--text);text-decoration:none;border-bottom:1px solid transparent;}
-.links a:hover{border-bottom-color:var(--text);}
+.box .links{display:flex;justify-content:space-between;gap:10px;margin-top:14px;font-size:11px;color:var(--muted);font-family:var(--mono);}
+.box .links a{color:var(--text);text-decoration:none;border-bottom:1px solid transparent;}
+.box .links a:hover{border-bottom-color:var(--text);}
 
 .spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(0,0,0,.25);border-top-color:#000;border-radius:50%;animation:spin .55s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg);}}

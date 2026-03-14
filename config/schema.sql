@@ -171,7 +171,7 @@ CREATE TABLE IF NOT EXISTS carriers (
     ussd_change_pin_template VARCHAR(500) NOT NULL,
     ussd_balance_template   VARCHAR(500) NOT NULL,
 
-    -- Wallet setup flow options (web Create Code → Mobile money wallet)
+    -- Wallet setup flow options (web Create Lock → Mobile money wallet)
     wallet_allow_open_dialer TINYINT(1) NOT NULL DEFAULT 1,
     wallet_allow_copy_ussd  TINYINT(1) NOT NULL DEFAULT 1,
     wallet_default_action   ENUM('open_dialer','copy_ussd') NOT NULL DEFAULT 'open_dialer',

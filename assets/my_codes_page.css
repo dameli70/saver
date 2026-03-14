@@ -1,8 +1,14 @@
 /* My Codes page (my_codes.php) */
 
-.app-body{max-width:820px;}
+.app-body{max-width:880px;}
 
-.locks-grid{display:flex;flex-direction:column;gap:12px;}
+.locks-toolbar{padding:16px 18px;}
+@media(min-width:600px){.locks-toolbar{padding:18px 20px;}}
+
+.locks-toolbar .ls-input{padding:12px 14px;font-size:13px;}
+
+.locks-grid{display:grid;grid-template-columns:1fr;gap:12px;}
+@media(min-width:980px){.locks-grid{grid-template-columns:1fr 1fr;}}
 .lock-card{background:var(--s1);border:1px solid var(--b1);padding:16px 18px;position:relative;
   border-radius:var(--radius-card);box-shadow:var(--shadow-card);
   transition:transform .18s,box-shadow .18s,border-color .18s;}

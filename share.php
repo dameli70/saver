@@ -18,7 +18,7 @@ $token = trim((string)($_GET['t'] ?? ''));
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title><?= htmlspecialchars(APP_NAME) ?> — Share</title>
+<title><?= htmlspecialchars(APP_NAME) ?> — <?= htmlspecialchars(t('page.share')) ?></title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <?php emitI18nJsGlobals(); ?>
@@ -32,37 +32,39 @@ $token = trim((string)($_GET['t'] ?? ''));
 <div class="orb orb1"></div><div class="orb orb2"></div>
 
 <div id="app">
-  <div class="topbar">
-    <div class="topbar-logo"><?= htmlspecialchars(APP_NAME) ?></div>
-    <div class="topbar-r">
-      <a class="btn btn-ghost btn-sm" href="index.php"><?php e('common.home'); ?></a>
-      <a class="btn btn-primary btn-sm" href="login.php"><?php e('common.login'); ?></a>
-    </div>
-  </div>
+  <?php include __DIR__ . '/includes/topbar_public.php'; ?>
 
   <div class="app-body">
+
+    <div class="page-head">
+      <div>
+        <div class="page-title"><?php e('page.share'); ?></div>
+        <div class="page-sub"><?php e('share.subtitle'); ?></div>
+      </div>
+    </div>
+
     <div class="card share-card">
-      <div class="card-title"><div class="dot"></div>Shared time lock</div>
+      <div class="card-title"><div class="dot"></div><?php e('share.card_title'); ?></div>
 
       <?php if ($token === ''): ?>
-        <div class="msg msg-err show">Invalid link (missing token).</div>
+        <div class="msg msg-err show"><?php e('share.invalid_link'); ?></div>
       <?php else: ?>
-        <div class="share-meta" id="sh-meta">Loading…</div>
+        <div class="share-meta" id="sh-meta"><?php e('common.loading'); ?></div>
 
         <div class="share-countdown" id="sh-countdown" style="display:none;"></div>
 
         <div class="share-secret" id="sh-secret-wrap" style="display:none;">
-          <label>Share secret</label>
-          <input type="password" id="sh-secret" placeholder="Paste the secret…" autocomplete="off">
-          <button class="btn btn-primary" id="sh-decrypt"><span class="btn-ico" id="sh-decrypt-ico" aria-hidden="true">🔒</span><span class="btn-txt" id="sh-decrypt-txt">Decrypt</span></button>
+          <label><?php e('share.secret_label'); ?></label>
+          <input type="password" id="sh-secret" placeholder="<?= htmlspecialchars(t('share.secret_placeholder'), ENT_QUOTES, 'UTF-8') ?>" autocomplete="off">
+          <button class="btn btn-primary" id="sh-decrypt"><span class="btn-ico" id="sh-decrypt-ico" aria-hidden="true">🔒</span><span class="btn-txt" id="sh-decrypt-txt"><?php e('share.btn_decrypt'); ?></span></button>
           <div id="sh-err" class="msg msg-err"></div>
         </div>
 
         <div class="share-plain" id="sh-plain" style="display:none;"></div>
-        <button class="btn btn-ghost" id="sh-copy" style="display:none;margin-top:10px;"><span class="btn-ico" aria-hidden="true">⧉</span><span class="btn-txt">Copy</span></button>
+        <button class="btn btn-ghost" id="sh-copy" style="display:none;margin-top:10px;"><span class="btn-ico" aria-hidden="true">⧉</span><span class="btn-txt"><?php e('share.btn_copy'); ?></span></button>
 
         <div class="small" id="sh-note" style="display:none;margin-top:10px;">
-          Zero-knowledge: decryption happens only in your browser. The server never sees the secret or plaintext.
+          <?php e('share.note_zero_knowledge'); ?>
         </div>
       <?php endif; ?>
     </div>
@@ -97,9 +99,41 @@ function fmtCountdown(seconds){
 function b64ToBytes(b64){return Uint8Array.from(atob(b64), c => c.charCodeAt(0));}
 function bytesToB64(bytes){return btoa(String.fromCharCode(...bytes));}
 
+const I18N = (window.LS_I18N && window.LS_I18N.strings) ? window.LS_I18N.strings : {};
+function tr(key, vars, fallback){
+  let s = (I18N && typeof I18N[key] === 'string') ? I18N[key] : fallback;
+  s = String(s == null ? '' : s);
+  if(vars){
+    Object.keys(vars).forEach(k => {
+      s = s.split('{' + k + '}').join(String(vars[k]));
+    });
+  }
+  return s;
+}
+
+const STR={
+  crypto_unavailable: <?= json_encode(t('crypto.unavailable')) ?>,
+  crypto_webcrypto_unavailable: <?= json_encode(t('crypto.webcrypto_unavailable')) ?>,
+  common_failed: <?= json_encode(t('common.failed')) ?>,
+  label_label: <?= json_encode(t('share.label_label')) ?>,
+  reveal_utc: <?= json_encode(t('share.reveal_utc')) ?>,
+  reveal_disabled: <?= json_encode(t('share.reveal_disabled')) ?>,
+  countdown_reveals_in: <?= json_encode(t('share.countdown_reveals_in')) ?>,
+  countdown_eligible: <?= json_encode(t('share.countdown_eligible')) ?>,
+  err_invalid: <?= json_encode(t('share.invalid_link')) ?>,
+  err_enter_secret: <?= json_encode(t('share.err_enter_secret')) ?>,
+  btn_decrypt: <?= json_encode(t('share.btn_decrypt')) ?>,
+  btn_decrypting: <?= json_encode(t('share.btn_decrypting')) ?>,
+  btn_decrypted: <?= json_encode(t('share.btn_decrypted')) ?>,
+  err_decrypt_failed: <?= json_encode(t('share.err_decrypt_failed')) ?>,
+  err_decrypt_failed_secret: <?= json_encode(t('share.err_decrypt_failed_secret')) ?>,
+  toast_copied: <?= json_encode(t('share.toast_copied')) ?>,
+  toast_select_manually: <?= json_encode(t('share.toast_select_manually')) ?>,
+};
+
 function requireWebCrypto(){
-  if (!window.crypto || !window.crypto.getRandomValues) throw new Error('Secure cryptography is unavailable in this browser.');
-  if (!window.isSecureContext || !window.crypto.subtle) throw new Error('Web Crypto API is unavailable. Use HTTPS (or localhost).');
+  if (!window.crypto || !window.crypto.getRandomValues) throw new Error(STR.crypto_unavailable);
+  if (!window.isSecureContext || !window.crypto.subtle) throw new Error(STR.crypto_webcrypto_unavailable);
   return window.crypto;
 }
 
@@ -158,8 +192,8 @@ function setCountdown(revealDateUtc){
     const now = Date.now();
     const until = d.getTime();
     const s = Math.max(0, Math.floor((until - now)/1000));
-    if(s > 0) cd.textContent = `⏱ Reveals in ${fmtCountdown(s)}`;
-    else cd.textContent = '⏱ Reveal eligible';
+    if(s > 0) cd.textContent = tr('share.countdown_reveals_in', {delta: fmtCountdown(s)}, STR.countdown_reveals_in);
+    else cd.textContent = tr('share.countdown_eligible', null, STR.countdown_eligible);
   }
 
   tick();
@@ -171,7 +205,7 @@ async function loadShare(){
 
   try{
     const j = await get('api/share.php?t=' + encodeURIComponent(TOKEN));
-    if(!j.success) throw new Error(j.error||'Failed');
+    if(!j.success) throw new Error(j.error||STR.common_failed);
 
     sharePayload = j;
 
@@ -180,13 +214,13 @@ async function loadShare(){
     const revealAt = lock.reveal_date ? esc(lock.reveal_date) : '';
 
     if(meta){
-      meta.innerHTML = `<div class="k">Label</div><div class="v">${label}</div>` + (revealAt ? `<div class="k" style="margin-top:10px;">Reveal (UTC)</div><div class="v">${revealAt}</div>` : '');
+      meta.innerHTML = `<div class="k">${esc(STR.label_label)}</div><div class="v">${label}</div>` + (revealAt ? `<div class="k" style="margin-top:10px;">${esc(STR.reveal_utc)}</div><div class="v">${revealAt}</div>` : '');
     }
 
     if(lock.reveal_date) setCountdown(lock.reveal_date);
 
     if(j.reveal_allowed === 0 && meta){
-      meta.innerHTML += `<div class="msg msg-err show" style="margin-top:10px;">Reveal via link is disabled by the owner.</div>`;
+      meta.innerHTML += `<div class="msg msg-err show" style="margin-top:10px;">${esc(STR.reveal_disabled)}</div>`;
     }
 
     if(j.locked){
@@ -198,7 +232,7 @@ async function loadShare(){
 
   }catch(e){
     if(meta){
-      meta.innerHTML = `<div class="msg msg-err show">${esc(e && e.message ? e.message : 'Invalid link')}</div>`;
+      meta.innerHTML = `<div class="msg msg-err show">${esc(e && e.message ? e.message : STR.err_invalid)}</div>`;
     }
   }
 }
@@ -207,14 +241,14 @@ async function doDecrypt(){
   if(!sharePayload || !sharePayload.share) return;
 
   const secret = (document.getElementById('sh-secret').value||'').trim();
-  if(!secret){ setErr('Enter the share secret'); return; }
+  if(!secret){ setErr(STR.err_enter_secret); return; }
 
   const btn = document.getElementById('sh-decrypt');
   const ico = document.getElementById('sh-decrypt-ico');
   const txt = document.getElementById('sh-decrypt-txt');
 
   setErr('');
-  setBtnState(btn, ico, txt, 'working', '⏳', 'Decrypting…');
+  setBtnState(btn, ico, txt, 'working', '⏳', STR.btn_decrypting);
   btn.disabled = true;
 
   try{
@@ -233,15 +267,15 @@ async function doDecrypt(){
     if(copy) copy.style.display='inline-flex';
     if(note) note.style.display='block';
 
-    setBtnState(btn, ico, txt, 'success', '☺', 'Decrypted');
+    setBtnState(btn, ico, txt, 'success', '☺', STR.btn_decrypted);
 
   }catch(e){
-    setErr((e && e.name==='OperationError') ? 'Decryption failed — wrong secret or tampered data' : ((e && e.message) ? e.message : 'Decryption failed'));
-    setBtnState(btn, ico, txt, 'error', '⚠', 'Failed');
+    setErr((e && e.name==='OperationError') ? STR.err_decrypt_failed_secret : ((e && e.message) ? e.message : STR.err_decrypt_failed));
+    setBtnState(btn, ico, txt, 'error', '⚠', STR.common_failed);
 
   }finally{
     setTimeout(()=>{
-      setBtnState(btn, ico, txt, null, '🔒', 'Decrypt');
+      setBtnState(btn, ico, txt, null, '🔒', STR.btn_decrypt);
       btn.disabled = false;
     }, 900);
   }
@@ -256,9 +290,9 @@ async function copyPlain(){
     }else{
       await navigator.clipboard.writeText(revealed);
     }
-    if(window.LS && LS.toast) LS.toast('Copied (will try to clear in ~30s)','ok');
+    if(window.LS && LS.toast) LS.toast(STR.toast_copied,'ok');
   }catch{
-    if(window.LS && LS.toast) LS.toast('Select the text manually','err');
+    if(window.LS && LS.toast) LS.toast(STR.toast_select_manually,'err');
   }
 }
 

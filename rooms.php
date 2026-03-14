@@ -42,31 +42,20 @@ header("Referrer-Policy: no-referrer");
 <div class="orb orb1"></div><div class="orb orb2"></div>
 
 <div id="app">
-  <div class="topbar">
-    <div class="topbar-logo"><?= htmlspecialchars(APP_NAME) ?></div>
-    <div class="topbar-r">
-      <span class="user-pill"><?= htmlspecialchars($userEmail) ?></span>
-      <button class="btn btn-ghost btn-sm btn-theme" type="button" data-theme-toggle><?php e('common.theme'); ?></button>
-      <?php $curLang = currentLang(); ?>
-      <a class="<?= $curLang === 'fr' ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm' ?>" href="<?= htmlspecialchars(langSwitchUrl('fr')) ?>"><?php e('common.lang_fr'); ?></a>
-      <a class="<?= $curLang === 'en' ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm' ?>" href="<?= htmlspecialchars(langSwitchUrl('en')) ?>"><?php e('common.lang_en'); ?></a>
-      <a class="btn btn-ghost btn-sm" href="dashboard.php"><?php e('nav.dashboard'); ?></a>
-      <a class="btn btn-ghost btn-sm" href="create_code.php"><?php e('nav.create_code'); ?></a>
-      <a class="btn btn-ghost btn-sm" href="my_codes.php"><?php e('nav.my_codes'); ?></a>
-      <a class="btn btn-ghost btn-sm" href="rooms.php"><?php e('nav.rooms'); ?></a>
-      <a class="btn btn-ghost btn-sm" href="notifications.php"><?php e('nav.notifications'); ?></a>
-      <a class="btn btn-ghost btn-sm" href="backup.php"><?php e('nav.backups'); ?></a>
-      <a class="btn btn-ghost btn-sm" href="vault_settings.php"><?php e('nav.vault'); ?></a>
-      <a class="btn btn-ghost btn-sm" href="setup.php"><?php e('nav.setup'); ?></a>
-      <a class="btn btn-ghost btn-sm" href="account.php"><?php e('nav.account'); ?></a>
-      <?php if ($isAdmin): ?><a class="btn btn-ghost btn-sm" href="admin.php"><?php e('nav.admin'); ?></a><?php endif; ?>
-      <a class="btn btn-ghost btn-sm" href="logout.php"><?php e('common.logout'); ?></a>
-    </div>
-  </div>
+  <?php include __DIR__ . '/includes/topbar.php'; ?>
 
   <div class="app-body wide">
-    <div class="h"><?php e('page.rooms'); ?></div>
-    <div class="p"><?php e('rooms.intro'); ?></div>
+
+    <div class="page-head">
+      <div>
+        <div class="page-title"><?php e('page.rooms'); ?></div>
+        <div class="page-sub"><?php e('rooms.intro'); ?></div>
+      </div>
+      <div class="page-actions">
+        <a class="btn btn-primary btn-sm" href="#create-room"><?php e('common.create'); ?></a>
+      </div>
+    </div>
+
     <div id="eligibility" style="color:var(--muted);font-size:12px;line-height:1.6;margin:-8px 0 18px 0;"></div>
 
   <div class="card" style="margin-bottom:14px;">
@@ -88,7 +77,7 @@ header("Referrer-Policy: no-referrer");
       <div id="rooms-wrap" class="rooms"></div>
     </div>
 
-    <div class="card">
+    <div class="card" id="create-room">
       <div class="card-title"><?php e('rooms.create_title'); ?></div>
       <div class="p" style="margin-top:-6px;"><?php e('rooms.create_sub'); ?></div>
 

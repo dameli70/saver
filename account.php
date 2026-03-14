@@ -96,54 +96,43 @@ code{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);pad
 </head>
 <body>
 <div id="app">
-  <div class="topbar">
-    <div class="topbar-logo"><?= htmlspecialchars(APP_NAME) ?></div>
-    <div class="topbar-r">
-      <span class="user-pill"><?= htmlspecialchars(getCurrentUserEmail() ?? '') ?></span>
-      <button class="btn btn-ghost btn-sm btn-theme" type="button" data-theme-toggle><?php e('common.theme'); ?></button>
-      <?php $curLang = currentLang(); ?>
-      <a class="<?= $curLang === 'fr' ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm' ?>" href="<?= htmlspecialchars(langSwitchUrl('fr')) ?>"><?php e('common.lang_fr'); ?></a>
-      <a class="<?= $curLang === 'en' ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm' ?>" href="<?= htmlspecialchars(langSwitchUrl('en')) ?>"><?php e('common.lang_en'); ?></a>
-      <?php if ($verified): ?>
-        <a class="btn btn-ghost btn-sm" href="dashboard.php"><?php e('nav.dashboard'); ?></a>
-        <a class="btn btn-ghost btn-sm" href="create_code.php"><?php e('nav.create_code'); ?></a>
-        <a class="btn btn-ghost btn-sm" href="my_codes.php"><?php e('nav.my_codes'); ?></a>
-        <a class="btn btn-ghost btn-sm" href="rooms.php"><?php e('nav.rooms'); ?></a>
-        <a class="btn btn-ghost btn-sm" href="notifications.php"><?php e('nav.notifications'); ?></a>
-        <a class="btn btn-ghost btn-sm" href="backup.php"><?php e('nav.backups'); ?></a>
-        <a class="btn btn-ghost btn-sm" href="vault_settings.php"><?php e('nav.vault'); ?></a>
-        <a class="btn btn-ghost btn-sm" href="setup.php"><?php e('nav.setup'); ?></a>
-        <?php if ($isAdmin): ?><a class="btn btn-ghost btn-sm" href="admin.php"><?php e('nav.admin'); ?></a><?php endif; ?>
-      <?php endif; ?>
-      <a class="btn btn-ghost btn-sm" href="logout.php"><?php e('common.logout'); ?></a>
-    </div>
-  </div>
+  <?php $userEmail = getCurrentUserEmail() ?? ''; include __DIR__ . '/includes/topbar.php'; ?>
 
   <div class="app-body">
-    <div class="h"><?php e('heading.account'); ?></div>
-    <div class="p"><?= $verified ? t('account.sub_verified') : t('account.sub_unverified') ?></div>
+
+    <div class="page-head">
+      <div>
+        <div class="page-title"><?php e('page.account'); ?></div>
+        <div class="page-sub"><?= $verified ? t('account.sub_verified') : t('account.sub_unverified') ?></div>
+      </div>
+      <div class="page-actions">
+        <?php if ($verified): ?>
+          <a class="btn btn-ghost btn-sm" href="setup.php"><?php e('nav.setup'); ?></a>
+        <?php endif; ?>
+      </div>
+    </div>
 
     <div class="card">
       <div class="row">
         <div>
-          <div class="k">Email</div>
+          <div class="k"><?php e('common.email'); ?></div>
           <div class="v"><?= htmlspecialchars($u['email']) ?></div>
         </div>
         <?php if ($verified): ?>
-          <div class="badge ok">✓ Verified</div>
+          <div class="badge ok"><?= htmlspecialchars(t('account.email_status_verified'), ENT_QUOTES, 'UTF-8') ?></div>
         <?php else: ?>
-          <div class="badge wait">⏳ Pending</div>
+          <div class="badge wait"><?= htmlspecialchars(t('account.email_status_pending'), ENT_QUOTES, 'UTF-8') ?></div>
         <?php endif; ?>
       </div>
 
       <?php if (!$verified): ?>
       <div style="margin-top:14px;color:var(--muted);font-size:12px;line-height:1.7;">
-        We sent a verification email. If you don’t see it, check spam/junk. You can resend it below...
+        <?php e('account.verify_notice'); ?>
       </div>
 
       <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;">
-        <button class="btn btn-primary" id="resend"><span id="resend-txt">Resend verification email</span></button>
-        <a class="btn btn-ghost" href="logout.php">Use a different email</a>
+        <button class="btn btn-primary" id="resend"><span id="resend-txt"><?php e('account.resend_verification'); ?></span></button>
+        <a class="btn btn-ghost" href="logout.php"><?php e('account.use_different_email'); ?></a>
       </div>
 
       <div id="msg-ok" class="msg msg-ok"></div>
@@ -151,8 +140,8 @@ code{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);pad
       <div id="dev" class="dev"></div>
       <?php else: ?>
       <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;">
-        <a class="btn btn-primary" href="dashboard.php">Go to dashboard</a>
-        <a class="btn btn-ghost" href="index.php">Home</a>
+        <a class="btn btn-primary" href="dashboard.php"><?php e('onboarding.action.go_to_dashboard'); ?></a>
+        <a class="btn btn-ghost" href="index.php"><?php e('common.home'); ?></a>
       </div>
       <?php endif; ?>
     </div>
@@ -161,14 +150,14 @@ code{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);pad
     <div class="card" id="trust-card">
       <div class="row">
         <div>
-          <div class="k">Trust level</div>
-          <div class="v">Room access and saving history</div>
+          <div class="k"><?php e('account.trust_title'); ?></div>
+          <div class="v"><?php e('account.trust_sub'); ?></div>
         </div>
         <div class="badge wait" id="trust-level-badge">⏳</div>
       </div>
 
       <div class="small" style="margin-top:12px;">
-        Some rooms require a higher level. Staying reliable unlocks more options. If you’re removed from a room, you may have a cooldown before joining new ones.
+        <?php e('account.trust_desc'); ?>
       </div>
 
       <div class="hr"></div>
@@ -176,18 +165,18 @@ code{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);pad
       <div style="display:grid;grid-template-columns:1fr;gap:10px;">
         <div class="item" style="align-items:center;">
           <div>
-            <div class="k">Strikes (last 6 months)</div>
+            <div class="k"><?php e('account.trust.strikes_label'); ?></div>
             <div class="v" id="trust-strikes">—</div>
           </div>
           <div>
-            <div class="k">Restricted period</div>
+            <div class="k"><?php e('account.trust.restricted_label'); ?></div>
             <div class="v" id="trust-restricted">—</div>
           </div>
         </div>
 
         <div class="item" style="align-items:center;">
           <div>
-            <div class="k">Progress</div>
+            <div class="k"><?php e('account.trust.progress_label'); ?></div>
             <div class="v" id="trust-next">—</div>
           </div>
         </div>
@@ -195,14 +184,14 @@ code{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);pad
 
       <div class="hr"></div>
 
-      <div class="k">Completed time locks</div>
-      <div class="small" style="margin-top:6px;">These are locks you stayed committed to until unlock.</div>
+      <div class="k"><?php e('account.trust.completed_title'); ?></div>
+      <div class="small" style="margin-top:6px;"><?php e('account.trust.completed_sub'); ?></div>
       <div id="trust-completed" style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;"></div>
 
       <div class="hr"></div>
 
-      <div class="k">Active Saving Rooms</div>
-      <div class="small" style="margin-top:6px;">Quick links to your current rooms and countdowns.</div>
+      <div class="k"><?php e('account.trust.active_rooms_title'); ?></div>
+      <div class="small" style="margin-top:6px;"><?php e('account.trust.active_rooms_sub'); ?></div>
       <div id="trust-active" class="list"></div>
 
       <div id="trust-msg" class="msg msg-err"></div>
@@ -213,31 +202,31 @@ code{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);pad
     <div class="card" id="notif-prefs-card">
       <div class="row">
         <div>
-          <div class="k">Email reminders</div>
-          <div class="v">Time lock notifications</div>
+          <div class="k"><?php e('account.email_reminders_title'); ?></div>
+          <div class="v"><?php e('account.email_reminders_sub'); ?></div>
         </div>
-        <div class="badge <?= $emailLockReminders ? 'ok' : 'wait' ?>" id="email-reminders-badge"><?= $emailLockReminders ? '✓ Email on' : '⏳ Email off' ?></div>
+        <div class="badge <?= $emailLockReminders ? 'ok' : 'wait' ?>" id="email-reminders-badge"><?= $emailLockReminders ? htmlspecialchars(t('account.email_reminders_badge_on'), ENT_QUOTES, 'UTF-8') : htmlspecialchars(t('account.email_reminders_badge_off'), ENT_QUOTES, 'UTF-8') ?></div>
       </div>
 
       <div class="small" style="margin-top:12px;">
-        Get optional email reminders for your time locks (24h before, 1h before, and when a lock becomes eligible to reveal).
+        <?php e('account.email_reminders_desc'); ?>
       </div>
 
       <div class="hr"></div>
 
       <div class="item" style="align-items:center;">
         <div style="flex:1;min-width:220px;">
-          <div class="k">Time lock email reminders</div>
-          <div class="v">Receive reminders at key moments</div>
+          <div class="k"><?php e('account.email_reminders_toggle_title'); ?></div>
+          <div class="v"><?php e('account.email_reminders_toggle_sub'); ?></div>
         </div>
         <label style="display:flex;align-items:center;gap:10px;font-size:12px;color:var(--text);">
           <input type="checkbox" id="pref-email-lock-reminders" <?= $emailLockReminders ? 'checked' : '' ?> style="width:20px;height:20px;accent-color:var(--accent);">
-          <span><?= $emailLockReminders ? 'On' : 'Off' ?></span>
+          <span><?= $emailLockReminders ? htmlspecialchars(t('common.on'), ENT_QUOTES, 'UTF-8') : htmlspecialchars(t('common.off'), ENT_QUOTES, 'UTF-8') ?></span>
         </label>
       </div>
 
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
-        <button class="btn btn-primary btn-sm" type="button" id="pref-save-email-reminders">Save</button>
+        <button class="btn btn-primary btn-sm" type="button" id="pref-save-email-reminders"><?php e('common.save'); ?></button>
         <div class="msg msg-ok" id="pref-email-ok"></div>
         <div class="msg msg-err" id="pref-email-err"></div>
       </div>
@@ -247,33 +236,33 @@ code{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);pad
     <div class="card" id="vault-passphrase-card">
       <div class="row">
         <div>
-          <div class="k">Vault passphrase</div>
-          <div class="v">The key you use to lock and unlock your time locks</div>
+          <div class="k"><?php e('account.vault_title'); ?></div>
+          <div class="v"><?php e('account.vault_sub'); ?></div>
         </div>
         <div class="badge wait" id="vault-passphrase-status">⏳</div>
       </div>
 
       <div class="small" style="margin-top:12px;">
-        You’ll enter this passphrase when creating and unlocking time locks. If you lose it, nobody can recover your locked codes.
+        <?php e('account.vault_desc'); ?>
       </div>
 
       <div id="vault-passphrase-unavailable" class="small" style="margin-top:12px;display:none;">
-        Vault passphrase setup isn’t available on this server yet. Ask the administrator to apply the latest database migrations.
+        <?php e('account.vault_unavailable'); ?>
       </div>
 
       <div id="vault-passphrase-set" class="small" style="margin-top:12px;display:none;">
-        Your vault passphrase is set. Keep it safe — if you lose it, your locked codes cannot be recovered.
+        <?php e('account.vault_set'); ?>
       </div>
 
       <div id="vault-passphrase-form" style="display:none;">
         <div class="hr"></div>
-        <div class="field"><label>New vault passphrase <span style="color:var(--muted)">(min 10 chars)</span></label>
-          <input type="password" id="vp1" autocomplete="new-password" placeholder="Something memorable only you know">
+        <div class="field"><label><?php e('account.vault_new_label'); ?> <span style="color:var(--muted)"><?php e('account.vault_new_hint'); ?></span></label>
+          <input type="password" id="vp1" autocomplete="new-password" placeholder="<?= htmlspecialchars(t('account.vault_new_placeholder'), ENT_QUOTES, 'UTF-8') ?>">
         </div>
-        <div class="field"><label>Confirm vault passphrase</label>
-          <input type="password" id="vp2" autocomplete="new-password" placeholder="Confirm passphrase">
+        <div class="field"><label><?php e('account.vault_confirm_label'); ?></label>
+          <input type="password" id="vp2" autocomplete="new-password" placeholder="<?= htmlspecialchars(t('account.vault_confirm_placeholder'), ENT_QUOTES, 'UTF-8') ?>">
         </div>
-        <button class="btn btn-primary" id="vp-save"><span id="vp-save-txt">Set vault passphrase</span></button>
+        <button class="btn btn-primary" id="vp-save"><span id="vp-save-txt"><?php e('account.vault_set_btn'); ?></span></button>
         <div id="vp-ok" class="msg msg-ok"></div>
         <div id="vp-err" class="msg msg-err"></div>
       </div>
@@ -283,43 +272,43 @@ code{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);pad
     <div class="card" id="totp-card">
       <div class="row">
         <div>
-          <div class="k">Two-factor authentication (TOTP)</div>
-          <div class="v">Use an authenticator app to confirm unlocking and backups</div>
+          <div class="k"><?php e('account.totp_title'); ?></div>
+          <div class="v"><?php e('account.totp_sub'); ?></div>
         </div>
         <?php if ($hasTotp): ?>
           <?php if (!empty($u['totp_enabled_at'])): ?>
-            <div class="badge ok">✓ Enabled</div>
+            <div class="badge ok"><?= htmlspecialchars(t('account.totp_enabled'), ENT_QUOTES, 'UTF-8') ?></div>
           <?php else: ?>
-            <div class="badge wait">⏳ Not enabled</div>
+            <div class="badge wait"><?= htmlspecialchars(t('account.totp_not_enabled'), ENT_QUOTES, 'UTF-8') ?></div>
           <?php endif; ?>
         <?php else: ?>
-          <div class="badge wait">⏳ Unavailable</div>
+          <div class="badge wait"><?= htmlspecialchars(t('account.totp_unavailable'), ENT_QUOTES, 'UTF-8') ?></div>
         <?php endif; ?>
       </div>
 
       <?php if (!$hasTotp): ?>
-        <div class="small" style="margin-top:12px;">TOTP isn’t available on this server yet. Ask the administrator to apply the latest database migrations.</div>
+        <div class="small" style="margin-top:12px;"><?php e('account.totp_unavailable_desc'); ?></div>
       <?php else: ?>
-        <div class="small" style="margin-top:12px;">When enabled, you’ll be asked for a 6‑digit code before sensitive actions like unlocking and backups.</div>
+        <div class="small" style="margin-top:12px;"><?php e('account.totp_desc'); ?></div>
 
         <div id="totp-setup" style="display:none;">
           <div class="hr"></div>
-          <div class="small">Scan this secret in your authenticator app:</div>
+          <div class="small"><?php e('account.totp_scan_secret'); ?></div>
           <div class="small" style="margin-top:6px;word-break:break-all;"><code id="totp-secret"></code></div>
-          <div class="small" style="margin-top:6px;word-break:break-all;"><a id="totp-otpauth" href="#" style="color:var(--orange)">otpauth:// link</a></div>
-          <div class="field"><label>6-digit code</label><input id="totp-code" inputmode="numeric" placeholder="123456"></div>
-          <button class="btn btn-primary" id="totp-enable"><span id="totp-enable-txt">Enable TOTP</span></button>
+          <div class="small" style="margin-top:6px;word-break:break-all;"><a id="totp-otpauth" href="#" style="color:var(--orange)"><?php e('account.totp_otpauth_link'); ?></a></div>
+          <div class="field"><label><?php e('account.totp_code_label'); ?></label><input id="totp-code" inputmode="numeric" placeholder="123456"></div>
+          <button class="btn btn-primary" id="totp-enable"><span id="totp-enable-txt"><?php e('account.totp_enable_btn'); ?></span></button>
         </div>
 
         <div id="totp-disable" style="display:none;">
           <div class="hr"></div>
-          <div class="field"><label>6-digit code</label><input id="totp-disable-code" inputmode="numeric" placeholder="123456"></div>
-          <button class="btn btn-red" id="totp-disable-btn">Disable TOTP</button>
+          <div class="field"><label><?php e('account.totp_code_label'); ?></label><input id="totp-disable-code" inputmode="numeric" placeholder="123456"></div>
+          <button class="btn btn-red" id="totp-disable-btn"><?php e('account.totp_disable_btn'); ?></button>
         </div>
 
         <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;">
-          <button class="btn btn-ghost" id="totp-begin">Setup TOTP</button>
-          <button class="btn btn-ghost" id="totp-reauth">Re-auth now</button>
+          <button class="btn btn-ghost" id="totp-begin"><?php e('account.totp_setup_btn'); ?></button>
+          <button class="btn btn-ghost" id="totp-reauth"><?php e('account.totp_reauth_btn'); ?></button>
         </div>
 
         <div id="totp-ok" class="msg msg-ok"></div>
@@ -330,35 +319,35 @@ code{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);pad
     <div class="card" id="passkeys-card">
       <div class="row">
         <div>
-          <div class="k">Passkeys</div>
-          <div class="v">Face ID / Touch ID / security keys (quick sign-in + extra confirmation)</div>
+          <div class="k"><?php e('account.passkeys_title'); ?></div>
+          <div class="v"><?php e('account.passkeys_sub'); ?></div>
         </div>
         <div class="badge wait" id="passkeys-status">⏳</div>
       </div>
 
       <?php if (!$hasPasskeys): ?>
-        <div class="small" style="margin-top:12px;">Passkeys aren’t available on this server yet. Ask the administrator to apply the latest database migrations.</div>
+        <div class="small" style="margin-top:12px;"><?php e('account.passkeys_unavailable_desc'); ?></div>
       <?php else: ?>
-        <div class="small" style="margin-top:12px;">Use a passkey to sign in without a password and to confirm sensitive actions like unlocking.</div>
+        <div class="small" style="margin-top:12px;"><?php e('account.passkeys_desc'); ?></div>
 
         <div class="hr"></div>
 
         <div class="row">
           <div>
-            <div class="k">Require passkey for login</div>
-            <div class="small">If enabled, password login is blocked.</div>
+            <div class="k"><?php e('account.passkeys_require_login'); ?></div>
+            <div class="small"><?php e('account.passkeys_require_login_sub'); ?></div>
           </div>
           <label class="small" style="display:flex;align-items:center;gap:10px;">
             <input type="checkbox" id="passkey-required" <?= $hasReqWebauthn ? '' : 'disabled' ?> <?= !empty($u['require_webauthn']) ? 'checked' : '' ?> >
-            <span><?= $hasReqWebauthn ? '' : 'Unavailable' ?></span>
+            <span><?= $hasReqWebauthn ? '' : htmlspecialchars(t('common.unavailable'), ENT_QUOTES, 'UTF-8') ?></span>
           </label>
         </div>
 
         <div class="list" id="passkeys-list"></div>
 
         <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;">
-          <button class="btn btn-ghost" id="passkey-refresh">Refresh</button>
-          <button class="btn btn-primary" id="passkey-add"><span id="passkey-add-txt">Add passkey</span></button>
+          <button class="btn btn-ghost" id="passkey-refresh"><?php e('common.refresh'); ?></button>
+          <button class="btn btn-primary" id="passkey-add"><span id="passkey-add-txt"><?php e('setup.add_passkey'); ?></span></button>
         </div>
 
         <div id="passkey-ok" class="msg msg-ok"></div>
@@ -370,25 +359,22 @@ code{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);pad
     <div class="card">
       <div class="row" style="margin-bottom:4px;">
         <div>
-          <div class="k">Security</div>
-          <div class="v">Login password + session control</div>
+          <div class="k"><?php e('account.security_title'); ?></div>
+          <div class="v"><?php e('account.security_sub'); ?></div>
         </div>
       </div>
 
-      <div class="small">
-        Your <strong>vault passphrase</strong> protects your time locks. If you forget it, nobody can recover your locked codes.
-        Save it somewhere safe and make backups.
-      </div>
+      <div class="small"><?php e('account.security_note_html'); ?></div>
 
       <div class="hr"></div>
 
-      <div class="k">Change login password</div>
+      <div class="k"><?php e('account.change_login_password_title'); ?></div>
       <form id="pw-form">
-        <div class="field"><label>Current password</label><input id="pw-cur" type="password" autocomplete="current-password" placeholder="••••••••" required></div>
-        <div class="field"><label>New password</label><input id="pw-new" type="password" autocomplete="new-password" placeholder="min 8 chars" required></div>
-        <div class="field"><label>Confirm new password</label><input id="pw-new2" type="password" autocomplete="new-password" placeholder="repeat new password" required></div>
+        <div class="field"><label><?php e('account.current_password_label'); ?></label><input id="pw-cur" type="password" autocomplete="current-password" placeholder="<?= htmlspecialchars(t('account.current_password_placeholder'), ENT_QUOTES, 'UTF-8') ?>" required></div>
+        <div class="field"><label><?php e('account.new_password_label'); ?></label><input id="pw-new" type="password" autocomplete="new-password" placeholder="<?= htmlspecialchars(t('account.new_password_placeholder'), ENT_QUOTES, 'UTF-8') ?>" required></div>
+        <div class="field"><label><?php e('account.confirm_new_password_label'); ?></label><input id="pw-new2" type="password" autocomplete="new-password" placeholder="<?= htmlspecialchars(t('account.confirm_new_password_placeholder'), ENT_QUOTES, 'UTF-8') ?>" required></div>
         <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;">
-          <button class="btn btn-primary" id="pw-btn" type="submit"><span id="pw-btn-txt">Update password</span></button>
+          <button class="btn btn-primary" id="pw-btn" type="submit"><span id="pw-btn-txt"><?php e('account.update_password_btn'); ?></span></button>
         </div>
         <div id="pw-ok" class="msg msg-ok"></div>
         <div id="pw-err" class="msg msg-err"></div>
@@ -398,12 +384,12 @@ code{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);pad
 
       <div class="row">
         <div>
-          <div class="k">Active sessions</div>
-          <div class="small">If you changed devices or suspect a stolen cookie, log out everywhere.</div>
+          <div class="k"><?php e('account.active_sessions_title'); ?></div>
+          <div class="small"><?php e('account.active_sessions_sub'); ?></div>
         </div>
         <div style="display:flex;gap:10px;flex-wrap:wrap;">
-          <button class="btn btn-ghost" id="sess-refresh" type="button">Refresh</button>
-          <button class="btn btn-red" id="logout-all" type="button">Logout all sessions</button>
+          <button class="btn btn-ghost" id="sess-refresh" type="button"><?php e('common.refresh'); ?></button>
+          <button class="btn btn-red" id="logout-all" type="button"><?php e('account.logout_all_sessions_btn'); ?></button>
         </div>
       </div>
 
@@ -423,6 +409,22 @@ const dev=document.getElementById('dev');
 function show(el,m){el.textContent=m;el.classList.add('show');}
 function clear(){[ok,err].forEach(e=>{e.textContent='';e.classList.remove('show');});dev.style.display='none';dev.textContent='';}
 
+const STR={
+  resendFailed: <?= json_encode(t('account.resend_failed')) ?>,
+  verificationSent: <?= json_encode(t('account.verification_sent')) ?>,
+  networkError: <?= json_encode(t('common.network_error')) ?>,
+  resendBtn: <?= json_encode(t('account.resend_verification')) ?>,
+  devVerifyHtml: <?= json_encode(t('account.dev_verify_html')) ?>,
+};
+
+function tpl(s, vars){
+  s = String(s||'');
+  Object.keys(vars||{}).forEach(k => {
+    s = s.split('{' + k + '}').join(String(vars[k]));
+  });
+  return s;
+}
+
 btn.addEventListener('click', async ()=>{
   clear();
   btn.disabled=true;
@@ -432,17 +434,17 @@ btn.addEventListener('click', async ()=>{
     const r=await fetch('api/auth.php',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({action:'resend_verification'})});
     const j=await r.json();
-    if(!j.success){show(err,j.error||'Failed to resend');return;}
-    show(ok,'Verification email sent.');
+    if(!j.success){show(err,j.error||STR.resendFailed);return;}
+    show(ok,STR.verificationSent);
     if(j.dev_verify_url){
       dev.style.display='block';
-      dev.innerHTML='DEV: Verification link: <br><a href="'+j.dev_verify_url+'">'+j.dev_verify_url+'</a>';
+      dev.innerHTML=tpl(STR.devVerifyHtml,{url:j.dev_verify_url});
     }
   }catch{
-    show(err,'Network error');
+    show(err,STR.networkError);
   }finally{
     btn.disabled=false;
-    btnTxt.textContent='Resend verification email';
+    btnTxt.textContent=STR.resendBtn;
   }
 });
 </script>

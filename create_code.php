@@ -34,6 +34,7 @@ header("Permissions-Policy: clipboard-write=(self)");
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <?php emitI18nJsGlobals(); ?>
 <script src="assets/theme.js"></script>
+<script src="assets/app.js"></script>
 <link rel="stylesheet" href="assets/base.css">
 <link rel="stylesheet" href="assets/app.css">
 <link rel="stylesheet" href="assets/create_code_page.css">
@@ -42,27 +43,20 @@ header("Permissions-Policy: clipboard-write=(self)");
 <div class="orb orb1"></div><div class="orb orb2"></div>
 
 <div id="app">
-  <div class="topbar">
-    <div class="topbar-logo"><?= htmlspecialchars(APP_NAME) ?></div>
-    <div class="topbar-r">
-      <span class="user-pill"><?= htmlspecialchars($userEmail) ?></span>
-      <button class="btn btn-ghost btn-sm btn-theme" type="button" data-theme-toggle><?php e('common.theme'); ?></button>
-      <?php $curLang = currentLang(); ?>
-      <a class="<?= $curLang === 'fr' ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm' ?>" href="<?= htmlspecialchars(langSwitchUrl('fr')) ?>"><?php e('common.lang_fr'); ?></a>
-      <a class="<?= $curLang === 'en' ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm' ?>" href="<?= htmlspecialchars(langSwitchUrl('en')) ?>"><?php e('common.lang_en'); ?></a>
-      <a class="btn btn-ghost btn-sm" href="my_codes.php"><?php e('nav.my_codes'); ?></a>
-      <a class="btn btn-ghost btn-sm" href="dashboard.php"><?php e('nav.dashboard'); ?></a>
-      <a class="btn btn-ghost btn-sm" href="rooms.php"><?php e('nav.rooms'); ?></a>
-      <a class="btn btn-ghost btn-sm" href="notifications.php"><?php e('nav.notifications'); ?></a>
-      <a class="btn btn-ghost btn-sm" href="backup.php"><?php e('nav.backups'); ?></a>
-      <a class="btn btn-ghost btn-sm" href="vault_settings.php"><?php e('nav.vault'); ?></a>
-      <a class="btn btn-ghost btn-sm" href="account.php"><?php e('nav.account'); ?></a>
-      <?php if ($isAdmin): ?><a class="btn btn-ghost btn-sm" href="admin.php"><?php e('nav.admin'); ?></a><?php endif; ?>
-      <a class="btn btn-ghost btn-sm" href="logout.php"><?php e('common.logout'); ?></a>
-    </div>
-  </div>
+  <?php include __DIR__ . '/includes/topbar.php'; ?>
 
   <div class="app-body">
+
+    <div class="page-head">
+      <div>
+        <div class="page-title"><?php e('page.create_code'); ?></div>
+        <div class="page-sub"><?php e('create_code.page_intro'); ?></div>
+      </div>
+      <div class="page-actions">
+        <a class="btn btn-ghost btn-sm" href="my_codes.php"><?php e('nav.my_codes'); ?></a>
+      </div>
+    </div>
+
     <div class="card" id="vault-unlock-card" style="display:none">
       <div class="card-title"><div class="dot" style="background:var(--orange)"></div><span style="color:var(--orange)"><?php e('nav.vault'); ?></span></div>
       <div style="font-size:12px;color:var(--muted);line-height:1.7;margin-bottom:14px;">
@@ -202,7 +196,6 @@ header("Permissions-Policy: clipboard-write=(self)");
   </div>
 </div>
 
-<script src="assets/app.js"></script>
 <script>
 const CSRF = <?= json_encode($csrf) ?>;
 const PBKDF2_ITERS = <?= (int)PBKDF2_ITERATIONS ?>;

@@ -43,37 +43,37 @@ header("Permissions-Policy: clipboard-write=(self)");
 <div class="orb orb1"></div><div class="orb orb2"></div>
 
 <div id="app">
-  <div class="topbar">
-    <div class="topbar-logo"><?= htmlspecialchars(APP_NAME) ?></div>
-    <div class="topbar-r">
-      <span class="user-pill"><?= htmlspecialchars($userEmail) ?></span>
-      <button class="btn btn-ghost btn-sm btn-theme" type="button" data-theme-toggle><?php e('common.theme'); ?></button>
-      <?php $curLang = currentLang(); ?>
-      <a class="<?= $curLang === 'fr' ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm' ?>" href="<?= htmlspecialchars(langSwitchUrl('fr')) ?>"><?php e('common.lang_fr'); ?></a>
-      <a class="<?= $curLang === 'en' ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm' ?>" href="<?= htmlspecialchars(langSwitchUrl('en')) ?>"><?php e('common.lang_en'); ?></a>
-      <a class="btn btn-ghost btn-sm" href="create_code.php"><?php e('nav.create_code'); ?></a>
-      <a class="btn btn-ghost btn-sm" href="dashboard.php"><?php e('nav.dashboard'); ?></a>
-      <a class="btn btn-ghost btn-sm" href="rooms.php"><?php e('nav.rooms'); ?></a>
-      <a class="btn btn-ghost btn-sm" href="notifications.php"><?php e('nav.notifications'); ?></a>
-      <a class="btn btn-ghost btn-sm" href="backup.php"><?php e('nav.backups'); ?></a>
-      <a class="btn btn-ghost btn-sm" href="vault_settings.php"><?php e('nav.vault'); ?></a>
-      <a class="btn btn-ghost btn-sm" href="account.php"><?php e('nav.account'); ?></a>
-      <?php if ($isAdmin): ?><a class="btn btn-ghost btn-sm" href="admin.php"><?php e('nav.admin'); ?></a><?php endif; ?>
-      <a class="btn btn-ghost btn-sm" href="logout.php"><?php e('common.logout'); ?></a>
-    </div>
-  </div>
+  <?php include __DIR__ . '/includes/topbar.php'; ?>
 
   <div class="app-body">
-    <div class="card">
-      <div class="card-title"><div class="dot"></div><?php e('page.my_codes'); ?></div>
-      <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:space-between;align-items:center;">
-        <div style="font-size:12px;color:var(--muted);line-height:1.7;">View your sealed codes. Unlocking/decryption happens in your browser.</div>
-        <button class="btn btn-ghost btn-sm" onclick="loadLocks()">↻ Refresh</button>
+
+    <div class="page-head">
+      <div>
+        <div class="page-title"><?php e('page.my_codes'); ?></div>
+        <div class="page-sub"><?php e('my_codes.intro'); ?></div>
+      </div>
+      <div class="page-actions">
+        <a class="btn btn-primary btn-sm" href="create_code.php"><?php e('nav.create_code'); ?></a>
+        <button class="btn btn-ghost btn-sm" type="button" onclick="loadLocks(true)">↻ <?php e('common.refresh'); ?></button>
+      </div>
+    </div>
+
+    <div class="card locks-toolbar">
+      <div class="toolbar">
+        <div class="search">
+          <input class="ls-input" id="locks-search" type="search" placeholder="<?= htmlspecialchars(t('my_codes.search_placeholder'), ENT_QUOTES, 'UTF-8') ?>" autocomplete="off">
+        </div>
+        <div class="seg" id="locks-seg" role="tablist" aria-label="<?= htmlspecialchars(t('page.my_codes'), ENT_QUOTES, 'UTF-8') ?>">
+          <button type="button" class="active" data-filter="all" role="tab" aria-selected="true"><?php e('my_codes.filter_all'); ?></button>
+          <button type="button" data-filter="sealed" role="tab" aria-selected="false"><?php e('my_codes.filter_sealed'); ?></button>
+          <button type="button" data-filter="ready" role="tab" aria-selected="false"><?php e('my_codes.filter_ready'); ?></button>
+          <button type="button" data-filter="wallet" role="tab" aria-selected="false"><?php e('my_codes.filter_wallet'); ?></button>
+        </div>
       </div>
     </div>
 
     <div id="locks-wrap">
-      <div class="empty"><div class="empty-icon">🔒</div><h3>Loading…</h3><p></p></div>
+      <div class="empty"><div class="empty-icon">🔒</div><h3><?php e('common.loading'); ?></h3><p></p></div>
     </div>
   </div>
 </div>
@@ -82,53 +82,52 @@ header("Permissions-Policy: clipboard-write=(self)");
 <div id="share-overlay" class="ls-modal-overlay ls-sheet" onclick="closeShare(event)">
   <div class="ls-modal reveal-sheet" role="dialog" aria-modal="true" aria-labelledby="ps-title">
     <button class="ls-modal-x" type="button" aria-label="<?= htmlspecialchars(t('common.close'), ENT_QUOTES, 'UTF-8') ?>" onclick="closeShare();event.stopPropagation();">×</button>
-    <div class="ls-modal-title" id="ps-title">Share lock</div>
-    <div class="ls-modal-sub">// create a share link even while sealed</div>
+    <div class="ls-modal-title" id="ps-title"><?php e('my_codes.share_title'); ?></div>
+    <div class="ls-modal-sub"><?php e('my_codes.share_sub'); ?></div>
 
     <div class="small" id="ps-meta" style="margin-bottom:12px;"></div>
 
     <div class="vault-input-wrap">
-      <label>Vault Passphrase</label>
-      <input type="password" id="ps-vault" placeholder="Your vault passphrase…" autocomplete="current-password">
-      <div class="small" style="margin-top:8px;">We’ll use your passphrase to unlock the share secret. The code itself stays sealed until the unlock date.</div>
+      <label><?php e('create_code.vault_passphrase_label'); ?></label>
+      <input type="password" id="ps-vault" placeholder="<?= htmlspecialchars(t('create_code.vault_passphrase_placeholder'), ENT_QUOTES, 'UTF-8') ?>" autocomplete="current-password">
+      <div class="small" style="margin-top:8px;"><?php e('my_codes.share_note'); ?></div>
     </div>
 
     <div id="ps-legacy" style="display:none;">
       <div class="hr" style="margin:14px 0;"></div>
       <div class="vault-input-wrap" style="margin:0;">
-        <label>Code to share (legacy)</label>
-        <input type="password" id="ps-code" placeholder="Paste the code you saved…" autocomplete="off">
-        <div class="small" style="margin-top:8px;">If this lock was created before sealed sharing was initialized, you can still share by pasting the code you saved earlier.</div>
+        <label><?php e('my_codes.share_legacy_label'); ?></label>
+        <input type="password" id="ps-code" placeholder="<?= htmlspecialchars(t('my_codes.share_legacy_placeholder'), ENT_QUOTES, 'UTF-8') ?>" autocomplete="off">
+        <div class="small" style="margin-top:8px;"><?php e('my_codes.share_legacy_note'); ?></div>
       </div>
     </div>
 
-   
     <label class="chk" style="margin:0 0 12px 0;">
       <input type="checkbox" id="ps-allow" checked>
-      <span>Reveal after the unlock date to anyone with the link</span>
+      <span><?php e('my_codes.share_allow_label'); ?></span>
     </label>
 
     <div id="ps-err" class="msg msg-err"></div>
 
-    <button class="btn btn-primary" id="ps-btn" onclick="createShareFromPrep()"><span class="btn-ico" id="ps-ico" aria-hidden="true">🔗</span><span class="btn-txt" id="ps-txt">Create share link</span></button>
+    <button class="btn btn-primary" id="ps-btn" onclick="createShareFromPrep()"><span class="btn-ico" id="ps-ico" aria-hidden="true">🔗</span><span class="btn-txt" id="ps-txt"><?php e('my_codes.share_create_btn'); ?></span></button>
 
     <div id="ps-out" class="rv-share" style="display:none;">
       <div class="hr"></div>
       <div class="rv-share-grid" style="margin-top:12px;">
         <div>
-          <div class="k">Link</div>
+          <div class="k"><?php e('my_codes.share_link_label'); ?></div>
           <input class="ls-input" id="ps-url" readonly value="" style="margin-top:6px;">
-          <button class="btn btn-ghost btn-sm btn-inline" type="button" id="ps-copy-url" style="margin-top:8px;">Copy link</button>
+          <button class="btn btn-ghost btn-sm btn-inline" type="button" id="ps-copy-url" style="margin-top:8px;"><?php e('my_codes.share_copy_link_btn'); ?></button>
         </div>
         <div>
-          <div class="k">Secret (save this)</div>
+          <div class="k"><?php e('my_codes.share_secret_label'); ?></div>
           <input class="ls-input" id="ps-secret" readonly value="" style="margin-top:6px;">
-          <button class="btn btn-ghost btn-sm btn-inline" type="button" id="ps-copy-secret" style="margin-top:8px;">Copy secret</button>
+          <button class="btn btn-ghost btn-sm btn-inline" type="button" id="ps-copy-secret" style="margin-top:8px;"><?php e('my_codes.share_copy_secret_btn'); ?></button>
         </div>
       </div>
 
       <div class="msg msg-ok" id="ps-ok"></div>
-      <button class="btn btn-red btn-sm btn-inline" type="button" id="ps-revoke" style="display:none;margin-top:12px;">Revoke link</button>
+      <button class="btn btn-red btn-sm btn-inline" type="button" id="ps-revoke" style="display:none;margin-top:12px;"><?php e('my_codes.share_revoke_btn'); ?></button>
     </div>
   </div>
 </div>
@@ -137,54 +136,54 @@ header("Permissions-Policy: clipboard-write=(self)");
 <div id="reveal-overlay" class="ls-modal-overlay ls-sheet" onclick="closeReveal(event)">
   <div class="ls-modal reveal-sheet" role="dialog" aria-modal="true" aria-labelledby="rv-label">
     <button class="ls-modal-x" type="button" aria-label="<?= htmlspecialchars(t('common.close'), ENT_QUOTES, 'UTF-8') ?>" onclick="closeReveal();event.stopPropagation();">×</button>
-    <div class="ls-modal-title" id="rv-label">Reveal</div>
-    <div class="ls-modal-sub">// enter vault passphrase to decrypt</div>
+    <div class="ls-modal-title" id="rv-label"><?php e('my_codes.reveal_title_default'); ?></div>
+    <div class="ls-modal-sub"><?php e('my_codes.reveal_sub'); ?></div>
     <div id="rv-hint" style="display:none;font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:12px;"></div>
 
     <div class="vault-input-wrap">
-      <label>Vault Passphrase</label>
-      <input type="password" id="rv-vault" placeholder="Your vault passphrase…" autocomplete="current-password">
+      <label><?php e('create_code.vault_passphrase_label'); ?></label>
+      <input type="password" id="rv-vault" placeholder="<?= htmlspecialchars(t('create_code.vault_passphrase_placeholder'), ENT_QUOTES, 'UTF-8') ?>" autocomplete="current-password">
     </div>
 
     <div class="reveal-pwd" id="rv-pwd"></div>
 
     <div id="rv-err" class="msg msg-err"></div>
 
-    <button class="btn btn-primary" id="rv-btn" onclick="doReveal()"><span class="btn-ico" id="rv-btn-ico" aria-hidden="true">🔒</span><span class="btn-txt" id="rv-btn-txt">Decrypt &amp; Reveal</span></button>
-    <button class="btn btn-ghost" id="rv-copy-btn" onclick="copyRevealed()" style="display:none;margin-top:10px;"><span class="btn-ico" aria-hidden="true">⧉</span><span class="btn-txt">Copy</span></button>
-    <button class="btn btn-ghost" id="rv-share-btn" onclick="startShareFlow()" style="display:none;margin-top:10px;"><span class="btn-ico" aria-hidden="true">🔗</span><span class="btn-txt">Create share link</span></button>
+    <button class="btn btn-primary" id="rv-btn" onclick="doReveal()"><span class="btn-ico" id="rv-btn-ico" aria-hidden="true">🔒</span><span class="btn-txt" id="rv-btn-txt"><?php e('my_codes.btn_decrypt_reveal'); ?></span></button>
+    <button class="btn btn-ghost" id="rv-copy-btn" onclick="copyRevealed()" style="display:none;margin-top:10px;"><span class="btn-ico" aria-hidden="true">⧉</span><span class="btn-txt"><?php e('share.btn_copy'); ?></span></button>
+    <button class="btn btn-ghost" id="rv-share-btn" onclick="startShareFlow()" style="display:none;margin-top:10px;"><span class="btn-ico" aria-hidden="true">🔗</span><span class="btn-txt"><?php e('my_codes.share_create_btn'); ?></span></button>
 
     <div id="rv-share-wrap" class="rv-share" style="display:none;">
       <div class="hr"></div>
-      <div class="k">Share link</div>
-      <div class="small" style="margin-top:6px;">Anyone with the link + the secret can decrypt after your lock becomes eligible to reveal.</div>
+      <div class="k"><?php e('my_codes.reveal_share_title'); ?></div>
+      <div class="small" style="margin-top:6px;"><?php e('my_codes.reveal_share_sub'); ?></div>
 
       <label class="chk" style="margin:12px 0 0 0;">
         <input type="checkbox" id="rv-share-allow" checked>
-        <span>Reveal after the unlock date to anyone with the link</span>
+        <span><?php e('my_codes.share_allow_label'); ?></span>
       </label>
 
       <div class="rv-share-grid" style="margin-top:12px;">
         <div>
-          <div class="k">Link</div>
+          <div class="k"><?php e('my_codes.share_link_label'); ?></div>
           <input class="ls-input" id="rv-share-url" readonly value="" style="margin-top:6px;">
-          <button class="btn btn-ghost btn-sm btn-inline" type="button" id="rv-share-copy-url" style="margin-top:8px;">Copy link</button>
+          <button class="btn btn-ghost btn-sm btn-inline" type="button" id="rv-share-copy-url" style="margin-top:8px;"><?php e('my_codes.share_copy_link_btn'); ?></button>
         </div>
         <div>
-          <div class="k">Secret (save this)</div>
+          <div class="k"><?php e('my_codes.share_secret_label'); ?></div>
           <input class="ls-input" id="rv-share-secret" readonly value="" style="margin-top:6px;">
-          <button class="btn btn-ghost btn-sm btn-inline" type="button" id="rv-share-copy-secret" style="margin-top:8px;">Copy secret</button>
+          <button class="btn btn-ghost btn-sm btn-inline" type="button" id="rv-share-copy-secret" style="margin-top:8px;"><?php e('my_codes.share_copy_secret_btn'); ?></button>
         </div>
       </div>
 
       <div class="msg msg-ok" id="rv-share-ok"></div>
       <div class="msg msg-err" id="rv-share-err"></div>
 
-      <button class="btn btn-red btn-sm btn-inline" type="button" id="rv-share-revoke" style="display:none;margin-top:12px;">Revoke link</button>
+      <button class="btn btn-red btn-sm btn-inline" type="button" id="rv-share-revoke" style="display:none;margin-top:12px;"><?php e('my_codes.share_revoke_btn'); ?></button>
     </div>
 
     <div id="rv-zk-note" style="display:none;margin-top:10px;font-size:10px;color:var(--muted);letter-spacing:1px;line-height:1.6;">
-      Zero-knowledge: only your browser decrypted this value.
+      <?php e('my_codes.zk_note'); ?>
     </div>
   </div>
 </div>
@@ -208,62 +207,128 @@ let currentPreShareId = null;
 let countdownTimer = null;
 let countdownRefreshTimer = null;
 
+let allLocksSession = [];
+let locksOffline = false;
+let locksLoading = false;
+
+let locksFilter = 'all'; // all|sealed|ready|wallet
+let locksQuery = '';
+
 const reduceMotion = (()=>{
   try{ return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches; }
   catch{ return false; }
 })();
 
-function apiUrl(url){return url.startsWith('/') ? url.slice(1) : url;}
-async function get(url){const r=await fetch(apiUrl(url),{credentials:'same-origin'});return r.json();}
-async function postCsrf(url,body){
-  const r=await fetch(apiUrl(url),{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRF-Token':CSRF},body:JSON.stringify(body)});
-  return r.json();
+function tr(key, fallback){
+  if(window.LS && LS.t){
+    const v = LS.t(key);
+    if(v && v !== key) return v;
+  }
+  return fallback || key;
+}
+
+function toast(msg,type='ok'){
+  if(window.LS && LS.toast) LS.toast(msg,type);
 }
 
 function esc(s){
-  if(window.LS && LS.esc) return LS.esc(s);
-  return String(s||'')
-    .replace(/&/g,'&amp;')
-    .replace(/</g,'&lt;')
-    .replace(/>/g,'&gt;')
-    .replace(/"/g,'&quot;');
-}
-function toast(msg,type='ok'){
-  if(window.LS && LS.toast) return LS.toast(msg, type);
-  const t=document.createElement('div');t.className=`toast ${type}`;t.textContent=String(msg||'');document.body.appendChild(t);setTimeout(()=>t.remove(),3200);
+  return (window.LS && LS.esc) ? LS.esc(s) : String(s||'');
 }
 
-function parseUtc(ts){
-  return (window.LS && LS.parseUtc) ? LS.parseUtc(ts) : new Date(ts);
+function apiUrl(url){return url.startsWith('/') ? url.slice(1) : url;}
+function getFilteredLocks(){
+  return (allLocksSession || []).filter(l => matchesFilter(l) && matchesQuery(l));
 }
 
-function fmtLocalTs(ts){
-  const d = parseUtc(ts);
-  return (window.LS && LS.fmtLocal) ? LS.fmtLocal(d) : (d && !isNaN(d.getTime()) ? d.toLocaleString() : '');
+function renderLocks(){
+  const wrap = document.getElementById('locks-wrap');
+  if(!wrap) return;
+
+  if(locksLoading && !(allLocksSession && allLocksSession.length) && !locksOffline){
+    wrap.innerHTML = renderLoadingSkeleton();
+    return;
+  }
+
+  const list = getFilteredLocks();
+
+  if(locksOffline){
+    wrap.innerHTML  '<<div class="card" style="margin-bottom:12p;"><<div class="small">' + esc(tr('my_codes.offline_banner', 'Offline mode: showing cached metadata. Reveal is disabled until you’re back online.')) '</ +d></ivdiv>';
+;
+    const holder = document.createElement('div');
+    holder.innerHTML = '<div class="locks-grid" id="locks-grid"></div>';
+    wrap.appendChild(holder.firstChild);
+    const grid = document.getElementById('locks-grid');
+    list.forEach(l => grid.appendChild(buildCard(l, {offline:true})));
+    startCountdownTicker();
+    return;
+  }
+
+  if(!list.length){
+    const t1 = (window.LS && LS.t) ? LS.t('my_codes.empty_title') : '';
+    const t2 = (window.LS && LS.t) ? LS.t('my_codes.empty_sub') : '';
+    wrap.innerHTML = `<div class="empty"><div class="empty-icon">🔒</div><h3>${esc(t1 || 'No time locks yet')}</h3><p>${esc(t2 || 'Create one from “Create Lock”.')}</p></div>`;
+    return;
+  }
+
+  wrap.innerHTML = '<div class="locks-grid" id="locks-grid"></div>';
+  const grid = document.getElementById('locks-grid');
+  list.forEach(l => grid.appendChild(buildCard(l, {offline:locksOffline})));
+
+  startCountdownTicker();
 }
 
-function fmtUtcTs(ts){
-  const d = parseUtc(ts);
-  return (window.LS && LS.fmtUtc) ? LS.fmtUtc(d) : (d && !isNaN(d.getTime()) ? d.toUTCString() : '');
+function setLocksFilter(next){
+  locksFilter = String(next || 'all');
+
+  const seg = document.getElementById('locks-seg');
+  if(seg){
+    seg.querySelectorAll('button[data-filter]').forEach(b => {
+      const isActive = (b.getAttribute('data-filter') === locksFilter);
+      if(isActive) b.classList.add('active');
+      else b.classList.remove('active');
+      b.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    });
+  }
+
+  renderLocks();
 }
 
-function fmtCountdown(seconds){
-  if(window.LS && LS.fmtCountdown) return LS.fmtCountdown(seconds);
-  const s = Math.max(0, parseInt(seconds||'0', 10) || 0);
-  const h = Math.floor(s / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  const ss = s % 60;
-  return (h > 0 ? (String(h).padStart(2,'0') + ':') : '') + String(m).padStart(2,'0') + ':' + String(ss).padStart(2,'0');
+function matchesFilter(l){
+  if(locksFilter === 'wallet') return l.kind === 'wallet';
+  if(locksFilter === 'ready') return String(l.display_status||'') === 'unlocked';
+  if(locksFilter === 'sealed'){
+    const st = String(l.display_status||'');
+    return (st === 'locked' || st === 'pending' || st === 'auto_saved');
+  }
+  return true;
 }
 
-function renderLoadingSkeleton(){
-  return `
-    <div class="locks-grid">
-      <div class="skel" style="height:120px;"></div>
-      <div class="skel" style="height:120px;"></div>
-      <div class="skel" style="height:120px;"></div>
-    </div>
-  `;
+function matchesQuery(l){
+  const q = String(locksQuery||'').trim().toLowerCase();
+  if(!q) return true;
+  const label = String(l.label||'').toLowerCase();
+  return label.indexOf(q) !== -1;
+}
+
+function initLocksToolbar(){
+  const seg = document.getElementById('locks-seg');
+  if(seg && !seg.getAttribute('data-init')){
+    seg.setAttribute('data-init','1');
+    seg.addEventListener('click', (e)=>{
+      const b = e.target && e.target.closest ? e.target.closest('button[data-filter]') : null;
+      if(!b) return;
+      setLocksFilter(b.getAttribute('data-filter') || 'all');
+    });
+  }
+
+  const search = document.getElementById('locks-search');
+  if(search && !search.getAttribute('data-init')){
+    search.setAttribute('data-init','1');
+    search.addEventListener('input', ()=>{
+      locksQuery = String(search.value || '');
+      renderLocks();
+    });
+  }
 }
 
 function b64ToBytes(b64){return Uint8Array.from(atob(b64), c => c.charCodeAt(0));}
@@ -370,14 +435,22 @@ function startCountdownTicker(){
   countdownTimer = setInterval(tick, 1000);
 }
 
-async function loadLocks(){
+async function loadLocks(force=false){
   if(countdownRefreshTimer){
     clearTimeout(countdownRefreshTimer);
     countdownRefreshTimer = null;
   }
 
+  initLocksToolbar();
+
   const wrap=document.getElementById('locks-wrap');
-  wrap.innerHTML=renderLoadingSkeleton();
+  if(!wrap) return;
+
+  if(force || !(allLocksSession && allLocksSession.length)){
+    wrap.innerHTML = renderLoadingSkeleton();
+  }
+
+  locksLoading = true;
 
   try{
     const [a,b] = await Promise.allSettled([
@@ -428,16 +501,11 @@ async function loadLocks(){
       return ay - ax;
     });
 
-    if(!mapped.length){
-      wrap.innerHTML='<div class="empty"><div class="empty-icon">🔒</div><h3>No codes yet</h3><p>Create one from the Create Code page.</p></div>';
-      return;
-    }
+    allLocksSession = mapped;
+    locksOffline = false;
+    locksLoading = false;
 
-    wrap.innerHTML='<div class="locks-grid" id="locks-grid"></div>';
-    const grid = document.getElementById('locks-grid');
-    mapped.forEach(l=>grid.appendChild(buildCard(l)));
-
-    startCountdownTicker();
+    renderLocks();
 
   }catch{
     try{
@@ -480,16 +548,17 @@ async function loadLocks(){
       });
 
       if(mapped.length){
-        wrap.innerHTML = '<div class="card" style="margin-bottom:12px;"><div class="small">Offline mode: showing cached metadata. Reveal is disabled until you’re back online.</div></div>';
-        const holder = document.createElement('div');
-        holder.innerHTML = '<div class="locks-grid" id="locks-grid"></div>';
-        wrap.appendChild(holder.firstChild);
-        const grid = document.getElementById('locks-grid');
-        mapped.forEach(l=>grid.appendChild(buildCard(l, {offline:true})));
-        startCountdownTicker();
+        allLocksSession = mapped;
+        locksOffline = true;
+        locksLoading = false;
+        renderLocks();
         return;
       }
     }catch{}
+
+    locksOffline = false;
+    locksLoading = false;
+    allLocksSession = [];
 
     wrap.innerHTML='<div class="empty"><p>Failed to load.</p></div>';
   }
@@ -740,7 +809,7 @@ function openReveal(kind, id, label, hint){
   const txt = document.getElementById('rv-btn-txt');
   btn.style.display='block';
   btn.disabled=false;
-  setBtnState(btn, ico, txt, null, '🔒', currentReveal.share_after ? 'Decrypt & Share' : 'Decrypt & Reveal');
+  setBtnState(btn, ico, txt, null, '🔒', currentReveal.share_after ? tr('my_codes.btn_decrypt_share', 'Decrypt & Share') : tr('my_codes.btn_decrypt_reveal', 'Decrypt & Reveal'));
 
   const errEl = document.getElementById('rv-err');
   errEl.classList.remove('show');
@@ -757,7 +826,7 @@ async function ensureReauth(methods){
   if(window.LS && LS.reauth){
     return LS.reauth(methods||{}, {post: postCsrf});
   }
-  toast('Enable TOTP or add a passkey in Account', 'warn');
+  toast(tr('js.enable_totp_or_passkey', 'Enable TOTP or add a passkey in Account'), 'warn');
   return false;
 }
 
@@ -770,10 +839,10 @@ async function doReveal(){
   const errEl=document.getElementById('rv-err');
   errEl.classList.remove('show');
 
-  if(!vault){errEl.textContent='Enter your vault passphrase';errEl.classList.add('show');return;}
-  if(!currentReveal || !currentReveal.id){errEl.textContent='No code selected';errEl.classList.add('show');return;}
+  if(!vault){errEl.textContent=tr('create_code.gen.toast_need_vault','Enter your vault passphrase');errEl.classList.add('show');return;}
+  if(!currentReveal || !currentReveal.id){errEl.textContent=tr('my_codes.err_no_lock_selected','No lock selected');errEl.classList.add('show');return;}
 
-  setBtnState(btn, ico, txt, 'working', '⏳', 'Decrypting…');
+  setBtnState(btn, ico, txt, 'working', '⏳', tr('share.btn_decrypting', 'Decrypting…'));
   btn.disabled=true;
   setRevealSheetState('working');
 
@@ -842,8 +911,7 @@ async function doReveal(){
 
     setTimeout(()=>{
       setRevealSheetState(null);
-      setBtnState(btn, ico, txt, null, '🔒', (currentReveal && currentReveal.share_after) ? 'Decrypt & Share' : 'Decrypt & Reveal');
-      btn.disabled=false;
+      setBtnState(btn, ico, txt, null, '🔒', (currentReveal && currentReveal.share_after) ? tr('my_codes.btn_decrypt_share', 'Decrypt & Share') :      btn.disabled=false;
     }, 900);
   }
 }
@@ -961,7 +1029,7 @@ function setPreShareMsg(el, txt, ok){
 
 async function revokePreShare(){
   if(!currentPreShareId) return;
-  if(!confirm('Revoke this share link? Anyone with it will lose access.')) return;
+  if(!confirm(tr('my_codes.share_revoke_confirm', 'Revoke this share link? Anyone with it will lose access.'))) return;
 
   const okEl = document.getElementById('ps-ok');
   const errEl = document.getElementById('ps-err');
@@ -977,12 +1045,12 @@ async function revokePreShare(){
   currentPreShareId = null;
   const revokeBtn = document.getElementById('ps-revoke');
   if(revokeBtn) revokeBtn.style.display='none';
-  setPreShareMsg(okEl, 'Link revoked.', true);
+  setPreShareMsg(okEl, tr('my_codes.share_link_revoked', 'Link revoked.'), true);
 }
 
 async function createShareFromPrep(){
   if(!currentShareLock || currentShareLock.kind !== 'lock' || !currentShareLock.id){
-    toast('Select a lock first','err');
+    toast(tr('my_codes.toast_select_lock_first','Select a lock first'), 'err');
     return;
   }
 
@@ -1195,7 +1263,7 @@ async function copyVal(id){
 
 async function revokeShare(){
   if(!currentShareId) return;
-  if(!confirm('Revoke this share link? Anyone with it will lose access.')) return;
+  if(!confirm(tr('my_codes.share_revoke_confirm', 'Re will lose access.')) return;
 
   const okEl = document.getElementById('rv-share-ok');
   const errEl = document.getElementById('rv-share-err');
@@ -1211,16 +1279,16 @@ async function revokeShare(){
   currentShareId = null;
   const revokeBtn = document.getElementById('rv-share-revoke');
   if(revokeBtn) revokeBtn.style.display='none';
-  setShareMsg(okEl, 'Link revoked.', true);
+  setShareMsg(okEl, tr('my_codes.share_link_revoked', 'Link revoked.'), true);
 }
 
 async function startShareFlow(){
   if(!currentReveal || currentReveal.kind !== 'lock' || !currentReveal.id){
-    toast('Select a lock first','err');
+    toast(tr('my_codes.toast_select_lock_first','Select a lock first'), 'err');
     return;
   }
   if(!revealedPwd){
-    toast('Decrypt first to generate a share link','warn');
+    toast(tr('my_codes.toast_decrypt_first_share','Decrypt first to generate a share link'), 'warn');
     return;
   }
 
@@ -1331,6 +1399,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   if(psCopySecret) psCopySecret.addEventListener('click', ()=>copyVal('ps-secret'));
   if(psRevoke) psRevoke.addEventListener('click', revokePreShare);
 
+  initLocksToolbar();
   await loadLocks();
 });
 </script>

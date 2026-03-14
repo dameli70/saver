@@ -30,6 +30,7 @@ header("Referrer-Policy: no-referrer");
 <?php emitI18nJsGlobals(); ?>
 <script src="assets/theme.js"></script>
 <link rel="stylesheet" href="assets/base.css">
+<link rel="stylesheet" href="assets/app.css">
 <link rel="stylesheet" href="assets/auth.css">
 <style>
 .box{max-width:520px;}
@@ -42,10 +43,13 @@ header("Referrer-Policy: no-referrer");
 </style>
 </head>
 <body>
-  <a class="lang-toggle fr<?= currentLang() === 'fr' ? ' active' : '' ?>" href="<?= htmlspecialchars(langSwitchUrl('fr'), ENT_QUOTES, 'UTF-8') ?>"><?php e('common.lang_fr'); ?></a>
-  <a class="lang-toggle en<?= currentLang() === 'en' ? ' active' : '' ?>" href="<?= htmlspecialchars(langSwitchUrl('en'), ENT_QUOTES, 'UTF-8') ?>"><?php e('common.lang_en'); ?></a>
-  <button class="theme-toggle" type="button" data-theme-toggle><?php e('common.theme'); ?></button>
-  <div class="box">
+<div class="orb orb1"></div><div class="orb orb2"></div>
+
+<div id="app">
+  <?php include __DIR__ . '/includes/topbar_public.php'; ?>
+
+  <div class="auth-wrap">
+    <div class="box">
     <div class="logo"><?= htmlspecialchars(APP_NAME) ?></div>
     <div class="sub"><?php e('signup.subtitle'); ?></div>
 
@@ -78,6 +82,8 @@ header("Referrer-Policy: no-referrer");
       <a href="login.php"><?php e('signup.have_account'); ?></a>
     </div>
   </div>
+  </div>
+</div>
 
 <script>
 const f=document.getElementById('f');

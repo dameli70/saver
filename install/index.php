@@ -392,6 +392,8 @@ header("Referrer-Policy: no-referrer");
 <title>Install — <?= htmlspecialchars($vals['app_name'] ?? 'Controle') ?></title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<?php emitI18nJsGlobals(); ?>
+<script src="../assets/theme.js"></script>
 <link rel="stylesheet" href="../assets/base.css">
 <link rel="stylesheet" href="../assets/app.css">
 <style>
@@ -418,9 +420,19 @@ hr{border:none;border-top:1px solid var(--b1);margin:16px 0;}
 </head>
 <body>
 <div class="orb orb1"></div><div class="orb orb2"></div>
-<div class="wrap">
-  <div class="logo"><?= htmlspecialchars($vals['app_name'] ?? 'Controle') ?></div>
-  <div class="sub">// Installation</div>
+
+<div id="app">
+  <?php
+    $topbarPrefix = '../';
+    $topbarAppName = $vals['app_name'] ?? 'Controle';
+    $topbarShowFaq = false;
+    $topbarShowAuth = false;
+    include __DIR__ . '/../includes/topbar_public.php';
+  ?>
+
+  <div class="wrap">
+    <div class="logo"><?= htmlspecialchars($vals['app_name'] ?? 'Controle') ?></div>
+    <div class="sub">// Installation</div>
 
   <?php if ($errors): ?>
     <div class="msg msg-err show">
@@ -518,6 +530,7 @@ hr{border:none;border-top:1px solid var(--b1);margin:16px 0;}
       </div>
     </div>
   </form>
+  </div>
 </div>
 </body>
 </html> 

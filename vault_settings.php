@@ -43,53 +43,45 @@ header("Permissions-Policy: clipboard-write=(self)");
 <div class="orb orb1"></div><div class="orb orb2"></div>
 
 <div id="app">
-  <div class="topbar">
-    <div class="topbar-logo"><?= htmlspecialchars(APP_NAME) ?></div>
-    <div class="topbar-r">
-      <span class="user-pill"><?= htmlspecialchars($userEmail) ?></span>
-      <button class="btn btn-ghost btn-sm btn-theme" type="button" data-theme-toggle><?php e('common.theme'); ?></button>
-      <?php $curLang = currentLang(); ?>
-      <a class="<?= $curLang === 'fr' ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm' ?>" href="<?= htmlspecialchars(langSwitchUrl('fr')) ?>"><?php e('common.lang_fr'); ?></a>
-      <a class="<?= $curLang === 'en' ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm' ?>" href="<?= htmlspecialchars(langSwitchUrl('en')) ?>"><?php e('common.lang_en'); ?></a>
-      <a class="btn btn-ghost btn-sm" href="dashboard.php"><?php e('nav.dashboard'); ?></a>
-      <a class="btn btn-ghost btn-sm" href="create_code.php"><?php e('nav.create_code'); ?></a>
-      <a class="btn btn-ghost btn-sm" href="my_codes.php"><?php e('nav.my_codes'); ?></a>
-      <a class="btn btn-ghost btn-sm" href="rooms.php"><?php e('nav.rooms'); ?></a>
-      <a class="btn btn-ghost btn-sm" href="notifications.php"><?php e('nav.notifications'); ?></a>
-      <a class="btn btn-ghost btn-sm" href="backup.php"><?php e('nav.backups'); ?></a>
-      <a class="btn btn-ghost btn-sm" href="account.php"><?php e('nav.account'); ?></a>
-      <?php if ($isAdmin): ?><a class="btn btn-ghost btn-sm" href="admin.php"><?php e('nav.admin'); ?></a><?php endif; ?>
-      <a class="btn btn-ghost btn-sm" href="logout.php"><?php e('common.logout'); ?></a>
-    </div>
-  </div>
+  <?php include __DIR__ . '/includes/topbar.php'; ?>
 
   <div class="app-body">
+
+    <div class="page-head">
+      <div>
+        <div class="page-title"><?php e('page.vault_settings'); ?></div>
+        <div class="page-sub"><?php e('vault_settings.subtitle'); ?></div>
+      </div>
+      <div class="page-actions">
+        <a class="btn btn-ghost btn-sm" href="backup.php"><?php e('nav.backups'); ?></a>
+      </div>
+    </div>
+
     <div class="card">
-      <div class="card-title"><div class="dot"></div>Vault rotation</div>
+      <div class="card-title"><div class="dot"></div><?php e('vault_settings.rotation_title'); ?></div>
       <div style="font-size:12px;color:var(--muted);line-height:1.7;margin-bottom:14px;">
-        Rotate your vault passphrase by re-encrypting <strong>already-unlocked</strong> codes (reveal date has passed).
-        Locked codes cannot be rotated until they unlock.
+        <?= t('vault_settings.rotation_sub_html') ?>
       </div>
 
       <div id="rot-ok" class="msg msg-ok"></div>
       <div id="rot-err" class="msg msg-err"></div>
 
-      <div class="field"><label>Current vault passphrase</label>
+      <div class="field"><label><?php e('vault_settings.current_passphrase_label'); ?></label>
         <input type="password" id="rot-cur" autocomplete="current-password">
       </div>
-      <div class="field"><label>New vault passphrase</label>
+      <div class="field"><label><?php e('vault_settings.new_passphrase_label'); ?></label>
         <input type="password" id="rot-new" autocomplete="new-password">
       </div>
-      <div class="field"><label>Confirm new vault passphrase</label>
+      <div class="field"><label><?php e('vault_settings.confirm_passphrase_label'); ?></label>
         <input type="password" id="rot-new2" autocomplete="new-password">
       </div>
 
       <button class="btn btn-primary" id="rot-btn" onclick="rotateVaultPassphrase()" style="width:100%;">
-        <span id="rot-txt">Rotate vault passphrase</span>
+        <span id="rot-txt"><?php e('vault_settings.rotate_btn'); ?></span>
       </button>
 
       <div style="margin-top:12px;font-size:11px;color:var(--muted);line-height:1.7;">
-        Note: rotation requires decrypting eligible ciphertext in your browser. The server never learns your passphrase.
+        <?php e('vault_settings.note'); ?>
       </div>
     </div>
   </div>
