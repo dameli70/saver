@@ -572,6 +572,14 @@ return [
     'rooms.action.request_join' => 'Request to join',
     'rooms.action.restricted' => 'Restricted',
     'rooms.action.restricted_title' => 'You cannot join new rooms until {ts}',
+    'rooms.action.requested' => 'Requested',
+    'rooms.action.in_your_rooms' => 'In your rooms',
+    'rooms.action.already_in_room_title' => 'You already have a status in this room ({status}).',
+
+    'rooms.err.goal_required' => 'Goal is required.',
+    'rooms.err.dates_required' => 'Start date and reveal date are required.',
+    'rooms.err.max_lt_min' => 'Max participants must be >= min participants.',
+    'rooms.err.reveal_after_start' => 'Reveal date must be after start date.',
 
     'rooms.msg.join_request_sent' => 'Join request sent.',
     'rooms.msg.room_created' => 'Room created.',

@@ -223,7 +223,15 @@ const STR = {
   join_request: tr('rooms.action.request_join', 'Request to join'),
   restricted: tr('rooms.action.restricted', 'Restricted'),
   restricted_title: tr('rooms.action.restricted_title', 'You cannot join new rooms until {ts}'),
+  requested: tr('rooms.action.requested', 'Requested'),
+  in_your_rooms: tr('rooms.action.in_your_rooms', 'In your rooms'),
+  already_in_room_title: tr('rooms.action.already_in_room_title', 'You already have a status in this room ({status}).'),
   join_request_sent: tr('rooms.msg.join_request_sent', 'Join request sent.'),
+
+  err_goal_required: tr('rooms.err.goal_required', 'Goal is required.'),
+  err_dates_required: tr('rooms.err.dates_required', 'Start date and reveal date are required.'),
+  err_max_lt_min: tr('rooms.err.max_lt_min', 'Max participants must be >= min participants.'),
+  err_reveal_after_start: tr('rooms.err.reveal_after_start', 'Reveal date must be after start date.'),
 
   no_rooms_yet: tr('rooms.msg.no_rooms_yet', 'No rooms yet.'),
   failed_to_load: tr('rooms.msg.failed_to_load', 'Failed to load.'),
@@ -295,6 +303,8 @@ function renderRoomSkeletons(n){
   for(let i=0;i<(n||4);i++) s += '<div class="room skel" style="height:132px;"></div>';
   return s;
 }
+
+let myRoomStatusById = Object.create(null);
 
 function b64uToBuf(b64url){
   const b64 = String(b64url||'').replace(/-/g,'+').replace(/_/g,'/');
@@ -448,7 +458,13 @@ function buildRoomCard(r){
   join.type='button';
   join.textContent=STR.join_request;
 
-  if(myRestrictedUntil){
+  const myStatus = myRoomStatusById[String(r.id)] || '';
+  if(myStatus && myStatus !== 'declined'){
+    join.className='btn btn-ghost btn-sm';
+    join.disabled=true;
+    join.textContent = (myStatus === 'pending') ? STR.requested : STR.in_your_rooms;
+    join.title = tf('rooms.action.already_in_room_title', {status: myStatus}, STR.already_in_room_title.replace('{status}', myStatus));
+  } else if(myRestrictedUntil){
     join.className='btn btn-ghost btn-sm';
     join.disabled=true;
     join.textContent=STR.restricted;
@@ -459,7 +475,11 @@ function buildRoomCard(r){
       try{
         const res=await postStrong('/api/rooms.php', {action:'request_join', room_id: r.id});
         if(!res.success) throw new Error(res.error||STR.failed);
+        myRoomStatusById[String(r.id)] = 'pending';
+        join.className='btn btn-ghost btn-sm';
+        join.textContent = STR.requested;
         setMsg('rooms-msg', STR.join_request_sent, true);
+        await loadMyRooms();
       }catch(e){
         setMsg('rooms-msg', e.message||STR.failed, false);
       }finally{
@@ -528,17 +548,26 @@ async function loadMyRooms(){
     if(!r.success) throw new Error(r.error||STR.failed);
 
     const rooms=r.rooms||[];
+    myRoomStatusById = Object.create(null);
+    rooms.forEach(x => {
+      myRoomStatusById[String(x.id)] = String(x.my_status||'');
+    });
+
     if(!rooms.length){
       wrap.innerHTML = '<div style="color:var(--muted);font-size:12px;line-height:1.6;">' + esc(STR.no_rooms_yet) + '</div>';
-      return;
+      return rooms;
     }
 
     wrap.innerHTML='';
     rooms.forEach(x => wrap.appendChild(buildMyRoomCard(x)));
 
+    return rooms;
+
   }catch(e){
+    myRoomStatusById = Object.create(null);
     wrap.innerHTML = '<div style="color:var(--muted);font-size:12px;">' + esc(STR.failed_to_load) + '</div>';
     setMsg('myrooms-msg', e.message||STR.failed, false);
+    return [];
   }
 }
 
@@ -578,9 +607,21 @@ async function loadRooms(){
 
 function toServerDateTimeLocal(v){
   // datetime-local gives local time. Convert to an unambiguous UTC instant.
+  // Avoid Date("YYYY-MM-DDTHH:MM") parsing inconsistencies across browsers.
   const s = String(v||'').trim();
   if(!s) return '';
-  const d = new Date(s);
+
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/);
+  if(!m) return '';
+
+  const y = parseInt(m[1], 10);
+  const mo = parseInt(m[2], 10) - 1;
+  const d0 = parseInt(m[3], 10);
+  const h = parseInt(m[4], 10);
+  const mi = parseInt(m[5], 10);
+  const sec = parseInt(m[6] || '0', 10);
+
+  const d = new Date(y, mo, d0, h, mi, sec, 0);
   if(isNaN(d.getTime())) return '';
   return d.toISOString();
 }
@@ -601,6 +642,26 @@ async function createRoom(){
   const reveal_at = toServerDateTimeLocal(document.getElementById('cr-reveal').value);
   const privacy_mode = document.getElementById('cr-privacy').checked ? 1 : 0;
   const escrow_policy = document.getElementById('cr-escrow').value;
+
+  if(!goal){
+    setMsg('cr-msg', STR.err_goal_required, false);
+    return;
+  }
+  if(!start_at || !reveal_at){
+    setMsg('cr-msg', STR.err_dates_required, false);
+    return;
+  }
+  if(max_participants < min_participants){
+    setMsg('cr-msg', STR.err_max_lt_min, false);
+    return;
+  }
+
+  const startTs = Date.parse(start_at);
+  const revealTs = Date.parse(reveal_at);
+  if(startTs && revealTs && revealTs <= startTs){
+    setMsg('cr-msg', STR.err_reveal_after_start, false);
+    return;
+  }
 
   try{
     const r = await postStrong('/api/rooms.php', {
@@ -631,9 +692,11 @@ async function createRoom(){
 }
 
 
-renderCategories();
-loadMyRooms();
-loadRooms();
+(async () => {
+  renderCategories();
+  await loadMyRooms();
+  await loadRooms();
+})();
 </script>
 </div>
 </body>

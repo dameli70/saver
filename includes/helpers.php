@@ -683,6 +683,21 @@ function hasLockSharesTable(): bool {
     }
 }
 
+function hasLockSharePrepsTable(): bool {
+    static $cached = null;
+    if ($cached !== null) return $cached;
+
+    try {
+        $db = getDB();
+        $stmt = $db->query("SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'lock_share_preps' LIMIT 1");
+        $cached = (bool)$stmt->fetchColumn();
+        return $cached;
+    } catch (Throwable) {
+        $cached = false;
+        return false;
+    }
+}
+
 function hasLockSharesAllowRevealAfterDateColumn(): bool {
     static $cached = null;
     if ($cached !== null) return $cached;

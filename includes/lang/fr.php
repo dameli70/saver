@@ -572,6 +572,14 @@ return [
     'rooms.action.request_join' => 'Demander à rejoindre',
     'rooms.action.restricted' => 'Restreint',
     'rooms.action.restricted_title' => 'Vous ne pouvez pas rejoindre de nouvelles salles avant {ts}',
+    'rooms.action.requested' => 'Demandé',
+    'rooms.action.in_your_rooms' => 'Déjà dans vos salles',
+    'rooms.action.already_in_room_title' => 'Vous avez déjà un statut dans cette salle ({status}).',
+
+    'rooms.err.goal_required' => 'Objectif requis.',
+    'rooms.err.dates_required' => 'Date de début et date de révélation requises.',
+    'rooms.err.max_lt_min' => 'Le maximum doit être >= au minimum.',
+    'rooms.err.reveal_after_start' => 'La date de révélation doit être après la date de début.',
 
     'rooms.msg.join_request_sent' => 'Demande envoyée.',
     'rooms.msg.room_created' => 'Salle créée.',

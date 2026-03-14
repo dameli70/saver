@@ -953,6 +953,8 @@ async function pollFeed(){
 
 function addFeedItem(ev){
   const feed = document.getElementById('feed');
+  const shouldScroll = (feed.scrollTop + feed.clientHeight) >= (feed.scrollHeight - 24);
+
   const el = document.createElement('div');
   el.className = 'feed-item';
 
@@ -1007,7 +1009,7 @@ function addFeedItem(ev){
   el.innerHTML = `<div>${esc(line)}${extra}</div><div class="feed-meta">${esc(fmt(ev.created_at))}</div>`;
 
   feed.appendChild(el);
-  feed.scrollTop = feed.scrollHeight;
+  if(shouldScroll) feed.scrollTop = feed.scrollHeight;
 }
 
 async function requestJoin(){

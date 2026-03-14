@@ -182,10 +182,11 @@ header("Permissions-Policy: clipboard-write=(self)");
 </div>
 
 <!-- confirm overlay -->
-<div id="confirm-overlay" onclick="closeConfirm(event)">
-  <div class="confirm-sheet">
-    <div class="confirm-title" id="confirm-title"><?php e('create_code.confirm.title_lock'); ?></div>
-    <div class="confirm-sub" id="cs-sub"><?php e('create_code.confirm.sub_copied'); ?></div>
+<div id="confirm-overlay" class="ls-modal-overlay ls-sheet" onclick="closeConfirm(event)">
+  <div class="ls-modal confirm-sheet" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+    <button class="ls-modal-x" type="button" aria-label="<?= htmlspecialchars(t('common.close'), ENT_QUOTES, 'UTF-8') ?>" onclick="closeConfirm();event.stopPropagation();">×</button>
+    <div class="ls-modal-title" id="confirm-title"><?php e('create_code.confirm.title_lock'); ?></div>
+    <div class="ls-modal-sub" id="cs-sub"><?php e('create_code.confirm.sub_copied'); ?></div>
     <div class="msg msg-warn" id="autosave-bar" style="display:none"><?php e('create_code.confirm.autosave'); ?></div>
 
     <div class="confirm-btns" id="confirm-btns">
@@ -442,6 +443,22 @@ function flashCard(card, state, ms=850){
 
 function bytesToB64(bytes){return btoa(String.fromCharCode(...bytes));}
 function b64ToBytes(b64){return Uint8Array.from(atob(b64), c => c.charCodeAt(0));}
+
+function bytesToHex(bytes){
+  return Array.from(bytes).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+function formatSecret(hex){
+  const parts = String(hex||'').match(/.{1,4}/g);
+  return parts ? parts.join('-') : String(hex||'');
+}
+
+function genShareSecret(){
+  const c = requireWebCrypto();
+  const b = new Uint8Array(16);
+  c.getRandomValues(b);
+  return formatSecret(bytesToHex(b));
+}
 
 function requireWebCrypto(){
   if (!window.crypto || !window.crypto.getRandomValues) {
@@ -720,7 +737,42 @@ async function doGenerate(){
 
     const enc = await aesEncrypt(plainPwd, key);
 
-    const r = await postCsrf('api/generate.php',{
+    // Share precomputation: lets users create a share link while the lock is still sealed,
+    // without needing to paste plaintext later.
+    const prep = {};
+    try{
+      const shareSecret = genShareSecret();
+      const c = requireWebCrypto();
+
+      const shareSaltBytes = new Uint8Array(16);
+      c.getRandomValues(shareSaltBytes);
+      const shareSaltB64 = bytesToB64(shareSaltBytes);
+
+      const shareKey = await deriveKey(shareSecret, shareSaltB64, PBKDF2_ITERS);
+      const shareEnc = await aesEncrypt(plainPwd, shareKey);
+
+      const wrapSaltBytes = new Uint8Array(16);
+      c.getRandomValues(wrapSaltBytes);
+      const wrapSaltB64 = bytesToB64(wrapSaltBytes);
+
+      const wrapKey = await deriveKey(vaultPhraseSession, wrapSaltB64, PBKDF2_ITERS);
+      const wrapEnc = await aesEncrypt(shareSecret, wrapKey);
+
+      prep.prep_share_cipher_blob = shareEnc.cipher_blob;
+      prep.prep_share_iv = shareEnc.iv;
+      prep.prep_share_auth_tag = shareEnc.auth_tag;
+      prep.prep_share_kdf_salt = shareSaltB64;
+      prep.prep_share_kdf_iterations = PBKDF2_ITERS;
+
+      prep.prep_share_secret_cipher_blob = wrapEnc.cipher_blob;
+      prep.prep_share_secret_iv = wrapEnc.iv;
+      prep.prep_share_secret_auth_tag = wrapEnc.auth_tag;
+      prep.prep_share_secret_kdf_salt = wrapSaltB64;
+      prep.prep_share_secret_kdf_iterations = PBKDF2_ITERS;
+
+    }catch{}
+
+    const payload = {
       label,
       type,
       length,
@@ -731,7 +783,10 @@ async function doGenerate(){
       iv: enc.iv,
       auth_tag: enc.auth_tag,
       kdf_salt,
-    });
+    };
+    Object.assign(payload, prep);
+
+    const r = await postCsrf('api/generate.php', payload);
 
     if(!r.success){throw new Error(r.error||STR.gen_err_generation_failed);}
 
