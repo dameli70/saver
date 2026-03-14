@@ -30,7 +30,7 @@ if (!function_exists('topbarHref')) {
     <?php if ($publicLogoUrl !== ''): ?>
       <img class="topbar-logo-img" src="<?= htmlspecialchars($publicLogoUrl, ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($publicAppName, ENT_QUOTES, 'UTF-8') ?>">
     <?php endif; ?>
-    <span class="topbar-logo-text"><?= htmlspecialchars($publicAppName) ?></span>
+    <span class="topbar-logo-text"><?= htmlspecialchars($publicAppName, ENT_QUOTES, 'UTF-8') ?></span>
   </a>
   <div class="topbar-r">
     <button class="btn btn-ghost btn-sm btn-theme" type="button" data-theme-toggle><?php e('common.theme'); ?></button>

@@ -44,6 +44,15 @@ $_SESSION['email_verified'] = $verified ? 1 : 0;
 $isAdmin = isAdmin();
 $csrf    = getCsrfToken();
 
+// Match the topbar logic: hide the Setup shortcut once onboarding is complete.
+$showSetupShortcut = $verified;
+if ($verified) {
+    $uid = (int)$userId;
+    if ($uid && hasOnboardingColumns() && isOnboardingComplete($uid)) {
+        $showSetupShortcut = false;
+    }
+}
+
 $emailLockReminders = false;
 if ($verified && hasNotificationPreferencesTable()) {
     $emailLockReminders = userWantsEmailTimeLockReminders((int)$userId);
@@ -67,30 +76,19 @@ header("Referrer-Policy: no-referrer");
 <script src="assets/app.js"></script>
 <link rel="stylesheet" href="assets/base.css">
 <link rel="stylesheet" href="assets/app.css">
-<style> 
+<style>
 
-.card{margin-bottom:14px;}
-.row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
-.k{color:var(--muted);font-size:10px;letter-spacing:2px;text-transform:uppercase;}
-.v{color:var(--text);font-size:12px;letter-spacing:.4px;}
-.badge{display:inline-flex;align-items:center;gap:8px;font-size:10px;letter-spacing:1px;text-transform:uppercase;padding:5px 10px;border:1px solid;border-radius:var(--radius-pill);}
-.badge.ok{background:color-mix(in srgb, var(--green) 7%, transparent);border-color:color-mix(in srgb, var(--green) 20%, transparent);color:var(--green);} 
-.badge.wait{background:color-mix(in srgb, var(--orange) 7%, transparent);border-color:color-mix(in srgb, var(--orange) 20%, transparent);color:var(--orange);} 
- 
-.dev{margin-top:12px;border:1px dashed color-mix(in srgb, var(--orange) 35%, transparent);background:color-mix(in srgb, var(--orange) 6%, transparent);padding:10px 12px;font-size:11px;color:var(--muted);line-height:1.6;display:none;}
-.dev a{color:var(--orange);} 
-.field{margin-top:14px;margin-bottom:0;}
-.field label{display:block;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:6px;}
-.field input{width:100%;background:var(--s2);border:1px solid var(--b1);color:var(--text);font-family:var(--mono);
-  font-size:15px;padding:14px;outline:none;transition:border-color .2s;border-radius:var(--radius-input);-webkit-appearance:none;}
-.field input:focus{border-color:var(--accent);} 
-.hr{border-top:1px solid var(--b1);margin:16px 0;}
-.list{margin-top:10px;display:flex;flex-direction:column;gap:10px;}
-.item{border:1px solid var(--b1);background:linear-gradient(180deg, var(--s2), var(--s1));padding:12px 14px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;border-radius:var(--radius-card);}
-.small{font-size:11px;color:var(--muted);line-height:1.6;}
-.btn-red{background:color-mix(in srgb, var(--red) 10%, transparent);border:1px solid color-mix(in srgb, var(--red) 28%, transparent);color:var(--red);} 
-.btn-red:hover{background:color-mix(in srgb, var(--red) 16%, transparent);} 
-code{background:var(--s2);border:1px solid var(--b1);padding:2px 6px;border-radius:10px;}
+.row{display:flex;align-items:flex-start;justify-content:space-between;gap:var(--ls-space-3);flex-wrap:wrap;}
+.k{color:var(--muted);font-family:var(--mono);font-size:var(--ls-type-label-size);letter-spacing:var(--ls-type-label-track);text-transform:uppercase;line-height:1.2;}
+.v{color:var(--text);font-size:var(--ls-type-value-size);letter-spacing:var(--ls-type-value-track);line-height:1.35;}
+
+.dev{margin-top:var(--ls-space-3);border:1px dashed color-mix(in srgb, var(--orange) 35%, transparent);background:color-mix(in srgb, var(--orange) 6%, transparent);padding:var(--ls-space-2) var(--ls-space-3);font-size:var(--ls-type-small-size);color:var(--muted);line-height:var(--ls-type-small-line);display:none;}
+.dev a{color:var(--orange);}
+
+.list{margin-top:var(--ls-space-3);display:flex;flex-direction:column;gap:var(--ls-space-3);}
+.item{border:1px solid var(--b1);background:linear-gradient(180deg, var(--s2), var(--s1));padding:var(--ls-space-3) var(--ls-space-4);display:flex;justify-content:space-between;align-items:flex-start;gap:var(--ls-space-3);flex-wrap:wrap;border-radius:var(--radius-card);}
+
+code{background:var(--code-bg);border:1px solid var(--b1);padding:2px 6px;border-radius:10px;}
 
 </style>
 </head>
@@ -106,7 +104,7 @@ code{background:var(--s2);border:1px solid var(--b1);padding:2px 6px;border-radi
         <div class="page-sub"><?= $verified ? t('account.sub_verified') : t('account.sub_unverified') ?></div>
       </div>
       <div class="page-actions">
-        <?php if ($verified): ?>
+        <?php if ($showSetupShortcut): ?>
           <a class="btn btn-ghost btn-sm" href="setup.php"><?php e('nav.setup'); ?></a>
         <?php endif; ?>
       </div>

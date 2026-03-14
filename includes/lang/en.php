@@ -28,6 +28,7 @@ return [
     'common.help' => 'Help',
     'common.session' => 'Session',
     'common.other' => 'Other',
+    'common.toggle' => 'Toggle',
     'common.network_error' => 'Network error',
 
     // Theme toggle (assets/theme.js)

@@ -37,21 +37,21 @@ $topbarActive = function(string $href) use ($topbarCurPage): bool {
     <?php if ($topbarLogoUrl !== ''): ?>
       <img class="topbar-logo-img" src="<?= htmlspecialchars($topbarLogoUrl, ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars(APP_NAME, ENT_QUOTES, 'UTF-8') ?>">
     <?php endif; ?>
-    <span class="topbar-logo-text"><?= htmlspecialchars(APP_NAME) ?></span>
+    <span class="topbar-logo-text"><?= htmlspecialchars(APP_NAME, ENT_QUOTES, 'UTF-8') ?></span>
   </a>
 
   <!-- Mobile-only drawer (CSS-only fallback in case assets/app.js fails). -->
-  <input class="ls-mobile-nav-toggle" type="checkbox" id="ls-mobile-nav-toggle" aria-hidden="true">
-  <label class="btn btn-ghost btn-sm topbar-menu-btn nav-btn" for="ls-mobile-nav-toggle" role="button" tabindex="0" aria-label="<?= htmlspecialchars(t('common.menu'), ENT_QUOTES, 'UTF-8') ?>">
+  <input class="ls-mobile-nav-toggle" type="checkbox" id="ls-mobile-nav-toggle">
+  <label class="btn btn-ghost btn-sm topbar-menu-btn nav-btn" for="ls-mobile-nav-toggle" role="button" tabindex="0" aria-haspopup="dialog" aria-controls="ls-mobile-nav-panel" aria-expanded="false" aria-label="<?= htmlspecialchars(t('common.menu'), ENT_QUOTES, 'UTF-8') ?>" onkeydown="if(event.key==='Enter'||event.key===' '||event.key==='Spacebar'){event.preventDefault();this.click();}">
     <span class="nav-ico" aria-hidden="true">☰</span>
     <span class="nav-lbl"><?php e('common.menu'); ?></span>
   </label>
-  <div class="ls-mobile-nav-overlay" aria-hidden="true">
+  <div class="ls-mobile-nav-overlay">
     <label class="ls-mobile-nav-backdrop" for="ls-mobile-nav-toggle" aria-label="<?= htmlspecialchars(t('common.close'), ENT_QUOTES, 'UTF-8') ?>"></label>
-    <div class="ls-mobile-nav-panel" role="dialog" aria-modal="true" aria-label="<?= htmlspecialchars(t('common.menu'), ENT_QUOTES, 'UTF-8') ?>">
+    <div class="ls-mobile-nav-panel" id="ls-mobile-nav-panel" role="dialog" aria-modal="true" aria-labelledby="ls-mobile-nav-title">
       <div class="ls-mobile-nav-head">
-        <div class="ls-mobile-nav-title"><?php e('common.menu'); ?></div>
-        <label class="btn btn-ghost btn-sm" for="ls-mobile-nav-toggle" aria-label="<?= htmlspecialchars(t('common.close'), ENT_QUOTES, 'UTF-8') ?>">×</label>
+        <div class="ls-mobile-nav-title" id="ls-mobile-nav-title"><?php e('common.menu'); ?></div>
+        <label class="btn btn-ghost btn-sm" for="ls-mobile-nav-toggle" role="button" tabindex="0" aria-label="<?= htmlspecialchars(t('common.close'), ENT_QUOTES, 'UTF-8') ?>" onkeydown="if(event.key==='Enter'||event.key===' '||event.key==='Spacebar'){event.preventDefault();this.click();}">×</label>
       </div>
 
       <div class="ls-mobile-nav-links" style="display:flex;flex-direction:column;gap:10px;">

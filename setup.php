@@ -126,8 +126,6 @@ header("Referrer-Policy: no-referrer");
 .step-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;}
 .step-title{font-family:var(--display);font-weight:900;font-size:12px;letter-spacing:2px;text-transform:uppercase;}
 .step-sub{color:var(--muted);font-size:12px;line-height:1.7;margin-top:8px;}
-.badge{font-size:10px;letter-spacing:1px;text-transform:uppercase;padding:5px 10px;border:1px solid var(--b2);color:var(--muted);background:var(--s1);border-radius:999px;}
-.badge.ok{border-color:color-mix(in srgb, var(--green) 22%, transparent);color:var(--green);background:color-mix(in srgb, var(--green) 7%, transparent);}
 .grid2{display:grid;grid-template-columns:1fr;gap:12px;}
 @media(min-width:760px){.grid2{grid-template-columns:repeat(2,1fr);} }
 .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;}
