@@ -107,6 +107,9 @@ code{background:var(--code-bg);border:1px solid var(--b1);padding:2px 6px;border
         <?php if ($showSetupShortcut): ?>
           <a class="btn btn-ghost btn-sm" href="setup.php"><?php e('nav.setup'); ?></a>
         <?php endif; ?>
+        <?php if ($verified): ?>
+          <a class="btn btn-ghost btn-sm" href="security.php"><?php e('nav.security'); ?></a>
+        <?php endif; ?>
       </div>
     </div>
 

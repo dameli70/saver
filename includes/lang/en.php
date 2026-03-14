@@ -44,6 +44,7 @@ return [
     'nav.backups' => 'Backups',
     'nav.vault' => 'Vault',
     'nav.setup' => 'Setup',
+    'nav.security' => 'Security',
     'nav.account' => 'Account',
     'nav.admin' => 'Admin',
     'nav.verify_email' => 'Verify Email',
@@ -66,6 +67,11 @@ return [
     'page.notifications' => 'Notifications',
     'page.backups' => 'Backups',
     'page.account' => 'Account',
+    'page.security' => 'Security',
+    'page.security_password' => 'Password',
+    'page.security_totp' => 'Authenticator app',
+    'page.security_passkeys' => 'Passkeys',
+    'page.security_sessions' => 'Sessions',
     'page.admin' => 'Admin',
     'page.setup' => 'Setup',
     'page.install' => 'Install',
@@ -431,6 +437,9 @@ return [
     'dashboard.check.first_lock_sub' => 'Create your first time lock to start building a cool-off period before spending.',
     'dashboard.security' => 'Security',
     'dashboard.security_sub_html' => 'Sensitive actions may ask for an extra confirmation (passkey or authenticator code). Set this up in {account_link}.',
+
+    'security.hub_sub' => 'Manage your login password, sessions, and extra confirmation methods.',
+
     'dashboard.next_unlock_label' => 'Next unlock:',
     'dashboard.no_upcoming_unlock' => 'No upcoming unlocks.',
 

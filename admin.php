@@ -97,6 +97,9 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--code-bg);border:
         <div class="page-sub"><?php e('admin.intro'); ?></div>
       </div>
       <div class="page-actions">
+        <?php if ($adminPage === 'users'): ?>
+          <a class="btn btn-primary btn-sm" href="admin_add_user.php"><?php e('admin.add_user_btn'); ?></a>
+        <?php endif; ?>
         <a class="btn btn-ghost btn-sm" href="dashboard.php"><?php e('nav.dashboard'); ?></a>
       </div>
     </div>
@@ -140,21 +143,10 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--code-bg);border:
 
     <div class="card">
       <div class="card-title"><?php e('admin.add_user_title'); ?></div>
-      <div class="field"><label><?php e('common.email'); ?></label><input id="nu-email" type="email" placeholder="user@example.com" autocomplete="off"></div>
-      <div class="field"><label><?php e('admin.login_password_label'); ?></label><input id="nu-login" type="password" placeholder="min 8 chars" autocomplete="new-password"></div>
-      
-
-      <label class="chk"><input type="checkbox" id="nu-verified"> <span><?php e('admin.add_user_mark_verified'); ?></span></label>
-      <label class="chk"><input type="checkbox" id="nu-admin"> <span><?php e('admin.add_user_make_admin'); ?></span></label>
-
-      <button class="btn btn-primary" onclick="createUser()"><?php e('admin.add_user_btn'); ?></button>
-      <div id="nu-msg" class="msg"></div>
-      <div id="nu-dev" class="msg" style="display:none;background:rgba(255,170,0,.06);border:1px solid rgba(255,170,0,.25);color:var(--muted);"></div>
-
-      <hr>
-      <div class="p" style="margin:0;">
+      <div class="p" style="margin-top:0;">
         <?php e('admin.add_user_note'); ?>
       </div>
+      <a class="btn btn-primary" href="admin_add_user.php"><?php e('admin.add_user_btn'); ?></a>
     </div>
   </div>
   <?php endif; ?>
@@ -487,134 +479,10 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--code-bg);border:
 <script>
 const CSRF = <?= json_encode($csrf) ?>;
 const ADMIN_PAGE = <?= json_encode($adminPage) ?>;
-
-function apiUrl(url){
-  return url.startsWith('/') ? url.slice(1) : url;
-}
-async function rawGet(url){
-  const r = await fetch(apiUrl(url), { credentials: 'same-origin' });
-  return r.json();
-}
-async function rawPostCsrf(url, body){
-  const r = await fetch(apiUrl(url), {
-    method: 'POST',
-    credentials: 'same-origin',
-    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF },
-    body: JSON.stringify(body),
-  });
-  return r.json();
-}
-
-function b64uToBuf(b64url){
-  const b64 = String(b64url||'').replace(/-/g,'+').replace(/_/g,'/');
-  const pad = b64.length % 4 ? '='.repeat(4 - (b64.length % 4)) : '';
-  const bin = atob(b64 + pad);
-  const bytes = new Uint8Array(bin.length);
-  for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
-  return bytes.buffer;
-}
-function bufToB64u(buf){
-  const bytes = new Uint8Array(buf);
-  let s='';
-  for(let i=0;i<bytes.length;i++) s+=String.fromCharCode(bytes[i]);
-  return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
-}
-
-async function ensureReauth(methods){
-  if(window.LS && LS.reauth){
-    return LS.reauth(methods||{}, {post: rawPostCsrf});
-  }
-
-  if(methods && methods.passkey && window.PublicKeyCredential){
-    try{
-      const begin = await rawPostCsrf('api/webauthn.php', {action:'reauth_begin'});
-      if(begin.success){
-        const pk = begin.publicKey || {};
-        const allow = (pk.allowCredentials||[]).map(c => ({type:c.type, id: b64uToBuf(c.id)}));
-        const cred = await navigator.credentials.get({publicKey:{
-          challenge: b64uToBuf(pk.challenge),
-          rpId: pk.rpId,
-          timeout: pk.timeout||60000,
-          userVerification: pk.userVerification||'required',
-          allowCredentials: allow,
-        }});
-
-        const a = cred.response;
-        const fin = await rawPostCsrf('api/webauthn.php', {
-          action:'reauth_finish',
-          rawId: bufToB64u(cred.rawId),
-          response:{
-            clientDataJSON: bufToB64u(a.clientDataJSON),
-            authenticatorData: bufToB64u(a.authenticatorData),
-            signature: bufToB64u(a.signature),
-            userHandle: a.userHandle ? bufToB64u(a.userHandle) : null,
-          }
-        });
-        if(fin.success) return true;
-      }
-    }catch{}
-  }
-
-  if(methods && methods.totp){
-    const code = prompt(<?= json_encode(t('login.enter_totp')) ?>);
-    if(!code) return false;
-    const r = await rawPostCsrf('api/totp.php', {action:'reauth', code});
-    return !!r.success;
-  }
-
-  return false;
-}
-
-async function get(url){
-  let j = await rawGet(url);
-  if(!j.success && (j.error_code==='reauth_required' || j.error_code==='security_setup_required')){
-    const ok = await ensureReauth(j.methods||{});
-    if(!ok) return j;
-    j = await rawGet(url);
-  }
-  return j;
-}
-
-async function postCsrf(url, body){
-  let j = await rawPostCsrf(url, body);
-  if(!j.success && (j.error_code==='reauth_required' || j.error_code==='security_setup_required')){
-    const ok = await ensureReauth(j.methods||{});
-    if(!ok) return j;
-    j = await rawPostCsrf(url, body);
-  }
-  return j;
-}
-
-function esc(s){
-  if(window.LS && LS.esc) return LS.esc(s);
-  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-function parseUtcDate(ts){
-  if(window.LS && LS.parseUtc) return LS.parseUtc(ts);
-
-  const s = String(ts||'').trim();
-  if(!s) return null;
-
-  // API timestamps are stored in UTC as "YYYY-MM-DD HH:MM:SS".
-  if(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/.test(s)){
-    return new Date(s.replace(' ', 'T') + 'Z');
-  }
-
-  return new Date(s);
-}
-function fmt(ts){
-  const d = parseUtcDate(ts);
-  if(!d || isNaN(d.getTime())) return '';
-  if(window.LS && LS.fmtLocal) return LS.fmtLocal(d);
-  return d.toLocaleString();
-}
-
-function setMsg(id, text, ok){
-  const el = document.getElementById(id);
-  if(!el) return;
-  el.className = 'msg ' + (ok ? 'msg-ok' : 'msg-err') + ' show';
-  el.textContent = text;
-}
+</script>
+<script src="assets/admin_shared.js"></script>
+<script src="assets/admin_users.js"></script>
+<script>
 
 function normalizeUssdTemplate(raw, requiredPlaceholder){
   const ph = (requiredPlaceholder === 'new_pin') ? '{new_pin}' : '{old_pin}';

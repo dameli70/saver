@@ -584,6 +584,7 @@
       if(h === 'notifications.php') return '✉';
       if(h === 'backup.php') return '⤓';
       if(h === 'vault_settings.php') return '⌁';
+      if(h === 'security.php') return '🔐';
       if(h === 'setup.php') return '✓';
       if(h === 'account.php') return '◎';
       if(h === 'admin.php') return '⚑';
@@ -633,7 +634,7 @@
       const base = h.split('#')[0];
       if(base === 'vault_settings.php' || base === 'backup.php') return 'vault';
       if(base === 'rooms.php' || base === 'notifications.php') return 'community';
-      if(base === 'account.php' || base === 'setup.php') return 'security';
+      if(base === 'security.php' || base === 'account.php' || base === 'setup.php') return 'security';
       if(base === 'admin.php') return 'admin';
       if(base === 'logout.php') return 'session';
       if(h.indexOf('index.php#faq') === 0) return 'help';
@@ -680,7 +681,7 @@
 
       const groupOrder = {
         vault: ['vault_settings.php', 'backup.php'],
-        security: ['account.php', 'setup.php'],
+        security: ['security.php', 'account.php', 'setup.php'],
         admin: ['admin.php'],
         help: ['index.php#faq'],
         session: ['logout.php'],
@@ -758,7 +759,7 @@
       const p = window.location && window.location.pathname ? window.location.pathname : '';
       const parts = p.split('/');
       const cur = parts[parts.length - 1] || '';
-      const mapped = (cur === 'room.php') ? 'rooms.php' : ((cur === 'admin_legacy.php' || (cur && cur.indexOf('admin_') === 0)) ? 'admin.php' : cur);
+      const mapped = (cur === 'room.php') ? 'rooms.php' : ((cur && cur.indexOf('security_') === 0) ? 'security.php' : ((cur === 'admin_legacy.php' || (cur && cur.indexOf('admin_') === 0)) ? 'admin.php' : cur));
 
       nav.querySelectorAll('a[href]').forEach(a => {
         const href = String(a.getAttribute('href')||'');
@@ -992,6 +993,7 @@
     const overflowItems = [
       {href:'vault_settings.php', label: LS.t('nav.vault') || 'Vault', ico:'⌁', group:'vault'},
       {href:'backup.php', label: LS.t('nav.backups') || 'Backups', ico:'⛁', group:'vault'},
+      {href:'security.php', label: LS.t('nav.security') || 'Security', ico:'🔐', group:'security'},
       {href:'account.php', label: LS.t('nav.account') || 'Account', ico:'👤', group:'security'},
       {href:'setup.php', label: LS.t('nav.setup') || 'Setup', ico:'⚙', group:'security'},
       {href:'index.php#faq', label: LS.t('common.faq') || 'FAQ', ico:'?', group:'help'},
