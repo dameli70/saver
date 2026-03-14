@@ -1079,6 +1079,7 @@
 
     nav.appendChild(moreBtn);
 
+    try{ app.classList.add('has-bottom-nav'); }catch{}
     document.body.appendChild(nav);
 
     // Optional: hide the dock while scrolling down (mobile only).

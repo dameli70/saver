@@ -1,6 +1,6 @@
 #app{min-height:100vh;min-height:100dvh;position:relative;z-index:1;padding-bottom:max(18px,var(--sab));}
 @media(max-width:720px){
-  #app{padding-bottom:calc(86px + var(--sab));}
+  #app.has-bottom-nav{padding-bottom:calc(86px + var(--sab));}
 }
 
 /* ─────────────────────────────
@@ -302,8 +302,25 @@
 .btn-sm{padding:10px 14px;font-size:10px;min-height:38px;}
 .btn-sm.btn-theme{min-width:40px;width:40px;}
 
-/* Compact buttons used in inline card actions (dashboard, etc.). */
 .btn-inline{padding:10px 14px;font-size:10px;min-height:38px;}
+</old_code><new_code>/* Compact buttons used in inline card actions (dashboard, etc.). */
+.btn-inline{padding:10px 14px;font-size:10px;min-height:38px;}</old_code><new_code>.btn-inline{padding:10px 14px;font-size:10px;min-height:38px;}
+
+/* Primary + neutral buttons */
+.btn-ghost{background:rgba(255,255,255,.04);border:1px solid var(--b1);color:var(--text);
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+}
+@media(hover:hover){
+  .btn-ghost:hover{border-color:var(--b2);background:rgba(255,255,255,.06);}
+}
+
+.btn-primary{background:linear-gradient(135deg, var(--accent), var(--accent2));
+  border:1px solid rgba(124,92,255,.25);
+  color:#070812;
+  font-weight:800;
+  box-shadow:0 10px 30px rgba(124,92,255,.22);
+}
+.btn-primary:disabled{opacity:.45;pointer-events:none;}
 
 .btn-green{background:rgba(50,213,131,.16);border:1px solid rgba(50,213,131,.30);color:var(--green);color:color-mix(in srgb, var(--green) 85%, white 0%);font-weight:700;}
 .btn-red{background:rgba(255,77,109,.10);border:1px solid rgba(255,77,109,.28);color:var(--red);}
