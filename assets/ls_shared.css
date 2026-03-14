@@ -8,7 +8,7 @@
   padding:3px 7px;border:1px solid var(--b2);color:var(--muted);background:rgba(255,255,255,.02);border-radius:var(--radius-pill);}
 
 .ls-modal-overlay{position:fixed;inset:0;background:var(--overlay-bg);
-  display:none;align-items:center;justify-content:center;z-index:650;
+  display:none;align-items:center;justify-content:center;z-index:820;
   padding:20px 16px max(20px,var(--sab));}
 .ls-modal-overlay.show{display:flex;}
 .ls-modal{background:var(--s1);border:1px solid var(--b2);width:100%;max-width:440px;padding:22px;position:relative;border-radius:var(--radius-card);box-shadow:var(--shadow-card);}

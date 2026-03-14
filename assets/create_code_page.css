@@ -32,7 +32,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
 .kdf-label{font-size:10px;color:var(--muted);letter-spacing:1px;text-align:center;}
 
 #confirm-overlay{position:fixed;inset:0;background:var(--overlay-bg);
-  display:none;align-items:flex-end;justify-content:center;z-index:500;padding:0 0 max(0px,var(--sab)) 0;}
+  display:none;align-items:flex-end;justify-content:center;z-index:820;padding:0 0 max(0px,var(--sab)) 0;}
 #confirm-overlay.show{display:flex;}
 .confirm-sheet{background:var(--toast-bg);border:1px solid var(--b2);border-bottom:none;
   padding:28px 22px max(28px,var(--sab));width:100%;max-width:480px;position:relative;
