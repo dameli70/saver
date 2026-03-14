@@ -206,7 +206,7 @@
     return el;
   }
 
-  function trapFocus(modal){
+  function trapFocus(modal, onEsc){
     const focusables = modal.querySelectorAll('button,[href],input,select,textarea,[tabindex]:not([tabindex="-1"])');
     const first = focusables[0];
     const last = focusables[focusables.length - 1];
@@ -214,7 +214,7 @@
     function onKey(e){
       if(e.key === 'Escape') {
         e.preventDefault();
-        modal.dispatchEvent(new CustomEvent('ls-modal-esc'));
+        if(typeof onEsc === 'function') onEsc();
         return;
       }
       if(e.key !== 'Tab') return;
@@ -283,47 +283,47 @@
 
     overlay.classList.add('show');
 
-    const releaseTrap = trapFocus(modal);
     const prevFocus = document.activeElement;
 
-    setTimeout(()=>{
-      const firstChoice = choices.querySelector('button');
-      if(firstChoice) firstChoice.focus();
-    }, 10);
+    let resolved = false;
+    let resolve;
+    const p = new Promise(r => resolve = r);
+
+    let releaseTrap = null;
 
     function cleanup(){
       overlay.classList.remove('show');
-      releaseTrap();
-      if(prevFocus && prevFocus.focus) setTimeout(()=>prevFocus.focus(), 0);
-      modal.removeEventListener('ls-modal-esc', onEsc);
+      if(releaseTrap) releaseTrap();
       overlay.removeEventListener('click', onClickOut);
       closeBtn.removeEventListener('click', onCancel);
       cancel.removeEventListener('click', onCancel);
+      if(prevFocus && prevFocus.focus) setTimeout(()=>prevFocus.focus(), 0);
     }
 
     function onCancel(){
+      if(resolved) return;
       cleanup();
       resolve({ok:false});
-    }
-
-    function onEsc(){
-      onCancel();
     }
 
     function onClickOut(e){
       if(e.target === overlay) onCancel();
     }
 
-    let resolve;
-    const p = new Promise(r => resolve = r);
+    releaseTrap = trapFocus(modal, onCancel);
 
-    modal.addEventListener('ls-modal-esc', onEsc);
     overlay.addEventListener('click', onClickOut);
     closeBtn.addEventListener('click', onCancel);
     cancel.addEventListener('click', onCancel);
 
+    setTimeout(()=>{
+      const firstChoice = choices.querySelector('button');
+      if(firstChoice) firstChoice.focus();
+    }, 10);
+
     btns.forEach(({el, method})=>{
       el.addEventListener('click', ()=>{
+        resolved = true;
         if(method === 'totp'){
           choices.style.display = 'none';
           totpWrap.style.display = 'block';
@@ -656,6 +656,9 @@
       topbar.appendChild(btn);
     }
 
+    btn.setAttribute('aria-haspopup', 'dialog');
+    if(!btn.hasAttribute('aria-expanded')) btn.setAttribute('aria-expanded', 'false');
+
     function getOverlay(){
       let ov = document.getElementById('ls-nav-overlay');
       if(ov) return ov;
@@ -679,6 +682,9 @@
       return window.matchMedia && window.matchMedia('(max-width: 720px)').matches;
     }
 
+    let releaseTrap = null;
+    let prevFocus = null;
+
     function open(){
       if(!isMobile()) return;
       const ov = getOverlay();
@@ -688,8 +694,17 @@
       // Move the real nav into the drawer so existing event handlers keep working.
       if(nav.parentNode !== body) body.appendChild(nav);
 
+      prevFocus = document.activeElement;
+
       ov.classList.add('show');
+      btn.setAttribute('aria-expanded', 'true');
       document.body.style.overflow = 'hidden';
+
+      try{
+        const panel = ov.querySelector('#ls-nav-panel');
+        if(releaseTrap) releaseTrap();
+        if(panel) releaseTrap = trapFocus(panel, close);
+      }catch{}
 
       setTimeout(()=>{
         const first = nav.querySelector('a,button');
@@ -705,8 +720,18 @@
       if(nav.parentNode !== topbar) topbar.insertBefore(nav, btn);
 
       ov.classList.remove('show');
+      btn.setAttribute('aria-expanded', 'false');
+
+      if(releaseTrap){
+        releaseTrap();
+        releaseTrap = null;
+      }
+
       document.body.style.overflow = '';
-      if(btn && btn.focus) btn.focus();
+
+      const f = prevFocus || btn;
+      if(f && f.focus) f.focus();
+      prevFocus = null;
     }
 
     btn.addEventListener('click', open);
@@ -800,6 +825,33 @@
     const nav = document.createElement('nav');
     nav.className = 'bottom-nav';
 
+    let releaseOverflowTrap = null;
+    let overflowPrevFocus = null;
+
+    function closeOverflow(){
+      const ov = document.getElementById('ls-overflow-overlay');
+      if(!ov) return;
+
+      ov.classList.remove('show');
+
+      const mb = document.getElementById('ls-bottom-more');
+      if(mb) mb.setAttribute('aria-expanded', 'false');
+
+      if(releaseOverflowTrap){
+        releaseOverflowTrap();
+        releaseOverflowTrap = null;
+      }
+
+      try{
+        const navOv = document.getElementById('ls-nav-overlay');
+        if(!navOv || !navOv.classList.contains('show')) document.body.style.overflow = '';
+      }catch{}
+
+      const f = overflowPrevFocus || mb;
+      if(f && f.focus) f.focus();
+      overflowPrevFocus = null;
+    }
+
     items.forEach(it => {
       const a = document.createElement('a');
       a.href = it.href;
@@ -849,30 +901,14 @@
         });
       }
 
-      function close(){
-        ov.classList.remove('show');
-        try{
-          const navOv = document.getElementById('ls-nav-overlay');
-          if(!navOv || !navOv.classList.contains('show')) document.body.style.overflow = '';
-        }catch{}
-        try{
-          const r = document.getElementById('ls-bottom-more');
-          if(r && r.focus) r.focus();
-        }catch{}
-      }
-
       ov.addEventListener('click', (e)=>{
-        if(e.target === ov) close();
+        if(e.target === ov) closeOverflow();
         const a = e.target && e.target.closest ? e.target.closest('a') : null;
-        if(a && a.getAttribute('href')) close();
+        if(a && a.getAttribute('href')) closeOverflow();
       });
 
       const cbtn = ov.querySelector('#ls-overflow-close');
-      if(cbtn) cbtn.addEventListener('click', close);
-
-      document.addEventListener('keydown', (e)=>{
-        if(e && e.key === 'Escape' && ov.classList.contains('show')) close();
-      });
+      if(cbtn) cbtn.addEventListener('click', closeOverflow);
 
       document.body.appendChild(ov);
       return ov;
@@ -889,10 +925,19 @@
     moreBtn.innerHTML = `<span class="nav-ico" aria-hidden="true">⋯</span><span class="nav-lbl">${LS.esc(LS.t('common.more') || 'More')}</span>`;
     moreBtn.addEventListener('click', ()=>{
       try{ nav.removeAttribute('data-hidden'); }catch{}
+
+      overflowPrevFocus = document.activeElement;
+
       moreBtn.setAttribute('aria-expanded', 'true');
       const ov = ensureOverflowOverlay();
       ov.classList.add('show');
       document.body.style.overflow = 'hidden';
+
+      try{
+        const sheet = ov.querySelector('#ls-overflow-sheet');
+        if(releaseOverflowTrap) releaseOverflowTrap();
+        if(sheet) releaseOverflowTrap = trapFocus(sheet, closeOverflow);
+      }catch{}
 
       setTimeout(()=>{
         const first = ov.querySelector('a,button');
@@ -1088,6 +1133,19 @@
     }catch{}
   }
 
+  function initA11y(){
+    try{
+      document.querySelectorAll('button[data-theme-toggle]').forEach(b => {
+        if(!b.getAttribute('aria-label')) b.setAttribute('aria-label', LS.t('common.theme') || 'Theme');
+      });
+
+      document.querySelectorAll('button:not([aria-label])').forEach(b => {
+        const txt = (b.textContent || '').trim();
+        if(txt === '×' || txt === '✕') b.setAttribute('aria-label', STR.close);
+      });
+    }catch{}
+  }
+
   function initPwa(){
     try{
       const head = document.head;
@@ -1137,6 +1195,7 @@
   }
 
   document.addEventListener('DOMContentLoaded', ()=>{
+    initA11y();
     initPwa();
     initNavGroups();
     initDesktopSidebar();
