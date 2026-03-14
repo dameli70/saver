@@ -89,6 +89,17 @@ $nextSetupLabel = t($nextSetupLabelKey);
 $onboardingAvailable = hasOnboardingColumns();
 $onboardingDone = isOnboardingComplete($userId);
 
+// If the user has completed all setup steps, hide this page.
+if ($setupDone >= $setupStepsTotal) {
+    if ($onboardingAvailable && !$onboardingDone) {
+        markOnboardingComplete($userId);
+    }
+    // Ensure any persistent "skip setup" preference is cleared once setup is effectively complete.
+    setUserSkipSetupRedirect($userId, false);
+    header('Location: dashboard.php');
+    exit;
+}
+
 header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none';");
 header("X-Frame-Options: DENY");
 header("X-Content-Type-Options: nosniff");

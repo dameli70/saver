@@ -44,7 +44,7 @@ $topbarLogoUrl = (defined('APP_LOGO_URL') ? trim((string)APP_LOGO_URL) : '');
       <a class="btn btn-ghost btn-sm" href="notifications.php"><?php e('nav.notifications'); ?></a>
       <a class="btn btn-ghost btn-sm" href="backup.php"><?php e('nav.backups'); ?></a>
       <a class="btn btn-ghost btn-sm" href="vault_settings.php"><?php e('nav.vault'); ?></a>
-      <a class="btn btn-ghost btn-sm" href="setup.php"><?php e('nav.setup'); ?></a>
+      <?php if ($topbarShowSetup): ?><a class="btn btn-ghost btn-sm" href="setup.php"><?php e('nav.setup'); ?></a><?php endif; ?>
       <a class="btn btn-ghost btn-sm" href="account.php"><?php e('nav.account'); ?></a>
       <?php if ($topbarIsAdmin): ?><a class="btn btn-ghost btn-sm" href="admin.php"><?php e('nav.admin'); ?></a><?php endif; ?>
     <?php else: ?>
