@@ -770,8 +770,60 @@
   }
 
   function initMobileNav(){
-    // If a CSS-only fallback drawer exists (server-rendered), don't also build a JS drawer.
-    if(document.getElementById('ls-mobile-nav-toggle')) return;
+    // If a CSS-only drawer exists (server-rendered), enhance it with keyboard handling
+    // (Escape to close, focus management, scroll lock) and skip building the JS drawer.
+    const cssToggle = document.getElementById('ls-mobile-nav-toggle');
+    if(cssToggle){
+      try{
+        const topbar = document.querySelector('.topbar');
+        const btn = topbar ? topbar.querySelector('label.topbar-menu-btn[for="ls-mobile-nav-toggle"]') : null;
+        const panel = document.getElementById('ls-mobile-nav-panel') || document.querySelector('.ls-mobile-nav-panel');
+
+        let prevFocus = null;
+
+        function sync(){
+          const open = !!cssToggle.checked;
+          if(btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+          document.body.style.overflow = open ? 'hidden' : '';
+
+          if(open){
+            prevFocus = document.activeElement;
+            setTimeout(()=>{
+              const first = panel ? panel.querySelector('a,button,[tabindex]:not([tabindex="-1"])') : null;
+              if(first && first.focus) first.focus();
+            }, 10);
+          } else {
+            const f = prevFocus || btn;
+            if(f && f.focus) f.focus();
+            prevFocus = null;
+          }
+        }
+
+        if(btn && !btn.hasAttribute('aria-expanded')) btn.setAttribute('aria-expanded', cssToggle.checked ? 'true' : 'false');
+        cssToggle.addEventListener('change', sync);
+        sync();
+
+        // Close on Escape.
+        document.addEventListener('keydown', (e)=>{
+          if(e.key !== 'Escape') return;
+          if(!cssToggle.checked) return;
+          cssToggle.checked = false;
+          sync();
+        });
+
+        // If user taps a link in the drawer, close it.
+        if(panel){
+          panel.addEventListener('click', (e)=>{
+            const a = e.target && e.target.closest ? e.target.closest('a') : null;
+            if(a && a.getAttribute('href')){
+              cssToggle.checked = false;
+              sync();
+            }
+          });
+        }
+      }catch{}
+      return;
+    }
 
     const topbar = document.querySelector('.topbar');
     const nav = topbar ? topbar.querySelector('.topbar-r') : null;
