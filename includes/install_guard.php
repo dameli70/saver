@@ -1,5 +1,18 @@
 <?php
 
+// Start output buffering early to prevent accidental whitespace/BOM output
+// from breaking session_start()/header() calls.
+// Skip for SSE endpoints (e.g., /api/*_stream.php) where buffering interferes with streaming.
+try {
+    $script = (string)($_SERVER['SCRIPT_NAME'] ?? '');
+    $isStream = (bool)preg_match('#/api/[^/]*_stream\.php$#', $script);
+    if (!$isStream && !headers_sent() && ob_get_level() === 0) {
+        ob_start(null, 4096);
+    }
+} catch (Throwable) {
+    // no-op
+}
+
 function getAppBasePath(): string {
     $dir = rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? '/'), '/');
     $dir = preg_replace('#/(api|install)$#', '', $dir);

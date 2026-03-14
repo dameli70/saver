@@ -21,19 +21,42 @@ require_once __DIR__ . '/i18n.php';
 
 // ── Session ──────────────────────────────────────────────────
 function startSecureSession(): void {
-    if (session_status() === PHP_SESSION_NONE) {
+    if (session_status() !== PHP_SESSION_NONE) {
+        if (function_exists('i18nBootstrap')) {
+            i18nBootstrap();
+        }
+        return;
+    }
+
+    $sent = false;
+    try { $sent = headers_sent(); } catch (Throwable) { $sent = false; }
+
+    // Only mutate session ini settings if headers are still modifiable.
+    if (!$sent) {
         ini_set('session.cookie_httponly', 1);
         ini_set('session.cookie_secure', (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 1 : 0);
         ini_set('session.cookie_samesite', 'Strict');
         ini_set('session.use_strict_mode', 1);
         ini_set('session.gc_maxlifetime', 3600);
-        session_start();
+    }
 
-        // Initialize i18n after session_start() so it can read/write language preference.
-        // Default language is French.
-        if (function_exists('i18nBootstrap')) {
-            i18nBootstrap();
-        }
+    // Avoid sending cache limiter headers from session_start().
+    // This reduces the chance of "headers already sent" issues in edge environments.
+    if (function_exists('session_cache_limiter')) {
+        session_cache_limiter('');
+    }
+
+    // If headers are already sent and there's no existing session cookie, we can't start a new session.
+    if ($sent && !isset($_COOKIE[session_name()])) {
+        return;
+    }
+
+    session_start();
+
+    // Initialize i18n after session_start() so it can read/write language preference.
+    // Default language is French.
+    if (function_exists('i18nBootstrap')) {
+        i18nBootstrap();
     }
 }
 
