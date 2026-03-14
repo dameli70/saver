@@ -175,19 +175,19 @@ header("Referrer-Policy: no-referrer");
 
         <div id="typeb-dispute-wrap" style="display:none;margin-top:12px;">
           <div class="hr"></div>
-          <div class="k">Dispute (Type B)</div>
+          <div class="k"><?php e('room.dispute_title'); ?></div>
           <div class="v" id="typeb-dispute-meta">—</div>
 
           <div id="typeb-dispute-form" style="display:none;margin-top:10px;">
-            <div class="k">Reason (optional)</div>
-            <input id="typeb-dispute-reason" class="ls-input" placeholder="e.g. I believe the turn user is not eligible / suspicious activity" style="margin-top:6px;">
+            <div class="k"><?php e('room.dispute_reason_optional'); ?></div>
+            <input id="typeb-dispute-reason" class="ls-input" placeholder="<?= htmlspecialchars(t('room.dispute_reason_placeholder'), ENT_QUOTES, 'UTF-8') ?>" style="margin-top:6px;">
             <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">
-              <button class="btn btn-red btn-sm" onclick="typeBRaiseDispute()">Raise dispute</button>
+              <button class="btn btn-red btn-sm" onclick="typeBRaiseDispute()"><?php e('room.dispute_raise_btn'); ?></button>
             </div>
           </div>
 
           <div id="typeb-dispute-actions" style="display:none;margin-top:10px;">
-            <button class="btn btn-blue btn-sm" id="typeb-dispute-ack-btn" onclick="typeBAckDispute()">Acknowledge dispute</button>
+            <button class="btn btn-blue btn-sm" id="typeb-dispute-ack-btn" onclick="typeBAckDispute()"><?php e('room.dispute_ack_btn'); ?></button>
           </div>
 
           <div id="typeb-dispute-msg" class="msg"></div>
@@ -198,24 +198,24 @@ header("Referrer-Policy: no-referrer");
 
       <div id="exit-block" style="display:none; margin-top:12px;">
         <div class="hr"></div>
-        <div class="card-title" style="margin-bottom:10px;">Exit request (Type B)</div>
-        <div class="p" style="margin-bottom:10px;">After the room starts, exiting requires maker approval + 60% participant approval. A settlement entry is recorded as a refund minus a 20% platform fee.</div>
+        <div class="card-title" style="margin-bottom:10px;"><?php e('room.exit_title'); ?></div>
+        <div class="p" style="margin-bottom:10px;"><?php e('room.exit_sub'); ?></div>
 
         <div class="v" id="exit-meta">—</div>
 
         <div id="exit-actions-request" style="display:none;margin-top:10px;">
-          <button class="btn btn-red btn-sm" onclick="createExitRequest()">Request to exit</button>
+          <button class="btn btn-red btn-sm" onclick="createExitRequest()"><?php e('room.exit_request_btn'); ?></button>
         </div>
 
         <div id="exit-actions-vote" style="display:none;margin-top:10px;">
           <div style="display:flex;gap:10px;flex-wrap:wrap;">
-            <button class="btn btn-blue btn-sm" onclick="voteExit('approve')">Approve exit</button>
-            <button class="btn btn-red btn-sm" onclick="voteExit('reject')">Reject</button>
+            <button class="btn btn-blue btn-sm" onclick="voteExit('approve')"><?php e('room.exit_approve_btn'); ?></button>
+            <button class="btn btn-red btn-sm" onclick="voteExit('reject')"><?php e('room.exit_reject_btn'); ?></button>
           </div>
         </div>
 
         <div id="exit-actions-cancel" style="display:none;margin-top:10px;">
-          <button class="btn btn-ghost btn-sm" onclick="cancelExitRequest()">Cancel request</button>
+          <button class="btn btn-ghost btn-sm" onclick="cancelExitRequest()"><?php e('room.exit_cancel_btn'); ?></button>
         </div>
 
         <div id="exit-msg" class="msg"></div>
@@ -260,22 +260,22 @@ header("Referrer-Policy: no-referrer");
     </div>
 
     <div class="card" id="escrow-card" style="display:none;grid-column:1/-1;">
-      <div class="card-title">Escrow settlements (maker)</div>
-      <div class="p">Accounting entries recorded when participants are removed after two missed contributions.</div>
+      <div class="card-title"><?php e('room.escrow_title'); ?></div>
+      <div class="p"><?php e('room.escrow_sub'); ?></div>
 
-      <div id="escrow-empty" class="k" style="display:none;">No escrow settlements.</div>
+      <div id="escrow-empty" class="k" style="display:none;"><?php e('room.escrow_empty'); ?></div>
 
       <div class="table-wrap" id="escrow-table-wrap" style="display:none;">
         <table class="table" id="escrow-table">
           <thead>
             <tr>
-              <th>Removed user</th>
-              <th>Policy</th>
-              <th>Total contributed</th>
-              <th>Fee</th>
-              <th>Refund</th>
-              <th>Status</th>
-              <th>Created</th>
+              <th><?php e('room.escrow_th_removed_user'); ?></th>
+              <th><?php e('room.escrow_th_policy'); ?></th>
+              <th><?php e('room.escrow_th_total_contributed'); ?></th>
+              <th><?php e('room.escrow_th_fee'); ?></th>
+              <th><?php e('room.escrow_th_refund'); ?></th>
+              <th><?php e('room.escrow_th_status'); ?></th>
+              <th><?php e('room.escrow_th_created'); ?></th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -285,16 +285,16 @@ header("Referrer-Policy: no-referrer");
     </div>
 
     <div class="card" id="unlisted-card" style="display:none;grid-column:1/-1;">
-      <div class="card-title">Unlisted invite link (maker)</div>
-      <div class="p">Unlisted rooms are not shown on discovery. Share a link to allow others to view and request to join (until the start date).</div>
+      <div class="card-title"><?php e('room.unlisted_title'); ?></div>
+      <div class="p"><?php e('room.unlisted_sub'); ?></div>
 
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
-        <button class="btn btn-blue btn-sm" onclick="generateUnlistedLink()">Generate new link</button>
-        <button class="btn btn-red btn-sm" onclick="revokeUnlistedLink()">Revoke link</button>
+        <button class="btn btn-blue btn-sm" onclick="generateUnlistedLink()"><?php e('room.unlisted_generate_btn'); ?></button>
+        <button class="btn btn-red btn-sm" onclick="revokeUnlistedLink()"><?php e('room.unlisted_revoke_btn'); ?></button>
       </div>
 
       <div id="unlisted-link-wrap" style="display:none;margin-top:12px;">
-        <div class="k">Shareable link (shown once)</div>
+        <div class="k"><?php e('room.unlisted_link_label'); ?></div>
         <input id="unlisted-link" class="ls-input" readonly style="margin-top:6px;">
       </div>
 
@@ -303,44 +303,44 @@ header("Referrer-Policy: no-referrer");
     </div>
 
     <div class="card" id="invites-card" style="display:none;grid-column:1/-1;">
-      <div class="card-title">Invites (maker)</div>
-      <div class="p">Private rooms require invites. Invite by email; invited users can accept from the room page.</div>
+      <div class="card-title"><?php e('room.invites_title'); ?></div>
+      <div class="p"><?php e('room.invites_sub'); ?></div>
 
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;align-items:center;">
-        <input id="invite-email" class="ls-input" placeholder="user@example.com" style="flex:1;min-width:220px;">
-        <button class="btn btn-blue btn-sm" onclick="sendInvite()">Send invite</button>
+        <input id="invite-email" class="ls-input" placeholder="<?= htmlspecialchars(t('room.invites_email_placeholder'), ENT_QUOTES, 'UTF-8') ?>" style="flex:1;min-width:220px;">
+        <button class="btn btn-blue btn-sm" onclick="sendInvite()"><?php e('room.invites_send_btn'); ?></button>
       </div>
 
       <div class="table-wrap" id="invites-table-wrap" style="margin-top:12px;display:none;">
         <table class="table" id="invites-table">
           <thead>
             <tr>
-              <th>Email</th>
-              <th>Status</th>
-              <th>Expires</th>
-              <th>Created</th>
-              <th></th>
+              <th><?php e('room.invites_th_email'); ?></th>
+              <th><?php e('room.invites_th_status'); ?></th>
+              <th><?php e('room.invites_th_expires'); ?></th>
+              <th><?php e('room.invites_th_created'); ?></th>
+              <th><?php e('room.invites_th_actions'); ?></th>
             </tr>
           </thead>
           <tbody></tbody>
         </table>
       </div>
-      <div id="invites-empty" class="k" style="display:none;margin-top:10px;">No invites.</div>
+      <div id="invites-empty" class="k" style="display:none;margin-top:10px;"><?php e('room.invites_empty'); ?></div>
       <div id="invites-msg" class="msg"></div>
     </div>
 
     <div class="card" id="maker-card" style="display:none;grid-column:1/-1;">
-      <div class="card-title">Join requests (maker)</div>
-      <div class="p">Review pending requests. You can see the applicant’s trust level and strikes summary.</div>
+      <div class="card-title"><?php e('room.requests_title'); ?></div>
+      <div class="p"><?php e('room.requests_sub'); ?></div>
       <div class="table-wrap">
         <table class="table" id="req-table">
           <thead>
             <tr>
-              <th>User</th>
-              <th>Snapshot</th>
-              <th>Current</th>
-              <th>Requested</th>
-              <th>Actions</th>
+              <th><?php e('room.requests_th_user'); ?></th>
+              <th><?php e('room.requests_th_snapshot'); ?></th>
+              <th><?php e('room.requests_th_current'); ?></th>
+              <th><?php e('room.requests_th_requested'); ?></th>
+              <th><?php e('room.requests_th_actions'); ?></th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -485,14 +485,14 @@ function fmtUtc(ts){
   return d.toUTCString();
 }
 function prettyVisibility(v){
-  if(v === 'public') return 'Public';
-  if(v === 'unlisted') return 'Unlisted';
-  if(v === 'private') return 'Private';
+  if(v === 'public') return tr('rooms.visibility.public', null, 'Public');
+  if(v === 'unlisted') return tr('rooms.visibility.unlisted', null, 'Unlisted');
+  if(v === 'private') return tr('rooms.visibility.private', null, 'Private');
   return v ? String(v) : '';
 }
 function prettySavingType(t){
-  if(t === 'A') return 'Type A';
-  if(t === 'B') return 'Type B';
+  if(t === 'A') return tr('rooms.saving_type.a', null, 'Type A');
+  if(t === 'B') return tr('rooms.saving_type.b', null, 'Type B');
   return t ? String(t) : '';
 }
 function formatActivityExtra(eventType, payload){
@@ -506,15 +506,15 @@ function formatActivityExtra(eventType, payload){
   }
 
   if(eventType === 'lobby_locked'){
-    if(payload.reason === 'capacity_reached') return 'Room full';
-    if(payload.reason === 'start_date_reached') return 'Start date reached';
-    if(payload.reason) return 'Reason: ' + String(payload.reason);
+    if(payload.reason === 'capacity_reached') return tr('room.activity.room_full', null, 'Room full');
+    if(payload.reason === 'start_date_reached') return tr('room.activity.start_date_reached', null, 'Start date reached');
+    if(payload.reason) return tr('room.activity.reason', {reason: String(payload.reason)}, 'Reason: ' + String(payload.reason));
     return '';
   }
 
   if(eventType === 'invite_created' || eventType === 'invite_revoked'){
-    if(payload.mode === 'private_user') return 'Private invite';
-    if(payload.mode === 'unlisted_link') return 'Unlisted link';
+    if(payload.mode === 'private_user') return tr('room.activity.private_invite', null, 'Private invite');
+    if(payload.mode === 'unlisted_link') return tr('room.activity.unlisted_link', null, 'Unlisted link');
     if(payload.mode) return String(payload.mode);
     return '';
   }
@@ -522,105 +522,105 @@ function formatActivityExtra(eventType, payload){
   if(eventType === 'unlock_vote_updated'){
     const a = payload.approvals;
     const e = payload.eligible;
-    if(typeof a === 'number' && typeof e === 'number') return `Approvals ${a}/${e}`;
+    if(typeof a === 'number' && typeof e === 'number') return tr('room.activity.approvals', {a, b: e}, `Approvals ${a}/${e}`);
     return '';
   }
 
   if(eventType === 'unlock_revealed' || eventType === 'unlock_expired'){
-    if(payload.expires_at) return 'Expires ' + fmt(payload.expires_at);
+    if(payload.expires_at) return tr('room.activity.expires', {ts: fmt(payload.expires_at)}, 'Expires ' + fmt(payload.expires_at));
     return '';
   }
 
   if(eventType === 'rotation_queue_created'){
-    if(payload.rotation_index) return 'Turn #' + String(payload.rotation_index);
+    if(payload.rotation_index) return tr('room.activity.turn', {n: String(payload.rotation_index)}, 'Turn #' + String(payload.rotation_index));
     return '';
   }
 
   if(eventType === 'rotation_vote_updated'){
     const bits = [];
-    if(payload.rotation_index) bits.push('Turn #' + String(payload.rotation_index));
-    if(typeof payload.approvals === 'number' && typeof payload.required === 'number') bits.push(`Approvals ${payload.approvals}/${payload.required}`);
-    if(payload.maker_vote) bits.push('Maker ' + String(payload.maker_vote));
+    if(payload.rotation_index) bits.push(tr('room.activity.turn', {n: String(payload.rotation_index)}, 'Turn #' + String(payload.rotation_index)));
+    if(typeof payload.approvals === 'number' && typeof payload.required === 'number') bits.push(tr('room.activity.approvals', {a: payload.approvals, b: payload.required}, `Approvals ${payload.approvals}/${payload.required}`));
+    if(payload.maker_vote) bits.push(tr('room.activity.maker', {vote: String(payload.maker_vote)}, 'Maker ' + String(payload.maker_vote)));
     return bits.join(' · ');
   }
 
   if(eventType === 'typeB_turn_revealed'){
     const bits = [];
-    if(payload.rotation_index) bits.push('Turn #' + String(payload.rotation_index));
-    if(payload.expires_at) bits.push('Expires ' + fmt(payload.expires_at));
+    if(payload.rotation_index) bits.push(tr('room.activity.turn', {n: String(payload.rotation_index)}, 'Turn #' + String(payload.rotation_index)));
+    if(payload.expires_at) bits.push(tr('room.activity.expires', {ts: fmt(payload.expires_at)}, 'Expires ' + fmt(payload.expires_at)));
     return bits.join(' · ');
   }
 
   if(eventType === 'typeB_turn_expired' || eventType === 'typeB_turn_advanced' || eventType === 'rotation_blocked_dispute' || eventType === 'rotation_blocked_debt' || eventType === 'rotation_unblocked_debt'){
-    if(payload.rotation_index) return 'Turn #' + String(payload.rotation_index);
+    if(payload.rotation_index) return tr('room.activity.turn', {n: String(payload.rotation_index)}, 'Turn #' + String(payload.rotation_index));
     return '';
   }
 
   if(eventType === 'grace_window_started'){
-    if(payload.cycle_index) return 'Cycle #' + String(payload.cycle_index);
-    if(payload.cycle_id) return 'Cycle ' + String(payload.cycle_id);
+    if(payload.cycle_index) return tr('room.activity.cycle_num', {n: String(payload.cycle_index)}, 'Cycle #' + String(payload.cycle_index));
+    if(payload.cycle_id) return tr('room.activity.cycle_id', {id: String(payload.cycle_id)}, 'Cycle ' + String(payload.cycle_id));
     return '';
   }
 
   if(eventType === 'contribution_confirmed'){
     const bits = [];
-    if(payload.cycle_id) bits.push('Cycle ' + String(payload.cycle_id));
-    if(payload.amount) bits.push('Amount ' + String(payload.amount));
+    if(payload.cycle_id) bits.push(tr('room.activity.cycle_id', {id: String(payload.cycle_id)}, 'Cycle ' + String(payload.cycle_id)));
+    if(payload.amount) bits.push(tr('room.activity.amount', {amount: String(payload.amount)}, 'Amount ' + String(payload.amount)));
     return bits.join(' · ');
   }
 
   if(eventType === 'strike_logged'){
-    if(payload.cycle_id) return 'Cycle ' + String(payload.cycle_id);
+    if(payload.cycle_id) return tr('room.activity.cycle_id', {id: String(payload.cycle_id)}, 'Cycle ' + String(payload.cycle_id));
     return '';
   }
 
   if(eventType === 'participant_removed'){
-    if(payload.reason === 'two_missed_contributions') return 'Two missed contributions';
-    if(payload.reason) return 'Reason: ' + String(payload.reason);
+    if(payload.reason === 'two_missed_contributions') return tr('room.activity.two_missed_contributions', null, 'Two missed contributions');
+    if(payload.reason) return tr('room.activity.reason', {reason: String(payload.reason)}, 'Reason: ' + String(payload.reason));
     return '';
   }
 
   if(eventType === 'escrow_settlement_recorded'){
-    if(payload.policy) return 'Policy: ' + String(payload.policy);
+    if(payload.policy) return tr('room.activity.policy', {policy: String(payload.policy)}, 'Policy: ' + String(payload.policy));
     return '';
   }
 
   if(eventType === 'underfilled_alerted'){
     const bits = [];
     if(typeof payload.approved_count !== 'undefined' && typeof payload.min_participants !== 'undefined'){
-      bits.push(`Approved ${payload.approved_count}/${payload.min_participants}`);
+      bits.push(tr('room.activity.approved', {a: payload.approved_count, b: payload.min_participants}, `Approved ${payload.approved_count}/${payload.min_participants}`));
     }
-    if(payload.decision_deadline_at) bits.push('Decision by ' + fmt(payload.decision_deadline_at));
+    if(payload.decision_deadline_at) bits.push(tr('room.activity.decision_by', {ts: fmt(payload.decision_deadline_at)}, 'Decision by ' + fmt(payload.decision_deadline_at)));
     return bits.join(' · ');
   }
 
   if(eventType === 'underfilled_resolved'){
-    if(payload.action === 'extend_start') return 'Start date extended';
+    if(payload.action === 'extend_start') return tr('room.activity.start_date_extended', null, 'Start date extended');
     if(payload.action === 'lower_min'){
-      if(payload.new_min_participants) return 'Minimum lowered to ' + String(payload.new_min_participants);
-      return 'Minimum lowered';
+      if(payload.new_min_participants) return tr('room.activity.minimum_lowered_to', {n: String(payload.new_min_participants)}, 'Minimum lowered to ' + String(payload.new_min_participants));
+      return tr('room.activity.minimum_lowered', null, 'Minimum lowered');
     }
     if(payload.action) return String(payload.action);
     return '';
   }
 
   if(eventType === 'room_auto_cancelled_underfilled' || eventType === 'room_cancelled_by_maker' || eventType === 'room_closed'){
-    if(payload.reason) return 'Reason: ' + String(payload.reason);
+    if(payload.reason) return tr('room.activity.reason', {reason: String(payload.reason)}, 'Reason: ' + String(payload.reason));
     return '';
   }
 
   if(eventType === 'exit_requested' || eventType === 'exit_vote_updated' || eventType === 'exit_approved' || eventType === 'exit_cancelled'){
     const bits = [];
-    if(payload.exit_request_id) bits.push('Request #' + String(payload.exit_request_id));
-    if(typeof payload.approvals === 'number' && typeof payload.required === 'number') bits.push(`Approvals ${payload.approvals}/${payload.required}`);
-    if(payload.maker_vote) bits.push('Maker ' + String(payload.maker_vote));
+    if(payload.exit_request_id) bits.push(tr('room.activity.request', {id: String(payload.exit_request_id)}, 'Request #' + String(payload.exit_request_id)));
+    if(typeof payload.approvals === 'number' && typeof payload.required === 'number') bits.push(tr('room.activity.approvals', {a: payload.approvals, b: payload.required}, `Approvals ${payload.approvals}/${payload.required}`));
+    if(payload.maker_vote) bits.push(tr('room.activity.maker', {vote: String(payload.maker_vote)}, 'Maker ' + String(payload.maker_vote)));
     return bits.join(' · ');
   }
 
   if(eventType === 'dispute_raised' || eventType === 'dispute_ack_updated'){
     const bits = [];
-    if(payload.rotation_index) bits.push('Turn #' + String(payload.rotation_index));
-    if(typeof payload.ack_count === 'number' && typeof payload.required === 'number') bits.push(`Ack ${payload.ack_count}/${payload.required}`);
+    if(payload.rotation_index) bits.push(tr('room.activity.turn', {n: String(payload.rotation_index)}, 'Turn #' + String(payload.rotation_index)));
+    if(typeof payload.ack_count === 'number' && typeof payload.required === 'number') bits.push(tr('room.activity.ack', {a: payload.ack_count, b: payload.required}, `Ack ${payload.ack_count}/${payload.required}`));
     return bits.join(' · ');
   }
 
@@ -637,14 +637,13 @@ function formatActivityExtra(eventType, payload){
 function destSummary(a){
   if(!a) return '—';
   if(a.account_type === 'mobile_money'){
-    const carrier = a.carrier_id ? ('carrier ' + a.carrier_id) : 'mobile money';
+    const carrier = a.carrier_id ? tr('room.dest.carrier', {id: a.carrier_id}, 'carrier ' + a.carrier_id) : tr('room.dest.mobile_money', null, 'mobile money');
     return carrier + ' · ' + (a.mobile_money_number||'');
   }
   if(a.account_type === 'bank'){
-    return (a.bank_name||'Bank') + ' · ' + (a.bank_account_number||'');
+    return (a.bank_name||tr('room.dest.bank', null, 'Bank')) + ' · ' + (a.bank_account_number||'');
   }
-  return a.account_type || '—';
-}
+ }
 
 let roomCache = null;
 let lastEventId = 0;
@@ -714,7 +713,7 @@ function renderRoom(){
   ov.innerHTML = `
     <div style="font-size:12px;line-height:1.7;">
       <div><span class="k">${esc(tr('room.ov.purpose', null, 'Purpose'))}:</span> ${esc(r.purpose_category)}</div>
-      <div><span class="k">${esc(tr('room.ov.visibility', null, 'Visibility'))}:</span> ${esc(r.visibility)}</div>
+      <div><span class="k">${esc(tr('room.ov.visibility', null, 'Visibility'))}:</span> ${esc(prettyVisibility(r.visibility))}</div>
       <div><span class="k">${esc(tr('room.ov.participation_amount', null, 'Participation amount'))}:</span> ${esc(r.participation_amount)}</div>
       <div><span class="k">${esc(tr('room.ov.destination', null, 'Destination'))}:</span> ${esc(destSummary(r.destination_account))}</div>
       <div><span class="k">${esc(tr('room.ov.participants', null, 'Participants'))}:</span> ${esc(r.approved_count)} / ${esc(r.max_participants)} (min ${esc(r.min_participants)})</div>
@@ -765,15 +764,15 @@ function renderRoom(){
       const eligible = (r.unlock && r.unlock.votes) ? (r.unlock.votes.eligible||0) : 0;
       const myVote = (r.unlock && r.unlock.my_vote) ? r.unlock.my_vote : 'none';
 
-      document.getElementById('unlock-consensus').textContent = `${approvals}/${eligible} (you: ${myVote})`;
+      document.getElementById('unlock-consensus').textContent = tr('room.unlock.consensus_you', {approvals, eligible, vote: myVote}, `${approvals}/${eligible} (you: ${myVote})`);
 
       const ev = r.unlock ? r.unlock.event : null;
       if(ev && ev.status === 'revealed'){
-        document.getElementById('unlock-window').textContent = `Revealed · expires ${fmt(ev.expires_at)}`;
+        document.getElementById('unlock-window').textContent = tr('room.unlock.window_revealed_expires', {ts: fmt(ev.expires_at)}, `Revealed · expires ${fmt(ev.expires_at)}`);
       } else if(ev && ev.status === 'expired'){
-        document.getElementById('unlock-window').textContent = 'Expired';
+        document.getElementById('unlock-window').textContent = tr('room.unlock.window_expired', null, 'Expired');
       } else {
-        document.getElementById('unlock-window').textContent = 'Pending';
+        document.getElementById('unlock-window').textContent = tr('room.unlock.window_pending', null, 'Pending');
       }
 
       const ra = parseUtcDate(r.reveal_at);
@@ -1107,7 +1106,7 @@ async function generateUnlistedLink(){
     if(wrap) wrap.style.display='block';
     if(input) input.select();
 
-    setMsg('unlisted-msg', 'Link generated. Copy it now; it will not be shown again.', true);
+    setMsg('unlisted-msg', tr('room.unlisted.link_generated_once', null, 'Link generated. Copy it now; it will not be shown again.'), true);
     await loadUnlistedInviteInfo(true);
 
   }catch(e){
@@ -1128,7 +1127,7 @@ async function revokeUnlistedLink(){
   try{
     const res = await postStrong('/api/rooms.php', {action:'unlisted_invite_revoke', room_id: ROOM_ID});
     if(!res.success) throw new Error(res.error||'Failed');
-    setMsg('unlisted-msg','Link revoked.', true);
+    setMsg('unlisted-msg', tr('room.unlisted.link_revoked', null, 'Link revoked.'), true);
     await loadUnlistedInviteInfo(true);
   }catch(e){
     setMsg('unlisted-msg', e.message||'Failed', false);
@@ -1537,7 +1536,7 @@ async function underfillLowerMin(){
 }
 
 async function underfillCancel(){
-  const ok = confirm('Cancel this room?');
+  const ok = confirm(tr('room.confirm.room_cancel', null, 'Cancel this room?'));
   if(!ok) return;
 
   try{
@@ -1664,3 +1663,4 @@ loadRoom().then(async ()=>{
 </div>
 </body>
 </html> 
+l> 

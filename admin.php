@@ -101,15 +101,15 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--code-bg);border:
       </div>
     </div>
 
-    <div style="display:flex;gap:10px;flex-wrap:wrap;margin:12px 0 16px 0;">
-      <a class="btn btn-ghost btn-sm <?= $adminPage === 'users' ? 'active' : '' ?>" href="admin.php?p=users">Users</a>
-      <a class="btn btn-ghost btn-sm <?= $adminPage === 'codes' ? 'active' : '' ?>" href="admin.php?p=codes">Codes</a>
-      <a class="btn btn-ghost btn-sm <?= $adminPage === 'carriers' ? 'active' : '' ?>" href="admin.php?p=carriers">Carriers</a>
-      <a class="btn btn-ghost btn-sm <?= $adminPage === 'destination_accounts' ? 'active' : '' ?>" href="admin.php?p=destination_accounts">Destination accounts</a>
-      <a class="btn btn-ghost btn-sm <?= $adminPage === 'escrow' ? 'active' : '' ?>" href="admin.php?p=escrow">Escrow</a>
-      <a class="btn btn-ghost btn-sm <?= $adminPage === 'disputes' ? 'active' : '' ?>" href="admin.php?p=disputes">Disputes</a>
-      <a class="btn btn-ghost btn-sm <?= $adminPage === 'audit' ? 'active' : '' ?>" href="admin.php?p=audit">Audit</a>
-    </div>
+    <nav class="seg" role="tablist" aria-label="<?= htmlspecialchars(t('page.admin'), ENT_QUOTES, 'UTF-8') ?>" style="margin:12px 0 16px 0;">
+      <a class="<?= $adminPage === 'users' ? 'active' : '' ?>" role="tab" aria-selected="<?= $adminPage === 'users' ? 'true' : 'false' ?>" href="admin.php?p=users"><?php e('admin.tab.users'); ?></a>
+      <a class="<?= $adminPage === 'codes' ? 'active' : '' ?>" role="tab" aria-selected="<?= $adminPage === 'codes' ? 'true' : 'false' ?>" href="admin.php?p=codes"><?php e('admin.tab.codes'); ?></a>
+      <a class="<?= $adminPage === 'carriers' ? 'active' : '' ?>" role="tab" aria-selected="<?= $adminPage === 'carriers' ? 'true' : 'false' ?>" href="admin.php?p=carriers"><?php e('admin.tab.carriers'); ?></a>
+      <a class="<?= $adminPage === 'destination_accounts' ? 'active' : '' ?>" role="tab" aria-selected="<?= $adminPage === 'destination_accounts' ? 'true' : 'false' ?>" href="admin.php?p=destination_accounts"><?php e('admin.tab.destination_accounts'); ?></a>
+      <a class="<?= $adminPage === 'escrow' ? 'active' : '' ?>" role="tab" aria-selected="<?= $adminPage === 'escrow' ? 'true' : 'false' ?>" href="admin.php?p=escrow"><?php e('admin.tab.escrow'); ?></a>
+      <a class="<?= $adminPage === 'disputes' ? 'active' : '' ?>" role="tab" aria-selected="<?= $adminPage === 'disputes' ? 'true' : 'false' ?>" href="admin.php?p=disputes"><?php e('admin.tab.disputes'); ?></a>
+      <a class="<?= $adminPage === 'audit' ? 'active' : '' ?>" role="tab" aria-selected="<?= $adminPage === 'audit' ? 'true' : 'false' ?>" href="admin.php?p=audit"><?php e('admin.tab.audit'); ?></a>
+    </nav>
 
   <?php if ($adminPage === 'users'): ?>
   <div class="grid">

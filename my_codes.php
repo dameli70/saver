@@ -73,7 +73,7 @@ header("Permissions-Policy: clipboard-write=(self)");
     </div>
 
     <div id="locks-wrap">
-      <div class="empty"><div class="empty-icon">🔒</div><h3>Loading…</h3><p></p></div>
+      <div class="empty"><div class="empty-icon">🔒</div><h3><?php e('common.loading'); ?></h3><p></p></div>
     </div>
   </div>
 </div>
@@ -82,53 +82,52 @@ header("Permissions-Policy: clipboard-write=(self)");
 <div id="share-overlay" class="ls-modal-overlay ls-sheet" onclick="closeShare(event)">
   <div class="ls-modal reveal-sheet" role="dialog" aria-modal="true" aria-labelledby="ps-title">
     <button class="ls-modal-x" type="button" aria-label="<?= htmlspecialchars(t('common.close'), ENT_QUOTES, 'UTF-8') ?>" onclick="closeShare();event.stopPropagation();">×</button>
-    <div class="ls-modal-title" id="ps-title">Share lock</div>
-    <div class="ls-modal-sub">// create a share link even while sealed</div>
+    <div class="ls-modal-title" id="ps-title"><?php e('my_codes.share_title'); ?></div>
+    <div class="ls-modal-sub"><?php e('my_codes.share_sub'); ?></div>
 
     <div class="small" id="ps-meta" style="margin-bottom:12px;"></div>
 
     <div class="vault-input-wrap">
-      <label>Vault Passphrase</label>
-      <input type="password" id="ps-vault" placeholder="Your vault passphrase…" autocomplete="current-password">
-      <div class="small" style="margin-top:8px;">We’ll use your passphrase to unlock the share secret. The code itself stays sealed until the unlock date.</div>
+      <label><?php e('create_code.vault_passphrase_label'); ?></label>
+      <input type="password" id="ps-vault" placeholder="<?= htmlspecialchars(t('create_code.vault_passphrase_placeholder'), ENT_QUOTES, 'UTF-8') ?>" autocomplete="current-password">
+      <div class="small" style="margin-top:8px;"><?php e('my_codes.share_note'); ?></div>
     </div>
 
     <div id="ps-legacy" style="display:none;">
       <div class="hr" style="margin:14px 0;"></div>
       <div class="vault-input-wrap" style="margin:0;">
-        <label>Code to share (legacy)</label>
-        <input type="password" id="ps-code" placeholder="Paste the code you saved…" autocomplete="off">
-        <div class="small" style="margin-top:8px;">If this lock was created before sealed sharing was initialized, you can still share by pasting the code you saved earlier.</div>
+        <label><?php e('my_codes.share_legacy_label'); ?></label>
+        <input type="password" id="ps-code" placeholder="<?= htmlspecialchars(t('my_codes.share_legacy_placeholder'), ENT_QUOTES, 'UTF-8') ?>" autocomplete="off">
+        <div class="small" style="margin-top:8px;"><?php e('my_codes.share_legacy_note'); ?></div>
       </div>
     </div>
 
-   
     <label class="chk" style="margin:0 0 12px 0;">
       <input type="checkbox" id="ps-allow" checked>
-      <span>Reveal after the unlock date to anyone with the link</span>
+      <span><?php e('my_codes.share_allow_label'); ?></span>
     </label>
 
     <div id="ps-err" class="msg msg-err"></div>
 
-    <button class="btn btn-primary" id="ps-btn" onclick="createShareFromPrep()"><span class="btn-ico" id="ps-ico" aria-hidden="true">🔗</span><span class="btn-txt" id="ps-txt">Create share link</span></button>
+    <button class="btn btn-primary" id="ps-btn" onclick="createShareFromPrep()"><span class="btn-ico" id="ps-ico" aria-hidden="true">🔗</span><span class="btn-txt" id="ps-txt"><?php e('my_codes.share_create_btn'); ?></span></button>
 
     <div id="ps-out" class="rv-share" style="display:none;">
       <div class="hr"></div>
       <div class="rv-share-grid" style="margin-top:12px;">
         <div>
-          <div class="k">Link</div>
+          <div class="k"><?php e('my_codes.share_link_label'); ?></div>
           <input class="ls-input" id="ps-url" readonly value="" style="margin-top:6px;">
-          <button class="btn btn-ghost btn-sm btn-inline" type="button" id="ps-copy-url" style="margin-top:8px;">Copy link</button>
+          <button class="btn btn-ghost btn-sm btn-inline" type="button" id="ps-copy-url" style="margin-top:8px;"><?php e('my_codes.share_copy_link_btn'); ?></button>
         </div>
         <div>
-          <div class="k">Secret (save this)</div>
+          <div class="k"><?php e('my_codes.share_secret_label'); ?></div>
           <input class="ls-input" id="ps-secret" readonly value="" style="margin-top:6px;">
-          <button class="btn btn-ghost btn-sm btn-inline" type="button" id="ps-copy-secret" style="margin-top:8px;">Copy secret</button>
+          <button class="btn btn-ghost btn-sm btn-inline" type="button" id="ps-copy-secret" style="margin-top:8px;"><?php e('my_codes.share_copy_secret_btn'); ?></button>
         </div>
       </div>
 
       <div class="msg msg-ok" id="ps-ok"></div>
-      <button class="btn btn-red btn-sm btn-inline" type="button" id="ps-revoke" style="display:none;margin-top:12px;">Revoke link</button>
+      <button class="btn btn-red btn-sm btn-inline" type="button" id="ps-revoke" style="display:none;margin-top:12px;"><?php e('my_codes.share_revoke_btn'); ?></button>
     </div>
   </div>
 </div>
@@ -137,54 +136,54 @@ header("Permissions-Policy: clipboard-write=(self)");
 <div id="reveal-overlay" class="ls-modal-overlay ls-sheet" onclick="closeReveal(event)">
   <div class="ls-modal reveal-sheet" role="dialog" aria-modal="true" aria-labelledby="rv-label">
     <button class="ls-modal-x" type="button" aria-label="<?= htmlspecialchars(t('common.close'), ENT_QUOTES, 'UTF-8') ?>" onclick="closeReveal();event.stopPropagation();">×</button>
-    <div class="ls-modal-title" id="rv-label">Reveal</div>
-    <div class="ls-modal-sub">// enter vault passphrase to decrypt</div>
+    <div class="ls-modal-title" id="rv-label"><?php e('my_codes.reveal_title_default'); ?></div>
+    <div class="ls-modal-sub"><?php e('my_codes.reveal_sub'); ?></div>
     <div id="rv-hint" style="display:none;font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:12px;"></div>
 
     <div class="vault-input-wrap">
-      <label>Vault Passphrase</label>
-      <input type="password" id="rv-vault" placeholder="Your vault passphrase…" autocomplete="current-password">
+      <label><?php e('create_code.vault_passphrase_label'); ?></label>
+      <input type="password" id="rv-vault" placeholder="<?= htmlspecialchars(t('create_code.vault_passphrase_placeholder'), ENT_QUOTES, 'UTF-8') ?>" autocomplete="current-password">
     </div>
 
     <div class="reveal-pwd" id="rv-pwd"></div>
 
     <div id="rv-err" class="msg msg-err"></div>
 
-    <button class="btn btn-primary" id="rv-btn" onclick="doReveal()"><span class="btn-ico" id="rv-btn-ico" aria-hidden="true">🔒</span><span class="btn-txt" id="rv-btn-txt">Decrypt &amp; Reveal</span></button>
-    <button class="btn btn-ghost" id="rv-copy-btn" onclick="copyRevealed()" style="display:none;margin-top:10px;"><span class="btn-ico" aria-hidden="true">⧉</span><span class="btn-txt">Copy</span></button>
-    <button class="btn btn-ghost" id="rv-share-btn" onclick="startShareFlow()" style="display:none;margin-top:10px;"><span class="btn-ico" aria-hidden="true">🔗</span><span class="btn-txt">Create share link</span></button>
+    <button class="btn btn-primary" id="rv-btn" onclick="doReveal()"><span class="btn-ico" id="rv-btn-ico" aria-hidden="true">🔒</span><span class="btn-txt" id="rv-btn-txt"><?php e('my_codes.btn_decrypt_reveal'); ?></span></button>
+    <button class="btn btn-ghost" id="rv-copy-btn" onclick="copyRevealed()" style="display:none;margin-top:10px;"><span class="btn-ico" aria-hidden="true">⧉</span><span class="btn-txt"><?php e('share.btn_copy'); ?></span></button>
+    <button class="btn btn-ghost" id="rv-share-btn" onclick="startShareFlow()" style="display:none;margin-top:10px;"><span class="btn-ico" aria-hidden="true">🔗</span><span class="btn-txt"><?php e('my_codes.share_create_btn'); ?></span></button>
 
     <div id="rv-share-wrap" class="rv-share" style="display:none;">
       <div class="hr"></div>
-      <div class="k">Share link</div>
-      <div class="small" style="margin-top:6px;">Anyone with the link + the secret can decrypt after your lock becomes eligible to reveal.</div>
+      <div class="k"><?php e('my_codes.reveal_share_title'); ?></div>
+      <div class="small" style="margin-top:6px;"><?php e('my_codes.reveal_share_sub'); ?></div>
 
       <label class="chk" style="margin:12px 0 0 0;">
         <input type="checkbox" id="rv-share-allow" checked>
-        <span>Reveal after the unlock date to anyone with the link</span>
+        <span><?php e('my_codes.share_allow_label'); ?></span>
       </label>
 
       <div class="rv-share-grid" style="margin-top:12px;">
         <div>
-          <div class="k">Link</div>
+          <div class="k"><?php e('my_codes.share_link_label'); ?></div>
           <input class="ls-input" id="rv-share-url" readonly value="" style="margin-top:6px;">
-          <button class="btn btn-ghost btn-sm btn-inline" type="button" id="rv-share-copy-url" style="margin-top:8px;">Copy link</button>
+          <button class="btn btn-ghost btn-sm btn-inline" type="button" id="rv-share-copy-url" style="margin-top:8px;"><?php e('my_codes.share_copy_link_btn'); ?></button>
         </div>
         <div>
-          <div class="k">Secret (save this)</div>
+          <div class="k"><?php e('my_codes.share_secret_label'); ?></div>
           <input class="ls-input" id="rv-share-secret" readonly value="" style="margin-top:6px;">
-          <button class="btn btn-ghost btn-sm btn-inline" type="button" id="rv-share-copy-secret" style="margin-top:8px;">Copy secret</button>
+          <button class="btn btn-ghost btn-sm btn-inline" type="button" id="rv-share-copy-secret" style="margin-top:8px;"><?php e('my_codes.share_copy_secret_btn'); ?></button>
         </div>
       </div>
 
       <div class="msg msg-ok" id="rv-share-ok"></div>
       <div class="msg msg-err" id="rv-share-err"></div>
 
-      <button class="btn btn-red btn-sm btn-inline" type="button" id="rv-share-revoke" style="display:none;margin-top:12px;">Revoke link</button>
+      <button class="btn btn-red btn-sm btn-inline" type="button" id="rv-share-revoke" style="display:none;margin-top:12px;"><?php e('my_codes.share_revoke_btn'); ?></button>
     </div>
 
     <div id="rv-zk-note" style="display:none;margin-top:10px;font-size:10px;color:var(--muted);letter-spacing:1px;line-height:1.6;">
-      Zero-knowledge: only your browser decrypted this value.
+      <?php e('my_codes.zk_note'); ?>
     </div>
   </div>
 </div>
@@ -220,6 +219,22 @@ const reduceMotion = (()=>{
   catch{ return false; }
 })();
 
+function tr(key, fallback){
+  if(window.LS && LS.t){
+    const v = LS.t(key);
+    if(v && v !== key) return v;
+  }
+  return fallback || key;
+}
+
+function toast(msg,type='ok'){
+  if(window.LS && LS.toast) LS.toast(msg,type);
+}
+
+function esc(s){
+  return (window.LS && LS.esc) ? LS.esc(s) : String(s||'');
+}
+
 function apiUrl(url){return url.startsWith('/') ? url.slice(1) : url;}
 function getFilteredLocks(){
   return (allLocksSession || []).filter(l => matchesFilter(l) && matchesQuery(l));
@@ -237,7 +252,8 @@ function renderLocks(){
   const list = getFilteredLocks();
 
   if(locksOffline){
-    wrap.innerHTML = '<div class="card" style="margin-bottom:12px;"><div class="small">Offline mode: showing cached metadata. Reveal is disabled until you’re back online.</div></div>';
+    wrap.innerHTML  '<<div class="card" style="margin-bottom:12p;"><<div class="small">' + esc(tr('my_codes.offline_banner', 'Offline mode: showing cached metadata. Reveal is disabled until you’re back online.')) '</ +d></ivdiv>';
+;
     const holder = document.createElement('div');
     holder.innerHTML = '<div class="locks-grid" id="locks-grid"></div>';
     wrap.appendChild(holder.firstChild);
@@ -793,7 +809,7 @@ function openReveal(kind, id, label, hint){
   const txt = document.getElementById('rv-btn-txt');
   btn.style.display='block';
   btn.disabled=false;
-  setBtnState(btn, ico, txt, null, '🔒', currentReveal.share_after ? 'Decrypt & Share' : 'Decrypt & Reveal');
+  setBtnState(btn, ico, txt, null, '🔒', currentReveal.share_after ? tr('my_codes.btn_decrypt_share', 'Decrypt & Share') : tr('my_codes.btn_decrypt_reveal', 'Decrypt & Reveal'));
 
   const errEl = document.getElementById('rv-err');
   errEl.classList.remove('show');
@@ -810,7 +826,7 @@ async function ensureReauth(methods){
   if(window.LS && LS.reauth){
     return LS.reauth(methods||{}, {post: postCsrf});
   }
-  toast('Enable TOTP or add a passkey in Account', 'warn');
+  toast(tr('js.enable_totp_or_passkey', 'Enable TOTP or add a passkey in Account'), 'warn');
   return false;
 }
 
@@ -823,10 +839,10 @@ async function doReveal(){
   const errEl=document.getElementById('rv-err');
   errEl.classList.remove('show');
 
-  if(!vault){errEl.textContent='Enter your vault passphrase';errEl.classList.add('show');return;}
-  if(!currentReveal || !currentReveal.id){errEl.textContent='No code selected';errEl.classList.add('show');return;}
+  if(!vault){errEl.textContent=tr('create_code.gen.toast_need_vault','Enter your vault passphrase');errEl.classList.add('show');return;}
+  if(!currentReveal || !currentReveal.id){errEl.textContent=tr('my_codes.err_no_lock_selected','No lock selected');errEl.classList.add('show');return;}
 
-  setBtnState(btn, ico, txt, 'working', '⏳', 'Decrypting…');
+  setBtnState(btn, ico, txt, 'working', '⏳', tr('share.btn_decrypting', 'Decrypting…'));
   btn.disabled=true;
   setRevealSheetState('working');
 
@@ -895,8 +911,7 @@ async function doReveal(){
 
     setTimeout(()=>{
       setRevealSheetState(null);
-      setBtnState(btn, ico, txt, null, '🔒', (currentReveal && currentReveal.share_after) ? 'Decrypt & Share' : 'Decrypt & Reveal');
-      btn.disabled=false;
+      setBtnState(btn, ico, txt, null, '🔒', (currentReveal && currentReveal.share_after) ? tr('my_codes.btn_decrypt_share', 'Decrypt & Share') :      btn.disabled=false;
     }, 900);
   }
 }
@@ -1014,7 +1029,7 @@ function setPreShareMsg(el, txt, ok){
 
 async function revokePreShare(){
   if(!currentPreShareId) return;
-  if(!confirm('Revoke this share link? Anyone with it will lose access.')) return;
+  if(!confirm(tr('my_codes.share_revoke_confirm', 'Revoke this share link? Anyone with it will lose access.'))) return;
 
   const okEl = document.getElementById('ps-ok');
   const errEl = document.getElementById('ps-err');
@@ -1030,12 +1045,12 @@ async function revokePreShare(){
   currentPreShareId = null;
   const revokeBtn = document.getElementById('ps-revoke');
   if(revokeBtn) revokeBtn.style.display='none';
-  setPreShareMsg(okEl, 'Link revoked.', true);
+  setPreShareMsg(okEl, tr('my_codes.share_link_revoked', 'Link revoked.'), true);
 }
 
 async function createShareFromPrep(){
   if(!currentShareLock || currentShareLock.kind !== 'lock' || !currentShareLock.id){
-    toast('Select a lock first','err');
+    toast(tr('my_codes.toast_select_lock_first','Select a lock first'), 'err');
     return;
   }
 
@@ -1248,7 +1263,7 @@ async function copyVal(id){
 
 async function revokeShare(){
   if(!currentShareId) return;
-  if(!confirm('Revoke this share link? Anyone with it will lose access.')) return;
+  if(!confirm(tr('my_codes.share_revoke_confirm', 'Re will lose access.')) return;
 
   const okEl = document.getElementById('rv-share-ok');
   const errEl = document.getElementById('rv-share-err');
@@ -1264,16 +1279,16 @@ async function revokeShare(){
   currentShareId = null;
   const revokeBtn = document.getElementById('rv-share-revoke');
   if(revokeBtn) revokeBtn.style.display='none';
-  setShareMsg(okEl, 'Link revoked.', true);
+  setShareMsg(okEl, tr('my_codes.share_link_revoked', 'Link revoked.'), true);
 }
 
 async function startShareFlow(){
   if(!currentReveal || currentReveal.kind !== 'lock' || !currentReveal.id){
-    toast('Select a lock first','err');
+    toast(tr('my_codes.toast_select_lock_first','Select a lock first'), 'err');
     return;
   }
   if(!revealedPwd){
-    toast('Decrypt first to generate a share link','warn');
+    toast(tr('my_codes.toast_decrypt_first_share','Decrypt first to generate a share link'), 'warn');
     return;
   }
 

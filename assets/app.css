@@ -242,7 +242,7 @@
   border-radius:999px;
   backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
 }
-.seg button{appearance:none;border:none;background:transparent;
+.seg button,.seg a{appearance:none;border:none;background:transparent;
   color:var(--muted);
   font-family:var(--mono);
   font-size:10px;
@@ -253,12 +253,13 @@
   cursor:pointer;
   min-height:36px;
 }
-.seg button.active{background:linear-gradient(180deg, rgba(124,92,255,.18), rgba(48,208,255,.06));
+.seg a{text-decoration:none;display:inline-flex;align-items:center;justify-content:center;}
+.seg button.active,.seg a.active{background:linear-gradient(180deg, rgba(124,92,255,.18), rgba(48,208,255,.06));
   color:var(--text);
   box-shadow:0 10px 24px rgba(124,92,255,.16);
 }
 @media(hover:hover){
-  .seg button:hover{color:var(--text);}
+  .seg button:hover,.seg a:hover{color:var(--text);}
 }
 
 .grid{display:grid;grid-template-columns:1fr;gap:14px;}
