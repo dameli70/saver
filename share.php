@@ -32,15 +32,28 @@ $token = trim((string)($_GET['t'] ?? ''));
 <div class="orb orb1"></div><div class="orb orb2"></div>
 
 <div id="app">
-  <div class="topbar">
-    <div class="topbar-logo"><?= htmlspecialchars(APP_NAME) ?></div>
+  <div class="topbar topbar-public">
+    <a class="topbar-logo" href="index.php"><?= htmlspecialchars(APP_NAME) ?></a>
     <div class="topbar-r">
-      <a class="btn btn-ghost btn-sm" href="index.php"><?php e('common.home'); ?></a>
-      <a class="btn btn-primary btn-sm" href="login.php"><?php e('common.login'); ?></a>
+      <button class="btn btn-ghost btn-sm btn-theme" type="button" data-theme-toggle><?php e('common.theme'); ?></button>
+      <?php $curLang = currentLang(); ?>
+      <a class="<?= $curLang === 'fr' ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm' ?>" href="<?= htmlspecialchars(langSwitchUrl('fr')) ?>"><?php e('common.lang_fr'); ?></a>
+      <a class="<?= $curLang === 'en' ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm' ?>" href="<?= htmlspecialchars(langSwitchUrl('en')) ?>"><?php e('common.lang_en'); ?></a>
+      <a class="btn btn-ghost btn-sm" href="index.php#faq"><?php e('common.faq'); ?></a>
+      <a class="btn btn-ghost btn-sm" href="login.php"><?php e('common.login'); ?></a>
+      <a class="btn btn-primary btn-sm" href="signup.php"><?php e('common.create_account'); ?></a>
     </div>
   </div>
 
   <div class="app-body">
+
+    <div class="page-head">
+      <div>
+        <div class="page-title"><?php e('page.share'); ?></div>
+        <div class="page-sub"><?php e('share.subtitle'); ?></div>
+      </div>
+    </div>
+
     <div class="card share-card">
       <div class="card-title"><div class="dot"></div><?php e('share.card_title'); ?></div>
 

@@ -36,6 +36,7 @@
   .topbar-menu-btn .nav-lbl{display:none;}
   .topbar-menu-btn .nav-ico{font-size:18px;}
   .topbar-r{display:none;}
+  .topbar.topbar-public .topbar-r{display:flex;}
 }
 
 /* Desktop sidebar (injected by assets/app.js) */

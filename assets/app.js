@@ -910,6 +910,8 @@
     try{
       const navWrap = topbar.querySelector('.topbar-r');
       if(!navWrap || !navWrap.querySelector('.user-pill')) return;
+      // Only show bottom navigation for verified sessions (dashboard link exists in the authenticated nav).
+      if(!navWrap.querySelector('a[href="dashboard.php"]')) return;
     }catch{ return; }
 
     if(document.querySelector('.bottom-nav')) return;

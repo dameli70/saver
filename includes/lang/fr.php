@@ -74,6 +74,7 @@ return [
     'page.share' => 'Partager',
 
     // Partage
+    'share.subtitle' => 'Saisissez le secret pour déchiffrer dans votre navigateur (déverrouillage imposé par le serveur).',
     'share.card_title' => 'Verrou partagé',
     'share.invalid_link' => 'Lien invalide (token manquant).',
     'share.secret_label' => 'Secret de partage',
@@ -97,7 +98,7 @@ return [
     'heading.account' => 'Votre compte',
     'heading.admin' => 'Tableau de bord admin',
 
-    'admin.intro' => 'Gérez les utilisateurs et tous les codes (blobs chiffrés + métadonnées). Le déchiffrement reste impossible sans la phrase secrète du coffre de l’utilisateur.',
+    'admin.intro' => 'Gérez les utilisateurs et tous les verrous (blobs chiffrés + métadonnées). Le déchiffrement reste impossible sans la phrase secrète du coffre de l’utilisateur.',
 
     'admin.tab.users' => 'Utilisateurs',
     'admin.tab.codes' => 'Verrous',
@@ -106,6 +107,56 @@ return [
     'admin.tab.escrow' => 'Séquestre',
     'admin.tab.disputes' => 'Litiges',
     'admin.tab.audit' => 'Audit',
+
+    'admin.th.id' => 'ID',
+    'admin.th.email' => 'E-mail',
+    'admin.th.verified' => 'Vérifié',
+    'admin.th.admin' => 'Admin',
+    'admin.th.time_locks' => 'Verrous',
+    'admin.th.created' => 'Créé',
+    'admin.th.last_login' => 'Dernière connexion',
+    'admin.th.actions' => 'Actions',
+    'admin.th.user' => 'Utilisateur',
+    'admin.th.label' => 'Libellé',
+    'admin.th.status' => 'Statut',
+    'admin.th.reveal' => 'Révélation',
+    'admin.th.copied' => 'Copié',
+    'admin.th.confirmed' => 'Confirmé',
+    'admin.th.revealed' => 'Révélé',
+    'admin.th.active' => 'Actif',
+
+    'admin.add_user_title' => 'Ajouter un utilisateur',
+    'admin.login_password_label' => 'Mot de passe de connexion',
+    'admin.add_user_mark_verified' => 'Marquer l’e-mail comme vérifié (ignorer la vérification par e-mail)',
+    'admin.add_user_make_admin' => 'Rendre cet utilisateur admin',
+    'admin.add_user_btn' => 'Créer l’utilisateur',
+    'admin.add_user_note' => 'Pour l’intégrité zero-knowledge, l’utilisateur doit choisir sa propre phrase secrète de coffre. En mode de sécurité renforcée, les phrases secrètes de coffre ne sont jamais envoyées au serveur.',
+
+    'admin.codes_search_label' => 'Recherche (e-mail ou libellé)',
+    'admin.codes_search_placeholder' => 'ex. alice@ / banque',
+    'admin.codes_include_inactive' => 'Inclure les inactifs',
+
+    'admin.carriers_title' => 'Opérateurs (Mobile Money)',
+    'admin.carriers_intro_html' => 'Définissez la politique PIN et les modèles USSD (utilisés par l’app mobile et par <em>Créer un verrou → Portefeuille mobile money</em>). Le flux portefeuille est conçu pour des modèles qui demandent le nouveau PIN dans le composeur, donc <strong>Changer le PIN</strong> doit inclure <code>{old_pin}</code> mais pas <code>{new_pin}</code>. Le modèle <strong>Solde</strong> doit inclure <code>{new_pin}</code>.',
+
+    'admin.destination_accounts_title' => 'Comptes de destination (Salles d’épargne)',
+    'admin.destination_accounts_intro' => 'Ces comptes reçoivent les dépôts pour les salles d’épargne. Les codes de déverrouillage sont stockés chiffrés et ne sont révélés aux participants qu’après consensus.',
+
+    'admin.escrow_title' => 'Règlements de séquestre (Salles d’épargne)',
+    'admin.escrow_intro' => 'File opérationnelle pour remboursements / redistribution après retraits (avertissements) ou sorties approuvées. Les règlements sont enregistrés automatiquement ; marquez-les comme traités après traitement hors plateforme.',
+    'admin.include_processed' => 'Inclure les traités',
+
+    'admin.disputes_title' => 'Litiges (Salles d’épargne)',
+    'admin.disputes_intro' => 'Litiges de type B arrivés en revue (ou ouverts). Les litiges validés font avancer la rotation ; les litiges rejetés appliquent un avertissement pour litige abusif.',
+    'admin.include_resolved' => 'Inclure les résolus',
+
+    'admin.audit_title' => 'Journal d’audit',
+    'admin.audit_search_label' => 'Recherche (e-mail / action / id de verrou)',
+    'admin.audit_search_placeholder' => 'ex. login / admin_delete',
+
+    'admin.modal.code_detail' => 'Détail du verrou',
+    'admin.modal.escrow_detail' => 'Détail du règlement de séquestre',
+    'admin.modal.edit_carrier' => 'Modifier l’opérateur',
 
     'backup.intro' => 'Les sauvegardes contiennent uniquement des blobs chiffrés et des métadonnées (libellés, dates, statut). Vos codes en clair ne sont jamais stockés par le serveur.',
     'backup.security_required_title' => 'Configuration de sécurité requise',

@@ -74,6 +74,7 @@ return [
     'page.share' => 'Share',
 
     // Share
+    'share.subtitle' => 'Enter the secret to decrypt in your browser (server-enforced unlock time).',
     'share.card_title' => 'Shared time lock',
     'share.invalid_link' => 'Invalid link (missing token).',
     'share.secret_label' => 'Share secret',
@@ -97,15 +98,65 @@ return [
     'heading.account' => 'Your account',
     'heading.admin' => 'Admin Dashboard',
 
-    'admin.intro' => 'Manage users and all codes (encrypted blobs + metadata). Decryption is still impossible without a user’s vault passphrase.',
+    'admin.intro' => 'Manage users and all locks (encrypted blobs + metadata). Decryption is still impossible without a user’s vault passphrase.',
 
     'admin.tab.users' => 'Users',
-    'admin.tab.codes' => 'Codes',
+    'admin.tab.codes' => 'Locks',
     'admin.tab.carriers' => 'Carriers',
     'admin.tab.destination_accounts' => 'Destination accounts',
     'admin.tab.escrow' => 'Escrow',
     'admin.tab.disputes' => 'Disputes',
     'admin.tab.audit' => 'Audit',
+
+    'admin.th.id' => 'ID',
+    'admin.th.email' => 'Email',
+    'admin.th.verified' => 'Verified',
+    'admin.th.admin' => 'Admin',
+    'admin.th.time_locks' => 'Time locks',
+    'admin.th.created' => 'Created',
+    'admin.th.last_login' => 'Last login',
+    'admin.th.actions' => 'Actions',
+    'admin.th.user' => 'User',
+    'admin.th.label' => 'Label',
+    'admin.th.status' => 'Status',
+    'admin.th.reveal' => 'Reveal',
+    'admin.th.copied' => 'Copied',
+    'admin.th.confirmed' => 'Confirmed',
+    'admin.th.revealed' => 'Revealed',
+    'admin.th.active' => 'Active',
+
+    'admin.add_user_title' => 'Add user',
+    'admin.login_password_label' => 'Login password',
+    'admin.add_user_mark_verified' => 'Mark email as verified (skip email verification)',
+    'admin.add_user_make_admin' => 'Make this user an admin',
+    'admin.add_user_btn' => 'Create user',
+    'admin.add_user_note' => 'For zero-knowledge integrity, the user should choose their own vault passphrase. In strong security mode, vault passphrases are never sent to the server.',
+
+    'admin.codes_search_label' => 'Search (email or label)',
+    'admin.codes_search_placeholder' => 'e.g. alice@ / bank',
+    'admin.codes_include_inactive' => 'Include inactive',
+
+    'admin.carriers_title' => 'Carriers (Mobile Money)',
+    'admin.carriers_intro_html' => 'Define carrier PIN policy and USSD templates (used by the mobile app and by <em>Create Lock → Mobile money wallet</em>). The wallet flow is designed for templates that prompt for the new PIN in the dialer, so <strong>Change PIN</strong> should include <code>{old_pin}</code> but not <code>{new_pin}</code>. The <strong>Balance</strong> template should include <code>{new_pin}</code>.',
+
+    'admin.destination_accounts_title' => 'Destination accounts (Saving Rooms)',
+    'admin.destination_accounts_intro' => 'These accounts receive deposits for saving rooms. Unlock codes are stored encrypted and are only revealed to participants after consensus.',
+
+    'admin.escrow_title' => 'Escrow settlements (Saving Rooms)',
+    'admin.escrow_intro' => 'Operational queue for refunds / redistribution after removals (strikes) or approved exits. Settlements are recorded automatically; mark them processed after handling them off-platform.',
+    'admin.include_processed' => 'Include processed',
+
+    'admin.disputes_title' => 'Disputes (Saving Rooms)',
+    'admin.disputes_intro' => 'Type B disputes that reached a review state (or are open). Validated disputes advance the rotation; dismissed disputes apply a false-dispute strike.',
+    'admin.include_resolved' => 'Include resolved',
+
+    'admin.audit_title' => 'Audit log',
+    'admin.audit_search_label' => 'Search (email / action / lock id)',
+    'admin.audit_search_placeholder' => 'e.g. login / admin_delete',
+
+    'admin.modal.code_detail' => 'Code detail',
+    'admin.modal.escrow_detail' => 'Escrow settlement detail',
+    'admin.modal.edit_carrier' => 'Edit carrier',
 
     'backup.intro' => 'Backups contain only encrypted ciphertext blobs and metadata (labels, dates, status). Your plaintext codes are never stored by the server.',
     'backup.security_required_title' => 'Security setup required',

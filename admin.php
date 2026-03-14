@@ -114,22 +114,22 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--code-bg);border:
   <?php if ($adminPage === 'users'): ?>
   <div class="grid">
     <div class="card">
-      <div class="card-title">Users</div>
+      <div class="card-title"><?php e('admin.tab.users'); ?></div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
-        <button class="btn btn-ghost btn-sm" onclick="loadUsers()">↻ Refresh</button>
+        <button class="btn btn-ghost btn-sm" onclick="loadUsers()">↻ <?php e('common.refresh'); ?></button>
       </div>
       <div class="table-wrap">
         <table class="table" id="users-table">
           <thead>
             <tr>
-              <th>ID</th>
-              <th>Email</th>
-              <th>Verified</th>
-              <th>Admin</th>
-              <th>Codes</th>
-              <th>Created</th>
-              <th>Last login</th>
-              <th>Actions.</th>
+              <th><?php e('admin.th.id'); ?></th>
+              <th><?php e('admin.th.email'); ?></th>
+              <th><?php e('admin.th.verified'); ?></th>
+              <th><?php e('admin.th.admin'); ?></th>
+              <th><?php e('admin.th.time_locks'); ?></th>
+              <th><?php e('admin.th.created'); ?></th>
+              <th><?php e('admin.th.last_login'); ?></th>
+              <th><?php e('admin.th.actions'); ?></th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -139,22 +139,21 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--code-bg);border:
     </div>
 
     <div class="card">
-      <div class="card-title">Add user</div>
-      <div class="field"><label>Email</label><input id="nu-email" type="email" placeholder="user@example.com" autocomplete="off"></div>
-      <div class="field"><label>Login password</label><input id="nu-login" type="password" placeholder="min 8 chars" autocomplete="new-password"></div>
+      <div class="card-title"><?php e('admin.add_user_title'); ?></div>
+      <div class="field"><label><?php e('common.email'); ?></label><input id="nu-email" type="email" placeholder="user@example.com" autocomplete="off"></div>
+      <div class="field"><label><?php e('admin.login_password_label'); ?></label><input id="nu-login" type="password" placeholder="min 8 chars" autocomplete="new-password"></div>
       
 
-      <label class="chk"><input type="checkbox" id="nu-verified"> <span>Mark email as verified (skip email verification)</span></label>
-      <label class="chk"><input type="checkbox" id="nu-admin"> <span>Make this user an admin</span></label>
+      <label class="chk"><input type="checkbox" id="nu-verified"> <span><?php e('admin.add_user_mark_verified'); ?></span></label>
+      <label class="chk"><input type="checkbox" id="nu-admin"> <span><?php e('admin.add_user_make_admin'); ?></span></label>
 
-      <button class="btn btn-primary" onclick="createUser()">Create user</button>
+      <button class="btn btn-primary" onclick="createUser()"><?php e('admin.add_user_btn'); ?></button>
       <div id="nu-msg" class="msg"></div>
       <div id="nu-dev" class="msg" style="display:none;background:rgba(255,170,0,.06);border:1px solid rgba(255,170,0,.25);color:var(--muted);"></div>
 
       <hr>
       <div class="p" style="margin:0;">
-        For zero-knowledge integrity, the user should choose their own vault passphrase.
-        In strong security mode, vault passphrases are never sent to the server.
+        <?php e('admin.add_user_note'); ?>
       </div>
     </div>
   </div>
@@ -162,33 +161,33 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--code-bg);border:
 
   <?php if ($adminPage === 'codes'): ?>
   <div class="card" style="margin-top:14px;">
-    <div class="card-title">Codes</div>
+    <div class="card-title"><?php e('admin.tab.codes'); ?></div>
 
 
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
       <div class="field" style="margin:0;min-width:240px;flex:1;">
-        <label>Search (email or label)</label>
-        <input id="codes-q" placeholder="e.g. alice@ / bank" onkeydown="if(event.key==='Enter')loadCodes()">
+        <label><?php e('admin.codes_search_label'); ?></label>
+        <input id="codes-q" placeholder="<?= htmlspecialchars(t('admin.codes_search_placeholder'), ENT_QUOTES, 'UTF-8') ?>" onkeydown="if(event.key==='Enter')loadCodes()">
       </div>
-      <label class="chk" style="margin:0;"><input type="checkbox" id="codes-inactive"> <span>Include inactive</span></label>
-      <button class="btn btn-ghost btn-sm" onclick="loadCodes()">↻ Refresh</button>
+      <label class="chk" style="margin:0;"><input type="checkbox" id="codes-inactive"> <span><?php e('admin.codes_include_inactive'); ?></span></label>
+      <button class="btn btn-ghost btn-sm" onclick="loadCodes()">↻ <?php e('common.refresh'); ?></button>
     </div>
 
     <div class="table-wrap">
       <table class="table" id="codes-table">
         <thead>
           <tr>
-            <th>ID</th>
-            <th>User</th>
-            <th>Label</th>
-            <th>Status</th>
-            <th>Reveal</th>
-            <th>Created</th>
-            <th>Copied</th>
-            <th>Confirmed</th>
-            <th>Revealed</th>
-            <th>Active</th>
-            <th>Actions</th>
+            <th><?php e('admin.th.id'); ?></th>
+            <th><?php e('admin.th.user'); ?></th>
+            <th><?php e('admin.th.label'); ?></th>
+            <th><?php e('admin.th.status'); ?></th>
+            <th><?php e('admin.th.reveal'); ?></th>
+            <th><?php e('admin.th.created'); ?></th>
+            <th><?php e('admin.th.copied'); ?></th>
+            <th><?php e('admin.th.confirmed'); ?></th>
+            <th><?php e('admin.th.revealed'); ?></th>
+            <th><?php e('admin.th.active'); ?></th>
+            <th><?php e('admin.th.actions'); ?></th>
           </tr>
         </thead>
         <tbody></tbody>
@@ -200,9 +199,9 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--code-bg);border:
 
   <?php if ($adminPage === 'carriers'): ?>
   <div class="card" style="margin-top:14px;">
-    <div class="card-title">Carriers (Mobile Money)</div>
+    <div class="card-title"><?php e('admin.carriers_title'); ?></div>
 
-    <div class="p">Define carrier PIN policy and USSD templates (used by the mobile app and by <em>Create Lock → Mobile money wallet</em>). The wallet flow is designed for templates that prompt for the new PIN in the dialer, so <strong>Change PIN</strong> should include <code>{old_pin}</code> but not <code>{new_pin}</code>. The <strong>Balance</strong> template should include <code>{new_pin}</code>.</div>
+    <div class="p"><?= t('admin.carriers_intro_html') ?></div>
 
     <div style="display:grid;grid-template-columns:1fr;gap:12px;margin-bottom:12px;">
       <div class="field"><label>Name</label><input id="car-name" placeholder="e.g. MTN MoMo"></div>
@@ -235,7 +234,7 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--code-bg);border:
     </div>
 
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
-      <button class="btn btn-ghost btn-sm" onclick="loadCarriers()">↻ Refresh</button>
+      <button class="btn btn-ghost btn-sm" onclick="loadCarriers()">↻ <?php e('common.refresh'); ?></button>
     </div>
 
     <div class="table-wrap">
@@ -262,8 +261,8 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--code-bg);border:
 
   <?php if ($adminPage === 'destination_accounts'): ?>
   <div class="card" style="margin-top:14px;">
-    <div class="card-title">Destination accounts (Saving Rooms)</div>
-    <div class="p">These accounts receive deposits for saving rooms. Unlock codes are stored encrypted and are only revealed to participants after consensus.</div>
+    <div class="card-title"><?php e('admin.destination_accounts_title'); ?></div>
+    <div class="p"><?php e('admin.destination_accounts_intro'); ?></div>
 
     <div style="display:grid;grid-template-columns:1fr;gap:12px;margin-bottom:12px;">
       <div class="field">
@@ -328,12 +327,12 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--code-bg);border:
 
   <?php if ($adminPage === 'escrow'): ?>
   <div class="card" style="margin-top:14px;">
-    <div class="card-title">Escrow settlements (Saving Rooms)</div>
-    <div class="p">Operational queue for refunds / redistribution after removals (strikes) or approved exits. Settlements are recorded automatically; mark them processed after handling them off-platform.</div>
+    <div class="card-title"><?php e('admin.escrow_title'); ?></div>
+    <div class="p"><?php e('admin.escrow_intro'); ?></div>
 
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
-      <label class="chk" style="margin:0;"><input type="checkbox" id="esc-inc"> <span>Include processed</span></label>
-      <button class="btn btn-ghost btn-sm" onclick="loadEscrowSettlements()">↻ Refresh</button>
+      <label class="chk" style="margin:0;"><input type="checkbox" id="esc-inc"> <span><?php e('admin.include_processed'); ?></span></label>
+      <button class="btn btn-ghost btn-sm" onclick="loadEscrowSettlements()">↻ <?php e('common.refresh'); ?></button>
     </div>
 
     <div class="table-wrap">
@@ -362,12 +361,12 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--code-bg);border:
 
   <?php if ($adminPage === 'disputes'): ?>
   <div class="card" style="margin-top:14px;">
-    <div class="card-title">Disputes (Saving Rooms)</div>
-    <div class="p">Type B disputes that reached a review state (or are open). Validated disputes advance the rotation; dismissed disputes apply a false-dispute strike.</div>
+    <div class="card-title"><?php e('admin.disputes_title'); ?></div>
+    <div class="p"><?php e('admin.disputes_intro'); ?></div>
 
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
-      <label class="chk" style="margin:0;"><input type="checkbox" id="disp-inc"> <span>Include resolved</span></label>
-      <button class="btn btn-ghost btn-sm" onclick="loadDisputes()">↻ Refresh</button>
+      <label class="chk" style="margin:0;"><input type="checkbox" id="disp-inc"> <span><?php e('admin.include_resolved'); ?></span></label>
+      <button class="btn btn-ghost btn-sm" onclick="loadDisputes()">↻ <?php e('common.refresh'); ?></button>
     </div>
 
     <div class="table-wrap">
@@ -393,14 +392,14 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--code-bg);border:
 
   <?php if ($adminPage === 'audit'): ?>
   <div class="card" style="margin-top:14px;">
-    <div class="card-title">Audit log</div>
+    <div class="card-title"><?php e('admin.audit_title'); ?></div>
 
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
       <div class="field" style="margin:0;min-width:240px;flex:1;">
-        <label>Search (email / action / lock id)</label>
-        <input id="audit-q" placeholder="e.g. login / admin_delete" onkeydown="if(event.key==='Enter')loadAudit()">
+        <label><?php e('admin.audit_search_label'); ?></label>
+        <input id="audit-q" placeholder="<?= htmlspecialchars(t('admin.audit_search_placeholder'), ENT_QUOTES, 'UTF-8') ?>" onkeydown="if(event.key==='Enter')loadAudit()">
       </div>
-      <button class="btn btn-ghost btn-sm" onclick="loadAudit()">↻ Refresh</button>
+      <button class="btn btn-ghost btn-sm" onclick="loadAudit()">↻ <?php e('common.refresh'); ?></button>
     </div>
 
     <div class="table-wrap">
@@ -426,8 +425,8 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--code-bg);border:
 <div class="modal" id="detail-modal" onclick="closeDetail(event)">
   <div class="sheet">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;">
-      <h3 style="margin:0;">Code detail</h3>
-      <button class="btn btn-ghost btn-sm" onclick="closeDetail()">Close</button>
+      <h3 style="margin:0;"><?php e('admin.modal.code_detail'); ?></h3>
+      <button class="btn btn-ghost btn-sm" onclick="closeDetail()"><?php e('common.close'); ?></button>
     </div>
     <pre id="detail-pre"></pre>
   </div>
@@ -436,8 +435,8 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--code-bg);border:
 <div class="modal" id="escrow-modal" onclick="closeEscrowDetail(event)">
   <div class="sheet">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;">
-      <h3 style="margin:0;">Escrow settlement detail</h3>
-      <button class="btn btn-ghost btn-sm" onclick="closeEscrowDetail()">Close</button>
+      <h3 style="margin:0;"><?php e('admin.modal.escrow_detail'); ?></h3>
+      <button class="btn btn-ghost btn-sm" onclick="closeEscrowDetail()"><?php e('common.close'); ?></button>
     </div>
     <pre id="escrow-pre"></pre>
   </div>
@@ -446,8 +445,8 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--code-bg);border:
 <div class="modal" id="carrier-modal" onclick="closeCarrierModal(event)">
   <div class="sheet">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;">
-      <h3 style="margin:0;">Edit carrier</h3>
-      <button class="btn btn-ghost btn-sm" onclick="closeCarrierModal()">Close</button>
+      <h3 style="margin:0;"><?php e('admin.modal.edit_carrier'); ?></h3>
+      <button class="btn btn-ghost btn-sm" onclick="closeCarrierModal()"><?php e('common.close'); ?></button>
     </div>
 
     <input type="hidden" id="car-edit-id">
@@ -478,8 +477,8 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--code-bg);border:
     <label class="chk" style="margin:0;"><input type="checkbox" id="car-edit-active"> <span>Active</span></label>
 
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;">
-      <button class="btn btn-primary" onclick="saveCarrierEdit()">Save</button>
-      <button class="btn btn-ghost" onclick="closeCarrierModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveCarrierEdit()"><?php e('common.save'); ?></button>
+      <button class="btn btn-ghost" onclick="closeCarrierModal()"><?php e('common.cancel'); ?></button>
     </div>
     <div id="car-edit-msg" class="msg"></div>
   </div>
