@@ -17,6 +17,7 @@
   font-family:var(--display);font-size:clamp(16px,3vw,20px);font-weight:700;letter-spacing:-.6px;
   text-decoration:none;color:var(--text);
 }
+.topbar-logo:visited{color:var(--text);}
 .topbar-logo-img{height:28px;width:auto;max-width:200px;object-fit:contain;
   border:1px solid rgba(255,255,255,.10);
   background:rgba(0,0,0,.12);
@@ -57,7 +58,7 @@
     width:260px;z-index:90;
     border-radius:var(--radius-card);
     border:1px solid var(--b1);
-    background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+    background:linear-gradient(180deg, rgba(255,255,255,.065), rgba(255,255,255,.028));
     box-shadow:var(--shadow-card);
     backdrop-filter:blur(18px);
     -webkit-backdrop-filter:blur(18px);
@@ -73,14 +74,45 @@
 
   #ls-sidebar .ls-side-body{padding:10px;overflow:auto;height:calc(100% - 56px);}
 
-  #ls-sidebar .topbar-r{display:flex;flex-direction:column;align-items:stretch;gap:10px;}
+  #ls-sidebar .topbar-r{display:flex;flex-direction:column;align-items:stretch;gap:8px;}
   #ls-sidebar .topbar-r .btn{width:100%;}
+
+  /* Sidebar nav readability (override the compact topbar button styling). */
+  #ls-sidebar .topbar-r .btn.btn-sm{padding:11px 12px;font-size:11px;min-height:42px;}
+  #ls-sidebar .topbar-r .btn.nav-btn{justify-content:flex-start;gap:12px;}
+  #ls-sidebar .topbar-r .btn.nav-btn .nav-ico{opacity:1;color:color-mix(in srgb, var(--accent) 70%, var(--text));}
+  #ls-sidebar .topbar-r .btn.nav-btn .nav-lbl{font-family:var(--sans);
+    font-size:12px;
+    letter-spacing:.2px;
+    text-transform:none;
+    color:var(--text);
+    opacity:.92;
+  }
+  #ls-sidebar .topbar-r a.active,
+  #ls-sidebar .topbar-r .btn.active{border-color:rgba(124,92,255,.35);
+    background:linear-gradient(180deg, rgba(124,92,255,.16), rgba(48,208,255,.05));
+  }
+
+  #ls-sidebar .user-pill{display:block;max-width:none;
+    padding:10px 12px;
+    border:1px solid var(--b1);
+    border-radius:var(--radius-btn);
+    background:rgba(255,255,255,.03);
+    margin-bottom:6px;
+  }
+
+  #ls-sidebar .nav-group-title{padding:14px 6px 6px;color:color-mix(in srgb, var(--muted) 78%, var(--text));}
+  #ls-sidebar details.nav-dd{margin-top:4px;}
+  #ls-sidebar details.nav-dd > summary.btn{background:rgba(255,255,255,.03);}
+  #ls-sidebar .nav-dd-panel{gap:8px;margin-top:8px;}
+
   #ls-sidebar[data-collapsed="1"] .topbar-r .nav-lbl{display:none;}
   #ls-sidebar[data-collapsed="1"] .topbar-r .btn.nav-btn{flex-direction:row;justify-content:center;}
   #ls-sidebar[data-collapsed="1"] .user-pill{display:none;}
 
   .topbar{left:0;right:0;margin-left:calc(16px + 260px + 16px);margin-right:16px;border-radius:var(--radius-card);
     border:1px solid var(--b1);border-bottom:1px solid var(--b1);
+    justify-content:flex-start;
   }
   #ls-sidebar[data-collapsed="1"] ~ #app-shell .topbar{margin-left:calc(16px + 84px + 16px);}
 
@@ -289,6 +321,11 @@
 /* ─────────────────────────────
    Buttons
    ───────────────────────────── */
+
+/* Prevent browser default visited-link purple/blue in our button-style links. */
+a.btn,
+a.btn:visited{color:inherit;}
+
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;
   padding:13px 18px;
   font-family:var(--mono);
