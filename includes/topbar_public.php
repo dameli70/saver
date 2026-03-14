@@ -8,6 +8,7 @@ $topbarShowFaq = $topbarShowFaq ?? true;
 $topbarShowAuth = $topbarShowAuth ?? true;
 
 $publicAppName = $topbarAppName ?? (defined('APP_NAME') ? APP_NAME : 'Controle');
+$publicLogoUrl = (defined('APP_LOGO_URL') ? trim((string)APP_LOGO_URL) : '');
 
 $publicLoggedIn = function_exists('isLoggedIn') ? isLoggedIn() : false;
 $publicVerified = $publicLoggedIn && function_exists('isEmailVerified') ? isEmailVerified() : false;
@@ -25,7 +26,12 @@ if (!function_exists('topbarHref')) {
 }
 ?>
 <div class="topbar topbar-public">
-  <a class="topbar-logo" href="<?= htmlspecialchars(topbarHref('index.php'), ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($publicAppName) ?></a>
+  <a class="topbar-logo" href="<?= htmlspecialchars(topbarHref('index.php'), ENT_QUOTES, 'UTF-8') ?>">
+    <?php if ($publicLogoUrl !== ''): ?>
+      <img class="topbar-logo-img" src="<?= htmlspecialchars($publicLogoUrl, ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($publicAppName, ENT_QUOTES, 'UTF-8') ?>">
+    <?php endif; ?>
+    <span class="topbar-logo-text"><?= htmlspecialchars($publicAppName) ?></span>
+  </a>
   <div class="topbar-r">
     <button class="btn btn-ghost btn-sm btn-theme" type="button" data-theme-toggle><?php e('common.theme'); ?></button>
 

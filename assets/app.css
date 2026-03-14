@@ -13,8 +13,19 @@
   backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
   border-bottom:1px solid var(--b1);
 }
-.topbar-logo{font-family:var(--display);font-size:clamp(16px,3vw,20px);font-weight:700;letter-spacing:-.6px;
-  text-decoration:none;color:var(--text);}
+.topbar-logo{display:flex;align-items:center;gap:10px;
+  font-family:var(--display);font-size:clamp(16px,3vw,20px);font-weight:700;letter-spacing:-.6px;
+  text-decoration:none;color:var(--text);
+}
+.topbar-logo-img{height:28px;width:auto;max-width:200px;object-fit:contain;
+  border:1px solid rgba(255,255,255,.10);
+  background:rgba(0,0,0,.12);
+  padding:4px 6px;
+  border-radius:12px;
+}
+@media(max-width:520px){
+  .topbar-logo-text{display:none;}
+}
 .topbar-logo:focus-visible{outline-offset:6px;}
 .topbar-r{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end;}
 .topbar-badge{font-family:var(--mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;

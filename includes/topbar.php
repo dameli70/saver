@@ -16,9 +16,15 @@ if (isset($verified)) {
 }
 
 $topbarHomeHref = $topbarVerified ? 'dashboard.php' : 'index.php';
+$topbarLogoUrl = (defined('APP_LOGO_URL') ? trim((string)APP_LOGO_URL) : '');
 ?>
 <div class="topbar">
-  <a class="topbar-logo" href="<?= htmlspecialchars($topbarHomeHref, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars(APP_NAME) ?></a>
+  <a class="topbar-logo" href="<?= htmlspecialchars($topbarHomeHref, ENT_QUOTES, 'UTF-8') ?>">
+    <?php if ($topbarLogoUrl !== ''): ?>
+      <img class="topbar-logo-img" src="<?= htmlspecialchars($topbarLogoUrl, ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars(APP_NAME, ENT_QUOTES, 'UTF-8') ?>">
+    <?php endif; ?>
+    <span class="topbar-logo-text"><?= htmlspecialchars(APP_NAME) ?></span>
+  </a>
   <div class="topbar-r">
     <?php if (isset($topbarBadgeText) && trim((string)$topbarBadgeText) !== ''): ?>
       <span class="topbar-badge"><?= htmlspecialchars((string)$topbarBadgeText) ?></span>

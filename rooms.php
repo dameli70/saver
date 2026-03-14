@@ -78,7 +78,7 @@ header("Referrer-Policy: no-referrer");
     </div>
 
     <div class="card" id="create-room">
-     <tdiv class="card-titlecreate_title'); ?></div>
+      <div class="card-title"><?php e('rooms.create_title'); ?></div>
       <div class="p" style="margin-top:-6px;"><?php e('rooms.create_sub'); ?></div>
 
       <div class="field"><label><?php e('rooms.field.purpose'); ?></label>
