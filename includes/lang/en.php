@@ -189,6 +189,7 @@ return [
     'account.trust.active_rooms_title' => 'Active Saving Rooms',
     'account.trust.active_rooms_sub' => 'Quick links to your current rooms and countdowns.',
     'account.trust.active_rooms_none' => 'No active rooms.',
+    'account.trust.failed_to_load' => 'Failed to load trust passport.',
     'account.trust.level_fmt' => 'LEVEL {level}',
     'account.trust.restricted_until_fmt' => 'Until {ts}',
     'account.trust.starts_in_minutes' => 'Starts in {n} min',

@@ -20,8 +20,8 @@ $out = [
     'start_url' => './dashboard.php',
     'scope' => './',
     'display' => 'standalone',
-    'background_color' => '#0b0d12',
-    'theme_color' => '#7c5cff',
+    'background_color' => '#07080c',
+    'theme_color' => '#0b0d12',
     'icons' => $icons,
 ];
 

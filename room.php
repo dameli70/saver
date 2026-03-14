@@ -32,14 +32,14 @@ header("X-Frame-Options: DENY");
 header("X-Content-Type-Options: nosniff");
 header("Referrer-Policy: no-referrer");
 ?>
-<!doctype html>
+<!DOCTYPE html>
 <html <?= htmlLangAttr() ?>>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title><?= htmlspecialchars(APP_NAME) ?> — <?= htmlspecialchars(t('page.room')) ?></title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700;800;900&family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
 <?php emitI18nJsGlobals(); ?>
 <script src="assets/theme.js"></script>
 <script src="assets/app.js"></script>
@@ -370,6 +370,82 @@ function tr(key, vars, fallback){
   return s;
 }
 
+const STR = {
+  failed: tr('common.failed', null, 'Failed'),
+  saved: tr('common.saved', null, 'Saved.'),
+  vote_saved: tr('room.vote_saved', null, 'Vote saved.'),
+  loading: tr('common.loading', null, 'Loading…'),
+  enter_totp: tr('login.enter_totp', null, 'Enter your 6-digit authenticator code'),
+  email_required: tr('common.email_required', null, 'Email required'),
+
+  join_request_sent: tr('rooms.msg.join_request_sent', null, 'Join request sent.'),
+
+  invite_no_active: tr('room.invitation.no_active', null, 'No active invite.'),
+  invite_accepted: tr('room.invitation.accepted', null, 'Invite accepted.'),
+  invite_declined: tr('room.invitation.declined', null, 'Invite declined.'),
+
+  invite_sent: tr('room.invites.sent', null, 'Invite sent.'),
+  invite_revoked: tr('room.invites.revoked', null, 'Invite revoked.'),
+
+  no_active_cycle: tr('room.contribution.no_active_cycle', null, 'No active cycle.'),
+  contribution_confirmed: tr('room.contribution.confirmed', null, 'Contribution confirmed.'),
+
+  feed_failed: tr('room.feed.failed_to_load_activity', null, 'Failed to load activity'),
+
+  active: tr('common.active', null, 'active'),
+  inactive: tr('common.inactive', null, 'inactive'),
+  participant: tr('common.participant', null, 'participant'),
+  revoke: tr('common.revoke', null, 'Revoke'),
+  approve: tr('common.approve', null, 'Approve'),
+  decline: tr('common.decline', null, 'Decline'),
+  restricted: tr('common.restricted', null, 'restricted'),
+  strikes: tr('common.strikes', null, 'strikes'),
+};
+
+const FEED_EVENT_LABELS = {
+  room_created: tr('room.feed.room_created', null, 'Room created'),
+  join_requested: tr('room.feed.join_requested', null, 'New join request'),
+  join_approved: tr('room.feed.join_approved', null, 'Join request approved'),
+  join_declined: tr('room.feed.join_declined', null, 'Join request declined'),
+  lobby_locked: tr('room.feed.lobby_locked', null, 'Lobby locked'),
+  room_started: tr('room.feed.room_started', null, 'Room started'),
+  grace_window_started: tr('room.feed.grace_window_started', null, 'Contribution grace window started'),
+  contribution_confirmed: tr('room.feed.contribution_confirmed', null, '✓ Contributed'),
+  strike_logged: tr('room.feed.strike_logged', null, 'Strike logged'),
+  participant_removed: tr('room.feed.participant_removed', null, 'Participant removed'),
+  escrow_settlement_recorded: tr('room.feed.escrow_settlement_recorded', null, 'Escrow settlement recorded'),
+  escrow_settlement_processed: tr('room.feed.escrow_settlement_processed', null, 'Escrow settlement processed'),
+  invite_created: tr('room.feed.invite_created', null, 'Invite created'),
+  invite_accepted: tr('room.feed.invite_accepted', null, 'Invite accepted'),
+  invite_declined: tr('room.feed.invite_declined', null, 'Invite declined'),
+  invite_revoked: tr('room.feed.invite_revoked', null, 'Invite revoked'),
+  unlock_vote_updated: tr('room.feed.unlock_vote_updated', null, 'Unlock vote updated'),
+  unlock_revealed: tr('room.feed.unlock_revealed', null, 'Unlock revealed'),
+  unlock_expired: tr('room.feed.unlock_expired', null, 'Unlock expired'),
+  rotation_queue_created: tr('room.feed.rotation_queue_created', null, 'Rotation queue created'),
+  rotation_vote_updated: tr('room.feed.rotation_vote_updated', null, 'Rotation vote updated'),
+  typeB_turn_revealed: tr('room.feed.typeB_turn_revealed', null, 'Type B turn revealed'),
+  typeB_turn_expired: tr('room.feed.typeB_turn_expired', null, 'Type B turn expired'),
+  typeB_turn_advanced: tr('room.feed.typeB_turn_advanced', null, 'Type B turn advanced'),
+  rotation_blocked_dispute: tr('room.feed.rotation_blocked_dispute', null, 'Rotation blocked (dispute)'),
+  rotation_blocked_debt: tr('room.feed.rotation_blocked_debt', null, 'Rotation blocked (unpaid contribution)'),
+  rotation_unblocked_debt: tr('room.feed.rotation_unblocked_debt', null, 'Rotation unblocked (debt cleared)'),
+  dispute_raised: tr('room.feed.dispute_raised', null, 'Dispute raised'),
+  dispute_ack_updated: tr('room.feed.dispute_ack_updated', null, 'Dispute acknowledgment updated'),
+  dispute_validated: tr('room.feed.dispute_validated', null, 'Dispute validated'),
+  dispute_dismissed: tr('room.feed.dispute_dismissed', null, 'Dispute dismissed'),
+  rotation_unblocked: tr('room.feed.rotation_unblocked', null, 'Rotation unblocked'),
+  underfilled_alerted: tr('room.feed.underfilled_alerted', null, 'Underfilled alert sent'),
+  underfilled_resolved: tr('room.feed.underfilled_resolved', null, 'Underfilled room resolved'),
+  room_auto_cancelled_underfilled: tr('room.feed.room_auto_cancelled_underfilled', null, 'Room auto-cancelled (underfilled)'),
+  room_cancelled_by_maker: tr('room.feed.room_cancelled_by_maker', null, 'Room cancelled by maker'),
+  exit_requested: tr('room.feed.exit_requested', null, 'Exit request opened'),
+  exit_vote_updated: tr('room.feed.exit_vote_updated', null, 'Exit request vote updated'),
+  exit_approved: tr('room.feed.exit_approved', null, 'Exit request approved'),
+  exit_cancelled: tr('room.feed.exit_cancelled', null, 'Exit request cancelled'),
+  room_closed: tr('room.feed.room_closed', null, 'Room closed'),
+};
+
 function apiUrl(url){return url.startsWith('/') ? url.slice(1) : url;}
 async function get(url){const r=await fetch(apiUrl(url),{credentials:'same-origin'});return r.json();}
 async function postCsrf(url,body){
@@ -428,7 +504,7 @@ async function ensureReauth(methods){
   }
 
   if(methods && methods.totp){
-    const code = prompt('Enter your 6-digit authenticator code');
+    const code = prompt(STR.enter_totp);
     if(!code) return false;
     const r = await postCsrf('api/totp.php', {action:'reauth', code});
     return !!r.success;
@@ -643,7 +719,8 @@ function destSummary(a){
   if(a.account_type === 'bank'){
     return (a.bank_name||tr('room.dest.bank', null, 'Bank')) + ' · ' + (a.bank_account_number||'');
   }
- }
+  return '—';
+}
 
 let roomCache = null;
 let lastEventId = 0;
@@ -1663,4 +1740,3 @@ loadRoom().then(async ()=>{
 </div>
 </body>
 </html> 
-l> 

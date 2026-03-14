@@ -5,7 +5,7 @@
 .toast.warn{border-color:rgba(255,170,0,.35);color:var(--orange);}
 
 .utc-pill{display:inline-flex;align-items:center;gap:6px;font-size:9px;letter-spacing:1px;text-transform:uppercase;
-  padding:3px 7px;border:1px solid var(--b2);color:var(--muted);background:rgba(255,255,255,.02);border-radius:var(--radius-pill);}
+  padding:3px 7px;border:1px solid var(--b2);color:var(--muted);background:var(--s1);border-radius:var(--radius-pill);}
 
 .ls-modal-overlay{position:fixed;inset:0;background:var(--overlay-bg);
   display:flex;align-items:center;justify-content:center;z-index:820;
@@ -14,7 +14,7 @@
   transition:opacity .18s ease, visibility 0s linear .18s;
 }
 .ls-modal-overlay.show{opacity:1;pointer-events:auto;visibility:visible;transition:opacity .18s ease;}
-.ls-modal{background:var(--s1);border:1px solid var(--b2);width:100%;max-width:440px;padding:22px;position:relative;border-radius:var(--radius-card);box-shadow:var(--shadow-card);
+.ls-modal{background:linear-gradient(180deg, var(--s2), var(--s1));border:1px solid var(--b2);width:100%;max-width:440px;padding:22px;position:relative;border-radius:var(--radius-card);box-shadow:var(--shadow-card);
   transform:translateY(10px);
   transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease;
 }
@@ -38,10 +38,10 @@
 .ls-modal-title{font-family:var(--display);font-size:15px;font-weight:900;margin-bottom:6px;}
 .ls-modal-sub{font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:14px;}
 
-.spin.light{border-color:rgba(255,255,255,.25);border-top-color:var(--accent);}
+.spin.light{border-color:rgb(var(--t0-rgb) / .25);border-top-color:var(--accent);}
 
-.skel{position:relative;overflow:hidden;background:rgba(255,255,255,.04);border:1px solid var(--b1);border-radius:var(--radius-card);}
+.skel{position:relative;overflow:hidden;background:linear-gradient(180deg, var(--s2), var(--s1));border:1px solid var(--b1);border-radius:var(--radius-card);}
 .skel::after{content:'';position:absolute;inset:0;transform:translateX(-100%);
-  background:linear-gradient(90deg, transparent, rgba(255,255,255,.06), transparent);
+  background:linear-gradient(90deg, transparent, rgb(var(--t0-rgb) / .06), transparent);
   animation:skel 1.2s infinite;}
 @keyframes skel{to{transform:translateX(100%);}}

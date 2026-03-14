@@ -112,7 +112,7 @@ header("Referrer-Policy: no-referrer");
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title><?= htmlspecialchars(APP_NAME) ?> — <?= htmlspecialchars(t('page.setup')) ?></title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700;800;900&family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
 <?php emitI18nJsGlobals(); ?>
 <script src="assets/theme.js"></script>
 <script src="assets/app.js"></script>
@@ -126,8 +126,8 @@ header("Referrer-Policy: no-referrer");
 .step-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;}
 .step-title{font-family:var(--display);font-weight:900;font-size:12px;letter-spacing:2px;text-transform:uppercase;}
 .step-sub{color:var(--muted);font-size:12px;line-height:1.7;margin-top:8px;}
-.badge{font-size:10px;letter-spacing:1px;text-transform:uppercase;padding:5px 10px;border:1px solid rgba(255,255,255,.13);color:var(--muted);}
-.badge.ok{border-color:rgba(71,255,176,.2);color:var(--green);background:rgba(71,255,176,.06);}
+.badge{font-size:10px;letter-spacing:1px;text-transform:uppercase;padding:5px 10px;border:1px solid var(--b2);color:var(--muted);background:var(--s1);border-radius:999px;}
+.badge.ok{border-color:color-mix(in srgb, var(--green) 22%, transparent);color:var(--green);background:color-mix(in srgb, var(--green) 7%, transparent);}
 .grid2{display:grid;grid-template-columns:1fr;gap:12px;}
 @media(min-width:760px){.grid2{grid-template-columns:repeat(2,1fr);} }
 .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;}
@@ -158,8 +158,8 @@ header("Referrer-Policy: no-referrer");
         <div style="font-size:12px;color:var(--muted);line-height:1.7;">
           <strong style="color:var(--text);font-weight:800;"><?= (int)$setupPercent ?>%</strong> <?php e('dashboard.progress_suffix', ['next' => $nextSetupText]); ?>
         </div>
-        <div style="height:10px;border:1px solid var(--b1);background:rgba(255,255,255,.02);margin-top:10px;">
-          <div style="height:100%;width:<?= (int)$setupPercent ?>%;background:linear-gradient(90deg, var(--accent), rgba(255,255,255,.12));"></div>
+        <div style="height:10px;border:1px solid var(--b1);background:var(--s2);margin-top:10px;border-radius:999px;overflow:hidden;">
+          <div style="height:100%;width:<?= (int)$setupPercent ?>%;background:linear-gradient(90deg, var(--accent), var(--accent2));"></div>
         </div>
       </div>
       <a class="btn btn-primary" href="<?= htmlspecialchars($nextSetupHref) ?>" style="width:auto;"><?= htmlspecialchars($nextSetupLabel) ?></a>
