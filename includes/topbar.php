@@ -29,6 +29,15 @@ if ($topbarVerified) {
 $topbarCurPage = basename($_SERVER['PHP_SELF'] ?? '');
 $topbarActive = function(string $href) use ($topbarCurPage): bool {
     $base = explode('#', $href, 2)[0];
+
+    if ($base === 'security.php') {
+        return $topbarCurPage === 'security.php' || str_starts_with($topbarCurPage, 'security_');
+    }
+
+    if ($base === 'admin.php') {
+        return $topbarCurPage === 'admin.php' || str_starts_with($topbarCurPage, 'admin_');
+    }
+
     return $base !== '' && $base === $topbarCurPage;
 };
 ?>
@@ -79,6 +88,7 @@ $topbarActive = function(string $href) use ($topbarCurPage): bool {
           <a class="btn btn-ghost btn-sm <?= $topbarActive('backup.php') ? 'active' : '' ?>" href="backup.php" <?= $topbarActive('backup.php') ? 'aria-current="page"' : '' ?>><?php e('nav.backups'); ?></a>
 
           <div class="nav-group-title"><?php e('dashboard.security'); ?></div>
+          <a class="btn btn-ghost btn-sm <?= $topbarActive('security.php') ? 'active' : '' ?>" href="security.php" <?= $topbarActive('security.php') ? 'aria-current="page"' : '' ?>><?php e('nav.security'); ?></a>
           <?php if ($topbarShowSetup): ?><a class="btn btn-ghost btn-sm <?= $topbarActive('setup.php') ? 'active' : '' ?>" href="setup.php" <?= $topbarActive('setup.php') ? 'aria-current="page"' : '' ?>><?php e('nav.setup'); ?></a><?php endif; ?>
           <a class="btn btn-ghost btn-sm <?= $topbarActive('account.php') ? 'active' : '' ?>" href="account.php" <?= $topbarActive('account.php') ? 'aria-current="page"' : '' ?>><?php e('nav.account'); ?></a>
           <?php if ($topbarIsAdmin): ?><a class="btn btn-ghost btn-sm <?= $topbarActive('admin.php') ? 'active' : '' ?>" href="admin.php" <?= $topbarActive('admin.php') ? 'aria-current="page"' : '' ?>><?php e('nav.admin'); ?></a><?php endif; ?>
@@ -120,6 +130,7 @@ $topbarActive = function(string $href) use ($topbarCurPage): bool {
       <a class="btn btn-ghost btn-sm" href="notifications.php"><?php e('nav.notifications'); ?></a>
       <a class="btn btn-ghost btn-sm" href="backup.php"><?php e('nav.backups'); ?></a>
       <a class="btn btn-ghost btn-sm" href="vault_settings.php"><?php e('nav.vault'); ?></a>
+      <a class="btn btn-ghost btn-sm" href="security.php"><?php e('nav.security'); ?></a>
       <?php if ($topbarShowSetup): ?><a class="btn btn-ghost btn-sm" href="setup.php"><?php e('nav.setup'); ?></a><?php endif; ?>
       <a class="btn btn-ghost btn-sm" href="account.php"><?php e('nav.account'); ?></a>
       <?php if ($topbarIsAdmin): ?><a class="btn btn-ghost btn-sm" href="admin.php"><?php e('nav.admin'); ?></a><?php endif; ?>

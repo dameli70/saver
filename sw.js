@@ -9,7 +9,7 @@
    - keep API requests network-first
 */
 
-const CACHE = 'controle-v12';
+const CACHE = 'controle-v13';
 
 const ASSETS = [
   './',
@@ -20,6 +20,10 @@ const ASSETS = [
   './assets/auth.css',
   './assets/app.js',
   './assets/theme.js',
+  './assets/security.js',
+  './assets/security_page.css',
+  './assets/admin_shared.js',
+  './assets/admin_users.js',
 ];
 
 self.addEventListener('install', (event) => {

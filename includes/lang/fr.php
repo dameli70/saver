@@ -44,6 +44,7 @@ return [
     'nav.backups' => 'Sauvegardes',
     'nav.vault' => 'Coffre',
     'nav.setup' => 'Configuration',
+    'nav.security' => 'Sécurité',
     'nav.account' => 'Compte',
     'nav.admin' => 'Admin',
     'nav.verify_email' => 'Vérifier l’e-mail',
@@ -66,6 +67,11 @@ return [
     'page.notifications' => 'Notifications',
     'page.backups' => 'Sauvegardes',
     'page.account' => 'Compte',
+    'page.security' => 'Sécurité',
+    'page.security_password' => 'Mot de passe',
+    'page.security_totp' => 'Authentificateur',
+    'page.security_passkeys' => 'Passkeys',
+    'page.security_sessions' => 'Sessions',
     'page.admin' => 'Admin',
     'page.setup' => 'Configuration',
     'page.install' => 'Installation',
@@ -440,6 +446,9 @@ return [
     'dashboard.check.first_lock_sub' => 'Créez votre premier verrou temporel pour instaurer une période de refroidissement avant de dépenser.',
     'dashboard.security' => 'Sécurité',
     'dashboard.security_sub_html' => 'Les actions sensibles peuvent demander une confirmation supplémentaire (passkey ou code d’authentification). Configurez cela dans {account_link}.',
+
+    'security.hub_sub' => 'Gérez votre mot de passe, vos sessions, et les méthodes de confirmation.',
+
     'dashboard.next_unlock_label' => 'Prochain déverrouillage :',
     'dashboard.no_upcoming_unlock' => 'Aucun déverrouillage à venir.',
 
