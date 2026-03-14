@@ -32,8 +32,8 @@ return [
 
     // Navigation
     'nav.dashboard' => 'Tableau de bord',
-    'nav.create_code' => 'Créer un code',
-    'nav.my_codes' => 'Mes codes',
+    'nav.create_code' => 'Créer un verrou',
+    'nav.my_codes' => 'Verrous',
     'nav.rooms' => 'Salles',
     'nav.notifications' => 'Notifications',
     'nav.backups' => 'Sauvegardes',

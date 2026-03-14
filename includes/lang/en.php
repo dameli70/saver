@@ -45,8 +45,8 @@ return [
 
     // Page titles / headings
     'page.dashboard' => 'Dashboard',
-    'page.create_code' => 'Create Code',
-    'page.my_codes' => 'My Codes',
+    'page.create_code' => 'Create Lock',
+    'page.my_codes' => 'Time Locks',
     'page.vault_settings' => 'Vault Settings',
     'page.rooms' => 'Saving Rooms',
     'page.room' => 'Room',

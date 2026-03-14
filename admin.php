@@ -21,6 +21,7 @@ if (!isAdmin()) {
 }
 
 $userEmail = getCurrentUserEmail() ?? '';
+$isAdmin   = true;
 $csrf      = getCsrfToken();
 
 $adminPage = $_GET['p'] ?? 'users';
@@ -86,27 +87,7 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--code-bg);border:
 <div class="orb orb1"></div><div class="orb orb2"></div>
 
 <div id="app">
-  <div class="topbar">
-    <div class="topbar-logo"><?= htmlspecialchars(APP_NAME) ?></div>
-    <div class="topbar-r">
-      <span class="badge">SUPER ADMIN</span>
-      <span class="user-pill"><?= htmlspecialchars($userEmail) ?></span>
-      <button class="btn btn-ghost btn-sm btn-theme" type="button" data-theme-toggle><?php e('common.theme'); ?></button>
-      <?php $curLang = currentLang(); ?>
-      <a class="<?= $curLang === 'fr' ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm' ?>" href="<?= htmlspecialchars(langSwitchUrl('fr')) ?>"><?php e('common.lang_fr'); ?></a>
-      <a class="<?= $curLang === 'en' ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm' ?>" href="<?= htmlspecialchars(langSwitchUrl('en')) ?>"><?php e('common.lang_en'); ?></a>
-      <a class="btn btn-ghost btn-sm" href="dashboard.php"><?php e('nav.dashboard'); ?></a>
-      <a class="btn btn-ghost btn-sm" href="create_code.php"><?php e('nav.create_code'); ?></a>
-      <a class="btn btn-ghost btn-sm" href="my_codes.php"><?php e('nav.my_codes'); ?></a>
-      <a class="btn btn-ghost btn-sm" href="rooms.php"><?php e('nav.rooms'); ?></a>
-      <a class="btn btn-ghost btn-sm" href="notifications.php"><?php e('nav.notifications'); ?></a>
-      <a class="btn btn-ghost btn-sm" href="backup.php"><?php e('nav.backups'); ?></a>
-      <a class="btn btn-ghost btn-sm" href="vault_settings.php"><?php e('nav.vault'); ?></a>
-      <a class="btn btn-ghost btn-sm" href="setup.php"><?php e('nav.setup'); ?></a>
-      <a class="btn btn-ghost btn-sm" href="account.php"><?php e('nav.account'); ?></a>
-      <a class="btn btn-ghost btn-sm" href="logout.php"><?php e('common.logout'); ?></a>
-    </div>
-  </div>
+  <?php $topbarBadgeText = 'SUPER ADMIN'; include __DIR__ . '/includes/topbar.php'; ?>
 
   <div class="app-body wide">
     <div class="h"><?php e('heading.admin'); ?></div>

@@ -496,6 +496,26 @@
     return true;
   };
 
+  function setNavDropdownsOpen(nav, open){
+    if(!nav) return;
+    try{
+      nav.querySelectorAll('details.nav-dd').forEach(d => {
+        if(open){
+          if(!d.hasAttribute('data-prev-open')) d.setAttribute('data-prev-open', d.open ? '1' : '0');
+          d.open = true;
+        }else{
+          const prev = d.getAttribute('data-prev-open');
+          if(prev !== null){
+            d.open = (prev === '1');
+            d.removeAttribute('data-prev-open');
+          }else{
+            d.open = false;
+          }
+        }
+      });
+    }catch{}
+  }
+
   function initNavGroups(){
     const nav = document.querySelector('.topbar .topbar-r');
     if(!nav) return;
@@ -528,6 +548,19 @@
 
     const primary = rest.filter(isPrimary);
     const secondary = rest.filter(el => !primary.includes(el));
+
+    // Enforce a consistent primary nav order across pages.
+    const primaryOrder = ['dashboard.php','create_code.php','my_codes.php','rooms.php','notifications.php'];
+    primary.sort((a, b) => {
+      const ha = String(a.getAttribute('href') || '').trim();
+      const hb = String(b.getAttribute('href') || '').trim();
+      const ia = primaryOrder.indexOf(ha);
+      const ib = primaryOrder.indexOf(hb);
+      if(ia === -1 && ib === -1) return 0;
+      if(ia === -1) return 1;
+      if(ib === -1) return -1;
+      return ia - ib;
+    });
 
     function decorateNavBtn(el, icon, label){
       if(!el) return;
@@ -645,6 +678,31 @@
         (byGroup[key] || byGroup.other).push(el);
       });
 
+      const groupOrder = {
+        vault: ['vault_settings.php', 'backup.php'],
+        security: ['account.php', 'setup.php'],
+        admin: ['admin.php'],
+        help: ['index.php#faq'],
+        session: ['logout.php'],
+      };
+
+      function sortGroup(key){
+        const ord = groupOrder[key];
+        if(!ord) return;
+        byGroup[key].sort((a, b) => {
+          const ha = String(a.getAttribute('href') || '').trim();
+          const hb = String(b.getAttribute('href') || '').trim();
+          const ia = ord.indexOf(ha);
+          const ib = ord.indexOf(hb);
+          if(ia === -1 && ib === -1) return 0;
+          if(ia === -1) return 1;
+          if(ib === -1) return -1;
+          return ia - ib;
+        });
+      }
+
+      Object.keys(groupOrder).forEach(sortGroup);
+
       appendGroup(more.panel, 'vault', byGroup.vault);
       appendGroup(more.panel, 'community', byGroup.community);
       appendGroup(more.panel, 'security', byGroup.security);
@@ -681,6 +739,15 @@
 
     // Close dropdowns when clicking outside.
     document.addEventListener('click', (e) => {
+      try{
+        const navOv = document.getElementById('ls-nav-overlay');
+        if(navOv && navOv.classList.contains('show')) return;
+      }catch{}
+
+      try{
+        if(nav.closest && nav.closest('#ls-sidebar')) return;
+      }catch{}
+
       if(!nav.contains(e.target)){
         nav.querySelectorAll('details.nav-dd[open]').forEach(x => x.open = false);
       }
@@ -757,6 +824,9 @@
       // Move the real nav into the drawer so existing event handlers keep working.
       if(nav.parentNode !== body) body.appendChild(nav);
 
+      // In the mobile drawer we want a full, categorized menu without extra taps.
+      setNavDropdownsOpen(nav, true);
+
       prevFocus = document.activeElement;
 
       ov.classList.add('show');
@@ -778,6 +848,9 @@
     function close(){
       const ov = document.getElementById('ls-nav-overlay');
       if(!ov) return;
+
+      // Restore the dropdown state before we move the nav back.
+      setNavDropdownsOpen(nav, false);
 
       // Restore nav to topbar.
       if(nav.parentNode !== topbar) topbar.insertBefore(nav, btn);
@@ -860,55 +933,18 @@
     ];
 
     const overflowItems = [
-      {href:'account.php', label: LS.t('nav.account') || 'Account', ico:'👤'},
-      {href:'backup.php', label: LS.t('nav.backups') || 'Backups', ico:'⛁'},
-      {href:'vault_settings.php', label: LS.t('nav.vault') || 'Vault', ico:'⌁'},
-      {href:'setup.php', label: LS.t('nav.setup') || 'Setup', ico:'⚙'},
+      {href:'vault_settings.php', label: LS.t('nav.vault') || 'Vault', ico:'⌁', group:'vault'},
+      {href:'backup.php', label: LS.t('nav.backups') || 'Backups', ico:'⛁', group:'vault'},
+      {href:'account.php', label: LS.t('nav.account') || 'Account', ico:'👤', group:'security'},
+      {href:'setup.php', label: LS.t('nav.setup') || 'Setup', ico:'⚙', group:'security'},
+      {href:'index.php#faq', label: LS.t('common.faq') || 'FAQ', ico:'?', group:'help'},
+      {href:'logout.php', label: LS.t('common.logout') || 'Logout', ico:'⎋', group:'session', danger:true},
     ];
     try{
       if(document.querySelector('a[href="admin.php"]')){
-        overflowItems.push({href:'admin.php', label: LS.t('nav.admin') || 'Admin', ico:'⬡'});
+        overflowItems.push({href:'admin.php', label: LS.t('nav.admin') || 'Admin', ico:'⬡', group:'admin'});
       }
     }catch{}
-
-    const cur = (()=>{
-      try{
-        const p = window.location && window.location.pathname ? window.location.pathname : '';
-        const parts = p.split('/');
-        const c = parts[parts.length - 1] || '';
-        if(c === 'room.php') return 'rooms.php';
-        if(c === 'admin_legacy.php') return 'admin.php';
-        if(c && c.indexOf('admin_') === 0) return 'admin.php';
-        return c;
-      }catch{ return ''; }
-    })();
-
-    const isOverflowActive = overflowItems.some(it => it.href === cur);
-
-    const nav = document.createElement('nav');
-    nav.className = 'bottom-nav';
-
-    let releaseOverflowTrap = null;
-    let overflowPrevFocus = null;
-
-    function closeOverflow(){
-      const ov = document.getElementById('ls-overflow-overlay');
-      if(!ov) return;
-
-      ov.classList.remove('show');
-
-      const mb = document.getElementById('ls-bottom-more');
-      if(mb) mb.setAttribute('aria-expanded', 'false');
-
-      if(releaseOverflowTrap){
-        releaseOverflowTrap();
-        releaseOverflowTrap = null;
-      }
-
-      try{
-        const navOv = document.getElementById('ls-nav-overlay');
-        if(!navOv || !navOv.classList.contains('show')) document.body.style.overflow = '';
-      }catch{}
 
       const f = overflowPrevFocus || mb;
       if(f && f.focus) f.focus();
@@ -949,18 +985,49 @@
         </div>
       `;
 
+      function groupTitle(key){
+        if(key === 'vault') return LS.t('nav.vault') || 'Vault';
+        if(key === 'security') return LS.t('dashboard.security') || 'Security';
+        if(key === 'admin') return LS.t('nav.admin') || 'Admin';
+        if(key === 'help') return LS.t('common.help') || 'Help';
+        if(key === 'session') return LS.t('common.session') || 'Session';
+        return LS.t('common.other') || 'Other';
+      }
+
       const links = ov.querySelector('.ls-overflow-links');
       if(links){
+        const order = ['vault','security','admin','help','session','other'];
+
+        const by = {vault:[], security:[], admin:[], help:[], session:[], other:[]};
         overflowItems.forEach(it => {
-          const a = document.createElement('a');
-          a.href = it.href;
-          a.className = 'btn btn-ghost nav-chip';
-          if(cur === it.href){
-            a.classList.add('active');
-            a.setAttribute('aria-current', 'page');
-          }
-          a.innerHTML = `<span class="nav-ico" aria-hidden="true">${LS.esc(it.ico || '•')}</span><span class="nav-lbl">${LS.esc(it.label)}</span>`;
-          links.appendChild(a);
+          const g = it.group && by[it.group] ? it.group : 'other';
+          by[g].push(it);
+        });
+
+        order.forEach(g => {
+          const list = by[g] || [];
+          if(!list.length) return;
+
+          const title = document.createElement('div');
+          title.className = 'nav-group-title';
+          title.textContent = groupTitle(g);
+          links.appendChild(title);
+
+          list.forEach(it => {
+            const a = document.createElement('a');
+            a.href = it.href;
+            a.className = 'btn btn-ghost nav-chip';
+            if(it.danger){
+              a.classList.remove('btn-ghost');
+              a.classList.add('btn-red');
+            }
+            if(cur === it.href){
+              a.classList.add('active');
+              a.setAttribute('aria-current', 'page');
+            }
+            a.innerHTML = `<span class="nav-ico" aria-hidden="true">${LS.esc(it.ico || '•')}</span><span class="nav-lbl">${LS.esc(it.label)}</span>`;
+            links.appendChild(a);
+          });
         });
       }
 
@@ -1113,10 +1180,17 @@
       const body = document.getElementById('ls-side-body');
       if(!body) return;
       if(nav.parentNode !== body) body.appendChild(nav);
+
+      // In the desktop sidebar, keep groups expanded for scanability.
+      setNavDropdownsOpen(nav, true);
     }
 
     function unmount(){
       if(isDesktop()) return;
+
+      // Restore the dropdown state before we move the nav back.
+      setNavDropdownsOpen(nav, false);
+
       // Restore the nav to its original spot in the topbar.
       const menuBtn = topbar.querySelector('.topbar-menu-btn');
       if(nav.parentNode !== topbar){

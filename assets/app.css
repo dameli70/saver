@@ -13,8 +13,15 @@
   backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
   border-bottom:1px solid var(--b1);
 }
-.topbar-logo{font-family:var(--display);font-size:clamp(16px,3vw,20px);font-weight:700;letter-spacing:-.6px;}
+.topbar-logo{font-family:var(--display);font-size:clamp(16px,3vw,20px);font-weight:700;letter-spacing:-.6px;
+  text-decoration:none;color:var(--text);}
+.topbar-logo:focus-visible{outline-offset:6px;}
 .topbar-r{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end;}
+.topbar-badge{font-family:var(--mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;
+  border:1px solid rgba(124,92,255,.35);color:var(--accent);
+  padding:6px 10px;border-radius:var(--radius-pill);
+  background:rgba(124,92,255,.08);
+}
 .user-pill{font-size:11px;color:var(--muted);letter-spacing:.4px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:none;}
 @media(min-width:560px){.user-pill{display:block;}}
 
@@ -193,6 +200,9 @@
   padding:4px 6px 0;
 }
 .nav-group-title + .btn{margin-top:2px;}
+
+.ls-overflow-links .nav-group-title{margin-top:12px;}
+.ls-overflow-links .nav-group-title:first-child{margin-top:0;}
 
 @media(min-width:721px){
   .nav-dd-panel{position:absolute;right:0;top:100%;margin-top:10px;min-width:280px;z-index:800;
