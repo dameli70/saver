@@ -73,7 +73,7 @@ function csrfToken(): string {
     return $_SESSION['install_csrf'];
 }
 
-function requireCsrf(): void {
+function requireInstallCsrf(): void {
     startInstallerSession();
     $t = $_POST['csrf'] ?? '';
     if (empty($_SESSION['install_csrf']) || !hash_equals($_SESSION['install_csrf'], $t)) {
@@ -256,7 +256,7 @@ $vals = [
 ];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    requireCsrf();
+    requireInstallCsrf();
 
     $vals['db_host'] = trim((string)($_POST['db_host'] ?? ''));
     $vals['db_name'] = trim((string)($_POST['db_name'] ?? ''));
