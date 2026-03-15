@@ -7,6 +7,7 @@ require_once __DIR__ . '/../includes/install_guard.php';
 requireInstalledForApi();
 
 require_once __DIR__ . '/../includes/helpers.php';
+require_once __DIR__ . '/../includes/packages.php';
 header('Content-Type: application/json');
 requireLogin();
 requireCsrf();
@@ -126,7 +127,11 @@ if ($hasPrepPayload) {
 
 // ── Store — server never touches key material ─────────────────
 try {
-    $userId = getCurrentUserId();
+    $userId = (int)getCurrentUserId();
+
+    // Enforce package limits (active codes).
+    packagesEnforceLimitOrJson($userId, 'locks');
+
     $lockId = generateUUID();
     $db     = getDB();
 

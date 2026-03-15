@@ -313,7 +313,13 @@ function apiUrl(url){return url.startsWith('/') ? url.slice(1) : url;}
 async function get(url){const r=await fetch(apiUrl(url),{credentials:'same-origin'});return r.json();}
 async function postCsrf(url,body){
   const r=await fetch(apiUrl(url),{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRF-Token':CSRF},body:JSON.stringify(body)});
-  return r.json();
+  const j = await r.json().catch(()=>null);
+  if(j && j.error_code==='package_limit' && j.redirect_url){
+    // Send the user to the Packages page to request an upgrade.
+    window.location.href = apiUrl(String(j.redirect_url));
+    return j;
+  }
+  return j;
 }
 
 function b64uToBuf(b64url){

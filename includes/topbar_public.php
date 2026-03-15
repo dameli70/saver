@@ -10,6 +10,15 @@ $topbarShowAuth = $topbarShowAuth ?? true;
 $publicAppName = $topbarAppName ?? (defined('APP_NAME') ? APP_NAME : 'Controle');
 $publicLogoUrl = (defined('APP_LOGO_URL') ? trim((string)APP_LOGO_URL) : '');
 
+// Prefer uploaded logo (stored encrypted server-side) if available.
+if (function_exists('getDB')) {
+    require_once __DIR__ . '/app_settings.php';
+    $uploaded = appUploadedLogoUrl($topbarPrefix);
+    if ($uploaded !== '') {
+        $publicLogoUrl = $uploaded;
+    }
+}
+
 $publicLoggedIn = function_exists('isLoggedIn') ? isLoggedIn() : false;
 $publicVerified = $publicLoggedIn && function_exists('isEmailVerified') ? isEmailVerified() : false;
 $publicIsAdmin  = $publicLoggedIn && function_exists('isAdmin') ? isAdmin() : false;

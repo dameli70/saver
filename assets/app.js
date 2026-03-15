@@ -1253,7 +1253,6 @@
       side.id = 'ls-sidebar';
       side.innerHTML = `
         <div class="ls-side-head">
-          <div class="ls-side-title">${LS.esc(LS.t('common.menu') || 'Menu')}</div>
           <button class="btn btn-ghost btn-sm btn-theme" type="button" id="ls-side-toggle" aria-label="${LS.esc(LS.t('common.toggle') || 'Toggle')}">⟷</button>
         </div>
         <div class="ls-side-body" id="ls-side-body"></div>

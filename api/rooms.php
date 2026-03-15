@@ -8,6 +8,7 @@ require_once __DIR__ . '/../includes/install_guard.php';
 requireInstalledForApi();
 
 require_once __DIR__ . '/../includes/helpers.php';
+require_once __DIR__ . '/../includes/packages.php';
 header('Content-Type: application/json');
 startSecureSession();
 
@@ -861,6 +862,9 @@ if ($action === 'create_room') {
 
     $userId = (int)getCurrentUserId();
 
+    // Enforce package limits (active rooms).
+    packagesEnforceLimitOrJson($userId, 'rooms');
+
     $purpose = (string)($body['purpose_category'] ?? 'other');
     $goal = trim((string)($body['goal_text'] ?? ''));
     $savingType = (string)($body['saving_type'] ?? 'A');
@@ -965,7 +969,7 @@ if ($action === 'create_room') {
     jsonResponse(['success' => true, 'room_id' => $roomId]);
 }
 
-// ── REQUEST JOIN ───────────────────────────────────────────
+// ── REQUEST JOIN ───────────────────────
 if ($action === 'request_join') {
     requireLogin();
     requireVerifiedEmail();
@@ -973,6 +977,10 @@ if ($action === 'request_join') {
     requireStrongAuth();
 
     $userId = (int)getCurrentUserId();
+
+    // Enforce package limits (active rooms).
+    packagesEnforceLimitOrJson($userId, 'rooms');
+
     $roomId = (string)($body['room_id'] ?? '');
     if ($roomId === '' || strlen($roomId) !== 36) jsonResponse(['error' => 'Invalid room_id'], 400);
 
