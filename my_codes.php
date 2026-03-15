@@ -215,6 +215,44 @@ let locksLastError = null;
 let locksFilter = 'all'; // all|sealed|ready|wallet
 let locksQuery = '';
 
+function lsGet(key){
+  try{ return localStorage.getItem(key); }catch{ return null; }
+}
+
+function lsSet(key, val){
+  try{ localStorage.setItem(key, String(val)); }catch{}
+}
+
+const LOCKS_TOOLBAR_STATE_KEY = (()=>{
+  try{ return 'ls_my_codes_toolbar:' + String(location.pathname||''); }
+  catch{ return 'ls_my_codes_toolbar'; }
+})();
+
+function persistLocksToolbarState(){
+  lsSet(LOCKS_TOOLBAR_STATE_KEY, JSON.stringify({
+    filter: locksFilter,
+    query: locksQuery,
+  }));
+}
+
+function restoreLocksToolbarState(){
+  try{
+    const st = JSON.parse(lsGet(LOCKS_TOOLBAR_STATE_KEY) || 'null');
+    if(!st || typeof st !== 'object') return;
+
+    const allowed = ['all','sealed','ready','wallet'];
+    const f = allowed.includes(String(st.filter||'')) ? String(st.filter) : 'all';
+    const q = (typeof st.query === 'string') ? st.query : '';
+
+    locksQuery = q;
+
+    const search = document.getElementById('locks-search');
+    if(search) search.value = q;
+
+    setLocksFilter(f, {noRender:true, noPersist:true});
+  }catch{}
+}
+
 const reduceMotion = (()=>{
   try{ return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches; }
   catch{ return false; }
@@ -310,6 +348,8 @@ function getFilteredLocks(){
 }
 
 function renderLocks(){
+  updateLocksSegCounts();
+
   const wrap = document.getElementById('locks-wrap');
   if(!wrap) return;
 
@@ -378,7 +418,8 @@ function renderLocks(){
   startCountdownTicker();
 }
 
-function setLocksFilter(next){
+function setLocksFilter(next, opts){
+  const o = opts || {};
   locksFilter = String(next || 'all');
 
   const seg = document.getElementById('locks-seg');
@@ -391,17 +432,23 @@ function setLocksFilter(next){
     });
   }
 
-  renderLocks();
+  updateLocksSegCounts();
+  if(!o.noPersist) persistLocksToolbarState();
+  if(!o.noRender) renderLocks();
 }
 
-function matchesFilter(l){
-  if(locksFilter === 'wallet') return l.kind === 'wallet';
-  if(locksFilter === 'ready') return String(l.display_status||'') === 'unlocked';
-  if(locksFilter === 'sealed'){
+function matchesFilterFor(filter, l){
+  if(filter === 'wallet') return l.kind === 'wallet';
+  if(filter === 'ready') return String(l.display_status||'') === 'unlocked';
+  if(filter === 'sealed'){
     const st = String(l.display_status||'');
     return (st === 'locked' || st === 'pending' || st === 'auto_saved');
   }
   return true;
+}
+
+function matchesFilter(l){
+  return matchesFilterFor(locksFilter, l);
 }
 
 function matchesQuery(l){
@@ -409,6 +456,28 @@ function matchesQuery(l){
   if(!q) return true;
   const label = String(l.label||'').toLowerCase();
   return label.indexOf(q) !== -1;
+}
+
+function updateLocksSegCounts(){
+  const seg = document.getElementById('locks-seg');
+  if(!seg) return;
+
+  const src = allLocksSession || [];
+
+  const counts = {
+    all: src.filter(l => matchesQuery(l)).length,
+    sealed: src.filter(l => matchesQuery(l) && matchesFilterFor('sealed', l)).length,
+    ready: src.filter(l => matchesQuery(l) && matchesFilterFor('ready', l)).length,
+    wallet: src.filter(l => matchesQuery(l) && matchesFilterFor('wallet', l)).length,
+  };
+
+  seg.querySelectorAll('button[data-filter]').forEach(b => {
+    const f = b.getAttribute('data-filter') || 'all';
+    if(!b.getAttribute('data-label')) b.setAttribute('data-label', String(b.textContent||'').trim());
+    const base = b.getAttribute('data-label') || '';
+    const n = (typeof counts[f] === 'number') ? counts[f] : counts.all;
+    b.textContent = `${base} (${n})`;
+  });
 }
 
 function initLocksToolbar(){
@@ -427,6 +496,7 @@ function initLocksToolbar(){
     search.setAttribute('data-init','1');
     search.addEventListener('input', ()=>{
       locksQuery = String(search.value || '');
+      persistLocksToolbarState();
       renderLocks();
     });
   }
@@ -556,7 +626,7 @@ async function loadLocks(force=false){
 
   try{
     let prevCache = null;
-    try{ prevCache = JSON.parse(localStorage.getItem('ls_my_codes_cache') || 'null'); }catch{}
+    try{ prevCache = JSON.parse(lsGet('ls_my_codes_cache') || 'null'); }catch{}
 
     const [a,b] = await Promise.allSettled([
       get('api/locks.php'),
@@ -596,7 +666,7 @@ async function loadLocks(force=false){
     if(locksOk || walletOk){
       try{
         const prev = (prevCache && typeof prevCache === 'object') ? prevCache : {};
-        localStorage.setItem('ls_my_codes_cache', JSON.stringify({
+        lsSet('ls_my_codes_cache', JSON.stringify({
           ts: Date.now(),
           locks: locksOk ? locks : (prev.locks || []),
           wallet_locks: walletOk ? walletLocks : (prev.wallet_locks || []),
@@ -650,7 +720,7 @@ async function loadLocks(force=false){
     let usedCache = false;
 
     try{
-      const cached = JSON.parse(localStorage.getItem('ls_my_codes_cache') || 'null');
+      const cached = JSON.parse(lsGet('ls_my_codes_cache') || 'null');
       const locks = cached && cached.locks ? cached.locks : [];
       const walletLocks = cached && cached.wallet_locks ? cached.wallet_locks : [];
 
@@ -1031,7 +1101,7 @@ async function doReveal(){
 
     if(currentReveal.kind !== 'wallet'){
       vaultSlotSession=parseInt(r.vault_verifier_slot||1,10)||1;
-      localStorage.setItem('vault_slot', String(vaultSlotSession));
+      lsSet('vault_slot', String(vaultSlotSession));
     }
 
     setRevealSheetState('success');
@@ -1536,7 +1606,7 @@ async function delLock(kind, id){
 }
 
 document.addEventListener('DOMContentLoaded', async ()=>{
-  const storedSlot = parseInt(localStorage.getItem('vault_slot') || '1', 10);
+  const storedSlot = parseInt(lsGet('vault_slot') || '1', 10);
   vaultSlotSession = ([1,2].includes(storedSlot) ? storedSlot : 1);
 
   const copyUrl = document.getElementById('rv-share-copy-url');
@@ -1554,6 +1624,8 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   if(psRevoke) psRevoke.addEventListener('click', revokePreShare);
 
   initLocksToolbar();
+  restoreLocksToolbarState();
+  updateLocksSegCounts();
   await loadLocks();
 });
 </script>
