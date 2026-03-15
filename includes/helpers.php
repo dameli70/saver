@@ -174,6 +174,44 @@ function hasOnboardingColumns(): bool {
     }
 }
 
+function hasRoomDisplayNameColumn(): bool {
+    static $cached = null;
+    if ($cached !== null) return $cached;
+
+    try {
+        $db = getDB();
+        $stmt = $db->query("SELECT 1 FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'users' AND column_name = 'room_display_name' LIMIT 1");
+        $cached = (bool)$stmt->fetchColumn();
+        return $cached;
+    } catch (Throwable) {
+        $cached = false;
+        return false;
+    }
+}
+
+function hasProfileImageUrlColumn(): bool {
+    static $cached = null;
+    if ($cached !== null) return $cached;
+
+    try {
+        $db = getDB();
+        $stmt = $db->query("SELECT 1 FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'users' AND column_name = 'profile_image_url' LIMIT 1");
+        $cached = (bool)$stmt->fetchColumn();
+        return $cached;
+    } catch (Throwable) {
+        $cached = false;
+        return false;
+    }
+}
+
+function sqlRoomUserDisplayNameExpr(string $alias = 'u', string $idCol = 'id'): string {
+    if (!hasRoomDisplayNameColumn()) {
+        return "CONCAT('User #', {$alias}.{$idCol})";
+    }
+
+    return "CASE WHEN {$alias}.room_display_name IS NOT NULL AND TRIM({$alias}.room_display_name) <> '' THEN {$alias}.room_display_name ELSE CONCAT('User #', {$alias}.{$idCol}) END";
+}
+
 function isOnboardingComplete(?int $userId = null): bool {
     startSecureSession();
 

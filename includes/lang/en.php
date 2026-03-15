@@ -46,6 +46,7 @@ return [
     'nav.setup' => 'Setup',
     'nav.security' => 'Security',
     'nav.account' => 'Account',
+    'nav.profile' => 'Profile',
     'nav.admin' => 'Admin',
     'nav.verify_email' => 'Verify Email',
 
@@ -67,6 +68,7 @@ return [
     'page.notifications' => 'Notifications',
     'page.backups' => 'Backups',
     'page.account' => 'Account',
+    'page.account_user' => 'Profile',
     'page.security' => 'Security',
     'page.security_password' => 'Password',
     'page.security_totp' => 'Authenticator app',
@@ -78,6 +80,23 @@ return [
     'page.signup' => 'Create account',
     'page.forgot' => 'Forgot password',
     'page.reset' => 'Reset password',
+
+    // Account user management
+    'account_user.subtitle' => 'Password, profile picture, and rooms nickname.',
+    'account_user.trust_level_label' => 'Trust level',
+    'account_user.login_password_title' => 'Login password',
+    'account_user.login_password_sub' => 'Change your login password.',
+    'account_user.profile_picture_title' => 'Profile picture',
+    'account_user.profile_picture_sub' => 'Optional image URL used across the app.',
+    'account_user.profile_image_url_label' => 'Image URL',
+    'account_user.profile_image_url_placeholder' => 'https://example.com/avatar.png',
+    'account_user.room_nickname_title' => 'Rooms display nickname',
+    'account_user.room_nickname_sub' => 'This name is shown to other participants instead of your email.',
+    'account_user.room_display_name_label' => 'Nickname',
+    'account_user.room_display_name_placeholder' => 'e.g. Alex',
+    'account_user.unavailable_migrations' => 'This feature is unavailable on this server. Apply database migrations.',
+    'account_user.nickname_locked_badge' => 'Locked',
+    'account_user.nickname_editable_badge' => 'Editable',
     'page.share' => 'Share',
 
     // Share

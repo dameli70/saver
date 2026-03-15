@@ -40,10 +40,7 @@ if ($verified) {
     }
 }
 
-$emailLockReminders = false;
-if ($verified && hasNotificationPreferencesTable()) {
-    $emailLockReminders = userWantsEmailTimeLockReminders((int)$userId);
-}
+
 
 header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none';");
 header("X-Frame-Options: DENY");
@@ -95,6 +92,7 @@ code{background:var(--code-bg);border:1px solid var(--b1);padding:2px 6px;border
           <a class="btn btn-ghost btn-sm" href="setup.php"><?php e('nav.setup'); ?></a>
         <?php endif; ?>
         <?php if ($verified): ?>
+          <a class="btn btn-ghost btn-sm" href="account_user.php"><?php e('nav.profile'); ?></a>
           <a class="btn btn-ghost btn-sm" href="security.php"><?php e('nav.security'); ?></a>
         <?php endif; ?>
       </div>
@@ -141,82 +139,31 @@ code{background:var(--code-bg);border:1px solid var(--b1);padding:2px 6px;border
           <div class="k"><?php e('account.trust_title'); ?></div>
           <div class="v"><?php e('account.trust_sub'); ?></div>
         </div>
-        <div class="badge wait" id="trust-level-badge">⏳</div>
-      </div>
-
-      <div class="small" style="margin-top:12px;">
-        <?php e('account.trust_desc'); ?>
-      </div>
-
-      <div class="hr"></div>
-
-      <div style="display:grid;grid-template-columns:1fr;gap:10px;">
-        <div class="item" style="align-items:center;">
-          <div>
-            <div class="k"><?php e('account.trust.strikes_label'); ?></div>
-            <div class="v" id="trust-strikes">—</div>
-          </div>
-          <div>
-            <div class="k"><?php e('account.trust.restricted_label'); ?></div>
-            <div class="v" id="trust-restricted">—</div>
-          </div>
-        </div>
-
-        <div class="item" style="align-items:center;">
-          <div>
-            <div class="k"><?php e('account.trust.progress_label'); ?></div>
-            <div class="v" id="trust-next">—</div>
-          </div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div class="badge wait" id="trust-level-badge">⏳</div>
+          <a class="btn btn-primary btn-sm" href="trust_passport.php"><?php e('common.open'); ?></a>
         </div>
       </div>
-
-      <div class="hr"></div>
-
-      <div class="k"><?php e('account.trust.completed_title'); ?></div>
-      <div class="small" style="margin-top:6px;"><?php e('account.trust.completed_sub'); ?></div>
-      <div id="trust-completed" style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;"></div>
-
-      <div class="hr"></div>
-
-      <div class="k"><?php e('account.trust.active_rooms_title'); ?></div>
-      <div class="small" style="margin-top:6px;"><?php e('account.trust.active_rooms_sub'); ?></div>
-      <div id="trust-active" class="list"></div>
-
       <div id="trust-msg" class="msg msg-err"></div>
     </div>
     <?php endif; ?>
 
     <?php if ($verified): ?>
-    <div class="card" id="notif-prefs-card">
+    <div class="card" id="user-management-card">
       <div class="row">
         <div>
-          <div class="k"><?php e('account.email_reminders_title'); ?></div>
-          <div class="v"><?php e('account.email_reminders_sub'); ?></div>
+          <div class="k">User management</div>
+          <div class="v">Password, profile picture, and rooms nickname</div>
         </div>
-        <div class="badge <?= $emailLockReminders ? 'ok' : 'wait' ?>" id="email-reminders-badge"><?= $emailLockReminders ? htmlspecialchars(t('account.email_reminders_badge_on'), ENT_QUOTES, 'UTF-8') : htmlspecialchars(t('account.email_reminders_badge_off'), ENT_QUOTES, 'UTF-8') ?></div>
-      </div>
-
-      <div class="small" style="margin-top:12px;">
-        <?php e('account.email_reminders_desc'); ?>
+        <a class="btn btn-primary btn-sm" href="account_user.php"><?php e('common.open'); ?></a>
       </div>
 
       <div class="hr"></div>
 
-      <div class="item" style="align-items:center;">
-        <div style="flex:1;min-width:220px;">
-          <div class="k"><?php e('account.email_reminders_toggle_title'); ?></div>
-          <div class="v"><?php e('account.email_reminders_toggle_sub'); ?></div>
-        </div>
-        <label style="display:flex;align-items:center;gap:10px;font-size:12px;color:var(--text);">
-          <input type="checkbox" id="pref-email-lock-reminders" <?= $emailLockReminders ? 'checked' : '' ?> style="width:20px;height:20px;accent-color:var(--accent);">
-          <span><?= $emailLockReminders ? htmlspecialchars(t('common.on'), ENT_QUOTES, 'UTF-8') : htmlspecialchars(t('common.off'), ENT_QUOTES, 'UTF-8') ?></span>
-        </label>
-      </div>
-
-      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
-        <button class="btn btn-primary btn-sm" type="button" id="pref-save-email-reminders"><?php e('common.save'); ?></button>
-        <div class="msg msg-ok" id="pref-email-ok"></div>
-        <div class="msg msg-err" id="pref-email-err"></div>
+      <div class="two-col">
+        <a class="btn btn-ghost btn-sm" href="account_user.php#password"><?php e('account.change_login_password_title'); ?></a>
+        <a class="btn btn-ghost btn-sm" href="account_user.php#profile-picture">Profile picture</a>
+        <a class="btn btn-ghost btn-sm" href="account_user.php#rooms-nickname">Rooms nickname</a>
       </div>
     </div>
     <?php endif; ?>
@@ -367,16 +314,11 @@ btn.addEventListener('click', async ()=>{
     if(!VERIFIED) return;
 
     const badge = document.getElementById('trust-level-badge');
-    const strikes = document.getElementById('trust-strikes');
-    const restricted = document.getElementById('trust-restricted');
-    const next = document.getElementById('trust-next');
-    const completed = document.getElementById('trust-completed');
-    const active = document.getElementById('trust-active');
     const msg = document.getElementById('trust-msg');
 
-    if(!badge || !strikes || !restricted || !next || !completed || !active) return;
+    if(!badge) return;
 
-    msg.classList.remove('show');
+    if(msg) msg.classList.remove('show');
     badge.textContent = '⏳';
     badge.className = 'badge wait';
 
@@ -389,76 +331,13 @@ btn.addEventListener('click', async ()=>{
       badge.textContent = tf('account.trust.level_fmt', {level}, `LEVEL ${level}`);
       badge.className = 'badge ' + (level >= 2 ? 'ok' : 'wait');
 
-      strikes.textContent = String(t.strike_count_6m ?? '0');
-      restricted.textContent = t.restricted_until
-        ? tf('account.trust.restricted_until_fmt', {ts: String(t.restricted_until)}, `Until ${String(t.restricted_until)}`)
-        : '—';
-      next.textContent = String(t.next_level_hint || '—');
-
-      const cr = j.completed_reveals || [];
-      completed.innerHTML = '';
-      if(!cr.length){
-        const d = document.createElement('div');
-        d.className = 'small';
-        d.textContent = tr('account.trust.completed_none', 'No completed time locks yet.');
-        completed.appendChild(d);
-      } else {
-        cr.forEach(x => {
-          const b = document.createElement('div');
-          b.className = 'badge';
-          b.style.borderColor = 'var(--b2)';
-          b.style.background = 'var(--s1)';
-          b.style.color = 'var(--text)';
-          b.textContent = '🔒 ' + (x.duration_days ? (String(x.duration_days) + 'd') : 'sealed');
-          b.title = 'Unlocked at ' + (x.unlocked_at || '');
-          completed.appendChild(b);
-        });
-      }
-
-      const ar = j.active_rooms || [];
-      active.innerHTML = '';
-      if(!ar.length){
-        const d = document.createElement('div');
-        d.className = 'small';
-        d.textContent = tr('account.trust.active_rooms_none', 'No active rooms.');
-        active.appendChild(d);
-      } else {
-        ar.forEach(r => {
-          const it = document.createElement('div');
-          it.className = 'item';
-
-          const now = Date.now();
-          const startAt = r.start_at ? new Date(r.start_at).getTime() : null;
-          const revealAt = r.reveal_at ? new Date(r.reveal_at).getTime() : null;
-
-          let cd = '';
-          if(r.room_state === 'lobby' && startAt){
-            const ms = Math.max(0, startAt - now);
-            const n = Math.ceil(ms/1000/60);
-            cd = tf('account.trust.starts_in_minutes', {n}, `Starts in ${n} min`);
-          } else if(r.room_state === 'active' && revealAt){
-            const ms = Math.max(0, revealAt - now);
-            const n = Math.ceil(ms/1000/60);
-            cd = tf('account.trust.reveal_in_minutes', {n}, `Reveal in ${n} min`);
-          }
-
-          it.innerHTML = `
-            <div>
-              <div class="k">${tr('account.trust.saving_room_label', 'Saving Room')}</div>
-              <div class="v">${String(r.goal_text||r.id||'Room')}</div>
-              <div class="small">${String(cd||'')}</div>
-            </div>
-            <div>
-              <a class="btn btn-ghost btn-sm" href="room.php?id=${encodeURIComponent(r.id)}">${tr('common.open', 'Open')}</a>
-            </div>
-          `;
-          active.appendChild(it);
-        });
-      }
-
     }catch(e){
-      msg.textContent = (e && e.message) ? e.message : tr('account.trust.failed_to_load', 'Failed to load trust passport');
-      msg.classList.add('show');
+      badge.textContent = '—';
+      badge.className = 'badge wait';
+      if(msg){
+        msg.textContent = (e && e.message) ? e.message : tr('account.trust.failed_to_load', 'Failed to load trust passport');
+        msg.classList.add('show');
+      }
     }
   }
 
@@ -503,6 +382,7 @@ btn.addEventListener('click', async ()=>{
   // ── VAULT PASSPHRASE SETUP ────────────────────
   const vaultStatus = document.getElementById('vault-passphrase-status');
   if (vaultStatus) {
+    const vaultCard = document.getElementById('vault-passphrase-card');
     const unavailable = document.getElementById('vault-passphrase-unavailable');
     const setNote = document.getElementById('vault-passphrase-set');
     const form = document.getElementById('vault-passphrase-form');
@@ -519,6 +399,7 @@ btn.addEventListener('click', async ()=>{
     async function loadVaultStatus(){
       clearMsg(ok); clearMsg(err);
       setBadge('⏳', false);
+      if(vaultCard) vaultCard.style.display='';
       if(unavailable) unavailable.style.display='none';
       if(setNote) setNote.style.display='none';
       if(form) form.style.display='none';
@@ -536,6 +417,7 @@ btn.addEventListener('click', async ()=>{
         if(j.initialized){
           setBadge('✓ Set', true);
           if(setNote) setNote.style.display='block';
+          if(vaultCard) vaultCard.style.display='none';
           return;
         }
 
@@ -598,50 +480,6 @@ btn.addEventListener('click', async ()=>{
   }
 
   
-
-  // ── NOTIFICATION PREFS (time lock email reminders) ─────────────────
-  if(VERIFIED){
-    const cb = document.getElementById('pref-email-lock-reminders');
-    const save = document.getElementById('pref-save-email-reminders');
-    const ok = document.getElementById('pref-email-ok');
-    const err = document.getElementById('pref-email-err');
-    const badge = document.getElementById('email-reminders-badge');
-
-    function showPrefMsg(el, text){
-      if(!el) return;
-      el.textContent = text;
-      el.classList.add('show');
-    }
-
-    if(save && cb){
-      save.addEventListener('click', async ()=>{
-        if(ok) ok.classList.remove('show');
-        if(err) err.classList.remove('show');
-
-        save.disabled = true;
-        const enabled = cb.checked ? 1 : 0;
-
-        const j = await postCsrf('api/account.php', {action:'set_email_time_lock_reminders', enabled});
-        save.disabled = false;
-
-        if(!j.success){
-          showPrefMsg(err, j.error || 'Failed');
-          return;
-        }
-
-        showPrefMsg(ok, 'Saved.');
-        if(badge){
-          badge.textContent = enabled ? '✓ Email on' : '⏳ Email off';
-          badge.className = 'badge ' + (enabled ? 'ok' : 'wait');
-        }
-      });
-
-      cb.addEventListener('change', ()=>{
-        const s = cb.parentNode ? cb.parentNode.querySelector('span') : null;
-        if(s) s.textContent = cb.checked ? 'On' : 'Off';
-      });
-    }
-  }
 
   loadTrustPassport();
 })();

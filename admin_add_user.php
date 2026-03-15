@@ -66,6 +66,15 @@ header("Referrer-Policy: no-referrer");
       <div class="field"><label><?php e('common.email'); ?></label><input id="nu-email" type="email" placeholder="user@example.com" autocomplete="off"></div>
       <div class="field"><label><?php e('admin.login_password_label'); ?></label><input id="nu-login" type="password" placeholder="min 8 chars" autocomplete="new-password"></div>
 
+      <div class="field">
+        <label><?php e('account.trust_title'); ?></label>
+        <select id="nu-trust">
+          <option value="1" selected><?php e('rooms.trust_level.1'); ?></option>
+          <option value="2"><?php e('rooms.trust_level.2'); ?></option>
+          <option value="3"><?php e('rooms.trust_level.3'); ?></option>
+        </select>
+      </div>
+
       <label class="chk"><input type="checkbox" id="nu-verified"> <span><?php e('admin.add_user_mark_verified'); ?></span></label>
       <label class="chk"><input type="checkbox" id="nu-admin"> <span><?php e('admin.add_user_make_admin'); ?></span></label>
 

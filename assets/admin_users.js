@@ -7,6 +7,7 @@
   async function createUser(){
     const emailEl = document.getElementById('nu-email');
     const loginEl = document.getElementById('nu-login');
+    const trustEl = document.getElementById('nu-trust');
     const verifiedEl = document.getElementById('nu-verified');
     const adminEl = document.getElementById('nu-admin');
 
@@ -14,6 +15,7 @@
 
     const email = String(emailEl.value || '').trim();
     const login = String(loginEl.value || '');
+    const trustLevel = trustEl ? parseInt(String(trustEl.value || '1'), 10) : 1;
     const markVerified = !!(verifiedEl && verifiedEl.checked);
     const makeAdmin = !!(adminEl && adminEl.checked);
 
@@ -28,6 +30,7 @@
         action: 'create_user',
         email,
         login_password: login,
+        trust_level: (trustLevel === 2 || trustLevel === 3) ? trustLevel : 1,
         mark_verified: markVerified ? 1 : 0,
         is_admin: makeAdmin ? 1 : 0,
       });
@@ -37,6 +40,7 @@
 
       emailEl.value = '';
       loginEl.value = '';
+      if(trustEl) trustEl.value = '1';
 
       if(r.dev_verify_url && dev){
         dev.style.display = 'block';

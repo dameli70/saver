@@ -874,7 +874,7 @@ function renderRoom(){
       const makerVote = (r.rotation && r.rotation.maker_vote) ? r.rotation.maker_vote : 'none';
 
       if(cur){
-        document.getElementById('typeb-turn').textContent = `#${cur.rotation_index} · ${cur.turn_user_email || 'user'}`;
+        document.getElementById('typeb-turn').textContent = `#${cur.rotation_index} · ${cur.turn_user_name || 'user'}`;
         document.getElementById('typeb-consensus').textContent = `${approvals}/${required} required (you: ${myVote} · eligible ${eligible})`;
 
         if(cur.status === 'revealed'){
@@ -909,7 +909,7 @@ function renderRoom(){
 
           if(showDispute){
             if(dispute){
-              const who = dispute.raised_by_email || 'participant';
+              const who = dispute.raised_by_name || 'participant';
               const windowTxt = within ? ('window ends ' + fmt(cur.dispute_window_ends_at)) : ('window ended ' + fmt(cur.dispute_window_ends_at));
               meta.textContent = `${dispute.status} · ${dispute.ack_count}/${dispute.threshold_required} acknowledgements · raised by ${who} · ${windowTxt}`;
 
@@ -965,7 +965,7 @@ function renderRoom(){
         const required = (er.votes && typeof er.votes.required !== 'undefined') ? er.votes.required : 0;
         const myVote = er.my_vote ? er.my_vote : '—';
 
-        if(meta) meta.textContent = `Open · requested by ${er.requested_by_email} · approvals ${approvals}/${required} · maker ${makerVote} · your vote ${myVote}`;
+        if(meta) meta.textContent = `Open · requested by ${er.requested_by_name} · approvals ${approvals}/${required} · maker ${makerVote} · your vote ${myVote}`;
 
         if(actReq) actReq.style.display = 'none';
 
@@ -1526,7 +1526,7 @@ function renderEscrowSettlements(rows){
     const refund = (r.policy === 'refund_minus_fee') ? (r.refund_amount || '0.00') : '—';
 
     tr.innerHTML = `
-      <td>${esc(r.email||('User ' + r.removed_user_id))}</td>
+      <td>${esc(r.removed_user_name||('User #' + r.removed_user_id))}</td>
       <td>${esc(r.policy)}</td>
       <td>${esc(r.total_contributed||'0.00')}</td>
       <td>${esc(fee)}</td>
@@ -1649,7 +1649,7 @@ async function loadJoinRequests(){
       const cur = `L${r.current_level||'?'} · strikes ${r.current_strikes_6m||0}` + (r.current_restricted_until ? ' · restricted' : '');
 
       tr.innerHTML = `
-        <td>${esc(r.email)}</td>
+        <td>${esc(r.display_name || ('User #' + r.user_id))}</td>
         <td>${esc(snap)}</td>
         <td>${esc(cur)}</td>
         <td>${esc(fmt(r.created_at))}</td>

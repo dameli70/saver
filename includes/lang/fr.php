@@ -46,6 +46,7 @@ return [
     'nav.setup' => 'Configuration',
     'nav.security' => 'Sécurité',
     'nav.account' => 'Compte',
+    'nav.profile' => 'Profil',
     'nav.admin' => 'Admin',
     'nav.verify_email' => 'Vérifier l’e-mail',
 
@@ -67,6 +68,7 @@ return [
     'page.notifications' => 'Notifications',
     'page.backups' => 'Sauvegardes',
     'page.account' => 'Compte',
+    'page.account_user' => 'Profil',
     'page.security' => 'Sécurité',
     'page.security_password' => 'Mot de passe',
     'page.security_totp' => 'Authentificateur',
@@ -78,6 +80,23 @@ return [
     'page.signup' => 'Créer un compte',
     'page.forgot' => 'Mot de passe oublié',
     'page.reset' => 'Réinitialiser le mot de passe',
+
+    // Gestion du profil
+    'account_user.subtitle' => 'Mot de passe, photo de profil et pseudo pour les salles.',
+    'account_user.trust_level_label' => 'Niveau de confiance',
+    'account_user.login_password_title' => 'Mot de passe de connexion',
+    'account_user.login_password_sub' => 'Modifier votre mot de passe de connexion.',
+    'account_user.profile_picture_title' => 'Photo de profil',
+    'account_user.profile_picture_sub' => 'URL d’image optionnelle utilisée dans l’application.',
+    'account_user.profile_image_url_label' => 'URL de l’image',
+    'account_user.profile_image_url_placeholder' => 'https://exemple.com/avatar.png',
+    'account_user.room_nickname_title' => 'Pseudo affiché dans les salles',
+    'account_user.room_nickname_sub' => 'Ce nom est affiché aux autres participants à la place de votre e-mail.',
+    'account_user.room_display_name_label' => 'Pseudo',
+    'account_user.room_display_name_placeholder' => 'ex. Alex',
+    'account_user.unavailable_migrations' => 'Cette fonctionnalité est indisponible sur ce serveur. Appliquez les migrations de base de données.',
+    'account_user.nickname_locked_badge' => 'Verrouillé',
+    'account_user.nickname_editable_badge' => 'Modifiable',
     'page.share' => 'Partager',
 
     // Partage
