@@ -9,7 +9,7 @@
    - keep API requests network-first
 */
 
-const CACHE = 'controle-v13';
+const CACHE = 'controle-v16';
 
 const ASSETS = [
   './',
@@ -51,11 +51,36 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return;
 
   // Never cache API responses.
-  if (url.pathname.startsWith('/api/')) return;
+  // (Use includes('/api/') so this works for subdirectory installs too.)
+  if (url.pathname.includes('/api/')) return;
 
-  // Stale-while-revalidate for static assets.
+  // For a few critical assets, prefer network-first so UI fixes land immediately.
+  const criticalAsset = (
+    url.pathname.endsWith('/assets/app.css') ||
+    url.pathname.endsWith('/assets/base.css') ||
+    url.pathname.endsWith('/assets/app.js')
+  );
+
+  if (url.pathname.includes('/assets/') && criticalAsset) {
+    event.respondWith(
+      caches.open(CACHE).then(async (cache) => {
+        try{
+          const res = await fetch(req);
+          if (res && res.ok) cache.put(req, res.clone());
+          return res;
+        }catch{
+          const cached = await cache.match(req);
+          if (cached) return cached;
+          throw new Error('offline');
+        }
+      })
+    );
+    return;
+  }
+
+  // Stale-while-revalidate for other static assets.
   // This avoids users being stuck on old CSS/JS after deploys.
-  if (url.pathname.startsWith('/assets/')) {
+  if (url.pathname.includes('/assets/')) {
     event.respondWith(
       caches.open(CACHE).then(async (cache) => {
         const cached = await cache.match(req);

@@ -120,7 +120,7 @@ if (!$hasVault) {
 } elseif (!$hasTotp && !$hasPasskey) {
     $nextSetupTextKey = 'onboarding.next.confirmation';
     $nextSetupLabelKey = 'onboarding.action.add_confirmation';
-    $nextSetupHref = 'account.php#passkeys-card';
+    $nextSetupHref = 'security.php';
 } elseif ($backupCount <= 0) {
     $nextSetupTextKey = 'onboarding.next.backup';
     $nextSetupLabelKey = 'onboarding.action.open_backup';
@@ -242,7 +242,7 @@ header("Permissions-Policy: clipboard-write=(self)");
             <div class="sec-banner-title"><?php e('dashboard.security_banner_title'); ?></div>
             <div class="sec-banner-sub"><?php e('dashboard.security_banner_sub'); ?></div>
           </div>
-          <a class="btn btn-ghost btn-sm" href="account.php#totp-card"><?php e('dashboard.open_account'); ?></a>
+          <a class="btn btn-ghost btn-sm" href="security.php"><?php e('dashboard.open_account'); ?></a>
         </div>
         <?php endif; ?>
 
@@ -288,7 +288,7 @@ header("Permissions-Policy: clipboard-write=(self)");
                   <div class="dash-check-sub"><?php e('dashboard.check.confirm_sub'); ?></div>
                 </div>
               </div>
-              <a class="btn btn-ghost btn-sm btn-inline" href="account.php#totp-card"><?php e('common.open'); ?></a>
+              <a class="btn btn-ghost btn-sm btn-inline" href="security.php"><?php e('common.open'); ?></a>
             </div>
 
             <div class="dash-check-item">
@@ -334,7 +334,7 @@ header("Permissions-Policy: clipboard-write=(self)");
         <div class="card">
           <div class="card-title"><div class="dot"></div><?php e('dashboard.security'); ?></div>
           <div class="dash-actions-sub">
-            <?= t('dashboard.security_sub_html', ['account_link' => '<a href="account.php" style="color:var(--text);">' . htmlspecialchars(t('nav.account'), ENT_QUOTES, 'UTF-8') . '</a>']) ?>
+            <?= t('dashboard.security_sub_html', ['account_link' => '<a href="security.php" style="color:var(--text);">' . htmlspecialchars(t('nav.security'), ENT_QUOTES, 'UTF-8') . '</a>']) ?>
           </div>
         </div>
 

@@ -231,7 +231,7 @@ const STR = {
   loading: tr('common.loading', 'Loading…'),
 
   enter_6_digit_code: tr('js.enter_6_digit_code', 'Enter your 6-digit authenticator code'),
-  enable_totp_or_passkey: tr('js.enable_totp_or_passkey', 'Enable TOTP or add a passkey in Account'),
+  enable_totp_or_passkey: tr('js.enable_totp_or_passkey', 'Enable TOTP or add a passkey in Security'),
 
   crypto_unavailable: tr('crypto.unavailable', 'Secure cryptography is unavailable in this browser.'),
   crypto_webcrypto_unavailable: tr('crypto.webcrypto_unavailable', 'Web Crypto API is unavailable. Use HTTPS (or localhost) to use the vault.'),

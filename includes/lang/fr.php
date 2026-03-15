@@ -168,7 +168,7 @@ return [
     'backup.intro' => 'Les sauvegardes contiennent uniquement des blobs chiffrés et des métadonnées (libellés, dates, statut). Vos codes en clair ne sont jamais stockés par le serveur.',
     'backup.security_required_title' => 'Configuration de sécurité requise',
     'backup.security_required_sub' => 'Activez TOTP ou ajoutez une passkey pour protéger les actions sensibles (sauvegardes cloud, restauration, export).',
-    'backup.open_account' => 'Ouvrir le compte',
+    'backup.open_account' => 'Ouvrir la sécurité',
 
     'notifications.intro' => 'Vos notifications dans l’application (critiques / importantes / info). Utilisez « Tout marquer comme lu » pour vider la boîte.',
 
@@ -366,7 +366,7 @@ return [
     'js.use_auth_code' => 'Utiliser un code authentificateur',
     'js.waiting' => 'En attente de confirmation…',
     'js.internal_error_missing_auth' => 'Erreur interne : gestionnaire d’auth manquant',
-    'js.enable_totp_or_passkey' => 'Activez TOTP ou ajoutez une passkey dans Compte',
+    'js.enable_totp_or_passkey' => 'Activez TOTP ou ajoutez une passkey dans Sécurité',
     'js.passkey_reauth_failed' => 'Ré-authentification par passkey échouée',
     'js.enter_6_digit_code' => 'Saisissez un code à 6 chiffres',
     'js.invalid_code' => 'Code invalide',
@@ -426,7 +426,7 @@ return [
     'dashboard.progress_suffix' => 'terminé — {next}',
     'dashboard.security_banner_title' => 'Finalisez votre configuration de sécurité',
     'dashboard.security_banner_sub' => 'Ajoutez une passkey ou un code d’authentification pour confirmer les actions sensibles (déverrouillage, sauvegardes, validations de salle).',
-    'dashboard.open_account' => 'Ouvrir le compte',
+    'dashboard.open_account' => 'Ouvrir la sécurité',
     'dashboard.quick_actions' => 'Actions rapides',
     'dashboard.create_time_lock' => 'Créer un verrou temporel',
     'dashboard.my_time_locks' => 'Mes verrous temporels',

@@ -106,17 +106,40 @@
 .ls-mobile-nav-toggle{position:absolute;opacity:0;pointer-events:none;width:1px;height:1px;left:-9999px;top:auto;}
 .ls-mobile-nav-overlay{display:none;}
 
-/* Hide scrollbars without disabling scroll (webkit + firefox + ms). */
+/* Hide scrollbars without disabling scroll (webkit + firefox + ms).
+   Keep selectors scoped to known scroll containers (do not apply globally).
+
+   NOTE: we avoid :is(... ) for the webkit scrollbar pseudo-element because
+   some browsers are finicky with complex selectors + ::-webkit-scrollbar.
+*/
 .ls-hide-scrollbar,
-:is(.ls-mobile-nav-panel, #ls-nav-panel, #ls-overflow-sheet){
-  -ms-overflow-style:none;
-  scrollbar-width:none;
+.ls-mobile-nav-panel,
+#ls-nav-panel,
+#ls-overflow-sheet,
+#ls-sidebar,
+#ls-sidebar .ls-side-body{
+  -ms-overflow-style: none; /* old Edge/IE */
+  scrollbar-width: none;    /* Firefox */
 }
+
 .ls-hide-scrollbar::-webkit-scrollbar,
-:is(.ls-mobile-nav-panel, #ls-nav-panel, #ls-overflow-sheet)::-webkit-scrollbar{
-  width:0;
-  height:0;
-  display:none;
+.ls-mobile-nav-panel::-webkit-scrollbar,
+#ls-nav-panel::-webkit-scrollbar,
+#ls-overflow-sheet::-webkit-scrollbar,
+#ls-sidebar::-webkit-scrollbar,
+#ls-sidebar .ls-side-body::-webkit-scrollbar{
+  width: 0 !important;
+  height: 0 !important;
+  display: none !important;
+}
+
+.ls-hide-scrollbar::-webkit-scrollbar-thumb,
+.ls-mobile-nav-panel::-webkit-scrollbar-thumb,
+#ls-nav-panel::-webkit-scrollbar-thumb,
+#ls-overflow-sheet::-webkit-scrollbar-thumb,
+#ls-sidebar::-webkit-scrollbar-thumb,
+#ls-sidebar .ls-side-body::-webkit-scrollbar-thumb{
+  background: transparent !important;
 }
 
 @media(max-width:980px) and (hover:none) and (pointer:coarse){
@@ -163,7 +186,7 @@
   }
   #ls-sidebar .ls-side-title{font-family:var(--display);font-weight:700;font-size:13px;letter-spacing:-.2px;}
 
-  #ls-sidebar .ls-side-body{padding:10px;overflow:auto;height:calc(100% - 56px);}
+  #ls-sidebar .ls-side-body{padding:10px;overflow-y:auto;overflow-x:hidden;height:calc(100% - 56px);}
 
   #ls-sidebar .topbar-r{display:flex;flex-direction:column;align-items:stretch;gap:8px;}
   #ls-sidebar .topbar-r .btn{width:100%;}

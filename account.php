@@ -13,20 +13,7 @@ if (!isLoggedIn()) {
 $userId = getCurrentUserId();
 $db     = getDB();
 
-$hasTotp = hasTotpColumns();
-$hasPasskeys = hasWebauthnCredentialsTable();
-
-$hasReqWebauthn = false;
-try {
-    $stmt = $db->query("SELECT 1 FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'users' AND column_name = 'require_webauthn' LIMIT 1");
-    $hasReqWebauthn = (bool)$stmt->fetchColumn();
-} catch (Throwable) {
-    $hasReqWebauthn = false;
-}
-
-$sel = 'email, email_verified_at, verification_sent_at'
-     . ($hasTotp ? ', totp_enabled_at' : ', NULL AS totp_enabled_at')
-     . ($hasReqWebauthn ? ', require_webauthn' : ', 0 AS require_webauthn');
+$sel = 'email, email_verified_at, verification_sent_at';
 
 $stmt = $db->prepare("SELECT {$sel} FROM users WHERE id = ?");
 $stmt->execute([(int)$userId]);
@@ -270,133 +257,27 @@ code{background:var(--code-bg);border:1px solid var(--b1);padding:2px 6px;border
     </div>
 
     <?php if ($verified): ?>
-    <div class="card" id="totp-card">
-      <div class="row">
-        <div>
-          <div class="k"><?php e('account.totp_title'); ?></div>
-          <div class="v"><?php e('account.totp_sub'); ?></div>
-        </div>
-        <?php if ($hasTotp): ?>
-          <?php if (!empty($u['totp_enabled_at'])): ?>
-            <div class="badge ok"><?= htmlspecialchars(t('account.totp_enabled'), ENT_QUOTES, 'UTF-8') ?></div>
-          <?php else: ?>
-            <div class="badge wait"><?= htmlspecialchars(t('account.totp_not_enabled'), ENT_QUOTES, 'UTF-8') ?></div>
-          <?php endif; ?>
-        <?php else: ?>
-          <div class="badge wait"><?= htmlspecialchars(t('account.totp_unavailable'), ENT_QUOTES, 'UTF-8') ?></div>
-        <?php endif; ?>
-      </div>
-
-      <?php if (!$hasTotp): ?>
-        <div class="small" style="margin-top:12px;"><?php e('account.totp_unavailable_desc'); ?></div>
-      <?php else: ?>
-        <div class="small" style="margin-top:12px;"><?php e('account.totp_desc'); ?></div>
-
-        <div id="totp-setup" style="display:none;">
-          <div class="hr"></div>
-          <div class="small"><?php e('account.totp_scan_secret'); ?></div>
-          <div class="small" style="margin-top:6px;word-break:break-all;"><code id="totp-secret"></code></div>
-          <div class="small" style="margin-top:6px;word-break:break-all;"><a id="totp-otpauth" href="#" style="color:var(--orange)"><?php e('account.totp_otpauth_link'); ?></a></div>
-          <div class="field"><label><?php e('account.totp_code_label'); ?></label><input id="totp-code" inputmode="numeric" placeholder="123456"></div>
-          <button class="btn btn-primary" id="totp-enable"><span id="totp-enable-txt"><?php e('account.totp_enable_btn'); ?></span></button>
-        </div>
-
-        <div id="totp-disable" style="display:none;">
-          <div class="hr"></div>
-          <div class="field"><label><?php e('account.totp_code_label'); ?></label><input id="totp-disable-code" inputmode="numeric" placeholder="123456"></div>
-          <button class="btn btn-red" id="totp-disable-btn"><?php e('account.totp_disable_btn'); ?></button>
-        </div>
-
-        <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;">
-          <button class="btn btn-ghost" id="totp-begin"><?php e('account.totp_setup_btn'); ?></button>
-          <button class="btn btn-ghost" id="totp-reauth"><?php e('account.totp_reauth_btn'); ?></button>
-        </div>
-
-        <div id="totp-ok" class="msg msg-ok"></div>
-        <div id="totp-err" class="msg msg-err"></div>
-      <?php endif; ?>
-    </div>
-
-    <div class="card" id="passkeys-card">
-      <div class="row">
-        <div>
-          <div class="k"><?php e('account.passkeys_title'); ?></div>
-          <div class="v"><?php e('account.passkeys_sub'); ?></div>
-        </div>
-        <div class="badge wait" id="passkeys-status">⏳</div>
-      </div>
-
-      <?php if (!$hasPasskeys): ?>
-        <div class="small" style="margin-top:12px;"><?php e('account.passkeys_unavailable_desc'); ?></div>
-      <?php else: ?>
-        <div class="small" style="margin-top:12px;"><?php e('account.passkeys_desc'); ?></div>
-
-        <div class="hr"></div>
-
-        <div class="row">
-          <div>
-            <div class="k"><?php e('account.passkeys_require_login'); ?></div>
-            <div class="small"><?php e('account.passkeys_require_login_sub'); ?></div>
-          </div>
-          <label class="small" style="display:flex;align-items:center;gap:10px;">
-            <input type="checkbox" id="passkey-required" <?= $hasReqWebauthn ? '' : 'disabled' ?> <?= !empty($u['require_webauthn']) ? 'checked' : '' ?> >
-            <span><?= $hasReqWebauthn ? '' : htmlspecialchars(t('common.unavailable'), ENT_QUOTES, 'UTF-8') ?></span>
-          </label>
-        </div>
-
-        <div class="list" id="passkeys-list"></div>
-
-        <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;">
-          <button class="btn btn-ghost" id="passkey-refresh"><?php e('common.refresh'); ?></button>
-          <button class="btn btn-primary" id="passkey-add"><span id="passkey-add-txt"><?php e('setup.add_passkey'); ?></span></button>
-        </div>
-
-        <div id="passkey-ok" class="msg msg-ok"></div>
-        <div id="passkey-err" class="msg msg-err"></div>
-      <?php endif; ?>
-    </div>
-    <?php endif; ?>
-
     <div class="card">
-      <div class="row" style="margin-bottom:4px;">
+      <div class="row">
         <div>
           <div class="k"><?php e('account.security_title'); ?></div>
-          <div class="v"><?php e('account.security_sub'); ?></div>
+          <div class="v"><?php e('security.hub_sub'); ?></div>
         </div>
+        <a class="btn btn-primary btn-sm" href="security.php"><?php e('common.open'); ?></a>
       </div>
 
-      <div class="small"><?php e('account.security_note_html'); ?></div>
+      <div class="small" style="margin-top:12px;"><?php e('account.security_note_html'); ?></div>
 
       <div class="hr"></div>
 
-      <div class="k"><?php e('account.change_login_password_title'); ?></div>
-      <form id="pw-form">
-        <div class="field"><label><?php e('account.current_password_label'); ?></label><input id="pw-cur" type="password" autocomplete="current-password" placeholder="<?= htmlspecialchars(t('account.current_password_placeholder'), ENT_QUOTES, 'UTF-8') ?>" required></div>
-        <div class="field"><label><?php e('account.new_password_label'); ?></label><input id="pw-new" type="password" autocomplete="new-password" placeholder="<?= htmlspecialchars(t('account.new_password_placeholder'), ENT_QUOTES, 'UTF-8') ?>" required></div>
-        <div class="field"><label><?php e('account.confirm_new_password_label'); ?></label><input id="pw-new2" type="password" autocomplete="new-password" placeholder="<?= htmlspecialchars(t('account.confirm_new_password_placeholder'), ENT_QUOTES, 'UTF-8') ?>" required></div>
-        <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;">
-          <button class="btn btn-primary" id="pw-btn" type="submit"><span id="pw-btn-txt"><?php e('account.update_password_btn'); ?></span></button>
-        </div>
-        <div id="pw-ok" class="msg msg-ok"></div>
-        <div id="pw-err" class="msg msg-err"></div>
-      </form>
-
-      <div class="hr"></div>
-
-      <div class="row">
-        <div>
-          <div class="k"><?php e('account.active_sessions_title'); ?></div>
-          <div class="small"><?php e('account.active_sessions_sub'); ?></div>
-        </div>
-        <div style="display:flex;gap:10px;flex-wrap:wrap;">
-          <button class="btn btn-ghost" id="sess-refresh" type="button"><?php e('common.refresh'); ?></button>
-          <button class="btn btn-red" id="logout-all" type="button"><?php e('account.logout_all_sessions_btn'); ?></button>
-        </div>
+      <div class="two-col">
+        <a class="btn btn-ghost btn-sm" href="security_totp.php"><?php e('account.totp_title'); ?></a>
+        <a class="btn btn-ghost btn-sm" href="security_passkeys.php"><?php e('account.passkeys_title'); ?></a>
+        <a class="btn btn-ghost btn-sm" href="security_password.php"><?php e('account.change_login_password_title'); ?></a>
+        <a class="btn btn-ghost btn-sm" href="security_sessions.php"><?php e('account.active_sessions_title'); ?></a>
       </div>
-
-      <div id="sess" class="list"></div>
-      <div id="sess-err" class="msg msg-err"></div>
     </div>
+    <?php endif; ?>
   </div>
 
 <?php if (!$verified): ?>
@@ -455,9 +336,6 @@ btn.addEventListener('click', async ()=>{
 (() => {
   const CSRF = <?= json_encode($csrf) ?>;
   const VERIFIED = <?= $verified ? 'true' : 'false' ?>;
-  const TOTP_AVAILABLE = <?= $hasTotp ? 'true' : 'false' ?>;
-  const PASSKEYS_AVAILABLE = <?= $hasPasskeys ? 'true' : 'false' ?>;
-  const TOTP_ENABLED = <?= (!empty($u['totp_enabled_at'])) ? 'true' : 'false' ?>;
   const PBKDF2_ITERS = <?= (int)PBKDF2_ITERATIONS ?>;
   const VAULT_CHECK_PLAIN = 'LOCKSMITH_VAULT_CHECK_v1';
 
@@ -719,389 +597,7 @@ btn.addEventListener('click', async ()=>{
     loadVaultStatus();
   }
 
-  // base64url helpers for WebAuthn
-  function b64uToBuf(b64url){
-    const b64 = String(b64url||'').replace(/-/g,'+').replace(/_/g,'/');
-    const pad = b64.length % 4 ? '='.repeat(4 - (b64.length % 4)) : '';
-    const bin = atob(b64 + pad);
-    const bytes = new Uint8Array(bin.length);
-    for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
-    return bytes.buffer;
-  }
-
-  function bufToB64u(buf){
-    const bytes = new Uint8Array(buf);
-    let s='';
-    for(let i=0;i<bytes.length;i++) s+=String.fromCharCode(bytes[i]);
-    return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
-  }
-
-  async function ensureReauth(methods){
-    if(methods && methods.passkey && window.PublicKeyCredential){
-      const begin = await postCsrf('api/webauthn.php', {action:'reauth_begin'});
-      if(begin.success){
-        const pk = begin.publicKey || {};
-        const allow = (pk.allowCredentials||[]).map(c => ({type:c.type, id: b64uToBuf(c.id)}));
-        const cred = await navigator.credentials.get({publicKey:{
-          challenge: b64uToBuf(pk.challenge),
-          rpId: pk.rpId,
-          timeout: pk.timeout||60000,
-          userVerification: pk.userVerification||'required',
-          allowCredentials: allow,
-        }});
-
-        const a = cred.response;
-        const fin = await postCsrf('api/webauthn.php', {
-          action:'reauth_finish',
-          rawId: bufToB64u(cred.rawId),
-          response:{
-            clientDataJSON: bufToB64u(a.clientDataJSON),
-            authenticatorData: bufToB64u(a.authenticatorData),
-            signature: bufToB64u(a.signature),
-            userHandle: a.userHandle ? bufToB64u(a.userHandle) : null,
-          }
-        });
-        return !!fin.success;
-      }
-    }
-
-    if(methods && methods.totp){
-      const code = prompt(tr('login.enter_totp', 'Enter your 6-digit authenticator code'));
-      if(!code) return false;
-      const r = await postCsrf('api/totp.php', {action:'reauth', code});
-      return !!r.success;
-    }
-
-    return false;
-  }
-
-  async function loadSessions(){
-    const wrap=document.getElementById('sess');
-    const err=document.getElementById('sess-err');
-    if(!wrap||!err) return;
-    clearMsg(err);
-    wrap.innerHTML='<div class="small">Loading…</div>';
-
-    try{
-      const j=await postCsrf('api/account.php',{action:'sessions'});
-      if(!j.success){showMsg(err,j.error||'Failed to load sessions');wrap.innerHTML='';return;}
-
-      if(!j.sessions||!j.sessions.length){
-        wrap.innerHTML='<div class="small">No tracked sessions yet (apply migrations to enable session tracking).</div>';
-        return;
-      }
-
-      wrap.innerHTML='';
-      j.sessions.forEach(s=>{
-        const el=document.createElement('div');
-        el.className='item';
-
-        const left=document.createElement('div');
-        const right=document.createElement('div');
-        right.className='small';
-
-        const line1=document.createElement('div');
-        line1.className='small';
-
-        const curSpan=document.createElement('span');
-        curSpan.style.color = s.is_current ? 'var(--green)' : 'var(--muted)';
-        curSpan.textContent = s.is_current ? 'CURRENT' : 'OTHER';
-        line1.appendChild(curSpan);
-        line1.append(' · Last seen: ');
-
-        const lastSeen=document.createElement('span');
-        lastSeen.style.color='var(--text)';
-        lastSeen.textContent = s.last_seen_at || '';
-        line1.appendChild(lastSeen);
-
-        const line2=document.createElement('div');
-        line2.className='small';
-        line2.append('IP: ');
-        const ip=document.createElement('span');
-        ip.style.color='var(--text)';
-        ip.textContent = s.ip_address || '';
-        line2.appendChild(ip);
-
-        const line3=document.createElement('div');
-        line3.className='small';
-        line3.append('UA: ');
-        const ua=document.createElement('span');
-        ua.style.color='var(--text)';
-        ua.textContent = String(s.user_agent || '').slice(0, 160);
-        line3.appendChild(ua);
-
-        left.appendChild(line1);
-        left.appendChild(line2);
-        left.appendChild(line3);
-
-        right.append('Created: ');
-        const created=document.createElement('span');
-        created.style.color='var(--text)';
-        created.textContent = s.created_at || '';
-        right.appendChild(created);
-
-        el.appendChild(left);
-        el.appendChild(right);
-        wrap.appendChild(el);
-      });
-    }catch{
-      showMsg(err,'Network error');
-      wrap.innerHTML='';
-    }
-  }
-
-  const pwForm=document.getElementById('pw-form');
-  if(pwForm){
-    const ok=document.getElementById('pw-ok');
-    const err=document.getElementById('pw-err');
-    const btn=document.getElementById('pw-btn');
-    const btnTxt=document.getElementById('pw-btn-txt');
-
-    pwForm.addEventListener('submit', async (e)=>{
-      e.preventDefault();
-      clearMsg(ok); clearMsg(err);
-
-      const cur=document.getElementById('pw-cur').value;
-      const p1=document.getElementById('pw-new').value;
-      const p2=document.getElementById('pw-new2').value;
-
-      if(!cur||!p1||!p2){showMsg(err,'Fill in all fields');return;}
-      if(p1.length<8){showMsg(err,'New password must be at least 8 characters');return;}
-      if(p1!==p2){showMsg(err,'Passwords do not match');return;}
-
-      btn.disabled=true;
-      btnTxt.innerHTML='<span class="spin"></span>';
-
-      try{
-        const j=await postCsrf('api/account.php',{action:'change_login_password',current_password:cur,new_password:p1});
-        if(!j.success){showMsg(err,j.error||'Update failed');return;}
-        showMsg(ok,'Login password updated.');
-        pwForm.reset();
-      }catch{
-        showMsg(err,'Network error');
-      }finally{
-        btn.disabled=false;
-        btnTxt.textContent='Update password';
-      }
-    });
-  }
-
-  const logoutAll=document.getElementById('logout-all');
-  if(logoutAll){
-    logoutAll.addEventListener('click', async ()=>{
-      if(!confirm('Log out all sessions (including this one)?')) return;
-      logoutAll.disabled=true;
-      try{
-        const j=await postCsrf('api/account.php',{action:'logout_all_sessions'});
-        if(j.success){window.location='login.php';}
-        else alert(j.error||'Failed');
-      }catch{
-        alert('Network error');
-      }finally{
-        logoutAll.disabled=false;
-      }
-    });
-  }
-
-  const sessRefresh=document.getElementById('sess-refresh');
-  if(sessRefresh){
-    sessRefresh.addEventListener('click', loadSessions);
-  }
-
-  // ── TOTP ─────────────────────────────────────
-  if(VERIFIED && TOTP_AVAILABLE){
-    const ok=document.getElementById('totp-ok');
-    const err=document.getElementById('totp-err');
-    const setup=document.getElementById('totp-setup');
-    const dis=document.getElementById('totp-disable');
-
-    function totpSetUi(enabled){
-      document.getElementById('totp-begin').style.display = enabled ? 'none' : 'inline-flex';
-      setup.style.display = 'none';
-      dis.style.display = enabled ? 'block' : 'none';
-    }
-
-    totpSetUi(TOTP_ENABLED);
-
-    document.getElementById('totp-begin').addEventListener('click', async ()=>{
-      clearMsg(ok); clearMsg(err);
-      const j=await postCsrf('api/totp.php', {action:'begin'});
-      if(!j.success){showMsg(err,j.error||'Failed');return;}
-      document.getElementById('totp-secret').textContent = j.secret;
-      const a=document.getElementById('totp-otpauth');
-      a.href=j.otpauth; a.textContent=j.otpauth;
-      setup.style.display='block';
-    });
-
-    document.getElementById('totp-enable').addEventListener('click', async ()=>{
-      clearMsg(ok); clearMsg(err);
-      const code=document.getElementById('totp-code').value.trim();
-      if(!code){showMsg(err,'Code required');return;}
-      const btn=document.getElementById('totp-enable');
-      const txt=document.getElementById('totp-enable-txt');
-      btn.disabled=true; txt.innerHTML='<span class="spin"></span>';
-      try{
-        const j=await postCsrf('api/totp.php', {action:'enable', code});
-        if(!j.success){showMsg(err,j.error||'Failed');return;}
-        showMsg(ok,'TOTP enabled.');
-        totpSetUi(true);
-      }finally{
-        btn.disabled=false; txt.textContent='Enable TOTP';
-      }
-    });
-
-    document.getElementById('totp-disable-btn').addEventListener('click', async ()=>{
-      clearMsg(ok); clearMsg(err);
-      const code=document.getElementById('totp-disable-code').value.trim();
-      if(!code){showMsg(err,'Code required');return;}
-      const j=await postCsrf('api/totp.php', {action:'disable', code});
-      if(!j.success){showMsg(err,j.error||'Failed');return;}
-      showMsg(ok,'TOTP disabled.');
-      totpSetUi(false);
-    });
-
-    document.getElementById('totp-reauth').addEventListener('click', async ()=>{
-      clearMsg(ok); clearMsg(err);
-      const code=prompt(tr('login.enter_totp', 'Enter your 6-digit authenticator code'));
-      if(!code) return;
-      const j=await postCsrf('api/totp.php', {action:'reauth', code});
-      if(!j.success){showMsg(err,j.error||'Failed');return;}
-      showMsg(ok,'Re-auth successful.');
-    });
-  }
-
-  // ── PASSKEYS ─────────────────────────────────
-  if(VERIFIED && PASSKEYS_AVAILABLE){
-    const ok=document.getElementById('passkey-ok');
-    const err=document.getElementById('passkey-err');
-    const list=document.getElementById('passkeys-list');
-    const status=document.getElementById('passkeys-status');
-
-    function setStatus(text, ok){
-      status.textContent = text;
-      status.className = 'badge ' + (ok ? 'ok' : 'wait');
-    }
-
-    async function loadPasskeys(){
-      clearMsg(ok); clearMsg(err);
-      list.innerHTML='<div class="small">Loading…</div>';
-      const j=await postCsrf('api/webauthn.php', {action:'list'});
-      if(!j.success){showMsg(err,j.error||'Failed');list.innerHTML='';setStatus('⏳',false);return;}
-      const keys=j.passkeys||[];
-      setStatus(keys.length ? '✓ Enabled' : '⏳ None', !!keys.length);
-      if(!keys.length){list.innerHTML='<div class="small">No passkeys registered.</div>';return;}
-
-      list.innerHTML='';
-      keys.forEach(k=>{
-        const el=document.createElement('div');
-        el.className='item';
-        const label=k.label ? k.label : 'Passkey';
-        el.innerHTML=`
-          <div>
-            <div class="small" style="color:var(--text)">${label}</div>
-            <div class="small">Created: ${k.created_at||''}</div>
-            <div class="small">Last used: ${k.last_used_at||'—'}</div>
-          </div>
-          <div style="display:flex;gap:10px;align-items:center;">
-            <button class="btn btn-red" data-id="${k.id}">Delete</button>
-          </div>
-        `;
-        el.querySelector('button').addEventListener('click', ()=>deletePasskey(k.id));
-        list.appendChild(el);
-      });
-    }
-
-    async function deletePasskey(id){
-      clearMsg(ok); clearMsg(err);
-      if(!confirm('Delete this passkey?')) return;
-
-      let j=await postCsrf('api/webauthn.php', {action:'delete', id});
-      if(!j.success && (j.error_code==='reauth_required' || j.error_code==='security_setup_required')){
-        const ok2 = await ensureReauth(j.methods||{});
-        if(!ok2){showMsg(err,j.error||'Re-auth required');return;}
-        j=await postCsrf('api/webauthn.php', {action:'delete', id});
-      }
-      if(!j.success){showMsg(err,j.error||'Failed');return;}
-      showMsg(ok,'Deleted.');
-      loadPasskeys();
-    }
-
-    async function addPasskey(){
-      clearMsg(ok); clearMsg(err);
-      if(!window.PublicKeyCredential){showMsg(err,'Passkeys not supported in this browser');return;}
-
-      const label = prompt('Label for this passkey (optional)') || '';
-      const btn=document.getElementById('passkey-add');
-      const txt=document.getElementById('passkey-add-txt');
-      btn.disabled=true; txt.innerHTML='<span class="spin"></span>';
-
-      try{
-        const begin=await postCsrf('api/webauthn.php', {action:'register_begin'});
-        if(!begin.success){showMsg(err,begin.error||'Failed');return;}
-
-        const pk=begin.publicKey||{};
-        const exclude=(pk.excludeCredentials||[]).map(c => ({type:c.type, id: b64uToBuf(c.id)}));
-
-        const cred=await navigator.credentials.create({publicKey:{
-          challenge: b64uToBuf(pk.challenge),
-          rp: pk.rp,
-          user: {
-            id: b64uToBuf(pk.user.id),
-            name: pk.user.name,
-            displayName: pk.user.displayName,
-          },
-          pubKeyCredParams: pk.pubKeyCredParams,
-          timeout: pk.timeout||60000,
-          attestation: pk.attestation||'none',
-          authenticatorSelection: pk.authenticatorSelection||{userVerification:'required'},
-          excludeCredentials: exclude,
-        }});
-
-        const a=cred.response;
-        const fin=await postCsrf('api/webauthn.php', {
-          action:'register_finish',
-          label,
-          rawId: bufToB64u(cred.rawId),
-          response:{
-            clientDataJSON: bufToB64u(a.clientDataJSON),
-            attestationObject: bufToB64u(a.attestationObject),
-          }
-        });
-
-        if(!fin.success){showMsg(err,fin.error||'Failed');return;}
-        showMsg(ok,'Passkey added.');
-        loadPasskeys();
-
-      }catch(e){
-        showMsg(err,(e && e.message) ? e.message : 'Passkey failed');
-      }finally{
-        btn.disabled=false; txt.textContent='Add passkey';
-      }
-    }
-
-    document.getElementById('passkey-refresh').addEventListener('click', loadPasskeys);
-    document.getElementById('passkey-add').addEventListener('click', addPasskey);
-
-    const req=document.getElementById('passkey-required');
-    if(req){
-      req.addEventListener('change', async ()=>{
-        clearMsg(ok); clearMsg(err);
-        const enabled = req.checked ? 1 : 0;
-
-        let j=await postCsrf('api/webauthn.php', {action:'require_for_login', enabled});
-        if(!j.success && (j.error_code==='reauth_required' || j.error_code==='security_setup_required')){
-          const ok2 = await ensureReauth(j.methods||{});
-          if(!ok2){showMsg(err,j.error||'Re-auth required');req.checked=!req.checked;return;}
-          j=await postCsrf('api/webauthn.php', {action:'require_for_login', enabled});
-        }
-
-        if(!j.success){showMsg(err,j.error||'Failed');req.checked=!req.checked;return;}
-        showMsg(ok, enabled ? 'Passkey required for login.' : 'Password login allowed.');
-      });
-    }
-
-    loadPasskeys();
-  }
+  
 
   // ── NOTIFICATION PREFS (time lock email reminders) ─────────────────
   if(VERIFIED){
@@ -1148,7 +644,6 @@ btn.addEventListener('click', async ()=>{
   }
 
   loadTrustPassport();
-  loadSessions();
 })();
 </script>
 </div>
