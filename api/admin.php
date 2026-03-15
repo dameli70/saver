@@ -154,11 +154,13 @@ if ($method === 'GET') {
                 u.verification_sent_at,
                 u.created_at,
                 u.last_login,
+                COALESCE(ut.trust_level, 1) AS trust_level,
                 COUNT(l.id) AS codes_total,
                 SUM(CASE WHEN l.is_active = 1 THEN 1 ELSE 0 END) AS codes_active
             FROM users u
+            LEFT JOIN user_trust ut ON ut.user_id = u.id
             LEFT JOIN locks l ON l.user_id = u.id
-            GROUP BY u.id, u.email, u.is_admin, u.email_verified_at, u.verification_sent_at, u.created_at, u.last_login
+            GROUP BY u.id, u.email, u.is_admin, u.email_verified_at, u.verification_sent_at, u.created_at, u.last_login, ut.trust_level
             ORDER BY u.created_at DESC
         ")->fetchAll();
 
@@ -474,11 +476,13 @@ if ($method === 'POST') {
     if ($action === 'create_user') {
         $email        = strtolower(trim($body['email'] ?? ''));
         $loginPwd     = $body['login_password'] ?? '';
+        $trustLevel   = intParam($body['trust_level'] ?? 1, 1);
         $makeAdmin    = !empty($body['is_admin']);
         $markVerified = !empty($body['mark_verified']);
 
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) jsonResponse(['error' => 'Invalid email'], 400);
         if (strlen($loginPwd) < 8) jsonResponse(['error' => 'Login password must be at least 8 characters'], 400);
+        if (!in_array($trustLevel, [1,2,3], true)) jsonResponse(['error' => 'Invalid trust_level'], 400);
 
         $db = getDB();
         $check = $db->prepare("SELECT id FROM users WHERE email = ?");
@@ -510,6 +514,12 @@ if ($method === 'POST') {
         ]);
 
         $userId = (int)$db->lastInsertId();
+
+        ensureTrustRow($db, $userId);
+        if ($trustLevel !== 1) {
+            $db->prepare('UPDATE user_trust SET trust_level = ?, last_level_change_at = NOW() WHERE user_id = ?')
+               ->execute([$trustLevel, $userId]);
+        }
 
         // Ensure key platform defaults are set for the user (for older installs / partial migrations).
         if (hasColumn($db, 'users', 'vault_active_slot')) {
@@ -591,6 +601,27 @@ if ($method === 'POST') {
         }
 
         auditLog('admin_set_verified', null, getCurrentUserId());
+        jsonResponse(['success' => true]);
+    }
+
+    // ── SET TRUST LEVEL ─────────────────────────────────────
+    if ($action === 'set_trust_level') {
+        $userId  = intParam($body['user_id'] ?? 0, 0);
+        $trustLevel = intParam($body['trust_level'] ?? 0, 0);
+        if ($userId < 1) jsonResponse(['error' => 'user_id required'], 400);
+        if (!in_array($trustLevel, [1,2,3], true)) jsonResponse(['error' => 'Invalid trust_level'], 400);
+
+        $db = getDB();
+
+        $check = $db->prepare('SELECT id FROM users WHERE id = ?');
+        $check->execute([$userId]);
+        if (!$check->fetch()) jsonResponse(['error' => 'User not found'], 404);
+
+        ensureTrustRow($db, $userId);
+        $db->prepare('UPDATE user_trust SET trust_level = ?, last_level_change_at = NOW() WHERE user_id = ?')
+           ->execute([$trustLevel, $userId]);
+
+        auditLog('admin_set_trust_level', null, getCurrentUserId());
         jsonResponse(['success' => true]);
     }
 

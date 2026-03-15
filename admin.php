@@ -74,6 +74,8 @@ header("Referrer-Policy: no-referrer");
 .table{width:100%;border-collapse:collapse;min-width:980px;}
 .table th,.table td{padding:10px 12px;border-bottom:1px solid var(--b1);text-align:left;font-size:12px;white-space:nowrap;}
 .table th{color:var(--muted);font-size:10px;letter-spacing:2px;text-transform:uppercase;background:var(--s2);}
+.tbl-sel{background:var(--s2);border:1px solid var(--b1);color:var(--text);font-family:var(--mono);font-size:12px;padding:6px 10px;border-radius:10px;outline:none;}
+.tbl-sel:focus{border-color:var(--accent);box-shadow:0 0 0 4px rgb(var(--accent-rgb) / .14);}
 .k{color:var(--muted);} 
 hr{border:none;border-top:1px solid var(--b1);margin:16px 0;}
 .modal{position:fixed;inset:0;background:var(--overlay-bg);display:none;align-items:center;justify-content:center;z-index:999;padding:24px;}
@@ -129,6 +131,7 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--code-bg);border:
               <th><?php e('admin.th.email'); ?></th>
               <th><?php e('admin.th.verified'); ?></th>
               <th><?php e('admin.th.admin'); ?></th>
+              <th><?php e('account.trust_title'); ?></th>
               <th><?php e('admin.th.time_locks'); ?></th>
               <th><?php e('admin.th.created'); ?></th>
               <th><?php e('admin.th.last_login'); ?></th>
@@ -627,10 +630,17 @@ let usersCache = [];
 let carriersCache = [];
 let destAccountsCache = [];
 
+function trustSelectHtml(userId, cur){
+  const lvl = parseInt(String(cur||'1'), 10);
+  const v = (lvl === 2 || lvl === 3) ? lvl : 1;
+  const opt = (n) => `<option value="${n}" ${v===n?'selected':''}>${n}</option>`;
+  return `<select class="tbl-sel" onchange="setTrustLevel(${userId}, this.value)">${opt(1)}${opt(2)}${opt(3)}</select>`;
+}
+
 async function loadUsers(){
   const tbody = document.querySelector('#users-table tbody');
   if(!tbody) return;
-  tbody.innerHTML = '<tr><td colspan="8" class="k">Loading…</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="9" class="k">Loading…</td></tr>';
 
   try{
     const r = await get('/api/admin.php?action=users');
@@ -638,7 +648,7 @@ async function loadUsers(){
     usersCache = r.users || [];
 
     if(!usersCache.length){
-      tbody.innerHTML = '<tr><td colspan="8" class="k">No users.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="9" class="k">No users.</td></tr>';
       return;
     }
 
@@ -647,6 +657,7 @@ async function loadUsers(){
       const tr = document.createElement('tr');
       const verified = u.email_verified_at ? '✓' : '—';
       const admin = u.is_admin ? '✓' : '—';
+      const trust = trustSelectHtml(u.id, u.trust_level);
       const codes = `${u.codes_active||0}/${u.codes_total||0}`;
 
       tr.innerHTML = `
@@ -654,6 +665,7 @@ async function loadUsers(){
         <td>${esc(u.email)}</td>
         <td>${verified}</td>
         <td>${admin}</td>
+        <td>${trust}</td>
         <td>${codes}</td>
         <td>${fmt(u.created_at)}</td>
         <td>${fmt(u.last_login)}</td>
@@ -667,7 +679,7 @@ async function loadUsers(){
     });
 
   }catch(e){
-    tbody.innerHTML = '<tr><td colspan="8" class="k">Failed to load users.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" class="k">Failed to load users.</td></tr>';
     setMsg('users-msg', e.message||'Failed', false);
   }
 }
@@ -726,6 +738,26 @@ async function toggleVerified(userId, cur){
 
   const r = await postCsrf('/api/admin.php', { action: 'set_verified', user_id: userId, verified: next });
   if(!r.success){ setMsg('users-msg', r.error||'Failed', false); return; }
+  loadUsers();
+}
+
+async function setTrustLevel(userId, trustLevel){
+  const next = parseInt(String(trustLevel||'1'), 10);
+  if(next !== 1 && next !== 2 && next !== 3){
+    setMsg('users-msg', 'Invalid trust level.', false);
+    loadUsers();
+    return;
+  }
+
+  const ok = confirm('Set trust level to ' + String(next) + '?');
+  if(!ok){
+    loadUsers();
+    return;
+  }
+
+  const r = await postCsrf('/api/admin.php', { action: 'set_trust_level', user_id: userId, trust_level: next });
+  if(!r.success){ setMsg('users-msg', r.error||'Failed', false); loadUsers(); return; }
+  setMsg('users-msg', 'Saved.', true);
   loadUsers();
 }
 

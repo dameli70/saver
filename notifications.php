@@ -18,6 +18,8 @@ $userEmail = getCurrentUserEmail() ?? '';
 $isAdmin   = isAdmin();
 $csrf      = getCsrfToken();
 
+$hasNotifPrefsTable = hasNotificationPreferencesTable();
+
 // Strict security headers
 header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none';");
 header("X-Frame-Options: DENY");
@@ -58,6 +60,34 @@ header("Permissions-Policy: clipboard-write=(self)");
       </div>
     </div>
 
+  <div class="card" id="notification-prefs-card">
+    <div class="card-title">
+      <span>Notification preferences</span>
+      <div class="badge wait" id="email-reminders-badge">⏳</div>
+    </div>
+
+    <div class="small" style="margin-top:12px;">
+      <?php e('account.email_reminders_desc'); ?>
+    </div>
+
+    <div class="hr"></div>
+
+    <div class="item" style="align-items:center;">
+      <div style="flex:1;min-width:220px;">
+        <div class="k"><?php e('account.email_reminders_toggle_title'); ?></div>
+        <div class="small" style="margin-top:6px;">
+          <?php e('account.email_reminders_toggle_sub'); ?>
+        </div>
+      </div>
+      <label style="display:flex;align-items:center;gap:10px;font-size:12px;color:var(--text);">
+        <input type="checkbox" id="pref-email-lock-reminders" style="width:20px;height:20px;accent-color:var(--accent);">
+        <span id="pref-email-lock-reminders-state"><?= htmlspecialchars(t('common.off'), ENT_QUOTES, 'UTF-8') ?></span>
+      </label>
+    </div>
+
+    <div id="pref-email-msg" class="msg"></div>
+  </div>
+
   <div class="card">
     <div class="card-title">
       <span><?php e('notifications.inbox'); ?></span>
@@ -89,6 +119,16 @@ const STR = {
   openLock: <?= json_encode(t('notifications.open_lock')) ?>,
   markRead: <?= json_encode(t('notifications.mark_read')) ?>,
   failed: <?= json_encode(t('common.failed')) ?>,
+};
+
+const PREFS_AVAILABLE = <?= $hasNotifPrefsTable ? 'true' : 'false' ?>;
+const PREF_STR = {
+  badgeOn: <?= json_encode(t('account.email_reminders_badge_on')) ?>,
+  badgeOff: <?= json_encode(t('account.email_reminders_badge_off')) ?>,
+  on: <?= json_encode(t('common.on')) ?>,
+  off: <?= json_encode(t('common.off')) ?>,
+  saved: <?= json_encode('Saved.') ?>,
+  unavailable: <?= json_encode('Notification preferences are unavailable on this server. Apply database migrations.') ?>,
 };
 
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
@@ -125,7 +165,9 @@ async function post(url, body){
     headers:{'Content-Type':'application/json','X-CSRF-Token':CSRF},
     body: JSON.stringify(body)
   });
-  return r.json();
+  const j = await r.json();
+  j._status = r.status;
+  return j;
 }
 
 function tierClass(t){
@@ -251,6 +293,103 @@ async function markAllRead(){
 function refresh(){ load(true); }
 function loadMore(){ load(false); }
 
+function setPrefMsg(text, ok){
+  const el = document.getElementById('pref-email-msg');
+  if(!el) return;
+
+  if(!text){
+    el.textContent = '';
+    el.className = 'msg';
+    return;
+  }
+
+  el.className = 'msg ' + (ok ? 'msg-ok' : 'msg-err') + ' show';
+  el.textContent = text;
+}
+
+async function initNotificationPrefs(){
+  const cb = document.getElementById('pref-email-lock-reminders');
+  const state = document.getElementById('pref-email-lock-reminders-state');
+  const badge = document.getElementById('email-reminders-badge');
+
+  if(!cb || !state || !badge) return;
+
+  let hardDisabled = false;
+  let current = 0;
+
+  function apply(enabled){
+    cb.checked = !!enabled;
+    state.textContent = enabled ? PREF_STR.on : PREF_STR.off;
+    badge.textContent = enabled ? PREF_STR.badgeOn : PREF_STR.badgeOff;
+    badge.className = 'badge ' + (enabled ? 'ok' : 'wait');
+  }
+
+  function disableUi(msg){
+    hardDisabled = true;
+    cb.checked = false;
+    cb.disabled = true;
+    state.textContent = PREF_STR.off;
+    badge.textContent = '⏳ Unavailable';
+    badge.className = 'badge wait';
+    setPrefMsg(msg || PREF_STR.unavailable, false);
+  }
+
+  if(!PREFS_AVAILABLE){
+    disableUi(PREF_STR.unavailable);
+    return;
+  }
+
+  cb.disabled = true;
+
+  let loaded = false;
+  try{
+    const r = await post('api/account.php', {action:'get_email_time_lock_reminders'});
+    if(!r.success) throw new Error(r.error || STR.failed);
+
+    current = r.enabled ? 1 : 0;
+    apply(!!current);
+    setPrefMsg('', true);
+    loaded = true;
+  }catch(e){
+    setPrefMsg(e.message || STR.failed, false);
+  }finally{
+    if(loaded && !hardDisabled) cb.disabled = false;
+  }
+
+  cb.addEventListener('change', async ()=>{
+    if(hardDisabled) return;
+
+    const enabled = cb.checked ? 1 : 0;
+    state.textContent = enabled ? PREF_STR.on : PREF_STR.off;
+
+    cb.disabled = true;
+    setPrefMsg('', true);
+
+    try{
+      const r = await post('api/account.php', {action:'set_email_time_lock_reminders', enabled});
+      if(!r.success){
+        if(r._status === 409){
+          disableUi(r.error || PREF_STR.unavailable);
+          return;
+        }
+        throw new Error(r.error || STR.failed);
+      }
+
+      current = r.enabled ? 1 : 0;
+      apply(!!current);
+      setPrefMsg(PREF_STR.saved, true);
+
+    }catch(e){
+      cb.checked = !!current;
+      state.textContent = current ? PREF_STR.on : PREF_STR.off;
+      setPrefMsg(e.message || STR.failed, false);
+    }finally{
+      if(!hardDisabled) cb.disabled = false;
+    }
+  });
+}
+
+initNotificationPrefs();
 load(true);
 </script>
 </div>

@@ -16,6 +16,11 @@ USE locksmith;
 CREATE TABLE IF NOT EXISTS users (
     id                           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     email                        VARCHAR(255) NOT NULL UNIQUE,
+
+    -- Profile fields (privacy): used for displaying participants in Saving Rooms
+    room_display_name            VARCHAR(60) NULL,
+    profile_image_url            VARCHAR(500) NULL,
+
     login_hash                   VARCHAR(255) NOT NULL,       -- Argon2id of LOGIN password (for auth only)
     vault_verifier               VARCHAR(255) NOT NULL,       -- legacy verifier (no longer required for reveals)
     vault_verifier_salt          CHAR(64) NOT NULL,

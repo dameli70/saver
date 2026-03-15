@@ -369,6 +369,8 @@ if ($action === 'room_detail') {
 
     $db = getDB();
 
+    $uNameExpr = sqlRoomUserDisplayNameExpr('u', 'id');
+
     $vis = (string)$room['visibility'];
 
     $myStmt = $db->prepare('SELECT status FROM saving_room_participants WHERE room_id = ? AND user_id = ?');
@@ -445,7 +447,7 @@ if ($action === 'room_detail') {
     $canSeeEscrow = (((int)$room['maker_user_id'] === $userId) || isAdmin($userId));
 
     if ($canSeeEscrow) {
-        $es = $db->prepare("SELECT s.removed_user_id, u.email, s.policy, s.total_contributed, s.platform_fee_amount, s.refund_amount, s.status, s.created_at
+        $es = $db->prepare("SELECT s.removed_user_id, {$uNameExpr} AS removed_user_name, s.policy, s.total_contributed, s.platform_fee_amount, s.refund_amount, s.status, s.created_at
                             FROM saving_room_escrow_settlements s
                             JOIN users u ON u.id = s.removed_user_id
                             WHERE s.room_id = ?
@@ -455,7 +457,7 @@ if ($action === 'room_detail') {
         $escrowSettlements = $es->fetchAll();
     }
 
-    $participantsStmt = $db->prepare("SELECT p.user_id, p.status, u.email,
+    $participantsStmt = $db->prepare("SELECT p.user_id, p.status, {$uNameExpr} AS display_name,
                                              (SELECT trust_level FROM user_trust WHERE user_id = p.user_id) AS trust_level,
                                              (SELECT COUNT(*) FROM user_strikes WHERE user_id = p.user_id AND created_at >= (NOW() - INTERVAL 6 MONTH)) AS strikes_6m,
                                              (SELECT restricted_until FROM user_restrictions WHERE user_id = p.user_id AND restricted_until > NOW()) AS restricted_until
@@ -541,7 +543,7 @@ if ($action === 'room_detail') {
     $rotation = null;
     if ($room['saving_type'] === 'B' && in_array($myStatus, ['active','approved'], true)) {
         $win = $db->prepare("SELECT w.id, w.user_id, w.rotation_index, w.status, w.revealed_at, w.expires_at, w.dispute_window_ends_at,
-                                    u.email AS turn_user_email
+                                    {$uNameExpr} AS turn_user_name
                              FROM saving_room_rotation_windows w
                              JOIN users u ON u.id = w.user_id
                              WHERE w.room_id = ?
@@ -584,7 +586,7 @@ if ($action === 'room_detail') {
 
             $dispute = null;
             $disp = $db->prepare("SELECT d.id, d.status, d.reason, d.threshold_count_required, d.created_at, d.updated_at,
-                                         u.email AS raised_by_email
+                                         {$uNameExpr} AS raised_by_name
                                   FROM saving_room_disputes d
                                   JOIN users u ON u.id = d.raised_by_user_id
                                   WHERE d.room_id = ?
@@ -607,7 +609,7 @@ if ($action === 'room_detail') {
                     'id' => (int)$d['id'],
                     'status' => $d['status'],
                     'reason' => $d['reason'],
-                    'raised_by_email' => $d['raised_by_email'],
+                    'raised_by_name' => $d['raised_by_name'],
                     'threshold_required' => (int)$d['threshold_count_required'],
                     'ack_count' => $ackCount,
                     'my_ack' => $myAck ? 1 : 0,
@@ -623,7 +625,7 @@ if ($action === 'room_detail') {
                     'revealed_at' => $w['revealed_at'],
                     'expires_at' => $w['expires_at'],
                     'dispute_window_ends_at' => $w['dispute_window_ends_at'],
-                    'turn_user_email' => $w['turn_user_email'],
+                    'turn_user_name' => $w['turn_user_name'],
                     'is_turn_user' => ((int)$w['user_id'] === $userId) ? 1 : 0,
                 ],
                 'votes' => [
@@ -641,7 +643,7 @@ if ($action === 'room_detail') {
     $exitRequest = null;
     if ($room['saving_type'] === 'B' && $room['room_state'] === 'active' && $myStatus === 'active') {
         $er = $db->prepare("SELECT er.id, er.requested_by_user_id, er.status, er.created_at,
-                                   u.email AS requested_by_email
+                                   {$uNameExpr} AS requested_by_name
                             FROM saving_room_exit_requests er
                             JOIN users u ON u.id = er.requested_by_user_id
                             WHERE er.room_id = ? AND er.status = 'open'
@@ -688,7 +690,7 @@ if ($action === 'room_detail') {
             $exitRequest = [
                 'id' => (int)$req['id'],
                 'status' => $req['status'],
-                'requested_by_email' => $req['requested_by_email'],
+                'requested_by_name' => $req['requested_by_name'],
                 'is_requester' => ($requesterId === $userId) ? 1 : 0,
                 'created_at' => $req['created_at'],
                 'votes' => [
@@ -706,7 +708,7 @@ if ($action === 'room_detail') {
 
     $settlements = [];
     if ($isMaker) {
-        $st = $db->prepare("SELECT s.removed_user_id, u.email, s.policy, s.total_contributed, s.platform_fee_amount, s.refund_amount, s.redistribution_json, s.status, s.created_at
+        $st = $db->prepare("SELECT s.removed_user_id, {$uNameExpr} AS removed_user_name, s.policy, s.total_contributed, s.platform_fee_amount, s.refund_amount, s.redistribution_json, s.status, s.created_at
                             FROM saving_room_escrow_settlements s
                             JOIN users u ON u.id = s.removed_user_id
                             WHERE s.room_id = ?
@@ -1451,7 +1453,9 @@ if ($action === 'maker_join_requests') {
 
     $db = getDB();
 
-    $stmt = $db->prepare("SELECT jr.id, jr.user_id, u.email, jr.status, jr.snapshot_level, jr.snapshot_strikes_6m, jr.snapshot_restricted_until, jr.created_at,
+    $uNameExpr = sqlRoomUserDisplayNameExpr('u', 'id');
+
+    $stmt = $db->prepare("SELECT jr.id, jr.user_id, {$uNameExpr} AS display_name, jr.status, jr.snapshot_level, jr.snapshot_strikes_6m, jr.snapshot_restricted_until, jr.created_at,
                                  (SELECT trust_level FROM user_trust WHERE user_id = jr.user_id) AS current_level,
                                  (SELECT COUNT(*) FROM user_strikes WHERE user_id = jr.user_id AND created_at >= (NOW() - INTERVAL 6 MONTH)) AS current_strikes_6m,
                                  (SELECT restricted_until FROM user_restrictions WHERE user_id = jr.user_id AND restricted_until > NOW()) AS current_restricted_until
