@@ -88,7 +88,7 @@ header("Referrer-Policy: no-referrer");
         <div class="sec-banner-title"><?php e('backup.security_required_title'); ?></div>
         <div class="sec-banner-sub"><?php e('backup.security_required_sub'); ?></div>
       </div>
-      <a class="btn btn-ghost" href="account.php#totp-card"><?php e('backup.open_account'); ?></a>
+      <a class="btn btn-ghost" href="security.php"><?php e('backup.open_account'); ?></a>
     </div>
     <?php endif; ?>
 

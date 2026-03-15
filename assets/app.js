@@ -16,7 +16,7 @@
     use_auth_code: t('js.use_auth_code', 'Use authenticator code'),
     waiting: t('js.waiting', 'Waiting for confirmation…'),
     internal_error_missing_auth: t('js.internal_error_missing_auth', 'Internal error: missing auth handler'),
-    enable_totp_or_passkey: t('js.enable_totp_or_passkey', 'Enable TOTP or add a passkey in Account'),
+    enable_totp_or_passkey: t('js.enable_totp_or_passkey', 'Enable TOTP or add a passkey in Security'),
     passkey_reauth_failed: t('js.passkey_reauth_failed', 'Passkey re-auth failed'),
     enter_6_digit_code: t('js.enter_6_digit_code', 'Enter a 6-digit code'),
     invalid_code: t('js.invalid_code', 'Invalid code'),
@@ -55,7 +55,7 @@
     'js.common.cancel': 'Cancel',
 
     'js.errors.missing_auth_handler': 'Internal error: missing auth handler',
-    'js.reauth.enable_totp_or_passkey': 'Enable TOTP or add a passkey in Account',
+    'js.reauth.enable_totp_or_passkey': 'Enable TOTP or add a passkey in Security',
     'js.reauth.passkey_failed': 'Passkey re-auth failed',
     'js.reauth.enter_6_digit_code': 'Enter a 6-digit code',
     'js.reauth.invalid_code': 'Invalid code',
@@ -351,9 +351,9 @@
 
     if(!methods || (!methods.passkey && !methods.totp)){
       LS.toast(STR.enable_totp_or_passkey, 'warn');
-      const go = window.confirm(STR.enable_totp_or_passkey + '\n\nGo to Account security setup now?');
+      const go = window.confirm(STR.enable_totp_or_passkey + '\n\nGo to Security setup now?');
       if(go){
-        window.location.href = 'account.php#passkeys-card';
+        window.location.href = 'security.php';
       }
       return false;
     }
@@ -972,6 +972,24 @@
 
     if(document.querySelector('.bottom-nav')) return;
 
+    const nav = document.createElement('nav');
+    nav.className = 'bottom-nav';
+    nav.setAttribute('aria-label', LS.t('common.menu') || 'Menu');
+
+    const p = window.location && window.location.pathname ? window.location.pathname : '';
+    const parts = p.split('/');
+    const base = parts[parts.length - 1] || '';
+    const hash = (window.location && window.location.hash) ? window.location.hash : '';
+    const curFull = base + hash;
+
+    const cur = (base === 'room.php')
+      ? 'rooms.php'
+      : ((base && base.indexOf('security_') === 0)
+        ? 'security.php'
+        : ((base === 'admin_legacy.php' || (base && base.indexOf('admin_') === 0))
+          ? 'admin.php'
+          : base));
+
     function iconForHref(href){
       const h = String(href||'').trim();
       if(h === 'dashboard.php') return '⌂';
@@ -1004,6 +1022,8 @@
         overflowItems.push({href:'admin.php', label: LS.t('nav.admin') || 'Admin', ico:'⬡', group:'admin'});
       }
     }catch{}
+
+    const isOverflowActive = overflowItems.some(it => it.href === cur || it.href === curFull);
 
     let releaseOverflowTrap = null;
     let overflowPrevFocus = null;

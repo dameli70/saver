@@ -168,7 +168,7 @@ return [
     'backup.intro' => 'Backups contain only encrypted ciphertext blobs and metadata (labels, dates, status). Your plaintext codes are never stored by the server.',
     'backup.security_required_title' => 'Security setup required',
     'backup.security_required_sub' => 'Enable TOTP or add a passkey to protect sensitive actions (cloud backups, restore, export).',
-    'backup.open_account' => 'Open account',
+    'backup.open_account' => 'Open security',
 
     'notifications.intro' => 'Your in-app notifications (critical / important / informational). Use “Mark all read” to clear the inbox.',
 
@@ -357,7 +357,7 @@ return [
     'js.use_auth_code' => 'Use authenticator code',
     'js.waiting' => 'Waiting for confirmation…',
     'js.internal_error_missing_auth' => 'Internal error: missing auth handler',
-    'js.enable_totp_or_passkey' => 'Enable TOTP or add a passkey in Account',
+    'js.enable_totp_or_passkey' => 'Enable TOTP or add a passkey in Security',
     'js.passkey_reauth_failed' => 'Passkey re-auth failed',
     'js.enter_6_digit_code' => 'Enter a 6-digit code',
     'js.invalid_code' => 'Invalid code',
@@ -417,7 +417,7 @@ return [
     'dashboard.progress_suffix' => 'complete — {next}',
     'dashboard.security_banner_title' => 'Finish your security setup',
     'dashboard.security_banner_sub' => 'Add a passkey or authenticator code to confirm sensitive actions (unlocking, backups, room approvals).',
-    'dashboard.open_account' => 'Open account',
+    'dashboard.open_account' => 'Open security',
     'dashboard.quick_actions' => 'Quick actions',
     'dashboard.create_time_lock' => 'Create a time lock',
     'dashboard.my_time_locks' => 'My time locks',

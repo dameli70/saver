@@ -65,7 +65,8 @@ Pages:
 - `notifications.php` — in-app notifications
 - `rooms.php` / `room.php` — saving rooms (discovery + room detail)
 - `admin.php` — super admin dashboard (requires admin)
-- `account.php` — account security settings
+- `account.php` — account overview (vault passphrase, trust passport, email verification)
+- `security.php` — security settings hub (password, passkeys, TOTP, sessions)
 - `logout.php` — destroys session
 
 API:

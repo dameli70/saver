@@ -220,7 +220,7 @@ async function ensureReauth(methods){
     return !!r.success;
   }
 
-  toast('Enable TOTP or add a passkey in Account', 'warn');
+  toast(tr('js.enable_totp_or_passkey', 'Enable TOTP or add a passkey in Security'), 'warn');
   return false;
 }
 

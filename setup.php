@@ -68,7 +68,7 @@ if (!$hasVault) {
 } elseif (!$hasTotp && !$hasPasskey) {
     $nextSetupTextKey = 'onboarding.next.confirmation';
     $nextSetupLabelKey = 'onboarding.action.add_confirmation';
-    $nextSetupHref = 'account.php#passkeys-card';
+    $nextSetupHref = 'security.php';
 } elseif ($backupCount <= 0) {
     $nextSetupTextKey = 'onboarding.next.backup';
     $nextSetupLabelKey = 'onboarding.action.open_backup';
@@ -201,8 +201,8 @@ header("Referrer-Policy: no-referrer");
         <div class="badge <?= ($hasTotp || $hasPasskey) ? 'ok' : '' ?>"><?= ($hasTotp || $hasPasskey) ? t('setup.status.ready') : t('setup.status.recommended') ?></div>
       </div>
       <div class="actions">
-        <a class="btn btn-primary" href="account.php#passkeys-card" style="width:auto;"><?php e('setup.add_passkey'); ?></a>
-        <a class="btn btn-ghost" href="account.php#totp-card" style="width:auto;"><?php e('setup.setup_authenticator'); ?></a>
+        <a class="btn btn-primary" href="security_passkeys.php" style="width:auto;"><?php e('setup.add_passkey'); ?></a>
+        <a class="btn btn-ghost" href="security_totp.php" style="width:auto;"><?php e('setup.setup_authenticator'); ?></a>
       </div>
     </div>
     <?php endif; ?>
