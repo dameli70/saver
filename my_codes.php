@@ -210,6 +210,7 @@ let countdownRefreshTimer = null;
 let allLocksSession = [];
 let locksOffline = false;
 let locksLoading = false;
+let locksLastError = null;
 
 let locksFilter = 'all'; // all|sealed|ready|wallet
 let locksQuery = '';
@@ -235,7 +236,75 @@ function esc(s){
   return (window.LS && LS.esc) ? LS.esc(s) : String(s||'');
 }
 
+function parseUtc(ts){
+  if(window.LS && typeof LS.parseUtc === 'function') return LS.parseUtc(ts);
+  if(!ts) return null;
+  const d = new Date(String(ts));
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function fmtLocalTs(ts){
+  const d = parseUtc(ts);
+  if(!d) return '';
+  if(window.LS && typeof LS.fmtLocal === 'function') return LS.fmtLocal(d);
+  return d.toLocaleString();
+}
+
+function fmtUtcTs(ts){
+  const d = parseUtc(ts);
+  if(!d) return '';
+  if(window.LS && typeof LS.fmtUtc === 'function') return LS.fmtUtc(d);
+  return new Intl.DateTimeFormat(undefined, {year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',timeZone:'UTC',timeZoneName:'short'}).format(d);
+}
+
+function fmtCountdown(totalSeconds){
+  if(window.LS && typeof LS.fmtCountdown === 'function') return LS.fmtCountdown(totalSeconds);
+  const s = Math.max(0, Math.floor(Number(totalSeconds)||0));
+  const days = Math.floor(s/86400);
+  const hours = Math.floor((s%86400)/3600);
+  const minutes = Math.floor((s%3600)/60);
+  const seconds = s%60;
+  if(days > 0) return `${days}d ${hours}h ${minutes}m`;
+  if(hours > 0) return `${hours}h ${minutes}m`;
+  if(minutes > 0) return `${minutes}m ${seconds}s`;
+  return `${seconds}s`;
+}
+
+function renderLoadingSkeleton(){
+  const title = tr('common.loading', 'Loading…');
+  const sub = tr('my_codes.loading_sub', 'Fetching your codes…');
+  return `<div class="empty"><div class="empty-icon"><span class="spin light"></span></div><h3>${esc(title)}</h3><p>${esc(sub)}</p></div>`;
+}
+
+async function readJsonResponse(r){
+  const txt = await r.text();
+  try{ return JSON.parse(txt); }
+  catch{
+    throw new Error('Invalid server response');
+  }
+}
+
+async function get(url){
+  const r = await fetch(apiUrl(url), {credentials:'same-origin', headers:{'Accept':'application/json'}});
+  return readJsonResponse(r);
+}
+
+async function postCsrf(url, body){
+  const r = await fetch(apiUrl(url), {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'X-CSRF-Token': CSRF,
+    },
+    body: JSON.stringify(body || {}),
+  });
+  return readJsonResponse(r);
+}
+
 function apiUrl(url){return url.startsWith('/') ? url.slice(1) : url;}
+
 function getFilteredLocks(){
   return (allLocksSession || []).filter(l => matchesFilter(l) && matchesQuery(l));
 }
@@ -250,6 +319,13 @@ function renderLocks(){
   }
 
   const list = getFilteredLocks();
+
+  if(!locksOffline && locksLastError && !locksLoading && !list.length){
+    const title = tr('my_codes.load_failed_title', 'Failed to load codes');
+    const retry = tr('common.retry', 'Retry');
+    wrap.innerHTML = `<div class="empty"><div class="empty-icon">⚠</div><h3>${esc(title)}</h3><p>${esc(locksLastError)}</p><button class="btn btn-ghost btn-sm" type="button" onclick="loadLocks(true)">↻ ${esc(retry)}</button></div>`;
+    return;
+  }
 
   if(locksOffline){
     wrap.innerHTML = '';
@@ -282,7 +358,20 @@ function renderLocks(){
     return;
   }
 
-  wrap.innerHTML = '<div class="locks-grid" id="locks-grid"></div>';
+  wrap.innerHTML = '';
+
+  if(locksLastError){
+    const err = document.createElement('div');
+    err.className = 'msg msg-err show';
+    err.textContent = String(locksLastError || '');
+    err.style.marginBottom = '12px';
+    wrap.appendChild(err);
+  }
+
+  const holder = document.createElement('div');
+  holder.innerHTML = '<div class="locks-grid" id="locks-grid"></div>';
+  wrap.appendChild(holder.firstChild);
+
   const grid = document.getElementById('locks-grid');
   list.forEach(l => grid.appendChild(buildCard(l, {offline:locksOffline})));
 
@@ -455,27 +544,69 @@ async function loadLocks(force=false){
 
   initLocksToolbar();
 
-  const wrap=document.getElementById('locks-wrap');
+  const wrap = document.getElementById('locks-wrap');
   if(!wrap) return;
 
-  if(force || !(allLocksSession && allLocksSession.length)){
-    wrap.innerHTML = renderLoadingSkeleton();
-  }
+  if(force) allLocksSession = [];
 
   locksLoading = true;
+  locksOffline = false;
+  locksLastError = null;
+  renderLocks();
 
   try{
+    let prevCache = null;
+    try{ prevCache = JSON.parse(localStorage.getItem('ls_my_codes_cache') || 'null'); }catch{}
+
     const [a,b] = await Promise.allSettled([
       get('api/locks.php'),
       get('api/wallet_locks.php'),
     ]);
 
-    const locks = (a.status==='fulfilled' && a.value && a.value.success) ? (a.value.locks||[]) : [];
-    const walletLocks = (b.status==='fulfilled' && b.value && b.value.success) ? (b.value.wallet_locks||[]) : [];
+    const locksOk  = (a.status==='fulfilled' && a.value && a.value.success);
+    const walletOk = (b.status==='fulfilled' && b.value && b.value.success);
 
-    try{
-      localStorage.setItem('ls_my_codes_cache', JSON.stringify({ts: Date.now(), locks, wallet_locks: walletLocks}));
-    }catch{}
+    const locks = locksOk ? (a.value.locks||[]) : [];
+    const walletLocks = walletOk ? (b.value.wallet_locks||[]) : [];
+
+    const locksErr = (a.status === 'rejected')
+      ? ((a.reason && a.reason.message) ? a.reason.message : 'Failed to load locks')
+      : ((!locksOk && a.value && a.value.error) ? String(a.value.error) : null);
+
+    const walletErr = (b.status === 'rejected')
+      ? ((b.reason && b.reason.message) ? b.reason.message : 'Failed to load wallet locks')
+      : ((!walletOk && b.value && b.value.error) ? String(b.value.error) : null);
+
+    // Wallet locks are an optional module. Only surface wallet-load errors if:
+    // - locks failed (already error), OR
+    // - user is filtering to wallet, OR
+    // - user previously had cached wallet locks that now can't be refreshed.
+    if(!locksOk){
+      const parts = [];
+      if(locksErr) parts.push(locksErr);
+      if(!walletOk && walletErr) parts.push(walletErr);
+      locksLastError = parts.length ? parts.join(' · ') : 'Failed to load.';
+    }else if(!walletOk){
+      const hadWalletCached = !!(prevCache && Array.isArray(prevCache.wallet_locks) && prevCache.wallet_locks.length);
+      const wantsWallet = (locksFilter === 'wallet');
+      locksLastError = (hadWalletCached || wantsWallet) ? (walletErr || 'Failed to load wallet locks') : null;
+    }
+
+    // Update cache, preserving the previous list for whichever endpoint failed.
+    if(locksOk || walletOk){
+      try{
+        const prev = (prevCache && typeof prevCache === 'object') ? prevCache : {};
+        localStorage.setItem('ls_my_codes_cache', JSON.stringify({
+          ts: Date.now(),
+          locks: locksOk ? locks : (prev.locks || []),
+          wallet_locks: walletOk ? walletLocks : (prev.wallet_locks || []),
+        }));
+      }catch{}
+    }
+
+    if(!locksOk && !walletOk){
+      throw new Error(locksLastError || 'Failed to load');
+    }
 
     const mapped = [];
 
@@ -514,12 +645,10 @@ async function loadLocks(force=false){
     });
 
     allLocksSession = mapped;
-    locksOffline = false;
-    locksLoading = false;
 
-    renderLocks();
+  }catch(e){
+    let usedCache = false;
 
-  }catch{
     try{
       const cached = JSON.parse(localStorage.getItem('ls_my_codes_cache') || 'null');
       const locks = cached && cached.locks ? cached.locks : [];
@@ -562,17 +691,20 @@ async function loadLocks(force=false){
       if(mapped.length){
         allLocksSession = mapped;
         locksOffline = true;
-        locksLoading = false;
-        renderLocks();
-        return;
+        locksLastError = null;
+        usedCache = true;
       }
     }catch{}
 
-    locksOffline = false;
-    locksLoading = false;
-    allLocksSession = [];
+    if(!usedCache){
+      locksOffline = false;
+      allLocksSession = [];
+      locksLastError = (e && e.message) ? e.message : 'Failed to load.';
+    }
 
-    wrap.innerHTML='<div class="empty"><p>Failed to load.</p></div>';
+  }finally{
+    locksLoading = false;
+    renderLocks();
   }
 }
 
@@ -1285,7 +1417,7 @@ async function copyVal(id){
 
 async function revokeShare(){
   if(!currentShareId) return;
-  if(!confirm(tr('my_codes.share_revoke_confirm', 'Re will lose access.')) return;
+  if(!confirm(tr('my_codes.share_revoke_confirm', 'Revoke this share link? Anyone with it will lose access.'))) return;
 
   const okEl = document.getElementById('rv-share-ok');
   const errEl = document.getElementById('rv-share-err');
