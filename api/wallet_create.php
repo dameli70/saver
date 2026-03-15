@@ -7,6 +7,7 @@ require_once __DIR__ . '/../includes/install_guard.php';
 requireInstalledForApi();
 
 require_once __DIR__ . '/../includes/helpers.php';
+require_once __DIR__ . '/../includes/packages.php';
 header('Content-Type: application/json');
 startSecureSession();
 
@@ -48,15 +49,18 @@ try {
     jsonResponse(['error' => 'Invalid unlock time'], 400);
 }
 
-if (base64_decode($iv, true) === false || strlen(base64_decode($iv)) !== 12)
+if (base64_decode($iv, true) === false || strlen(base64_decode($iv, true)) !== 12)
     jsonResponse(['error' => 'IV must be 12 bytes (base64)'], 400);
-if (base64_decode($authTag, true) === false || strlen(base64_decode($authTag)) !== 16)
+if (base64_decode($authTag, true) === false || strlen(base64_decode($authTag, true)) !== 16)
     jsonResponse(['error' => 'auth_tag must be 16 bytes (base64)'], 400);
-if (base64_decode($kdfSalt, true) === false || strlen(base64_decode($kdfSalt)) !== 32)
+if (base64_decode($kdfSalt, true) === false || strlen(base64_decode($kdfSalt, true)) !== 32)
     jsonResponse(['error' => 'kdf_salt must be 32 bytes (base64)'], 400);
 
-$userId = getCurrentUserId();
-if (!$userId) jsonResponse(['error' => 'Unauthorized'], 401);
+$userId = (int)getCurrentUserId();
+if ($userId < 1) jsonResponse(['error' => 'Unauthorized'], 401);
+
+// Enforce package limits (active wallet locks).
+packagesEnforceLimitOrJson($userId, 'wallet_locks');
 
 $db = getDB();
 

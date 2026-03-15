@@ -16,7 +16,12 @@ if (isset($verified)) {
 }
 
 $topbarHomeHref = $topbarVerified ? 'dashboard.php' : 'index.php';
-$topbarLogoUrl = (defined('APP_LOGO_URL') ? trim((string)APP_LOGO_URL) : '');
+
+require_once __DIR__ . '/app_settings.php';
+$topbarLogoUrl = appUploadedLogoUrl();
+if ($topbarLogoUrl === '') {
+    $topbarLogoUrl = (defined('APP_LOGO_URL') ? trim((string)APP_LOGO_URL) : '');
+}
 
 $topbarShowSetup = true;
 if ($topbarVerified) {
@@ -27,6 +32,34 @@ if ($topbarVerified) {
 }
 
 $topbarCurPage = basename($_SERVER['PHP_SELF'] ?? '');
+
+$topbarInitials = function(string $email): string {
+    $s = trim($email);
+    if ($s === '') return 'U';
+
+    $local = explode('@', $s, 2)[0] ?? '';
+    $local = trim($local);
+
+    $parts = preg_split('/[^A-Za-z0-9]+/', $local) ?: [];
+
+    $out = '';
+    foreach ($parts as $p) {
+        $p = trim((string)$p);
+        if ($p === '') continue;
+        $out .= strtoupper($p[0]);
+        if (strlen($out) >= 2) break;
+    }
+
+    if (strlen($out) < 2) {
+        $compact = preg_replace('/[^A-Za-z0-9]/', '', $local);
+        $out = strtoupper(substr((string)$compact, 0, 2));
+    }
+
+    return $out !== '' ? $out : 'U';
+};
+
+$topbarUserInitials = $topbarInitials($topbarUserEmail);
+
 $topbarActive = function(string $href) use ($topbarCurPage): bool {
     $base = explode('#', $href, 2)[0];
 
@@ -67,7 +100,13 @@ $topbarActive = function(string $href) use ($topbarCurPage): bool {
         <?php if (isset($topbarBadgeText) && trim((string)$topbarBadgeText) !== ''): ?>
           <span class="topbar-badge"><?= htmlspecialchars((string)$topbarBadgeText) ?></span>
         <?php endif; ?>
-        <span class="user-pill"><?= htmlspecialchars($topbarUserEmail) ?></span>
+        <span class="user-pill">
+            <span class="ls-avatar" aria-hidden="true">
+              <img class="ls-avatar-img" data-user-avatar="1" src="api/profile_image.php?v=0" alt="" onload="if(this.nextElementSibling){this.nextElementSibling.style.display='none';}" onerror="this.style.display='none';if(this.nextElementSibling){this.nextElementSibling.style.display='flex';}">
+              <span class="ls-avatar-initials"><?= htmlspecialchars($topbarUserInitials, ENT_QUOTES, 'UTF-8') ?></span>
+            </span>
+            <span class="user-email"><?= htmlspecialchars($topbarUserEmail) ?></span>
+          </span>
 
         <div class="nav-group-title"><?php e('common.preferences'); ?></div>
         <button class="btn btn-ghost btn-sm btn-theme" type="button" data-theme-toggle><?php e('common.theme'); ?></button>
@@ -82,6 +121,7 @@ $topbarActive = function(string $href) use ($topbarCurPage): bool {
           <a class="btn btn-ghost btn-sm <?= $topbarActive('my_codes.php') ? 'active' : '' ?>" href="my_codes.php" <?= $topbarActive('my_codes.php') ? 'aria-current="page"' : '' ?>><?php e('nav.my_codes'); ?></a>
           <a class="btn btn-ghost btn-sm <?= $topbarActive('rooms.php') || $topbarActive('room.php') ? 'active' : '' ?>" href="rooms.php" <?= ($topbarActive('rooms.php') || $topbarActive('room.php')) ? 'aria-current="page"' : '' ?>><?php e('nav.rooms'); ?></a>
           <a class="btn btn-ghost btn-sm <?= $topbarActive('notifications.php') ? 'active' : '' ?>" href="notifications.php" <?= $topbarActive('notifications.php') ? 'aria-current="page"' : '' ?>><?php e('nav.notifications'); ?></a>
+          <a class="btn btn-ghost btn-sm <?= $topbarActive('packages.php') ? 'active' : '' ?>" href="packages.php" <?= $topbarActive('packages.php') ? 'aria-current="page"' : '' ?>><?php e('packages.title'); ?></a>
 
           <div class="nav-group-title"><?php e('nav.vault'); ?></div>
           <a class="btn btn-ghost btn-sm <?= $topbarActive('vault_settings.php') ? 'active' : '' ?>" href="vault_settings.php" <?= $topbarActive('vault_settings.php') ? 'aria-current="page"' : '' ?>><?php e('nav.vault'); ?></a>
@@ -115,7 +155,13 @@ $topbarActive = function(string $href) use ($topbarCurPage): bool {
     <?php if (isset($topbarBadgeText) && trim((string)$topbarBadgeText) !== ''): ?>
       <span class="topbar-badge"><?= htmlspecialchars((string)$topbarBadgeText) ?></span>
     <?php endif; ?>
-    <span class="user-pill"><?= htmlspecialchars($topbarUserEmail) ?></span>
+    <span class="user-pill">
+      <span class="ls-avatar" aria-hidden="true">
+        <img class="ls-avatar-img" data-user-avatar="1" src="api/profile_image.php?v=0" alt="" onload="if(this.nextElementSibling){this.nextElementSibling.style.display='none';}" onerror="this.style.display='none';if(this.nextElementSibling){this.nextElementSibling.style.display='flex';}">
+        <span class="ls-avatar-initials"><?= htmlspecialchars($topbarUserInitials, ENT_QUOTES, 'UTF-8') ?></span>
+      </span>
+      <span class="user-email"><?= htmlspecialchars($topbarUserEmail) ?></span>
+    </span>
     <button class="btn btn-ghost btn-sm btn-theme" type="button" data-theme-toggle><?php e('common.theme'); ?></button>
     <?php $curLang = currentLang(); ?>
     <a class="<?= $curLang === 'fr' ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm' ?>" href="<?= htmlspecialchars(langSwitchUrl('fr')) ?>"><?php e('common.lang_fr'); ?></a>
@@ -128,6 +174,7 @@ $topbarActive = function(string $href) use ($topbarCurPage): bool {
       <a class="btn btn-ghost btn-sm" href="my_codes.php"><?php e('nav.my_codes'); ?></a>
       <a class="btn btn-ghost btn-sm" href="rooms.php"><?php e('nav.rooms'); ?></a>
       <a class="btn btn-ghost btn-sm" href="notifications.php"><?php e('nav.notifications'); ?></a>
+      <a class="btn btn-ghost btn-sm" href="packages.php"><?php e('packages.title'); ?></a>
       <a class="btn btn-ghost btn-sm" href="backup.php"><?php e('nav.backups'); ?></a>
       <a class="btn btn-ghost btn-sm" href="vault_settings.php"><?php e('nav.vault'); ?></a>
       <a class="btn btn-ghost btn-sm" href="security.php"><?php e('nav.security'); ?></a>

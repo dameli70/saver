@@ -102,6 +102,8 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--code-bg);border:
         <?php if ($adminPage === 'users'): ?>
           <a class="btn btn-primary btn-sm" href="admin_add_user.php"><?php e('admin.add_user_btn'); ?></a>
         <?php endif; ?>
+        <a class="btn btn-ghost btn-sm" href="admin_logo.php">App logo</a>
+        <a class="btn btn-ghost btn-sm" href="admin_packages.php"><?php e('packages.title'); ?></a>
         <a class="btn btn-ghost btn-sm" href="dashboard.php"><?php e('nav.dashboard'); ?></a>
       </div>
     </div>

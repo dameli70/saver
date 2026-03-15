@@ -87,15 +87,27 @@ header("Referrer-Policy: no-referrer");
           <div style="flex:1;min-width:240px;">
             <div class="k"><?php e('account_user.profile_picture_title'); ?></div>
             <div class="small"><?php e('account_user.profile_picture_sub'); ?></div>
-            <div class="field" style="margin-top:10px;">
-              <label><?php e('account_user.profile_image_url_label'); ?></label>
-              <input type="url" id="profile-image-url" placeholder="<?= htmlspecialchars(t('account_user.profile_image_url_placeholder'), ENT_QUOTES, 'UTF-8') ?>">
+
+            <div style="display:flex;align-items:center;gap:14px;margin-top:12px;flex-wrap:wrap;">
+              <div class="ls-avatar ls-avatar-lg" id="profile-image-preview-wrap">
+                <img class="ls-avatar-img" id="profile-image-preview" src="api/profile_image.php?v=0" alt="<?= htmlspecialchars(t('account_user.profile_picture_title'), ENT_QUOTES, 'UTF-8') ?>" onload="if(this.nextElementSibling){this.nextElementSibling.style.display='none';}" onerror="this.style.display='none';if(this.nextElementSibling){this.nextElementSibling.style.display='flex';}">
+                <span class="ls-avatar-initials" id="profile-image-initials"></span>
+              </div>
+
+              <div style="flex:1;min-width:220px;">
+                <div class="field" style="margin:0;">
+                  <label><?php e('account_user.profile_image_upload_label'); ?></label>
+                  <input type="file" id="profile-image-file" accept="image/png,image/jpeg,image/webp">
+                </div>
+                <div class="small"><?php e('account_user.profile_image_upload_hint'); ?></div>
+              </div>
             </div>
+
             <div class="msg msg-ok" id="img-ok"></div>
             <div class="msg msg-err" id="img-err"></div>
           </div>
           <div class="item-actions">
-            <button class="btn btn-blue btn-sm" type="button" id="img-save"><?php e('common.save'); ?></button>
+            <button class="btn btn-blue btn-sm" type="button" id="img-upload"><?php e('account_user.profile_image_upload_btn'); ?></button>
           </div>
         </div>
 
@@ -155,10 +167,17 @@ header("Referrer-Policy: no-referrer");
   const badge = document.getElementById('nickname-badge');
   const unavailable = document.getElementById('profile-unavailable');
 
-  const imgInput = document.getElementById('profile-image-url');
-  const imgSave = document.getElementById('img-save');
+  const USER_EMAIL = <?= json_encode($userEmail) ?>;
+
+  const imgFile = document.getElementById('profile-image-file');
+  const imgUpload = document.getElementById('img-upload');
+  const imgPreview = document.getElementById('profile-image-preview');
+  const imgInitials = document.getElementById('profile-image-initials');
   const imgOk = document.getElementById('img-ok');
   const imgErr = document.getElementById('img-err');
+
+  let avatarBlob = null;
+  let avatarPreviewUrl = null;
 
   const nameInput = document.getElementById('room-display-name');
   const nameSave = document.getElementById('name-save');
@@ -166,6 +185,108 @@ header("Referrer-Policy: no-referrer");
   const nameErr = document.getElementById('name-err');
 
   let state = {trust_level: 1, nickname_locked: 0, profile_fields_available: 1};
+
+  function initialsFromEmail(email){
+    const s = String(email || '').trim();
+    if(!s) return 'U';
+
+    const local = (s.split('@')[0] || '').trim();
+    const parts = local.split(/[^A-Za-z0-9]+/).filter(Boolean);
+
+    let out = '';
+    for(const p of parts){
+      if(!p) continue;
+      out += p[0];
+      if(out.length >= 2) break;
+    }
+
+    if(out.length < 2){
+      const compact = local.replace(/[^A-Za-z0-9]/g, '');
+      out = (compact.slice(0, 2) || 'U');
+    }
+
+    return out.toUpperCase();
+  }
+
+  function setAvatarInitials(){
+    if(imgInitials) imgInitials.textContent = initialsFromEmail(USER_EMAIL);
+  }
+
+  function canvasSupports(type){
+    try{
+      const c = document.createElement('canvas');
+      return (c.toDataURL(type) || '').indexOf('data:' + type) === 0;
+    }catch(e){
+      return false;
+    }
+  }
+
+  const AVATAR_OUT_TYPE = canvasSupports('image/webp') ? 'image/webp' : 'image/jpeg';
+
+  function refreshAvatarFromServer(){
+    if(!imgPreview) return;
+    if(avatarPreviewUrl){
+      try{ URL.revokeObjectURL(avatarPreviewUrl); }catch(e){}
+      avatarPreviewUrl = null;
+    }
+    avatarBlob = null;
+
+    imgPreview.style.display = 'block';
+    imgPreview.src = 'api/profile_image.php?v=' + String(Date.now());
+  }
+
+  function refreshTopbarAvatars(){
+    const v = String(Date.now());
+    document.querySelectorAll('img[data-user-avatar="1"]').forEach(el => {
+      try{ el.style.display = ''; }catch(e){}
+      el.src = 'api/profile_image.php?v=' + v;
+    });
+  }
+
+  async function centerCropToSquare(file, outSize){
+    const f = file;
+    const size = outSize || 512;
+
+    if(!f) throw new Error(tr('common.failed', 'Failed'));
+
+    const allowed = {'image/png':1,'image/jpeg':1,'image/webp':1};
+    if(!allowed[f.type]) throw new Error(tr('account_user.profile_image_err_type', 'Unsupported image type'));
+
+    const url = URL.createObjectURL(f);
+    const img = new Image();
+    img.decoding = 'async';
+
+    const loaded = new Promise((resolve, reject) => {
+      img.onload = () => resolve(true);
+      img.onerror = () => reject(new Error(tr('account_user.profile_image_err_decode', 'Could not read image')));
+    });
+
+    img.src = url;
+    await loaded;
+
+    const w = img.naturalWidth || img.width;
+    const h = img.naturalHeight || img.height;
+
+    const s = Math.min(w, h);
+    const sx = Math.floor((w - s) / 2);
+    const sy = Math.floor((h - s) / 2);
+
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, sx, sy, s, s, 0, 0, size, size);
+
+    URL.revokeObjectURL(url);
+
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, AVATAR_OUT_TYPE, 0.9));
+    if(!blob) throw new Error(tr('common.failed', 'Failed'));
+
+    return blob;
+  }
+
+  setAvatarInitials();
 
   function setAvailability(){
     const ok = !!state.profile_fields_available;
@@ -175,8 +296,8 @@ header("Referrer-Policy: no-referrer");
       unavailable.textContent = ok ? '' : tr('account_user.unavailable_migrations', 'This feature is unavailable on this server. Apply database migrations.');
     }
 
-    if(imgInput) imgInput.disabled = !ok;
-    if(imgSave) imgSave.disabled = !ok;
+    if(imgFile) imgFile.disabled = !ok;
+    if(imgUpload) imgUpload.disabled = !ok;
 
     const locked = !!state.nickname_locked;
     if(nameInput) nameInput.disabled = !ok || locked;
@@ -210,10 +331,10 @@ header("Referrer-Policy: no-referrer");
 
       if(trustEl) trustEl.textContent = 'Level ' + String(state.trust_level);
 
-      if(imgInput) imgInput.value = j.profile_image_url || '';
       if(nameInput) nameInput.value = j.room_display_name || '';
 
       setAvailability();
+      refreshAvatarFromServer();
     }catch(e){
       if(unavailable){
         unavailable.style.display = 'block';
@@ -228,21 +349,75 @@ header("Referrer-Policy: no-referrer");
     }
   }
 
-  if(imgSave){
-    imgSave.addEventListener('click', async () => {
+  if(imgFile){
+    imgFile.addEventListener('change', async () => {
       clearMsg(imgOk); clearMsg(imgErr);
-      imgSave.disabled = true;
+
+      const f = (imgFile.files && imgFile.files[0]) ? imgFile.files[0] : null;
+      if(!f){
+        avatarBlob = null;
+        if(avatarPreviewUrl){
+          try{ URL.revokeObjectURL(avatarPreviewUrl); }catch(e){}
+          avatarPreviewUrl = null;
+        }
+        refreshAvatarFromServer();
+        return;
+      }
 
       try{
-        const profile_image_url = (imgInput ? imgInput.value : '').trim();
-        const j = await postCsrf('api/profile.php', {action:'set_profile', profile_image_url});
-        if(!j.success) throw new Error(j.error || tr('common.failed', 'Failed'));
-        if(imgInput) imgInput.value = j.profile_image_url || '';
+        const blob = await centerCropToSquare(f, 512);
+        avatarBlob = blob;
+
+        if(avatarPreviewUrl){
+          try{ URL.revokeObjectURL(avatarPreviewUrl); }catch(e){}
+          avatarPreviewUrl = null;
+        }
+
+        avatarPreviewUrl = URL.createObjectURL(blob);
+        if(imgPreview){
+          imgPreview.style.display = 'block';
+          imgPreview.src = avatarPreviewUrl;
+        }
+      }catch(e){
+        avatarBlob = null;
+        showMsg(imgErr, (e && e.message) ? e.message : tr('common.failed', 'Failed'));
+      }
+    });
+  }
+
+  if(imgUpload){
+    imgUpload.addEventListener('click', async () => {
+      clearMsg(imgOk); clearMsg(imgErr);
+      imgUpload.disabled = true;
+
+      try{
+        if(!avatarBlob) throw new Error(tr('account_user.profile_image_err_select', 'Select an image first'));
+
+        const fd = new FormData();
+        const ext = (AVATAR_OUT_TYPE === 'image/webp') ? 'webp' : 'jpg';
+        fd.append('image', avatarBlob, 'avatar.' + ext);
+
+        const r = await fetch('api/profile_image_upload.php', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {'X-CSRF-Token': CSRF},
+          body: fd,
+        });
+
+        let j = null;
+        try{ j = await r.json(); }catch(e){ j = null; }
+
+        if(!r.ok || !j || !j.success) {
+          throw new Error((j && j.error) ? j.error : tr('common.failed', 'Failed'));
+        }
+
         showMsg(imgOk, tr('common.saved', 'Saved.'));
+        refreshAvatarFromServer();
+        refreshTopbarAvatars();
       }catch(e){
         showMsg(imgErr, (e && e.message) ? e.message : tr('common.failed', 'Failed'));
       }finally{
-        imgSave.disabled = false;
+        imgUpload.disabled = false;
       }
     });
   }
