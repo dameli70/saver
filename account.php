@@ -94,6 +94,7 @@ code{background:var(--code-bg);border:1px solid var(--b1);padding:2px 6px;border
         <?php if ($verified): ?>
           <a class="btn btn-ghost btn-sm" href="account_user.php"><?php e('nav.profile'); ?></a>
           <a class="btn btn-ghost btn-sm" href="security.php"><?php e('nav.security'); ?></a>
+          <a class="btn btn-ghost btn-sm" href="kyc.php">KYC</a>
         <?php endif; ?>
       </div>
     </div>
@@ -145,6 +146,22 @@ code{background:var(--code-bg);border:1px solid var(--b1);padding:2px 6px;border
         </div>
       </div>
       <div id="trust-msg" class="msg msg-err"></div>
+    </div>
+    <?php endif; ?>
+
+    <?php if ($verified): ?>
+    <div class="card" id="kyc-card">
+      <div class="row">
+        <div>
+          <div class="k">KYC</div>
+          <div class="v">Identity & address verification</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div class="badge wait" id="kyc-badge">⏳</div>
+          <a class="btn btn-primary btn-sm" href="kyc.php"><?php e('common.open'); ?></a>
+        </div>
+      </div>
+      <div id="kyc-msg" class="msg msg-err"></div>
     </div>
     <?php endif; ?>
 
@@ -341,6 +358,48 @@ btn.addEventListener('click', async ()=>{
     }
   }
 
+  // ── KYC BADGE ─────────────────────────────────
+  async function loadKycStatus(){
+    if(!VERIFIED) return;
+
+    const badge = document.getElementById('kyc-badge');
+    const msg = document.getElementById('kyc-msg');
+
+    if(!badge) return;
+
+    if(msg) msg.classList.remove('show');
+    badge.textContent = '⏳';
+    badge.className = 'badge wait';
+
+    try{
+      const j = await getJson('api/kyc.php?action=status');
+      if(!j.success) throw new Error(j.error || 'Failed to load KYC status');
+
+      const st = String((j.submission||{}).status || 'draft');
+      if(st === 'approved'){
+        badge.textContent = '✓ APPROVED';
+        badge.className = 'badge ok';
+      }else if(st === 'submitted'){
+        badge.textContent = '⏳ SUBMITTED';
+        badge.className = 'badge wait';
+      }else if(st === 'rejected'){
+        badge.textContent = 'REJECTED';
+        badge.className = 'badge wait';
+      }else{
+        badge.textContent = 'DRAFT';
+        badge.className = 'badge wait';
+      }
+
+    }catch(e){
+      badge.textContent = '—';
+      badge.className = 'badge wait';
+      if(msg){
+        msg.textContent = (e && e.message) ? e.message : 'Failed to load KYC status';
+        msg.classList.add('show');
+      }
+    }
+  }
+
   function bytesToB64(bytes){return btoa(String.fromCharCode(...bytes));}
   function b64ToBytes(b64){return Uint8Array.from(atob(b64), c => c.charCodeAt(0));}
 
@@ -482,6 +541,7 @@ btn.addEventListener('click', async ()=>{
   
 
   loadTrustPassport();
+  loadKycStatus();
 })();
 </script>
 </div>

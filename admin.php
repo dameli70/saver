@@ -104,6 +104,8 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--code-bg);border:
         <?php endif; ?>
         <a class="btn btn-ghost btn-sm" href="admin_logo.php">App logo</a>
         <a class="btn btn-ghost btn-sm" href="admin_packages.php"><?php e('packages.title'); ?></a>
+        <a class="btn btn-ghost btn-sm" href="admin_kyc.php">KYC review</a>
+        <a class="btn btn-ghost btn-sm" href="admin_system_backups.php">System backups</a>
         <a class="btn btn-ghost btn-sm" href="dashboard.php"><?php e('nav.dashboard'); ?></a>
       </div>
     </div>
