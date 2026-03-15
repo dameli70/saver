@@ -11,7 +11,12 @@ $publicAppName = $topbarAppName ?? (defined('APP_NAME') ? APP_NAME : 'Controle')
 $publicLogoUrl = (defined('APP_LOGO_URL') ? trim((string)APP_LOGO_URL) : '');
 
 // Prefer uploaded logo (stored encrypted server-side) if available.
-if (function_exists('getDB')) {
+// IMPORTANT: the installer must be viewable even when default DB credentials are invalid.
+// Only attempt DB-backed branding after the installer has successfully completed.
+$canUseDbBranding = file_exists(__DIR__ . '/../config/installed.flag');
+$isInstallPage = strpos($_SERVER['SCRIPT_NAME'] ?? '', '/install/') !== false;
+
+if ($canUseDbBranding && !$isInstallPage && function_exists('getDB')) {
     require_once __DIR__ . '/app_settings.php';
     $uploaded = appUploadedLogoUrl($topbarPrefix);
     if ($uploaded !== '') {
