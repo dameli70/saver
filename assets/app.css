@@ -183,7 +183,7 @@
 /* Desktop sidebar (injected by assets/app.js) */
 #ls-sidebar{display:none;}
 @media(min-width:981px){
-  #ls-sidebar{display:block;position:fixed;left:16px;top:max(16px,var(--sat));bottom:16px;
+  #ls-sidebar{display:flex;flex-direction:column;position:fixed;left:16px;top:max(16px,var(--sat));bottom:16px;
     width:260px;z-index:90;
     border-radius:var(--radius-card);
     border:1px solid var(--b1);
@@ -195,13 +195,13 @@
   }
 
   #ls-sidebar[data-collapsed="1"]{width:84px;}
+  #ls-sidebar[data-collapsed="1"] .ls-side-head{justify-content:center;}
 
-  #ls-sidebar .ls-side-head{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  #ls-sidebar .ls-side-head{display:flex;align-items:center;justify-content:flex-end;gap:10px;
     padding:14px 14px 10px;border-bottom:1px solid var(--b1);
   }
-  #ls-sidebar .ls-side-title{font-family:var(--display);font-weight:700;font-size:13px;letter-spacing:-.2px;}
 
-  #ls-sidebar .ls-side-body{padding:10px;overflow-y:auto;overflow-x:hidden;height:calc(100% - 56px);}
+  #ls-sidebar .ls-side-body{padding:10px;overflow-y:auto;overflow-x:hidden;flex:1;min-height:0;}
 
   #ls-sidebar .topbar-r{display:flex;flex-direction:column;align-items:stretch;gap:8px;}
   #ls-sidebar .topbar-r .btn{width:100%;}
