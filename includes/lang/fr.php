@@ -727,6 +727,8 @@ return [
     'room.activity.expires' => 'Expire {ts}',
     'room.activity.turn' => 'Tour n°{n}',
     'room.activity.maker' => 'Créateur : {vote}',
+    'room.activity.role' => 'rôle {role}',
+    'room.activity.delegate_to' => 'délégué {name}',
     'room.activity.cycle_num' => 'Cycle n°{n}',
     'room.activity.cycle_id' => 'Cycle {id}',
     'room.activity.amount' => 'Montant {amount}',
@@ -846,6 +848,11 @@ return [
     'room.feed.exit_cancelled' => 'Demande de sortie annulée',
     'room.feed.room_closed' => 'Salle clôturée',
 
+    'room.feed.typeB_code_accessed' => 'Code Type B consulté',
+    'room.feed.typeB_delegate_set' => 'Délégation Type B définie',
+    'room.feed.typeB_withdrawal_confirmed' => 'Retrait confirmé',
+    'room.feed.typeB_turn_voided' => 'Tour annulé (sans confirmation)',
+
     'room.contribution_title' => 'Contribution',
     'room.contribution_sub' => 'Confirmez votre contribution pour le cycle actif.',
     'room.contribution.cycle' => 'Cycle',
@@ -866,7 +873,7 @@ return [
     'room.unlock.code_label' => 'Code de déverrouillage (auto-effacé)',
 
     'room.rotation_type_b_title' => 'Rotation (Type B)',
-    'room.rotation_type_b_sub' => 'Chaque tour exige l’approbation du créateur + 50 % des participants. Si approuvé, seul l’utilisateur du tour courant peut révéler le code pendant 72 heures.',
+    'room.rotation_type_b_sub' => 'Chaque tour exige l’approbation du créateur + 50 % des participants. Si approuvé, l’utilisateur du tour peut révéler le code pendant 72 heures. Pendant les 12 premières heures, il peut déléguer l’accès à un autre participant. Après 12 heures sans confirmation de retrait, le créateur (ou un admin) peut révéler.',
     'room.rotation.current_turn' => 'Tour courant',
     'room.rotation.consensus' => 'Consensus',
     'room.rotation.window' => 'Fenêtre',
@@ -875,6 +882,32 @@ return [
     'room.rotation.btn_reject' => 'Rejeter',
     'room.rotation.btn_reveal_code' => 'Révéler le code',
     'room.rotation.code_label' => 'Code de déverrouillage (auto-effacé)',
+
+    'room.rotation.window_revealed_grace_expires_fmt' => 'Révélé · grâce jusqu’à {grace} · expire {ts}',
+
+    'room.rotation.delegate_title' => 'Déléguer l’accès (optionnel)',
+    'room.rotation.delegate_select' => 'Déléguer à',
+    'room.rotation.delegate_select_placeholder' => 'Sélectionner un participant',
+    'room.rotation.delegate_select_required' => 'Sélectionnez un délégué.',
+    'room.rotation.delegate_set_btn' => 'Définir le délégué',
+    'room.rotation.delegate_clear_btn' => 'Retirer le délégué',
+    'room.rotation.delegate_none' => 'Aucun délégué défini.',
+    'room.rotation.delegate_current_fmt' => 'Délégué : {name}',
+    'room.rotation.delegate_short_fmt' => 'délégué : {name}',
+
+    'room.rotation.withdrawal_title' => 'Confirmation de retrait',
+    'room.rotation.withdrawal_confirm_btn' => 'Confirmer le retrait',
+    'room.rotation.withdrawal_not_confirmed' => 'Pas encore confirmé.',
+    'room.rotation.withdrawal_confirmed_fmt' => 'Confirmé {ts}',
+    'room.rotation.withdrawal_unconfirmed' => 'Non confirmé',
+    'room.rotation.withdrawal_reference_prompt' => 'Référence / note optionnelle (laisser vide si aucune) :',
+
+    'room.rotation.history_title' => 'Historique des tours',
+    'room.rotation.history_th_turn' => 'Tour',
+    'room.rotation.history_th_turn_user' => 'Utilisateur du tour',
+    'room.rotation.history_th_code' => 'Dernière consultation du code',
+    'room.rotation.history_th_withdrawal' => 'Retrait',
+    'room.rotation.history_empty' => 'Aucun historique pour le moment.',
 
     'room.invitation_title' => 'Invitation',
     'room.invitation_sub' => 'Vous avez été invité à cette salle privée. En acceptant, vous serez ajouté comme participant approuvé.',

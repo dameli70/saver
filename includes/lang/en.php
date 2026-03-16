@@ -933,6 +933,8 @@ return [
     'room.activity.expires' => 'Expires {ts}',
     'room.activity.turn' => 'Turn #{n}',
     'room.activity.maker' => 'Maker {vote}',
+    'room.activity.role' => 'role {role}',
+    'room.activity.delegate_to' => 'delegate {name}',
     'room.activity.cycle_num' => 'Cycle #{n}',
     'room.activity.cycle_id' => 'Cycle {id}',
     'room.activity.amount' => 'Amount {amount}',
@@ -1052,6 +1054,11 @@ return [
     'room.feed.exit_cancelled' => 'Exit request cancelled',
     'room.feed.room_closed' => 'Room closed',
 
+    'room.feed.typeB_code_accessed' => 'Type B code accessed',
+    'room.feed.typeB_delegate_set' => 'Type B delegate set',
+    'room.feed.typeB_withdrawal_confirmed' => 'Withdrawal confirmed',
+    'room.feed.typeB_turn_voided' => 'Turn voided (no confirmation)',
+
     'room.contribution_title' => 'Contribution',
     'room.contribution_sub' => 'Confirm your contribution for the active cycle.',
     'room.contribution.cycle' => 'Cycle',
@@ -1072,7 +1079,7 @@ return [
     'room.unlock.code_label' => 'Unlock code (auto-clears)',
 
     'room.rotation_type_b_title' => 'Rotation (Type B)',
-    'room.rotation_type_b_sub' => 'Each turn requires maker approval + 50% participant approval. If approved, only the current turn user can reveal the unlock code for 72 hours.',
+    'room.rotation_type_b_sub' => 'Each turn requires maker approval + 50% participant approval. If approved, the turn user can reveal the unlock code for 72 hours. During the first 12 hours, they can optionally delegate access to another participant. After 12 hours without withdrawal confirmation, the maker (or admin) may reveal.',
     'room.rotation.current_turn' => 'Current turn',
     'room.rotation.consensus' => 'Consensus',
     'room.rotation.window' => 'Window',
@@ -1081,6 +1088,32 @@ return [
     'room.rotation.btn_reject' => 'Reject',
     'room.rotation.btn_reveal_code' => 'Reveal code',
     'room.rotation.code_label' => 'Unlock code (auto-clears)',
+
+    'room.rotation.window_revealed_grace_expires_fmt' => 'Revealed · grace until {grace} · expires {ts}',
+
+    'room.rotation.delegate_title' => 'Delegate access (optional)',
+    'room.rotation.delegate_select' => 'Delegate to',
+    'room.rotation.delegate_select_placeholder' => 'Select a participant',
+    'room.rotation.delegate_select_required' => 'Select a delegate.',
+    'room.rotation.delegate_set_btn' => 'Set delegate',
+    'room.rotation.delegate_clear_btn' => 'Clear delegate',
+    'room.rotation.delegate_none' => 'No delegate set.',
+    'room.rotation.delegate_current_fmt' => 'Delegated to: {name}',
+    'room.rotation.delegate_short_fmt' => 'delegate: {name}',
+
+    'room.rotation.withdrawal_title' => 'Withdrawal confirmation',
+    'room.rotation.withdrawal_confirm_btn' => 'Confirm withdrawn',
+    'room.rotation.withdrawal_not_confirmed' => 'Not confirmed yet.',
+    'room.rotation.withdrawal_confirmed_fmt' => 'Confirmed {ts}',
+    'room.rotation.withdrawal_unconfirmed' => 'Unconfirmed',
+    'room.rotation.withdrawal_reference_prompt' => 'Optional reference / note (leave blank if none):',
+
+    'room.rotation.history_title' => 'Turn history',
+    'room.rotation.history_th_turn' => 'Turn',
+    'room.rotation.history_th_turn_user' => 'Turn user',
+    'room.rotation.history_th_code' => 'Code last viewed',
+    'room.rotation.history_th_withdrawal' => 'Withdrawal',
+    'room.rotation.history_empty' => 'No history yet.',
 
     'room.invitation_title' => 'Invitation',
     'room.invitation_sub' => 'You were invited to this private room. Accepting will add you as an approved participant.',

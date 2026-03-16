@@ -173,6 +173,55 @@ header("Referrer-Policy: no-referrer");
           <div class="small" id="typeb-code-exp" style="margin-top:6px;"></div>
         </div>
 
+        <div id="typeb-delegate-wrap" style="display:none;margin-top:12px;">
+          <div class="hr"></div>
+          <div class="k"><?php e('room.rotation.delegate_title'); ?></div>
+          <div class="v" id="typeb-delegate-meta">—</div>
+
+          <div id="typeb-delegate-form" style="display:none;margin-top:10px;">
+            <div class="k"><?php e('room.rotation.delegate_select'); ?></div>
+            <select id="typeb-delegate-user" class="ls-input" style="margin-top:6px;"></select>
+
+            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">
+              <button class="btn btn-blue btn-sm" onclick="typeBSetDelegate()"><?php e('room.rotation.delegate_set_btn'); ?></button>
+              <button class="btn btn-ghost btn-sm" onclick="typeBClearDelegate()"><?php e('room.rotation.delegate_clear_btn'); ?></button>
+            </div>
+          </div>
+
+          <div id="typeb-delegate-msg" class="msg"></div>
+        </div>
+
+        <div id="typeb-withdraw-wrap" style="display:none;margin-top:12px;">
+          <div class="hr"></div>
+          <div class="k"><?php e('room.rotation.withdrawal_title'); ?></div>
+          <div class="v" id="typeb-withdraw-meta">—</div>
+
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">
+            <button class="btn btn-primary btn-sm" id="typeb-confirm-btn" onclick="typeBConfirmWithdrawal()" style="display:none;"><?php e('room.rotation.withdrawal_confirm_btn'); ?></button>
+          </div>
+
+          <div id="typeb-withdraw-msg" class="msg"></div>
+        </div>
+
+        <div id="typeb-history-wrap" style="display:none;margin-top:12px;">
+          <div class="hr"></div>
+          <div class="k"><?php e('room.rotation.history_title'); ?></div>
+          <div class="table-wrap" id="typeb-history-table-wrap" style="margin-top:10px;display:none;">
+            <table class="table" id="typeb-history-table">
+              <thead>
+                <tr>
+                  <th><?php e('room.rotation.history_th_turn'); ?></th>
+                  <th><?php e('room.rotation.history_th_turn_user'); ?></th>
+                  <th><?php e('room.rotation.history_th_code'); ?></th>
+                  <th><?php e('room.rotation.history_th_withdrawal'); ?></th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div id="typeb-history-empty" class="k" style="display:none;"><?php e('room.rotation.history_empty'); ?></div>
+        </div>
+
         <div id="typeb-dispute-wrap" style="display:none;margin-top:12px;">
           <div class="hr"></div>
           <div class="k"><?php e('room.dispute_title'); ?></div>
@@ -357,6 +406,7 @@ header("Referrer-Policy: no-referrer");
 const CSRF = <?= json_encode($csrf) ?>;
 const ROOM_ID = <?= json_encode($roomId) ?>;
 const INVITE_TOKEN = <?= json_encode($inviteToken) ?>;
+const IS_ADMIN = <?= json_encode($isAdmin ? 1 : 0) ?>;
 
 const I18N = (window.LS_I18N && window.LS_I18N.strings) ? window.LS_I18N.strings : {};
 function tr(key, vars, fallback){
@@ -427,6 +477,10 @@ const FEED_EVENT_LABELS = {
   typeB_turn_revealed: tr('room.feed.typeB_turn_revealed', null, 'Type B turn revealed'),
   typeB_turn_expired: tr('room.feed.typeB_turn_expired', null, 'Type B turn expired'),
   typeB_turn_advanced: tr('room.feed.typeB_turn_advanced', null, 'Type B turn advanced'),
+  typeB_code_accessed: tr('room.feed.typeB_code_accessed', null, 'Type B code accessed'),
+  typeB_delegate_set: tr('room.feed.typeB_delegate_set', null, 'Type B delegate set'),
+  typeB_withdrawal_confirmed: tr('room.feed.typeB_withdrawal_confirmed', null, 'Withdrawal confirmed'),
+  typeB_turn_voided: tr('room.feed.typeB_turn_voided', null, 'Turn voided (no confirmation)'),
   rotation_blocked_dispute: tr('room.feed.rotation_blocked_dispute', null, 'Rotation blocked (dispute)'),
   rotation_blocked_debt: tr('room.feed.rotation_blocked_debt', null, 'Rotation blocked (unpaid contribution)'),
   rotation_unblocked_debt: tr('room.feed.rotation_unblocked_debt', null, 'Rotation unblocked (debt cleared)'),
@@ -632,9 +686,31 @@ function formatActivityExtra(eventType, payload){
     return bits.join(' · ');
   }
 
-  if(eventType === 'typeB_turn_expired' || eventType === 'typeB_turn_advanced' || eventType === 'rotation_blocked_dispute' || eventType === 'rotation_blocked_debt' || eventType === 'rotation_unblocked_debt'){
+  if(eventType === 'typeB_turn_expired' || eventType === 'typeB_turn_advanced' || eventType === 'rotation_blocked_dispute' || eventType === 'rotation_blocked_debt' || eventType === 'rotation_unblocked_debt' || eventType === 'typeB_turn_voided'){
     if(payload.rotation_index) return tr('room.activity.turn', {n: String(payload.rotation_index)}, 'Turn #' + String(payload.rotation_index));
     return '';
+  }
+
+  if(eventType === 'typeB_code_accessed'){
+    const bits = [];
+    if(payload.rotation_index) bits.push(tr('room.activity.turn', {n: String(payload.rotation_index)}, 'Turn #' + String(payload.rotation_index)));
+    if(payload.role) bits.push(tr('room.activity.role', {role: String(payload.role)}, 'role ' + String(payload.role)));
+    if(payload.viewer_name) bits.push(String(payload.viewer_name));
+    return bits.join(' · ');
+  }
+
+  if(eventType === 'typeB_delegate_set'){
+    const bits = [];
+    if(payload.rotation_index) bits.push(tr('room.activity.turn', {n: String(payload.rotation_index)}, 'Turn #' + String(payload.rotation_index)));
+    if(payload.delegate_name) bits.push(tr('room.activity.delegate_to', {name: String(payload.delegate_name)}, 'delegate ' + String(payload.delegate_name)));
+    return bits.join(' · ');
+  }
+
+  if(eventType === 'typeB_withdrawal_confirmed'){
+    const bits = [];
+    if(payload.rotation_index) bits.push(tr('room.activity.turn', {n: String(payload.rotation_index)}, 'Turn #' + String(payload.rotation_index)));
+    if(payload.role) bits.push(tr('room.activity.role', {role: String(payload.role)}, 'role ' + String(payload.role)));
+    return bits.join(' · ');
   }
 
   if(eventType === 'grace_window_started'){
@@ -889,7 +965,13 @@ function renderRoom(){
         }, `${approvals}/${required} required (you: ${myVote} · eligible ${eligible})`);
 
         if(cur.status === 'revealed'){
-          document.getElementById('typeb-window').textContent = tr('room.unlock.window_revealed_expires', {ts: fmt(cur.expires_at)}, `Revealed · expires ${fmt(cur.expires_at)}`);
+          const expTs = fmt(cur.expires_at);
+          const graceTs = cur.grace_ends_at ? fmt(cur.grace_ends_at) : '';
+          if(graceTs){
+            document.getElementById('typeb-window').textContent = tr('room.rotation.window_revealed_grace_expires_fmt', {grace: graceTs, ts: expTs}, `Revealed · grace until ${graceTs} · expires ${expTs}`);
+          } else {
+            document.getElementById('typeb-window').textContent = tr('room.unlock.window_revealed_expires', {ts: expTs}, `Revealed · expires ${expTs}`);
+          }
         } else if(cur.status === 'blocked_dispute'){
           document.getElementById('typeb-window').textContent = tr('room.rotation.blocked_dispute', null, 'Blocked (dispute)');
         } else if(cur.status === 'blocked_debt'){
@@ -900,8 +982,111 @@ function renderRoom(){
 
         document.getElementById('typeb-maker').textContent = makerVote;
 
-        const canRevealB = (r.room_state === 'active' && r.my_status === 'active' && cur.status === 'revealed' && (cur.is_turn_user === 1));
+        const canRevealB = (r.room_state === 'active' && r.my_status === 'active' && cur.status === 'revealed' && (cur.can_reveal_code === 1));
         document.getElementById('typeb-reveal-btn').style.display = canRevealB ? 'inline-flex' : 'none';
+
+        // Delegate UI
+        const delWrap = document.getElementById('typeb-delegate-wrap');
+        if(delWrap){
+          const meta = document.getElementById('typeb-delegate-meta');
+          const form = document.getElementById('typeb-delegate-form');
+          const sel = document.getElementById('typeb-delegate-user');
+
+          const canSee = (cur.status === 'revealed');
+          delWrap.style.display = canSee ? 'block' : 'none';
+
+          if(canSee){
+            if(cur.delegate_name){
+              meta.textContent = tr('room.rotation.delegate_current_fmt', {name: cur.delegate_name}, `Delegated to: ${cur.delegate_name}`);
+            } else {
+              meta.textContent = tr('room.rotation.delegate_none', null, 'No delegate set.');
+            }
+
+            const canSet = (cur.can_set_delegate === 1);
+            form.style.display = canSet ? 'block' : 'none';
+
+            if(canSet && sel){
+              const rows = (roomCache && roomCache.participants) ? roomCache.participants : [];
+              const opts = rows.filter(x => x && x.status === 'active' && x.user_id !== cur.turn_user_id);
+              sel.innerHTML = '<option value="0">' + esc(tr('room.rotation.delegate_select_placeholder', null, 'Select a participant')) + '</option>';
+              opts.forEach(x => {
+                const o = document.createElement('option');
+                o.value = String(x.user_id);
+                o.textContent = String(x.display_name||('User #' + x.user_id));
+                if(cur.delegate_user_id && x.user_id === cur.delegate_user_id) o.selected = true;
+                sel.appendChild(o);
+              });
+            }
+          }
+        }
+
+        // Withdrawal confirmation UI
+        const wdWrap = document.getElementById('typeb-withdraw-wrap');
+        if(wdWrap){
+          const meta = document.getElementById('typeb-withdraw-meta');
+          const btn = document.getElementById('typeb-confirm-btn');
+
+          const canSee = (cur.status === 'revealed');
+          wdWrap.style.display = canSee ? 'block' : 'none';
+
+          if(canSee){
+            const w = cur.withdrawal;
+            if(w && w.confirmed_at){
+              const by = w.confirmed_by_name ? (' · ' + String(w.confirmed_by_name)) : '';
+              const role = w.confirmed_role ? (' · ' + String(w.confirmed_role)) : '';
+              meta.textContent = tr('room.rotation.withdrawal_confirmed_fmt', {ts: fmt(w.confirmed_at)}, `Confirmed ${fmt(w.confirmed_at)}`) + role + by;
+            } else {
+              meta.textContent = tr('room.rotation.withdrawal_not_confirmed', null, 'Not confirmed yet.');
+            }
+
+            const canConfirm = (cur.can_confirm_withdrawal === 1);
+            if(btn) btn.style.display = canConfirm ? 'inline-flex' : 'none';
+          }
+        }
+
+        // History
+        const hWrap = document.getElementById('typeb-history-wrap');
+        if(hWrap){
+          const rows = r.rotation_history || [];
+          const empty = document.getElementById('typeb-history-empty');
+          const wrap = document.getElementById('typeb-history-table-wrap');
+          const tbody = document.querySelector('#typeb-history-table tbody');
+
+          const show = (rows && rows.length);
+          hWrap.style.display = show ? 'block' : 'none';
+          if(show){
+            wrap.style.display = 'block';
+            empty.style.display = 'none';
+            tbody.innerHTML = '';
+
+            rows.forEach(x => {
+              const trEl = document.createElement('tr');
+              const codeTxt = x.code_last_viewed_at
+                ? (fmt(x.code_last_viewed_at) + (x.code_last_viewed_role ? (' · ' + x.code_last_viewed_role) : '') + (x.code_last_viewed_by_name ? (' · ' + x.code_last_viewed_by_name) : ''))
+                : '—';
+
+              let wdTxt = '—';
+              if(x.withdrawal_confirmed_at){
+                wdTxt = fmt(x.withdrawal_confirmed_at) + (x.withdrawal_confirmed_role ? (' · ' + x.withdrawal_confirmed_role) : '') + (x.withdrawal_confirmed_by_name ? (' · ' + x.withdrawal_confirmed_by_name) : '');
+              } else if(x.status === 'expired') {
+                wdTxt = tr('room.rotation.withdrawal_unconfirmed', null, 'Unconfirmed');
+              }
+
+              trEl.innerHTML = `
+                <td>#${esc(String(x.rotation_index||''))}</td>
+                <td>${esc(String(x.turn_user_name||''))}${x.delegate_name ? ('<div class="small">' + esc(tr('room.rotation.delegate_short_fmt', {name: String(x.delegate_name)}, 'delegate: ' + String(x.delegate_name))) + '</div>') : ''}</td>
+                <td>${esc(codeTxt)}</td>
+                <td>${esc(wdTxt)}</td>
+              `;
+              tbody.appendChild(trEl);
+            });
+          } else {
+            wrap.style.display = 'none';
+            empty.style.display = 'block';
+            tbody.innerHTML = '';
+          }
+
+        }
 
         const dispWrap = document.getElementById('typeb-dispute-wrap');
         if(dispWrap){
@@ -956,6 +1141,12 @@ function renderRoom(){
         document.getElementById('typeb-window').textContent = '—';
         document.getElementById('typeb-maker').textContent = '—';
         document.getElementById('typeb-reveal-btn').style.display = 'none';
+        const delWrap = document.getElementById('typeb-delegate-wrap');
+        if(delWrap) delWrap.style.display = 'none';
+        const wdWrap = document.getElementById('typeb-withdraw-wrap');
+        if(wdWrap) wdWrap.style.display = 'none';
+        const hWrap = document.getElementById('typeb-history-wrap');
+        if(hWrap) hWrap.style.display = 'none';
         const dispWrap = document.getElementById('typeb-dispute-wrap');
         if(dispWrap) dispWrap.style.display = 'none';
       }
@@ -1041,6 +1232,7 @@ async function loadRoom(){
     if(!res.success) throw new Error(res.error||STR.failed);
     roomCache = res.room;
     roomCache.escrow_settlements = res.escrow_settlements || [];
+    roomCache.participants = res.participants || [];
     renderRoom();
   }catch(e){
     setMsg('room-msg', e.message||STR.failed, false);
@@ -1366,11 +1558,71 @@ async function typeBReveal(){
       wrap.style.display='none';
     }, 30000);
 
-    setMsg('typeb-msg', tr('room.code.revealed_autoclear_30s', null, 'Code revealed. It will auto-clear in 30 seconds.'), true);
+    const who = res.role ? (' (' + String(res.role) + ')') : '';
+    setMsg('typeb-msg', tr('room.code.revealed_autoclear_30s', null, 'Code revealed. It will auto-clear in 30 seconds.') + who, true);
+    await loadRoom();
     await pollFeed();
 
   }catch(e){
     setMsg('typeb-msg', e.message||STR.failed, false);
+  }
+}
+
+async function typeBSetDelegate(){
+  const msgId = 'typeb-delegate-msg';
+  document.getElementById(msgId).className='msg';
+
+  try{
+    const sel = document.getElementById('typeb-delegate-user');
+    const delegate_user_id = sel ? parseInt(sel.value||'0', 10) : 0;
+    if(!delegate_user_id) throw new Error(tr('room.rotation.delegate_select_required', null, 'Select a delegate.'));
+
+    const res = await postStrong('/api/rooms.php', {action:'typeB_set_delegate', room_id: ROOM_ID, delegate_user_id});
+    if(!res.success) throw new Error(res.error||STR.failed);
+
+    setMsg(msgId, STR.saved, true);
+    await loadRoom();
+    await pollFeed();
+
+  }catch(e){
+    setMsg(msgId, e.message||STR.failed, false);
+  }
+}
+
+async function typeBClearDelegate(){
+  const msgId = 'typeb-delegate-msg';
+  document.getElementById(msgId).className='msg';
+
+  try{
+    const res = await postStrong('/api/rooms.php', {action:'typeB_set_delegate', room_id: ROOM_ID, delegate_user_id: 0});
+    if(!res.success) throw new Error(res.error||STR.failed);
+
+    setMsg(msgId, STR.saved, true);
+    await loadRoom();
+    await pollFeed();
+
+  }catch(e){
+    setMsg(msgId, e.message||STR.failed, false);
+  }
+}
+
+async function typeBConfirmWithdrawal(){
+  const msgId = 'typeb-withdraw-msg';
+  document.getElementById(msgId).className='msg';
+
+  try{
+    const ref = prompt(tr('room.rotation.withdrawal_reference_prompt', null, 'Optional reference / note (leave blank if none):'));
+    if(ref === null) return;
+
+    const res = await postStrong('/api/rooms.php', {action:'typeB_confirm_withdrawal', room_id: ROOM_ID, reference: String(ref||'')});
+    if(!res.success) throw new Error(res.error||STR.failed);
+
+    setMsg(msgId, STR.saved, true);
+    await loadRoom();
+    await pollFeed();
+
+  }catch(e){
+    setMsg(msgId, e.message||STR.failed, false);
   }
 }
 

@@ -645,20 +645,48 @@ CREATE TABLE IF NOT EXISTS saving_room_rotation_windows (
     id                     INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     room_id                CHAR(36) NOT NULL,
     user_id                INT UNSIGNED NOT NULL,
+    delegate_user_id       INT UNSIGNED NULL,
+    delegate_set_at        DATETIME NULL,
     rotation_index         INT UNSIGNED NOT NULL,
 
     status                 ENUM('pending_votes','revealed','expired','blocked_dispute','blocked_debt') NOT NULL DEFAULT 'pending_votes',
     revealed_at            DATETIME NULL,
     expires_at             DATETIME NULL,
+
+    withdrawal_confirmed_at DATETIME NULL,
+    withdrawal_confirmed_by_user_id INT UNSIGNED NULL,
+    withdrawal_reference   VARCHAR(120) NULL,
+    withdrawal_confirmed_role VARCHAR(20) NULL,
+
     dispute_window_ends_at DATETIME NULL,
 
     created_at             DATETIME DEFAULT CURRENT_TIMESTAMP,
 
     UNIQUE KEY uniq_room_rotation (room_id, rotation_index),
     INDEX idx_room_status (room_id, status),
+    INDEX idx_delegate (delegate_user_id),
+    INDEX idx_withdraw_confirm (withdrawal_confirmed_at),
 
     FOREIGN KEY (room_id) REFERENCES saving_rooms(id) ON DELETE CASCADE,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (delegate_user_id) REFERENCES users(id) ON DELETE SET NULL,
+    FOREIGN KEY (withdrawal_confirmed_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS saving_room_turn_code_views (
+  id             INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  room_id         CHAR(36) NOT NULL,
+  rotation_index  INT UNSIGNED NOT NULL,
+  viewer_user_id  INT UNSIGNED NOT NULL,
+  viewer_role     VARCHAR(20) NOT NULL,
+  viewed_at       DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+  UNIQUE KEY uniq_view (room_id, rotation_index, viewer_user_id),
+  INDEX idx_room_rotation (room_id, rotation_index),
+  INDEX idx_viewer_time (viewer_user_id, viewed_at),
+
+  FOREIGN KEY (room_id) REFERENCES saving_rooms(id) ON DELETE CASCADE,
+  FOREIGN KEY (viewer_user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS saving_room_unlock_votes (
