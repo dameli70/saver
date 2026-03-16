@@ -32,8 +32,13 @@ $stmt->execute([$lockId, $userId]);
 $lock = $stmt->fetch();
 
 if (!$lock) jsonResponse(['error' => 'Lock not found'], 404);
-if ($lock['confirmation_status'] !== 'pending') {
-    jsonResponse(['success' => true, 'already_set' => $lock['confirmation_status']]);
+
+$status = $lock['confirmation_status'];
+if ($status === 'auto_saved') {
+    // auto_saved is an intermediate state; user can still confirm/reject later (auto_save stays idempotent).
+    if ($action === 'auto_save') jsonResponse(['success' => true, 'already_set' => $status]);
+} elseif ($status !== 'pending') {
+    jsonResponse(['success' => true, 'already_set' => $status]);
 }
 
 switch ($action) {
