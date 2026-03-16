@@ -453,19 +453,27 @@ if ($action === 'destination_accounts') {
         jsonResponse(['success' => true, 'accounts' => []]);
     }
 
-    $sel = "id, account_type";
-    $sel .= dbHasColumn('platform_destination_accounts', 'display_label') ? ", display_label" : ", NULL AS display_label";
-    $sel .= ", mobile_money_number, bank_name, bank_account_number";
+    $sel = "a.id, a.account_type";
+    $sel .= dbHasColumn('platform_destination_accounts', 'display_label') ? ", a.display_label" : ", NULL AS display_label";
+    $sel .= ", a.mobile_money_number, a.bank_name, a.bank_account_number";
 
     // Optional crypto columns (keep backward compatibility with older schemas)
-    $sel .= dbHasColumn('platform_destination_accounts', 'crypto_network') ? ", crypto_network" : ", NULL AS crypto_network";
-    $sel .= dbHasColumn('platform_destination_accounts', 'crypto_address') ? ", crypto_address" : ", NULL AS crypto_address";
+    $sel .= dbHasColumn('platform_destination_accounts', 'crypto_network') ? ", a.crypto_network" : ", NULL AS crypto_network";
+    $sel .= dbHasColumn('platform_destination_accounts', 'crypto_address') ? ", a.crypto_address" : ", NULL AS crypto_address";
 
     // legacy naming (if any)
-    $sel .= dbHasColumn('platform_destination_accounts', 'crypto_wallet_network') ? ", crypto_wallet_network" : ", NULL AS crypto_wallet_network";
-    $sel .= dbHasColumn('platform_destination_accounts', 'crypto_wallet_address') ? ", crypto_wallet_address" : ", NULL AS crypto_wallet_address";
+    $sel .= dbHasColumn('platform_destination_accounts', 'crypto_wallet_network') ? ", a.crypto_wallet_network" : ", NULL AS crypto_wallet_network";
+    $sel .= dbHasColumn('platform_destination_accounts', 'crypto_wallet_address') ? ", a.crypto_wallet_address" : ", NULL AS crypto_wallet_address";
 
-    $rows = $db->query("SELECT {$sel} FROM platform_destination_accounts WHERE is_active = 1 ORDER BY id ASC")->fetchAll();
+    $sql = "SELECT {$sel} FROM platform_destination_accounts a";
+    if (dbHasTable('saving_room_accounts')) {
+        $sql .= " LEFT JOIN saving_room_accounts ra ON ra.account_id = a.id WHERE a.is_active = 1 AND ra.account_id IS NULL";
+    } else {
+        $sql .= " WHERE a.is_active = 1";
+    }
+    $sql .= " ORDER BY a.id ASC";
+
+    $rows = $db->query($sql)->fetchAll();
 
     $maskTail = function(string $s, int $n = 4): ?string {
         $str = trim($s);
@@ -1539,7 +1547,9 @@ if ($action === 'create_room') {
     $revealAtRaw = trim((string)($body['reveal_at'] ?? ''));
 
     $privacyMode = !empty($body['privacy_mode']) ? 1 : 0;
-    $escrowPolicy = (string)($body['escrow_policy'] ?? 'redistribute');
+
+    $isAdminUser = isAdmin($userId);
+    $escrowPolicy = $isAdminUser ? (string)($body['escrow_policy'] ?? 'redistribute') : 'redistribute';
 
     $allowedPurpose = ['education','travel','business','emergency','community','other'];
     if (!in_array($purpose, $allowedPurpose, true)) jsonResponse(['error' => 'Invalid purpose_category'], 400);
@@ -1555,16 +1565,35 @@ if ($action === 'create_room') {
     if (!is_numeric($amount) || (float)$amount <= 0) jsonResponse(['error' => 'Invalid participation_amount'], 400);
     if (!in_array($periodicity, ['weekly','biweekly','monthly'], true)) jsonResponse(['error' => 'Invalid periodicity'], 400);
 
+    if ($startAtRaw === '') jsonResponse(['error' => 'start_at required'], 400);
+    if ($savingType === 'A' && $revealAtRaw === '') jsonResponse(['error' => 'reveal_at required'], 400);
+
     try {
         $startDt = new DateTimeImmutable($startAtRaw, new DateTimeZone('UTC'));
-        $revealDt = new DateTimeImmutable($revealAtRaw, new DateTimeZone('UTC'));
     } catch (Exception) {
-        jsonResponse(['error' => 'Invalid start/reveal dates'], 400);
+        jsonResponse(['error' => 'Invalid start date'], 400);
     }
 
     $nowUtc = new DateTimeImmutable('now', new DateTimeZone('UTC'));
     if ($startDt <= $nowUtc->modify('+5 minutes')) jsonResponse(['error' => 'Start date must be in the future'], 400);
-    if ($revealDt <= $startDt) jsonResponse(['error' => 'Reveal date must be after start date'], 400);
+
+    if ($savingType === 'A') {
+        try {
+            $revealDt = new DateTimeImmutable($revealAtRaw, new DateTimeZone('UTC'));
+        } catch (Exception) {
+            jsonResponse(['error' => 'Invalid reveal date'], 400);
+        }
+
+        if ($revealDt <= $startDt) jsonResponse(['error' => 'Reveal date must be after start date'], 400);
+
+    } else {
+        $periodInterval = null;
+        if ($periodicity === 'biweekly') $periodInterval = new DateInterval('P14D');
+        else if ($periodicity === 'monthly') $periodInterval = new DateInterval('P1M');
+        else $periodInterval = new DateInterval('P7D');
+
+        $revealDt = $startDt->add($periodInterval)->sub(new DateInterval('P1D'));
+    }
 
     $startStr = $startDt->format('Y-m-d H:i:s');
     $revealStr = $revealDt->format('Y-m-d H:i:s');
@@ -1590,38 +1619,22 @@ if ($action === 'create_room') {
         jsonResponse(['error' => 'Invalid destination_account_type'], 400);
     }
 
-    $acct = null;
+    if ($destinationAccountId <= 0) {
+        jsonResponse(['error' => 'destination_account_id required', 'error_code' => 'destination_account_required'], 400);
+    }
 
-    if ($destinationAccountId > 0) {
-        $acctStmt = $db->prepare("SELECT {$acctSelect}
-                                  FROM platform_destination_accounts
-                                  WHERE id = ? AND is_active = 1
-                                  LIMIT 1");
-        $acctStmt->execute([$destinationAccountId]);
-        $acct = $acctStmt->fetch();
-        if (!$acct) {
-            jsonResponse(['error' => 'Destination account not found or inactive'], 400);
-        }
-    } else {
-        $sql = "SELECT {$acctSelect}
-                FROM platform_destination_accounts
-                WHERE is_active = 1";
-        $params = [];
+    $acctStmt = $db->prepare("SELECT {$acctSelect}
+                              FROM platform_destination_accounts
+                              WHERE id = ? AND is_active = 1
+                              LIMIT 1");
+    $acctStmt->execute([$destinationAccountId]);
+    $acct = $acctStmt->fetch();
+    if (!$acct) {
+        jsonResponse(['error' => 'Destination account not found or inactive'], 400);
+    }
 
-        if ($destinationAccountType !== '') {
-            $sql .= " AND account_type = ?";
-            $params[] = $destinationAccountType;
-        }
-
-        $sql .= " ORDER BY id ASC LIMIT 1";
-
-        $acctStmt = $db->prepare($sql);
-        $acctStmt->execute($params);
-        $acct = $acctStmt->fetch();
-
-        if (!$acct) {
-            jsonResponse(['error' => 'No active destination account is configured. Ask an admin to create one.'], 500);
-        }
+    if ($destinationAccountType !== '' && (string)($acct['account_type'] ?? '') !== $destinationAccountType) {
+        jsonResponse(['error' => 'Selected destination account does not match destination_account_type'], 400);
     }
 
     $acctId = (int)$acct['id'];
@@ -1640,6 +1653,20 @@ if ($action === 'create_room') {
     $roomId = generateUUID();
 
     $db->beginTransaction();
+
+    if (dbHasTable('saving_room_accounts')) {
+        $used = $db->prepare('SELECT room_id FROM saving_room_accounts WHERE account_id = ? LIMIT 1');
+        $used->execute([$acctId]);
+        $usedRoomId = $used->fetchColumn();
+        if ($usedRoomId) {
+            $db->rollBack();
+            jsonResponse([
+                'error' => 'Destination account is already assigned to another room',
+                'error_code' => 'destination_account_in_use',
+                'room_id' => (string)$usedRoomId,
+            ], 409);
+        }
+    }
 
     $db->prepare("INSERT INTO saving_rooms
                     (id, maker_user_id, purpose_category, goal_text, saving_type, visibility,
@@ -2326,10 +2353,9 @@ if ($action === 'underfill_decide') {
 
         try {
             $startDt = new DateTimeImmutable($newStartAtRaw, new DateTimeZone('UTC'));
-            $revealDt = new DateTimeImmutable($newRevealAtRaw, new DateTimeZone('UTC'));
         } catch (Exception) {
             $db->rollBack();
-            jsonResponse(['error' => 'Invalid dates'], 400);
+            jsonResponse(['error' => 'Invalid start date'], 400);
         }
 
         $nowUtc = new DateTimeImmutable('now', new DateTimeZone('UTC'));
@@ -2337,9 +2363,27 @@ if ($action === 'underfill_decide') {
             $db->rollBack();
             jsonResponse(['error' => 'Start date must be in the future'], 400);
         }
-        if ($revealDt <= $startDt) {
-            $db->rollBack();
-            jsonResponse(['error' => 'Reveal date must be after start date'], 400);
+
+        if ((string)($room['saving_type'] ?? '') === 'A') {
+            try {
+                $revealDt = new DateTimeImmutable($newRevealAtRaw, new DateTimeZone('UTC'));
+            } catch (Exception) {
+                $db->rollBack();
+                jsonResponse(['error' => 'Invalid reveal date'], 400);
+            }
+
+            if ($revealDt <= $startDt) {
+                $db->rollBack();
+                jsonResponse(['error' => 'Reveal date must be after start date'], 400);
+            }
+        } else {
+            $per = (string)($room['periodicity'] ?? 'weekly');
+            $periodInterval = null;
+            if ($per === 'biweekly') $periodInterval = new DateInterval('P14D');
+            else if ($per === 'monthly') $periodInterval = new DateInterval('P1M');
+            else $periodInterval = new DateInterval('P7D');
+
+            $revealDt = $startDt->add($periodInterval)->sub(new DateInterval('P1D'));
         }
 
         $extensionsUsed = (int)$room['extensions_used'];

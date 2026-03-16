@@ -5,3 +5,14 @@
 
 /* Minor layout tweaks */
 .app-body.wide{max-width:1180px;}
+
+/* Overview */
+.room-ov{display:flex;flex-direction:column;gap:12px;}
+.room-ov-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap;}
+.room-ov-badges{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+
+.room-ov-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 14px;}
+@media(max-width:520px){.room-ov-grid{grid-template-columns:1fr;}}
+
+.room-ov-item{min-width:0;display:flex;flex-direction:column;gap:4px;}
+.room-ov-foot{border-top:1px solid var(--b1);padding-top:12px;display:flex;flex-direction:column;gap:4px;}
