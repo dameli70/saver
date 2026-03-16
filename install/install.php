@@ -183,6 +183,7 @@ try {
         $st = $dbPdo->prepare('SELECT id FROM users WHERE email = ? LIMIT 1');
         $st->execute([$adminEmailLower]);
         $adminUserId = (int)$st->fetchColumn();
+        $st->closeCursor();
         if ($adminUserId <= 0) {
             throw new RuntimeException('Failed to resolve Super Admin user id.');
         }
@@ -291,20 +292,28 @@ function requireExt(string $ext): void {
 
 function connectPdoServer(string $host, string $charset, string $user, string $pass): PDO {
     $dsn = "mysql:host={$host};charset={$charset}";
-    return new PDO($dsn, $user, $pass, [
+    $opts = [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         PDO::ATTR_EMULATE_PREPARES => false,
-    ]);
+    ];
+    if (defined('PDO::MYSQL_ATTR_USE_BUFFERED_QUERY')) {
+        $opts[PDO::MYSQL_ATTR_USE_BUFFERED_QUERY] = true;
+    }
+    return new PDO($dsn, $user, $pass, $opts);
 }
 
 function connectPdoDb(string $host, string $dbName, string $charset, string $user, string $pass): PDO {
     $dsn = "mysql:host={$host};dbname={$dbName};charset={$charset}";
-    return new PDO($dsn, $user, $pass, [
+    $opts = [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         PDO::ATTR_EMULATE_PREPARES => false,
-    ]);
+    ];
+    if (defined('PDO::MYSQL_ATTR_USE_BUFFERED_QUERY')) {
+        $opts[PDO::MYSQL_ATTR_USE_BUFFERED_QUERY] = true;
+    }
+    return new PDO($dsn, $user, $pass, $opts);
 }
 
 function splitSqlStatements(string $sql): array {
@@ -388,7 +397,17 @@ function applySqlFile(PDO $db, string $path, bool $ignoreDuplicateErrors): void 
         if (preg_match('/^USE\s+/i', $trim)) continue;
 
         try {
-            $db->exec($stmt);
+            // Some migrations include SELECT/SHOW fallbacks (e.g. "SELECT 1").
+            // Using exec() on those can leave an unbuffered result set open.
+            if (preg_match('/^(SELECT|SHOW|DESCRIBE|EXPLAIN|WITH|CALL)\b/i', $trim)) {
+                $q = $db->query($stmt);
+                if ($q) {
+                    $q->fetchAll();
+                    $q->closeCursor();
+                }
+            } else {
+                $db->exec($stmt);
+            }
         } catch (PDOException $e) {
             $code = (int)($e->errorInfo[1] ?? 0);
             if ($ignoreDuplicateErrors && in_array($code, [1050, 1060, 1061, 1062, 1068, 1091], true)) {
@@ -406,7 +425,9 @@ function ensureMigrationsTable(PDO $db): void {
 function migrationApplied(PDO $db, string $filename): bool {
     $st = $db->prepare('SELECT 1 FROM schema_migrations WHERE filename = ? LIMIT 1');
     $st->execute([$filename]);
-    return (bool)$st->fetchColumn();
+    $v = (bool)$st->fetchColumn();
+    $st->closeCursor();
+    return $v;
 }
 
 function markMigrationApplied(PDO $db, string $filename): void {
@@ -430,7 +451,9 @@ function hashVaultVerifier(string $passphrase): string {
 }
 
 function createInitialAdmin(PDO $db, string $email, string $loginPwd): void {
-    $users = (int)$db->query('SELECT COUNT(*) FROM users')->fetchColumn();
+    $st = $db->query('SELECT COUNT(*) FROM users');
+    $users = (int)$st->fetchColumn();
+    $st->closeCursor();
     if ($users !== 0) return;
 
     $email = strtolower(trim($email));
