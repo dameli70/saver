@@ -68,7 +68,7 @@ header("Referrer-Policy: no-referrer");
   <div class="grid">
     <div class="card">
       <div class="card-title"><?php e('room.overview_title'); ?></div>
-      <div id="room-overview" class="k"><?php e('common.loading'); ?></div>
+      <div id="room-overview" class="room-ov"><?php e('common.loading'); ?></div>
 
       <div id="contrib-block" style="display:none; margin-top:12px;">
         <div class="hr"></div>
@@ -565,6 +565,7 @@ function fmtUtc(ts){
   if(window.LS && LS.fmtUtc) return LS.fmtUtc(d);
   return d.toUTCString();
 }
+
 function prettyVisibility(v){
   if(v === 'public') return tr('rooms.visibility.public', null, 'Public');
   if(v === 'unlisted') return tr('rooms.visibility.unlisted', null, 'Unlisted');
@@ -575,6 +576,64 @@ function prettySavingType(t){
   if(t === 'A') return tr('rooms.saving_type.a', null, 'Type A');
   if(t === 'B') return tr('rooms.saving_type.b', null, 'Type B');
   return t ? String(t) : '';
+}
+function shortSavingType(t){
+  const s = prettySavingType(t);
+  // Keep badges short even if translations include descriptions (e.g. "Type A — …").
+  return String(s).split('—')[0].trim() || String(s||'');
+}
+function prettyPeriodicity(p){
+  if(p === 'weekly') return tr('rooms.periodicity.weekly', null, 'Weekly');
+  if(p === 'biweekly') return tr('rooms.periodicity.biweekly', null, 'Bi-weekly');
+  if(p === 'monthly') return tr('rooms.periodicity.monthly', null, 'Monthly');
+  return p ? String(p) : '';
+}
+function prettyRoomState(r){
+  if(!r) return '';
+  const st = String(r.room_state||'');
+  if(st === 'active') return tr('room.state.active', null, 'Active');
+  if(st === 'swap_window') return tr('room.state.swap_window', null, 'Swap window');
+  if(st === 'closed') return tr('room.state.closed', null, 'Closed');
+  if(st === 'cancelled') return tr('room.state.cancelled', null, 'Cancelled');
+
+  if(st === 'lobby'){
+    const lobby = String(r.lobby_state||'');
+    if(lobby === 'locked') return tr('room.state.lobby_locked', null, 'Lobby (locked)');
+    return tr('room.state.lobby_open', null, 'Lobby (open)');
+  }
+
+  return st;
+}
+function roomStateBadgeClass(r){
+  if(!r) return '';
+  const st = String(r.room_state||'');
+  if(st === 'active') return 'ok';
+  if(st === 'swap_window') return 'wait';
+  if(st === 'closed' || st === 'cancelled') return 'err';
+  if(st === 'lobby' && String(r.lobby_state||'') === 'locked') return 'wait';
+  if(st === 'lobby') return 'wait';
+  return '';
+}
+function prettyMyStatus(st){
+  const s = String(st||'');
+  if(!s) return tr('room.status.none', null, 'Not a member');
+  if(s === 'pending') return tr('room.status.pending', null, 'Pending');
+  if(s === 'approved') return tr('room.status.approved', null, 'Approved');
+  if(s === 'active') return tr('room.status.active', null, 'Active');
+  if(s === 'declined') return tr('room.status.declined', null, 'Declined');
+  if(s === 'removed') return tr('room.status.removed', null, 'Removed');
+  if(s === 'completed') return tr('room.status.completed', null, 'Completed');
+  if(s === 'exited_prestart') return tr('room.status.exited_prestart', null, 'Exited (pre-start)');
+  if(s === 'exited_poststart') return tr('room.status.exited_poststart', null, 'Exited');
+  return s;
+}
+function myStatusBadgeClass(st){
+  const s = String(st||'');
+  if(s === 'active' || s === 'approved') return 'ok';
+  if(s === 'pending') return 'wait';
+  if(s === 'removed' || s === 'declined' || s === 'exited_prestart' || s === 'exited_poststart') return 'err';
+  if(s === 'completed') return 'ok';
+  return '';
 }
 function formatActivityExtra(eventType, payload){
   if(!payload) return '';
@@ -792,18 +851,67 @@ function renderRoom(){
   }, `Type ${esc(r.saving_type)} · Level ${esc(r.required_trust_level)} · ${esc(r.periodicity)} · Starts <b>${esc(startLocal)}</b> <span class="utc-pill" title="${esc(utcTitle)}">${esc(startUtc)}</span>`);
 
   const ov = document.getElementById('room-overview');
+
+  const badges = [];
+  badges.push(`<span class="badge">${esc(shortSavingType(r.saving_type))}</span>`);
+
+  if(r.purpose_category && r.purpose_category !== 'other'){
+    const p = tr('rooms.purpose.' + String(r.purpose_category), null, String(r.purpose_category));
+    badges.push(`<span class="badge">${esc(p)}</span>`);
+  }
+
+  if(r.visibility && r.visibility !== 'public'){
+    badges.push(`<span class="badge">${esc(prettyVisibility(r.visibility))}</span>`);
+  }
+
+  const rs = prettyRoomState(r);
+  const rsCls = roomStateBadgeClass(r);
+  badges.push(`<span class="badge ${rsCls}">${esc(rs)}</span>`);
+
+  if(r.my_invite && !r.my_status){
+    badges.push(`<span class="badge info">${esc(tr('room.status.invited', null, 'Invited'))}</span>`);
+  }
+
+  if(r.my_status){
+    const ms = prettyMyStatus(r.my_status);
+    const msCls = myStatusBadgeClass(r.my_status);
+    badges.push(`<span class="badge ${msCls}">${esc(tr('room.status.you_fmt', {status: ms}, 'You: ' + ms))}</span>`);
+  }
+
+  const items = [];
+  items.push({k: tr('room.ov.participation_amount', null, 'Participation amount'), v: esc(r.participation_amount||'—')});
+  items.push({k: tr('rooms.field.periodicity', null, 'Period'), v: esc(prettyPeriodicity(r.periodicity)||'—')});
+  items.push({k: tr('room.ov.start_date', null, 'Start date'), v: esc(startLocal||'—')});
+
+  if(r.saving_type === 'B'){
+    const cur = (r.rotation && r.rotation.current) ? r.rotation.current : null;
+    if(r.room_state === 'active' && cur){
+      const turnUser = cur.turn_user_name || tr('common.user', null, 'user');
+      items.push({k: tr('room.rotation.current_turn', null, 'Current turn'), v: esc(`#${cur.rotation_index} · ${turnUser}`)});
+    } else {
+      items.push({k: tr('room.ov.reveal_date', null, 'Reveal date'), v: esc(revealLocal||'—')});
+    }
+  } else {
+    items.push({k: tr('room.ov.reveal_date', null, 'Reveal date'), v: esc(revealLocal||'—')});
+  }
+
+  items.push({k: tr('room.ov.participants', null, 'Participants'), v: esc(`${r.approved_count||0} / ${r.max_participants||0}`)});
+
+  const canSeeDest = !!(r.is_maker || (r.my_status && r.my_status !== 'declined'));
+  if(canSeeDest && r.destination_account){
+    items.push({k: tr('room.ov.destination', null, 'Destination'), v: esc(destSummary(r.destination_account))});
+  }
+
   ov.innerHTML = `
-    <div style="font-size:12px;line-height:1.7;">
-      <div><span class="k">${esc(tr('room.ov.purpose', null, 'Purpose'))}:</span> ${esc(r.purpose_category)}</div>
-      <div><span class="k">${esc(tr('room.ov.visibility', null, 'Visibility'))}:</span> ${esc(prettyVisibility(r.visibility))}</div>
-      <div><span class="k">${esc(tr('room.ov.participation_amount', null, 'Participation amount'))}:</span> ${esc(r.participation_amount)}</div>
-      <div><span class="k">${esc(tr('room.ov.destination', null, 'Destination'))}:</span> ${esc(destSummary(r.destination_account))}</div>
-      <div><span class="k">${esc(tr('room.ov.participants', null, 'Participants'))}:</span> ${esc(r.approved_count)} / ${esc(r.max_participants)} (min ${esc(r.min_participants)})</div>
-      <div><span class="k">${esc(tr('room.ov.lobby', null, 'Lobby'))}:</span> ${esc(r.lobby_state)} · <span class="k">${esc(tr('room.ov.state', null, 'State'))}:</span> ${esc(r.room_state)}</div>
-      <div><span class="k">${esc(tr('room.ov.start_date', null, 'Start date'))}:</span> ${esc(startLocal)} <span class="utc-pill" title="${esc(utcTitle)}">${esc(startUtc)}</span></div>
-      <div><span class="k">${esc(tr('room.ov.reveal_date', null, 'Reveal date'))}:</span> ${esc(revealLocal)} <span class="utc-pill" title="${esc(utcTitle)}">${esc(revealUtc)}</span></div>
-      <div><span class="k">${esc(tr('room.ov.countdown', null, 'Countdown'))}:</span> <span id="room-countdown"></span></div>
-      <div><span class="k">${esc(tr('room.ov.your_status', null, 'Your status'))}:</span> ${esc(r.my_status||'none')}</div>
+    <div class="room-ov-head">
+      <div class="room-ov-badges">${badges.join('')}</div>
+    </div>
+    <div class="room-ov-grid">
+      ${items.map(it => `<div class="room-ov-item"><div class="k">${esc(it.k)}</div><div class="v">${it.v}</div></div>`).join('')}
+    </div>
+    <div class="room-ov-foot">
+      <div class="k">${esc(tr('room.ov.countdown', null, 'Countdown'))}</div>
+      <div class="v" id="room-countdown"></div>
     </div>
   `;
 
