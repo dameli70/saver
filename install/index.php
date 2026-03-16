@@ -33,6 +33,7 @@ function createInitialAdmin(PDO $pdo, string $email, string $loginPwd): void {
     try {
         $stmt = $pdo->query("SELECT 1 FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'users' AND column_name = 'is_admin' LIMIT 1");
         $hasAdminCol = (bool)$stmt->fetchColumn();
+        $stmt->closeCursor();
     } catch (Throwable) {
         $hasAdminCol = false;
     }
@@ -41,7 +42,9 @@ function createInitialAdmin(PDO $pdo, string $email, string $loginPwd): void {
         throw new RuntimeException("Your schema does not include users.is_admin. Re-run the installer with schema initialization enabled.");
     }
 
-    $users = (int)$pdo->query('SELECT COUNT(*) FROM users')->fetchColumn();
+    $usersStmt = $pdo->query('SELECT COUNT(*) FROM users');
+    $users = (int)$usersStmt->fetchColumn();
+    $usersStmt->closeCursor();
     if ($users !== 0) {
         throw new RuntimeException('Users already exist. Refusing to create an initial super admin.');
     }
@@ -148,20 +151,28 @@ function updateConfigFile(string $path, array $vals): void {
 
 function connectPdoServer(string $host, string $charset, string $user, string $pass): PDO {
     $dsn = "mysql:host={$host};charset={$charset}";
-    return new PDO($dsn, $user, $pass, [
+    $opts = [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         PDO::ATTR_EMULATE_PREPARES => false,
-    ]);
+    ];
+    if (defined('PDO::MYSQL_ATTR_USE_BUFFERED_QUERY')) {
+        $opts[PDO::MYSQL_ATTR_USE_BUFFERED_QUERY] = true;
+    }
+    return new PDO($dsn, $user, $pass, $opts);
 }
 
 function connectPdoDb(string $host, string $db, string $charset, string $user, string $pass): PDO {
     $dsn = "mysql:host={$host};dbname={$db};charset={$charset}";
-    return new PDO($dsn, $user, $pass, [
+    $opts = [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         PDO::ATTR_EMULATE_PREPARES => false,
-    ]);
+    ];
+    if (defined('PDO::MYSQL_ATTR_USE_BUFFERED_QUERY')) {
+        $opts[PDO::MYSQL_ATTR_USE_BUFFERED_QUERY] = true;
+    }
+    return new PDO($dsn, $user, $pass, $opts);
 }
 
 function splitSqlStatements(string $sql): array {
@@ -186,11 +197,22 @@ function applySqlFile(PDO $pdo, string $path, bool $ignoreDuplicates): void {
     foreach ($stmts as $stmt) {
         $trim = ltrim($stmt);
         if ($trim === '') continue;
-        if (preg_match('/^CREATE\\s+DATABASE/i', $trim)) continue;
-        if (preg_match('/^USE\\s+/i', $trim)) continue;
+        if (preg_match('/^CREATE\s+DATABASE/i', $trim)) continue;
+        if (preg_match('/^USE\s+/i', $trim)) continue;
 
         try {
-            $pdo->exec($stmt);
+            // Some migrations contain "SELECT 1" / "SHOW ..." fallbacks.
+            // Using exec() for statements that return result sets can leave an
+            // unbuffered cursor open and break subsequent queries.
+            if (preg_match('/^(SELECT|SHOW|DESCRIBE|EXPLAIN|WITH|CALL)\b/i', $trim)) {
+                $q = $pdo->query($stmt);
+                if ($q) {
+                    $q->fetchAll();
+                    $q->closeCursor();
+                }
+            } else {
+                $pdo->exec($stmt);
+            }
         } catch (PDOException $e) {
             $msg = $e->getMessage();
             if ($ignoreDuplicates && (
@@ -371,6 +393,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $adminIdStmt = $dbPdo->prepare('SELECT id FROM users WHERE email = ? LIMIT 1');
             $adminIdStmt->execute([$adminEmailLower]);
             $adminUserId = (int)$adminIdStmt->fetchColumn();
+            $adminIdStmt->closeCursor();
             if ($adminUserId <= 0) {
                 throw new RuntimeException('Failed to resolve Super Admin user id.');
             }

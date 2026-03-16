@@ -9,13 +9,17 @@
 function demoSeedHasTable(PDO $db, string $table): bool {
     $stmt = $db->prepare("SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ? LIMIT 1");
     $stmt->execute([$table]);
-    return (bool)$stmt->fetchColumn();
+    $v = (bool)$stmt->fetchColumn();
+    $stmt->closeCursor();
+    return $v;
 }
 
 function demoSeedHasColumn(PDO $db, string $table, string $column): bool {
     $stmt = $db->prepare("SELECT 1 FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ? LIMIT 1");
     $stmt->execute([$table, $column]);
-    return (bool)$stmt->fetchColumn();
+    $v = (bool)$stmt->fetchColumn();
+    $stmt->closeCursor();
+    return $v;
 }
 
 function demoSeedGenerateUuid(): string {
@@ -50,7 +54,15 @@ function demoSeedNow(string $modify = 'now'): string {
 }
 
 function seedDemoData(PDO $db, int $adminUserId, string $demoPassword = 'DemoPass123!'): array {
-    $existing = (int)$db->query('SELECT COUNT(*) FROM users')->fetchColumn();
+    $fetchColumn = static function (PDOStatement $stmt) {
+        $v = $stmt->fetchColumn();
+        $stmt->closeCursor();
+        return $v;
+    };
+
+    // Don't seed if there are already users beyond the admin created by the installer.
+    $st = $db->query('SELECT COUNT(*) FROM users');
+    $existing = (int)$fetchColumn($st);
     if ($existing > 1) {
         return [
             'seeded' => 0,
@@ -190,7 +202,8 @@ function seedDemoData(PDO $db, int $adminUserId, string $demoPassword = 'DemoPas
         ],
     ];
 
-    $userCols = ['email', 'login_hash', 'vault_verifier', 'vault_verifier_salt', 'is_admin', 'email_verified_at'];
+    $userCols = ['email', 'login_hash', 'vault_verifier', 'vault_verifier_salt', 'is_admin'];
+    if ($has('users', 'email_verified_at')) $userCols[] = 'email_verified_at';
     if ($has('users', 'room_display_name')) $userCols[] = 'room_display_name';
     if ($has('users', 'profile_image_url')) $userCols[] = 'profile_image_url';
     if ($has('users', 'require_webauthn')) $userCols[] = 'require_webauthn';
