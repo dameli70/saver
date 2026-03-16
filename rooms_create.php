@@ -124,6 +124,7 @@ header("Referrer-Policy: no-referrer");
 
         <div class="field"><label><?php e('rooms.field.reveal_date'); ?></label>
           <input id="cr-reveal" type="datetime-local">
+          <div class="k" id="cr-reveal-hint" style="margin-top:6px;font-size:11px;display:none;"></div>
         </div>
 
         <label style="display:flex;align-items:center;gap:10px;color:var(--muted);font-size:12px;line-height:1.4;margin:10px 0;">
@@ -131,12 +132,14 @@ header("Referrer-Policy: no-referrer");
           <span><?php e('rooms.privacy_mode'); ?></span>
         </label>
 
+        <?php if ($isAdmin): ?>
         <div class="field"><label><?php e('rooms.field.escrow_policy'); ?></label>
           <select id="cr-escrow">
             <option value="redistribute"><?php e('rooms.escrow.redistribute'); ?></option>
             <option value="refund_minus_fee"><?php e('rooms.escrow.refund_minus_fee'); ?></option>
           </select>
         </div>
+        <?php endif; ?>
 
         <div class="field"><label><?php e('rooms.field.destination_account'); ?></label>
           <div class="two-col">

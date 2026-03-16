@@ -1201,13 +1201,15 @@ return [
     'rooms.escrow.redistribute' => 'Proportional redistribution',
     'rooms.escrow.refund_minus_fee' => 'Return minus platform fee',
 
-    'rooms.field.destination_account' => 'Destination account (optional)',
+    'rooms.field.destination_account' => 'Destination account',
     'rooms.destination_account.type_any' => 'Any type',
     'rooms.destination_account.type_mobile_money' => 'Mobile money',
     'rooms.destination_account.type_bank' => 'Bank',
     'rooms.destination_account.type_crypto' => 'Crypto wallet',
-    'rooms.destination_account.auto' => 'Auto select',
-    'rooms.destination_account_hint' => 'Optional: choose a destination account. If left blank, an active account is selected automatically.',
+    'rooms.destination_account.auto' => 'Select an account',
+    'rooms.destination_account_hint' => 'Select a destination account. Destination accounts cannot be reused across rooms.',
+
+    'rooms.reveal_auto_hint' => 'Type B reveal date is calculated automatically{date}.',
 
     'rooms.destination_account.summary.mobile_money' => 'Mobile money {masked}',
     'rooms.destination_account.summary.mobile_money_short' => 'Mobile money',
@@ -1250,6 +1252,9 @@ return [
     'rooms.action.already_in_room_title' => 'You already have a status in this room ({status}).',
 
     'rooms.err.goal_required' => 'Goal is required.',
+    'rooms.err.start_required' => 'Start date is required.',
+    'rooms.err.reveal_required' => 'Reveal date is required.',
+    'rooms.err.destination_required' => 'Destination account is required.',
     'rooms.err.dates_required' => 'Start date and reveal date are required.',
     'rooms.err.max_lt_min' => 'Max participants must be >= min participants.',
     'rooms.err.reveal_after_start' => 'Reveal date must be after start date.',

@@ -1172,13 +1172,15 @@ return [
     'rooms.escrow.redistribute' => 'Redistribution proportionnelle',
     'rooms.escrow.refund_minus_fee' => 'Retour moins frais de plateforme',
 
-    'rooms.field.destination_account' => 'Compte de destination (optionnel)',
+    'rooms.field.destination_account' => 'Compte de destination',
     'rooms.destination_account.type_any' => 'Tout type',
     'rooms.destination_account.type_mobile_money' => 'Mobile money',
     'rooms.destination_account.type_bank' => 'Banque',
     'rooms.destination_account.type_crypto' => 'Portefeuille crypto',
-    'rooms.destination_account.auto' => 'Sélection automatique',
-    'rooms.destination_account_hint' => 'Optionnel : choisissez un compte de destination. Sinon, un compte actif est sélectionné automatiquement.',
+    'rooms.destination_account.auto' => 'Sélectionner un compte',
+    'rooms.destination_account_hint' => 'Sélectionnez un compte de destination. Un compte de destination ne peut pas être réutilisé entre plusieurs salles.',
+
+    'rooms.reveal_auto_hint' => 'Pour le Type B, la date de révélation est calculée automatiquement{date}.',
 
     'rooms.destination_account.summary.mobile_money' => 'Mobile money {masked}',
     'rooms.destination_account.summary.mobile_money_short' => 'Mobile money',
@@ -1220,6 +1222,9 @@ return [
     'rooms.action.already_in_room_title' => 'Vous avez déjà un statut dans cette salle ({status}).',
 
     'rooms.err.goal_required' => 'Objectif requis.',
+    'rooms.err.start_required' => 'Date de début requise.',
+    'rooms.err.reveal_required' => 'Date de révélation requise.',
+    'rooms.err.destination_required' => 'Compte de destination requis.',
     'rooms.err.dates_required' => 'Date de début et date de révélation requises.',
     'rooms.err.max_lt_min' => 'Le maximum doit être >= au minimum.',
     'rooms.err.reveal_after_start' => 'La date de révélation doit être après la date de début.',

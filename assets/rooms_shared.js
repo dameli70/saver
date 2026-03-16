@@ -56,7 +56,9 @@
     join_request_sent: tr('rooms.msg.join_request_sent', 'Join request sent.'),
 
     err_goal_required: tr('rooms.err.goal_required', 'Goal is required.'),
-    err_dates_required: tr('rooms.err.dates_required', 'Start date and reveal date are required.'),
+    err_start_required: tr('rooms.err.start_required', 'Start date is required.'),
+    err_reveal_required: tr('rooms.err.reveal_required', 'Reveal date is required.'),
+    err_destination_required: tr('rooms.err.destination_required', 'Destination account is required.'),
     err_max_lt_min: tr('rooms.err.max_lt_min', 'Max participants must be >= min participants.'),
     err_reveal_after_start: tr('rooms.err.reveal_after_start', 'Reveal date must be after start date.'),
 
@@ -679,9 +681,15 @@
     const participation_amount = String(((document.getElementById('cr-amt') || {}).value)||'').trim();
     const periodicity = (document.getElementById('cr-per') || {}).value;
     const start_at = toServerDateTimeLocal(((document.getElementById('cr-start') || {}).value)||'');
-    const reveal_at = toServerDateTimeLocal(((document.getElementById('cr-reveal') || {}).value)||'');
+
+    const reveal_at = (saving_type === 'A')
+      ? toServerDateTimeLocal(((document.getElementById('cr-reveal') || {}).value)||'')
+      : '';
+
     const privacy_mode = (document.getElementById('cr-privacy') || {}).checked ? 1 : 0;
-    const escrow_policy = (document.getElementById('cr-escrow') || {}).value;
+
+    const escrowEl = document.getElementById('cr-escrow');
+    const escrow_policy = escrowEl ? String(escrowEl.value||'') : '';
 
     const destination_account_type = (document.getElementById('cr-dest-type') || {}).value;
     const destination_account_id = parseInt(((document.getElementById('cr-dest-account') || {}).value)||'0',10);
@@ -690,8 +698,16 @@
       setMsg('cr-msg', STR.err_goal_required, false);
       return;
     }
-    if(!start_at || !reveal_at){
-      setMsg('cr-msg', STR.err_dates_required, false);
+    if(!start_at){
+      setMsg('cr-msg', STR.err_start_required, false);
+      return;
+    }
+    if(saving_type === 'A' && !reveal_at){
+      setMsg('cr-msg', STR.err_reveal_required, false);
+      return;
+    }
+    if(destination_account_id <= 0){
+      setMsg('cr-msg', STR.err_destination_required, false);
       return;
     }
     if(max_participants < min_participants){
@@ -699,11 +715,13 @@
       return;
     }
 
-    const startTs = Date.parse(start_at);
-    const revealTs = Date.parse(reveal_at);
-    if(startTs && revealTs && revealTs <= startTs){
-      setMsg('cr-msg', STR.err_reveal_after_start, false);
-      return;
+    if(saving_type === 'A'){
+      const startTs = Date.parse(start_at);
+      const revealTs = Date.parse(reveal_at);
+      if(startTs && revealTs && revealTs <= startTs){
+        setMsg('cr-msg', STR.err_reveal_after_start, false);
+        return;
+      }
     }
 
     try{
@@ -719,16 +737,20 @@
         participation_amount,
         periodicity,
         start_at,
-        reveal_at,
         privacy_mode,
-        escrow_policy,
+        destination_account_id,
       };
+
+      if(saving_type === 'A'){
+        payload.reveal_at = reveal_at;
+      }
 
       if(destination_account_type){
         payload.destination_account_type = destination_account_type;
       }
-      if(destination_account_id > 0){
-        payload.destination_account_id = destination_account_id;
+
+      if(escrow_policy){
+        payload.escrow_policy = escrow_policy;
       }
 
       const r = await postStrong('/api/rooms.php', payload);
@@ -810,8 +832,10 @@
     const acctSel = document.getElementById('cr-dest-account');
     if(!typeSel || !acctSel) return;
 
+    const curVal = String(acctSel.value||'');
+
     const firstOpt = acctSel.querySelector('option');
-    const autoText = firstOpt ? String(firstOpt.textContent||'Auto select') : 'Auto select';
+    const placeholderText = firstOpt ? String(firstOpt.textContent||'Select an account') : 'Select an account';
 
     const t = String(typeSel.value||'');
 
@@ -819,7 +843,8 @@
 
     const opt0 = document.createElement('option');
     opt0.value = '';
-    opt0.textContent = autoText;
+    opt0.textContent = placeholderText;
+    opt0.disabled = true;
     acctSel.appendChild(opt0);
 
     (createDestAccounts||[]).forEach(a => {
@@ -830,6 +855,15 @@
       opt.textContent = destAccountSummary(a) || a.display_label || (String(a.account_type||'') + ' #' + String(a.id||''));
       acctSel.appendChild(opt);
     });
+
+    // Restore selection if still available.
+    let ok = false;
+    if(curVal){
+      Array.from(acctSel.options||[]).forEach(o => {
+        if(String(o.value||'') === curVal) ok = true;
+      });
+    }
+    acctSel.value = ok ? curVal : '';
   }
 
   async function initCreateDestAccounts(){
@@ -852,8 +886,92 @@
     buildCreateDestOptions();
   }
 
+  function pad2(n){
+    const x = parseInt(String(n||'0'), 10) || 0;
+    return (x < 10 ? '0' : '') + String(x);
+  }
+
+  function toDatetimeLocalValue(d){
+    if(!d || isNaN(d.getTime())) return '';
+    return d.getFullYear() + '-' + pad2(d.getMonth()+1) + '-' + pad2(d.getDate()) + 'T' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+  }
+
+  function computeTypeBRevealDate(startLocalValue, periodicity){
+    const s = String(startLocalValue||'').trim();
+    const m = s.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/);
+    if(!m) return null;
+
+    const y = parseInt(m[1], 10);
+    const mo = parseInt(m[2], 10) - 1;
+    const d0 = parseInt(m[3], 10);
+    const h = parseInt(m[4], 10);
+    const mi = parseInt(m[5], 10);
+    const sec = parseInt(m[6] || '0', 10);
+
+    const d = new Date(y, mo, d0, h, mi, sec, 0);
+    if(isNaN(d.getTime())) return null;
+
+    if(periodicity === 'biweekly'){
+      d.setDate(d.getDate() + 13);
+    }else if(periodicity === 'monthly'){
+      d.setMonth(d.getMonth() + 1);
+      d.setDate(d.getDate() - 1);
+    }else{
+      d.setDate(d.getDate() + 6);
+    }
+
+    return d;
+  }
+
+  function updateCreateRevealMode(){
+    const typeSel = document.getElementById('cr-type');
+    const perSel = document.getElementById('cr-per');
+    const startEl = document.getElementById('cr-start');
+    const revealEl = document.getElementById('cr-reveal');
+    const hintEl = document.getElementById('cr-reveal-hint');
+    if(!typeSel || !perSel || !startEl || !revealEl) return;
+
+    const t = String(typeSel.value||'');
+
+    if(t === 'B'){
+      revealEl.readOnly = true;
+      revealEl.disabled = true;
+
+      const dt = computeTypeBRevealDate(String(startEl.value||''), String(perSel.value||''));
+      if(dt){
+        revealEl.value = toDatetimeLocalValue(dt);
+      }
+
+      if(hintEl){
+        hintEl.style.display = 'block';
+        const dateTxt = dt ? dt.toLocaleString() : '';
+        const dateSuffix = dateTxt ? (' (' + dateTxt + ')') : '';
+        hintEl.textContent = tf('rooms.reveal_auto_hint', {date: dateSuffix}, dateTxt ? ('Type B reveal date is calculated automatically (' + dateTxt + ').') : 'Type B reveal date is calculated automatically.' );
+      }
+
+    }else{
+      const wasAuto = !!revealEl.disabled;
+      revealEl.readOnly = false;
+      revealEl.disabled = false;
+      if(wasAuto) revealEl.value = '';
+      if(hintEl) hintEl.style.display = 'none';
+    }
+  }
+
+  function initCreateTypeControls(){
+    const typeSel = document.getElementById('cr-type');
+    const perSel = document.getElementById('cr-per');
+    const startEl = document.getElementById('cr-start');
+    if(typeSel) typeSel.addEventListener('change', updateCreateRevealMode);
+    if(perSel) perSel.addEventListener('change', updateCreateRevealMode);
+    if(startEl) startEl.addEventListener('change', updateCreateRevealMode);
+    if(startEl) startEl.addEventListener('keyup', updateCreateRevealMode);
+    updateCreateRevealMode();
+  }
+
   function initCreate(){
     initCreateDestAccounts();
+    initCreateTypeControls();
   }
 
   window.Rooms = window.Rooms || {};
