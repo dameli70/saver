@@ -138,6 +138,21 @@ header("Referrer-Policy: no-referrer");
           </select>
         </div>
 
+        <div class="field"><label><?php e('rooms.field.destination_account'); ?></label>
+          <div class="two-col">
+            <select id="cr-dest-type">
+              <option value=""><?php e('rooms.destination_account.type_any'); ?></option>
+              <option value="mobile_money"><?php e('rooms.destination_account.type_mobile_money'); ?></option>
+              <option value="bank"><?php e('rooms.destination_account.type_bank'); ?></option>
+              <option value="crypto_wallet"><?php e('rooms.destination_account.type_crypto'); ?></option>
+            </select>
+            <select id="cr-dest-account">
+              <option value=""><?php e('rooms.destination_account.auto'); ?></option>
+            </select>
+          </div>
+          <div class="k" style="margin-top:6px;font-size:11px;"><?php e('rooms.destination_account_hint'); ?></div>
+        </div>
+
         <button class="btn btn-primary" onclick="createRoom()"><?php e('rooms.btn.create_room'); ?></button>
         <div id="cr-msg" class="msg"></div>
       </div>

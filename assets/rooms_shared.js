@@ -272,33 +272,161 @@
     el.innerHTML = bits.join(' · ');
   }
 
+  function roomStartMs(r){
+    const d = parseUtcDate(r && r.start_at);
+    const ms = d && !isNaN(d.getTime()) ? d.getTime() : 0;
+    return ms || 0;
+  }
+
+  function stableSort(arr, cmp){
+    return (arr || []).map((v, i) => ({v, i}))
+      .sort((a, b) => {
+        const c = cmp(a.v, b.v);
+        return c || (a.i - b.i);
+      })
+      .map(x => x.v);
+  }
+
+  function discoverRoomRank(r){
+    const st = myRoomStatusById[String((r && r.id) || '')] || '';
+    const spots = parseInt(String((r && r.spots_remaining) || ''), 10);
+    const hasSpots = isNaN(spots) ? true : (spots > 0);
+
+    // Discover hierarchy (rooms.php):
+    //  0) Rooms you're already in (approved/active/etc)
+    //  1) Rooms you've requested (pending)
+    //  2) Joinable rooms (spots available)
+    //  3) Joinable but you're globally restricted
+    //  4) Full rooms
+    if(st && st !== 'declined') return (st === 'pending') ? 1 : 0;
+    if(!hasSpots) return 4;
+    if(myRestrictedUntil) return 3;
+    return 2;
+  }
+
+  function sortDiscoverRooms(rooms){
+    return stableSort(rooms, (a, b) => {
+      const ra = discoverRoomRank(a);
+      const rb = discoverRoomRank(b);
+      if(ra !== rb) return ra - rb;
+
+      const sa = roomStartMs(a);
+      const sb = roomStartMs(b);
+      if(sa !== sb) return sa - sb;
+
+      const la = parseInt(String((a && a.required_level) || '0'), 10) || 0;
+      const lb = parseInt(String((b && b.required_level) || '0'), 10) || 0;
+      if(la !== lb) return la - lb;
+
+      const pa = parseInt(String((a && a.spots_remaining) || '0'), 10) || 0;
+      const pb = parseInt(String((b && b.spots_remaining) || '0'), 10) || 0;
+      if(pa !== pb) return pb - pa;
+
+      const ga = String((a && a.goal) || '');
+      const gb = String((b && b.goal) || '');
+      return ga.localeCompare(gb);
+    });
+  }
+
+  function myRoomRank(r){
+    const st = String((r && r.my_status) || '');
+    if(st === 'active') return 0;
+    if(st === 'approved') return 1;
+    if(st === 'pending') return 2;
+    if(st === 'completed') return 3;
+    if(st === 'exited_poststart' || st === 'exited_prestart' || st === 'removed') return 4;
+    return 5;
+  }
+
+  function sortMyRooms(rooms){
+    return stableSort(rooms, (a, b) => {
+      const ra = myRoomRank(a);
+      const rb = myRoomRank(b);
+      if(ra !== rb) return ra - rb;
+
+      const ma = (a && a.is_maker) ? 0 : 1;
+      const mb = (b && b.is_maker) ? 0 : 1;
+      if(ma !== mb) return ma - mb;
+
+      const sa = roomStartMs(a);
+      const sb = roomStartMs(b);
+      const dir = (ra <= 2) ? 1 : -1;
+      if(sa !== sb) return (sa - sb) * dir;
+
+      const ga = String((a && a.goal) || '');
+      const gb = String((b && b.goal) || '');
+      return ga.localeCompare(gb);
+    });
+  }
+
   function buildRoomCard(r){
     const el = document.createElement('div');
-    el.className = 'room';
+    el.className = 'room room-card';
+    el.dataset.roomId = String(r.id || '');
 
-    const top = document.createElement('div');
-    top.className = 'room-top';
+    // ── Header (primary hierarchy)
+    const head = document.createElement('div');
+    head.className = 'room-head';
+
+    const title = document.createElement('div');
+    title.className = 'room-title';
 
     const goal = document.createElement('div');
     goal.className = 'room-goal';
     goal.textContent = r.goal || '';
 
+    title.appendChild(goal);
+
+    const badges = document.createElement('div');
+    badges.className = 'room-badges';
+
     const badge = document.createElement('div');
     badge.className = 'badge';
     badge.textContent = tf('rooms.badge.level_type', {level: r.required_level, type: r.saving_type}, `LEVEL ${r.required_level} · TYPE ${r.saving_type}`);
 
-    top.appendChild(goal);
-    top.appendChild(badge);
+    badges.appendChild(badge);
 
+    head.appendChild(title);
+    head.appendChild(badges);
+
+    // ── Meta (secondary hierarchy)
     const startLocal = fmtLocal(r.start_at);
     const startUtc = fmtUtc(r.start_at);
 
     const meta = document.createElement('div');
-    meta.className = 'meta';
-    meta.innerHTML = `${esc(STR.meta_amount)}: <b>${esc(r.participation_amount)}</b><br>${esc(STR.meta_period)}: <b>${esc(periodicityLabel(r.periodicity))}</b><br>${esc(STR.meta_spots_remaining)}: <b>${esc(r.spots_remaining)}</b><br>${esc(STR.meta_starts)}: <b>${esc(startLocal)}</b> <span class="utc-pill" title="${esc(STR.stored_enforced_utc)}">${esc(startUtc)}</span>`;
+    meta.className = 'room-meta meta';
 
+    const grid = document.createElement('div');
+    grid.className = 'meta-grid';
+
+    function addMetaItem(label, valueHtml){
+      const item = document.createElement('div');
+      item.className = 'meta-item';
+
+      const k = document.createElement('div');
+      k.className = 'meta-k';
+      k.textContent = String(label || '');
+
+      const v = document.createElement('div');
+      v.className = 'meta-v';
+      v.innerHTML = valueHtml;
+
+      item.appendChild(k);
+      item.appendChild(v);
+      grid.appendChild(item);
+    }
+
+    // Meta order by hierarchy: contribution info + schedule first.
+    addMetaItem(STR.meta_amount, esc(r.participation_amount));
+    addMetaItem(STR.meta_period, esc(periodicityLabel(r.periodicity)));
+    addMetaItem(STR.meta_starts, esc(startLocal) + ' <span class="utc-pill" title="' + esc(STR.stored_enforced_utc) + '">' + esc(startUtc) + '</span>');
+    addMetaItem(STR.meta_spots_remaining, esc(r.spots_remaining));
+
+    meta.appendChild(grid);
+
+    // ── Actions
     const actions = document.createElement('div');
-    actions.className = 'actions';
+    actions.className = 'room-actions actions';
 
     const open = document.createElement('a');
     open.className = 'btn btn-ghost btn-sm';
@@ -343,7 +471,7 @@
     actions.appendChild(open);
     actions.appendChild(join);
 
-    el.appendChild(top);
+    el.appendChild(head);
     el.appendChild(meta);
     el.appendChild(actions);
     return el;
@@ -351,31 +479,73 @@
 
   function buildMyRoomCard(r){
     const el = document.createElement('div');
-    el.className = 'room';
+    el.className = 'room room-card';
+    el.dataset.roomId = String(r.id || '');
+    el.dataset.myStatus = String(r.my_status || '');
 
-    const top = document.createElement('div');
-    top.className = 'room-top';
+    // ── Header
+    const head = document.createElement('div');
+    head.className = 'room-head';
+
+    const title = document.createElement('div');
+    title.className = 'room-title';
 
     const goal = document.createElement('div');
     goal.className = 'room-goal';
     goal.textContent = r.goal || '';
 
+    title.appendChild(goal);
+
+    const badges = document.createElement('div');
+    badges.className = 'room-badges';
+
     const badge = document.createElement('div');
     badge.className = 'badge';
     badge.textContent = tf('rooms.badge.status_type', {status: String((r.my_status||'').toUpperCase()), type: r.saving_type}, `${String((r.my_status||'').toUpperCase())} · TYPE ${r.saving_type}`);
 
-    top.appendChild(goal);
-    top.appendChild(badge);
+    badges.appendChild(badge);
 
+    head.appendChild(title);
+    head.appendChild(badges);
+
+    // ── Meta
     const startLocal = fmtLocal(r.start_at);
     const startUtc = fmtUtc(r.start_at);
 
     const meta = document.createElement('div');
-    meta.className = 'meta';
-    meta.innerHTML = `${esc(STR.meta_amount)}: <b>${esc(r.participation_amount)}</b><br>${esc(STR.meta_period)}: <b>${esc(periodicityLabel(r.periodicity))}</b><br>${esc(STR.meta_state)}: <b>${esc(r.room_state)} / ${esc(r.lobby_state)}</b><br>${esc(STR.meta_starts)}: <b>${esc(startLocal)}</b> <span class="utc-pill" title="${esc(STR.stored_enforced_utc)}">${esc(startUtc)}</span>`;
+    meta.className = 'room-meta meta';
 
+    const grid = document.createElement('div');
+    grid.className = 'meta-grid';
+
+    function addMetaItem(label, valueHtml){
+      const item = document.createElement('div');
+      item.className = 'meta-item';
+
+      const k = document.createElement('div');
+      k.className = 'meta-k';
+      k.textContent = String(label || '');
+
+      const v = document.createElement('div');
+      v.className = 'meta-v';
+      v.innerHTML = valueHtml;
+
+      item.appendChild(k);
+      item.appendChild(v);
+      grid.appendChild(item);
+    }
+
+    // Meta order by hierarchy: current room state + schedule first.
+    addMetaItem(STR.meta_state, esc(String(r.room_state||'')) + ' / ' + esc(String(r.lobby_state||'')));
+    addMetaItem(STR.meta_starts, esc(startLocal) + ' <span class="utc-pill" title="' + esc(STR.stored_enforced_utc) + '">' + esc(startUtc) + '</span>');
+    addMetaItem(STR.meta_amount, esc(r.participation_amount));
+    addMetaItem(STR.meta_period, esc(periodicityLabel(r.periodicity)));
+
+    meta.appendChild(grid);
+
+    // ── Actions
     const actions = document.createElement('div');
-    actions.className = 'actions';
+    actions.className = 'room-actions actions';
 
     const open = document.createElement('a');
     open.className = 'btn btn-ghost btn-sm';
@@ -384,7 +554,7 @@
 
     actions.appendChild(open);
 
-    el.appendChild(top);
+    el.appendChild(head);
     el.appendChild(meta);
     el.appendChild(actions);
     return el;
@@ -407,17 +577,19 @@
         myRoomStatusById[String(x.id)] = String(x.my_status||'');
       });
 
-      if(!wrap) return rooms;
+      const sorted = sortMyRooms(rooms);
 
-      if(!rooms.length){
+      if(!wrap) return sorted;
+
+      if(!sorted.length){
         wrap.innerHTML = '<div style="color:var(--muted);font-size:12px;line-height:1.6;">' + esc(STR.no_rooms_yet) + '</div>';
-        return rooms;
+        return sorted;
       }
 
       wrap.innerHTML = '';
-      rooms.forEach(x => wrap.appendChild(buildMyRoomCard(x)));
+      sorted.forEach(x => wrap.appendChild(buildMyRoomCard(x)));
 
-      return rooms;
+      return sorted;
 
     }catch(e){
       myRoomStatusById = Object.create(null);
@@ -458,8 +630,10 @@
         return;
       }
 
+      const sorted = sortDiscoverRooms(rooms);
+
       wrap.innerHTML = '';
-      rooms.forEach(x => wrap.appendChild(buildRoomCard(x)));
+      sorted.forEach(x => wrap.appendChild(buildRoomCard(x)));
 
     }catch(e){
       wrap.innerHTML = '<div style="color:var(--muted);font-size:12px;">' + esc(STR.failed_to_load_rooms) + '</div>';
@@ -509,6 +683,9 @@
     const privacy_mode = (document.getElementById('cr-privacy') || {}).checked ? 1 : 0;
     const escrow_policy = (document.getElementById('cr-escrow') || {}).value;
 
+    const destination_account_type = (document.getElementById('cr-dest-type') || {}).value;
+    const destination_account_id = parseInt(((document.getElementById('cr-dest-account') || {}).value)||'0',10);
+
     if(!goal){
       setMsg('cr-msg', STR.err_goal_required, false);
       return;
@@ -530,7 +707,7 @@
     }
 
     try{
-      const r = await postStrong('/api/rooms.php', {
+      const payload = {
         action:'create_room',
         goal_text: goal,
         purpose_category,
@@ -545,7 +722,16 @@
         reveal_at,
         privacy_mode,
         escrow_policy,
-      });
+      };
+
+      if(destination_account_type){
+        payload.destination_account_type = destination_account_type;
+      }
+      if(destination_account_id > 0){
+        payload.destination_account_id = destination_account_id;
+      }
+
+      const r = await postStrong('/api/rooms.php', payload);
 
       if(!r || !r.success) throw new Error((r && r.error) ? r.error : STR.failed);
 
@@ -567,8 +753,107 @@
     await loadMyRooms();
   }
 
+  let createDestAccounts = [];
+  let createDestInitDone = false;
+
+  function destAccountSummary(a){
+    if(!a) return '';
+
+    const type = String(a.account_type||'');
+    const label = a.display_label ? String(a.display_label) : '';
+
+    let core = '';
+
+    if(type === 'mobile_money'){
+      const masked = a.mobile_money_masked ? String(a.mobile_money_masked) : '';
+      core = masked ? tf('rooms.destination_account.summary.mobile_money', {masked}, `Mobile money ${masked}`)
+                    : tr('rooms.destination_account.summary.mobile_money_short', 'Mobile money');
+
+    }else if(type === 'bank'){
+      const bankName = a.bank_name ? String(a.bank_name) : '';
+      const masked = a.bank_account_masked ? String(a.bank_account_masked) : '';
+
+      if(bankName && masked){
+        core = tf('rooms.destination_account.summary.bank_named', {bank: bankName, masked}, `${bankName} ${masked}`);
+      }else if(masked){
+        core = tf('rooms.destination_account.summary.bank', {masked}, `Bank ${masked}`);
+      }else if(bankName){
+        core = bankName;
+      }else{
+        core = tr('rooms.destination_account.summary.bank_short', 'Bank');
+      }
+
+    }else if(type === 'crypto_wallet'){
+      const net = a.crypto_network ? String(a.crypto_network) : '';
+      const addr = a.crypto_address_masked ? String(a.crypto_address_masked) : '';
+
+      if(net && addr){
+        core = tf('rooms.destination_account.summary.crypto_wallet_with_network', {network: net, addr}, `Crypto wallet (${net}) ${addr}`);
+      }else if(net){
+        core = tf('rooms.destination_account.summary.crypto_wallet_with_network_no_addr', {network: net}, `Crypto wallet (${net})`);
+      }else if(addr){
+        core = tf('rooms.destination_account.summary.crypto_wallet', {addr}, `Crypto wallet ${addr}`);
+      }else{
+        core = tr('rooms.destination_account.summary.crypto_wallet_no_addr', 'Crypto wallet');
+      }
+
+    }else{
+      core = type ? type.toUpperCase() : '';
+    }
+
+    if(label) return label + ' — ' + core;
+    return core;
+  }
+
+  function buildCreateDestOptions(){
+    const typeSel = document.getElementById('cr-dest-type');
+    const acctSel = document.getElementById('cr-dest-account');
+    if(!typeSel || !acctSel) return;
+
+    const firstOpt = acctSel.querySelector('option');
+    const autoText = firstOpt ? String(firstOpt.textContent||'Auto select') : 'Auto select';
+
+    const t = String(typeSel.value||'');
+
+    acctSel.innerHTML = '';
+
+    const opt0 = document.createElement('option');
+    opt0.value = '';
+    opt0.textContent = autoText;
+    acctSel.appendChild(opt0);
+
+    (createDestAccounts||[]).forEach(a => {
+      if(!a) return;
+      if(t && String(a.account_type||'') !== t) return;
+      const opt = document.createElement('option');
+      opt.value = String(a.id||'');
+      opt.textContent = destAccountSummary(a) || a.display_label || (String(a.account_type||'') + ' #' + String(a.id||''));
+      acctSel.appendChild(opt);
+    });
+  }
+
+  async function initCreateDestAccounts(){
+    const typeSel = document.getElementById('cr-dest-type');
+    const acctSel = document.getElementById('cr-dest-account');
+    if(!typeSel || !acctSel || createDestInitDone) return;
+    createDestInitDone = true;
+
+    typeSel.addEventListener('change', buildCreateDestOptions);
+
+    try{
+      const r = await get('/api/rooms.php?action=destination_accounts');
+      if(r && r.success){
+        createDestAccounts = Array.isArray(r.accounts) ? r.accounts : [];
+      }
+    }catch(e){
+      // best effort
+    }
+
+    buildCreateDestOptions();
+  }
+
   function initCreate(){
-    // no-op
+    initCreateDestAccounts();
   }
 
   window.Rooms = window.Rooms || {};

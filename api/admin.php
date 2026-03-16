@@ -296,10 +296,32 @@ if ($method === 'GET') {
     // ── DESTINATION ACCOUNTS (saving rooms) ─────────────────
     if ($action === 'destination_accounts') {
         $db = getDB();
-        $rows = $db->query("SELECT id, account_type, carrier_id, mobile_money_number, bank_name, bank_account_name, bank_account_number, bank_routing_number, bank_swift, bank_iban,
-                                   code_rotated_at, code_rotation_version, is_active, created_at, updated_at
-                            FROM platform_destination_accounts
-                            ORDER BY id DESC")->fetchAll();
+
+        // Keep this endpoint compatible with both legacy schemas (unlock_code on destination accounts)
+        // and the newer schema (unlock_code moved to saving_room_accounts).
+
+        $sel = "id, account_type";
+        $sel .= hasColumn($db, 'platform_destination_accounts', 'display_label') ? ", display_label" : ", NULL AS display_label";
+        $sel .= ", carrier_id, mobile_money_number, bank_name, bank_account_name, bank_account_number, bank_routing_number, bank_swift, bank_iban";
+
+        // Crypto fields: prefer canonical columns, fall back to any legacy naming.
+        $cryptoNetworkExpr = hasColumn($db, 'platform_destination_accounts', 'crypto_network')
+            ? 'crypto_network'
+            : (hasColumn($db, 'platform_destination_accounts', 'crypto_wallet_network') ? 'crypto_wallet_network' : 'NULL');
+        $cryptoAddressExpr = hasColumn($db, 'platform_destination_accounts', 'crypto_address')
+            ? 'crypto_address'
+            : (hasColumn($db, 'platform_destination_accounts', 'crypto_wallet_address') ? 'crypto_wallet_address' : 'NULL');
+
+        $sel .= ", {$cryptoNetworkExpr} AS crypto_network";
+        $sel .= ", {$cryptoAddressExpr} AS crypto_address";
+
+        // Legacy code rotation metadata on destination accounts.
+        $sel .= hasColumn($db, 'platform_destination_accounts', 'code_rotated_at') ? ", code_rotated_at" : ", NULL AS code_rotated_at";
+        $sel .= hasColumn($db, 'platform_destination_accounts', 'code_rotation_version') ? ", code_rotation_version" : ", NULL AS code_rotation_version";
+
+        $sel .= ", is_active, created_at, updated_at";
+
+        $rows = $db->query("SELECT {$sel} FROM platform_destination_accounts ORDER BY id DESC")->fetchAll();
         jsonResponse(['success' => true, 'accounts' => $rows]);
     }
 
@@ -308,10 +330,32 @@ if ($method === 'GET') {
         $limit  = intParam($_GET['limit'] ?? 200, 200);
         $limit  = max(1, min(500, $limit));
 
+        $hasSraUnlock = hasColumn($db, 'saving_room_accounts', 'unlock_code_enc');
+        $hasSraRotatedAt = hasColumn($db, 'saving_room_accounts', 'code_rotated_at');
+        $hasSraRotVer = hasColumn($db, 'saving_room_accounts', 'code_rotation_version');
+
+        $sraSel = 'a.account_id';
+        $sraSel .= $hasSraUnlock ? ", (a.unlock_code_enc IS NOT NULL) AS has_code" : ", 0 AS has_code";
+        $sraSel .= $hasSraRotatedAt ? ", a.code_rotated_at" : ", NULL AS code_rotated_at";
+        $sraSel .= $hasSraRotVer ? ", a.code_rotation_version" : ", NULL AS code_rotation_version";
+
+        $pdaSel = 'pda.account_type, pda.mobile_money_number, pda.bank_name, pda.bank_account_number, pda.is_active';
+        $pdaSel .= hasColumn($db, 'platform_destination_accounts', 'display_label') ? ', pda.display_label' : ', NULL AS display_label';
+
+        // Crypto fields in the canonical schema.
+        $cryptoNetworkExpr = hasColumn($db, 'platform_destination_accounts', 'crypto_network')
+            ? 'pda.crypto_network'
+            : (hasColumn($db, 'platform_destination_accounts', 'crypto_wallet_network') ? 'pda.crypto_wallet_network' : 'NULL');
+        $cryptoAddressExpr = hasColumn($db, 'platform_destination_accounts', 'crypto_address')
+            ? 'pda.crypto_address'
+            : (hasColumn($db, 'platform_destination_accounts', 'crypto_wallet_address') ? 'pda.crypto_wallet_address' : 'NULL');
+
+        $pdaSel .= ", {$cryptoNetworkExpr} AS crypto_network";
+        $pdaSel .= ", {$cryptoAddressExpr} AS crypto_address";
+
         $rows = $db->query("SELECT r.id AS room_id, r.goal_text, r.saving_type, r.room_state, r.start_at, r.reveal_at,
-                                   a.account_id,
-                                   pda.account_type, pda.mobile_money_number, pda.bank_name, pda.bank_account_number,
-                                   pda.code_rotation_version, pda.is_active
+                                   {$sraSel},
+                                   {$pdaSel}
                             FROM saving_rooms r
                             LEFT JOIN saving_room_accounts a ON a.room_id = r.id
                             LEFT JOIN platform_destination_accounts pda ON pda.id = a.account_id
@@ -977,46 +1021,136 @@ if ($method === 'POST') {
         requireStrongAuth();
 
         $accountType = (string)($body['account_type'] ?? '');
+        $displayLabel = trim((string)($body['display_label'] ?? ''));
         $carrierId = intParam($body['carrier_id'] ?? 0, 0);
         $mm = trim((string)($body['mobile_money_number'] ?? ''));
+
         $bankName = trim((string)($body['bank_name'] ?? ''));
         $bankAccName = trim((string)($body['bank_account_name'] ?? ''));
         $bankAccNum = trim((string)($body['bank_account_number'] ?? ''));
-        $unlockCode = (string)($body['unlock_code'] ?? '');
+        $bankRouting = trim((string)($body['bank_routing_number'] ?? ''));
+        $bankSwift = trim((string)($body['bank_swift'] ?? ''));
+        $bankIban = trim((string)($body['bank_iban'] ?? ''));
+
+        // Canonical crypto fields
+        $cryptoAddress = trim((string)($body['crypto_address'] ?? ($body['crypto_wallet_address'] ?? '')));
+        $cryptoNetwork = trim((string)($body['crypto_network'] ?? ($body['crypto_wallet_network'] ?? '')));
+
+        // Legacy/extra crypto fields (if present in some schemas)
+        $cryptoChain = trim((string)($body['crypto_wallet_chain'] ?? ''));
+        $cryptoAsset = trim((string)($body['crypto_wallet_asset'] ?? ''));
+        $cryptoMemo = trim((string)($body['crypto_wallet_memo'] ?? ''));
+
         $isActive = !empty($body['is_active']) ? 1 : 0;
 
-        if (!in_array($accountType, ['mobile_money','bank'], true)) jsonResponse(['error' => 'Invalid account_type'], 400);
-        if ($unlockCode === '') jsonResponse(['error' => 'unlock_code required'], 400);
+        if (!in_array($accountType, ['mobile_money','bank','crypto_wallet'], true)) jsonResponse(['error' => 'Invalid account_type'], 400);
 
         if ($accountType === 'mobile_money') {
             if ($mm === '') jsonResponse(['error' => 'mobile_money_number required'], 400);
-        } else {
+        } else if ($accountType === 'bank') {
             if ($bankName === '' || $bankAccNum === '') jsonResponse(['error' => 'bank_name and bank_account_number required'], 400);
+        } else {
+            if ($cryptoAddress === '') jsonResponse(['error' => 'crypto_address required'], 400);
         }
 
         $db = getDB();
-        $enc = encryptForDb($unlockCode);
 
-        $db->prepare("INSERT INTO platform_destination_accounts
-                      (account_type, carrier_id, mobile_money_number, bank_name, bank_account_name, bank_account_number,
-                       unlock_code_enc, code_rotated_at, code_rotation_version, is_active, created_at, updated_at)
-                      VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), 1, ?, NOW(), NOW())")
-           ->execute([
-               $accountType,
-               $accountType === 'mobile_money' ? ($carrierId > 0 ? $carrierId : null) : null,
-               $accountType === 'mobile_money' ? $mm : null,
-               $accountType === 'bank' ? $bankName : null,
-               $accountType === 'bank' ? ($bankAccName !== '' ? $bankAccName : null) : null,
-               $accountType === 'bank' ? $bankAccNum : null,
-               $enc,
-               $isActive,
-           ]);
+        $hasCrypto = hasColumn($db, 'platform_destination_accounts', 'crypto_address')
+            || hasColumn($db, 'platform_destination_accounts', 'crypto_wallet_address');
+
+        if ($accountType === 'crypto_wallet' && !$hasCrypto) {
+            jsonResponse(['error' => 'Crypto wallet destination accounts are unavailable. Apply database migrations.'], 409);
+        }
+
+        // Legacy installs stored unlock codes on destination accounts. New installs store unlock codes per-room.
+        $enc = null;
+        if (hasColumn($db, 'platform_destination_accounts', 'unlock_code_enc')) {
+            $unlockCode = (string)($body['unlock_code'] ?? '');
+            if ($unlockCode === '') $unlockCode = generateRandomUnlockCode(12);
+            $enc = encryptForDb($unlockCode);
+        }
+
+        $cols = [];
+        $ph = [];
+        $vals = [];
+
+        $add = function(string $col, mixed $val) use (&$cols, &$ph, &$vals): void {
+            $cols[] = $col;
+            $ph[] = '?';
+            $vals[] = $val;
+        };
+
+        $add('account_type', $accountType);
+
+        if (hasColumn($db, 'platform_destination_accounts', 'display_label')) {
+            $add('display_label', $displayLabel !== '' ? sanitize($displayLabel) : null);
+        }
+
+        $add('carrier_id', $accountType === 'mobile_money' ? ($carrierId > 0 ? $carrierId : null) : null);
+        $add('mobile_money_number', $accountType === 'mobile_money' ? $mm : null);
+
+        $add('bank_name', $accountType === 'bank' ? $bankName : null);
+        $add('bank_account_name', $accountType === 'bank' ? ($bankAccName !== '' ? $bankAccName : null) : null);
+        $add('bank_account_number', $accountType === 'bank' ? $bankAccNum : null);
+        $add('bank_routing_number', $accountType === 'bank' ? ($bankRouting !== '' ? $bankRouting : null) : null);
+        $add('bank_swift', $accountType === 'bank' ? ($bankSwift !== '' ? $bankSwift : null) : null);
+        $add('bank_iban', $accountType === 'bank' ? ($bankIban !== '' ? $bankIban : null) : null);
+
+        // Canonical crypto naming.
+        if (hasColumn($db, 'platform_destination_accounts', 'crypto_network')) {
+            $add('crypto_network', $accountType === 'crypto_wallet' ? ($cryptoNetwork !== '' ? $cryptoNetwork : null) : null);
+        }
+        if (hasColumn($db, 'platform_destination_accounts', 'crypto_address')) {
+            $add('crypto_address', $accountType === 'crypto_wallet' ? $cryptoAddress : null);
+        }
+
+        // Legacy naming (no longer used, but keep compatible).
+        if (hasColumn($db, 'platform_destination_accounts', 'crypto_wallet_network')) {
+            $add('crypto_wallet_network', $accountType === 'crypto_wallet' ? ($cryptoNetwork !== '' ? $cryptoNetwork : null) : null);
+        }
+        if (hasColumn($db, 'platform_destination_accounts', 'crypto_wallet_address')) {
+            $add('crypto_wallet_address', $accountType === 'crypto_wallet' ? $cryptoAddress : null);
+        }
+        if (hasColumn($db, 'platform_destination_accounts', 'crypto_wallet_chain')) {
+            $add('crypto_wallet_chain', $accountType === 'crypto_wallet' ? ($cryptoChain !== '' ? $cryptoChain : null) : null);
+        }
+        if (hasColumn($db, 'platform_destination_accounts', 'crypto_wallet_asset')) {
+            $add('crypto_wallet_asset', $accountType === 'crypto_wallet' ? ($cryptoAsset !== '' ? $cryptoAsset : null) : null);
+        }
+        if (hasColumn($db, 'platform_destination_accounts', 'crypto_wallet_memo')) {
+            $add('crypto_wallet_memo', $accountType === 'crypto_wallet' ? ($cryptoMemo !== '' ? $cryptoMemo : null) : null);
+        }
+
+        if ($enc !== null) {
+            $add('unlock_code_enc', $enc);
+        }
+
+        if (hasColumn($db, 'platform_destination_accounts', 'code_rotated_at')) {
+            $cols[] = 'code_rotated_at';
+            $ph[] = 'NOW()';
+        }
+        if (hasColumn($db, 'platform_destination_accounts', 'code_rotation_version')) {
+            $cols[] = 'code_rotation_version';
+            $ph[] = '1';
+        }
+
+        $cols[] = 'is_active';
+        $ph[] = '?';
+        $vals[] = $isActive;
+
+        $cols[] = 'created_at';
+        $ph[] = 'NOW()';
+        $cols[] = 'updated_at';
+        $ph[] = 'NOW()';
+
+        $sql = 'INSERT INTO platform_destination_accounts (' . implode(',', $cols) . ') VALUES (' . implode(',', $ph) . ')';
+        $db->prepare($sql)->execute($vals);
 
         auditLog('admin_destination_account_create', null, getCurrentUserId());
         jsonResponse(['success' => true, 'account_id' => (int)$db->lastInsertId()]);
     }
 
-    // ── DESTINATION ACCOUNTS: ROTATE CODE ────────────────────
+    // ── DESTINATION ACCOUNTS: ROTATE CODE (legacy only) ──────
     if ($action === 'destination_account_rotate') {
         requireStrongAuth();
 
@@ -1026,14 +1160,76 @@ if ($method === 'POST') {
         if ($unlockCode === '') jsonResponse(['error' => 'unlock_code required'], 400);
 
         $db = getDB();
+
+        if (!hasColumn($db, 'platform_destination_accounts', 'unlock_code_enc')) {
+            jsonResponse(['error' => 'Destination account unlock codes are stored per-room. Rotate from "Room unlock codes".', 'error_code' => 'room_unlock_codes'], 409);
+        }
+
         $enc = encryptForDb($unlockCode);
 
-        $db->prepare("UPDATE platform_destination_accounts
-                      SET unlock_code_enc = ?, code_rotated_at = NOW(), code_rotation_version = code_rotation_version + 1, updated_at = NOW()
-                      WHERE id = ?")
-           ->execute([$enc, $accountId]);
+        $sets = ['unlock_code_enc = ?'];
+        $params = [$enc];
+
+        if (hasColumn($db, 'platform_destination_accounts', 'code_rotated_at')) {
+            $sets[] = 'code_rotated_at = NOW()';
+        }
+        if (hasColumn($db, 'platform_destination_accounts', 'code_rotation_version')) {
+            $sets[] = 'code_rotation_version = COALESCE(code_rotation_version, 0) + 1';
+        }
+        $sets[] = 'updated_at = NOW()';
+
+        $params[] = $accountId;
+
+        $db->prepare('UPDATE platform_destination_accounts SET ' . implode(', ', $sets) . ' WHERE id = ?')
+           ->execute($params);
 
         auditLog('admin_destination_account_rotate', null, getCurrentUserId());
+        jsonResponse(['success' => true]);
+    }
+
+    // ── ROOM ACCOUNTS: ROTATE CODE (per-room) ────────────────
+    if ($action === 'room_account_rotate') {
+        requireStrongAuth();
+
+        $roomId = (string)($body['room_id'] ?? '');
+        $unlockCode = (string)($body['unlock_code'] ?? '');
+        if ($roomId === '' || strlen($roomId) !== 36) jsonResponse(['error' => 'room_id required'], 400);
+        if ($unlockCode === '') jsonResponse(['error' => 'unlock_code required'], 400);
+
+        $db = getDB();
+
+        if (!hasColumn($db, 'saving_room_accounts', 'unlock_code_enc')) {
+            jsonResponse(['error' => 'Per-room unlock codes are unavailable. Apply database migrations.'], 409);
+        }
+
+        $enc = encryptForDb($unlockCode);
+
+        $sets = ['unlock_code_enc = ?'];
+        $params = [$enc];
+
+        if (hasColumn($db, 'saving_room_accounts', 'code_rotated_at')) {
+            $sets[] = 'code_rotated_at = NOW()';
+        }
+        if (hasColumn($db, 'saving_room_accounts', 'code_rotation_version')) {
+            $sets[] = 'code_rotation_version = COALESCE(code_rotation_version, 0) + 1';
+        }
+        if (hasColumn($db, 'saving_room_accounts', 'updated_at')) {
+            $sets[] = 'updated_at = NOW()';
+        }
+
+        $params[] = $roomId;
+
+        $stmt = $db->prepare('UPDATE saving_room_accounts SET ' . implode(', ', $sets) . ' WHERE room_id = ?');
+        $stmt->execute($params);
+        if ($stmt->rowCount() < 1) jsonResponse(['error' => 'Room account not found'], 404);
+
+        try {
+            roomActivity($db, $roomId, 'destination_code_rotated_admin', ['by_user_id' => (int)getCurrentUserId()]);
+        } catch (Throwable) {
+            // best effort
+        }
+
+        auditLog('admin_room_account_rotate', null, getCurrentUserId());
         jsonResponse(['success' => true]);
     }
 

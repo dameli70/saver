@@ -37,6 +37,7 @@ register_shutdown_function(function() use ($lockFp) {
 });
 
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../includes/helpers.php';
 
 function db(): PDO {
     return getDB();
@@ -49,6 +50,233 @@ function logLine(string $s): void {
 function activityLog(PDO $db, string $roomId, string $eventType, array $payload): void {
     $db->prepare('INSERT INTO saving_room_activity (room_id, event_type, public_payload_json) VALUES (?, ?, ?)')
        ->execute([$roomId, $eventType, json_encode($payload, JSON_UNESCAPED_UNICODE)]);
+}
+
+function hasTable(PDO $db, string $table): bool {
+    static $cache = [];
+    if (array_key_exists($table, $cache)) return (bool)$cache[$table];
+
+    $stmt = $db->prepare("SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ? LIMIT 1");
+    $stmt->execute([$table]);
+    $cache[$table] = (bool)$stmt->fetchColumn();
+    return (bool)$cache[$table];
+}
+
+function hasColumn(PDO $db, string $table, string $column): bool {
+    static $cache = [];
+    $k = $table . '.' . $column;
+    if (array_key_exists($k, $cache)) return (bool)$cache[$k];
+
+    $stmt = $db->prepare("SELECT 1 FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ? LIMIT 1");
+    $stmt->execute([$table, $column]);
+    $cache[$k] = (bool)$stmt->fetchColumn();
+    return (bool)$cache[$k];
+}
+
+function enumAllows(PDO $db, string $table, string $column, string $value): bool {
+    static $cache = [];
+    $k = $table . '.' . $column;
+    if (!array_key_exists($k, $cache)) {
+        $stmt = $db->prepare("SELECT column_type FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ? LIMIT 1");
+        $stmt->execute([$table, $column]);
+        $cache[$k] = $stmt->fetchColumn() ?: null;
+    }
+
+    $t = $cache[$k];
+    if (!$t) return false;
+    return str_contains((string)$t, "'" . str_replace("'", "''", $value) . "'");
+}
+
+function generateDestinationUnlockCode(PDO $db, string $roomId): string {
+    $pinType = 'numeric';
+    $pinLen = 6;
+
+    if (hasTable($db, 'saving_room_accounts') && hasTable($db, 'platform_destination_accounts')) {
+        $selCarrier = hasTable($db, 'carriers') && hasColumn($db, 'carriers', 'pin_type') && hasColumn($db, 'carriers', 'pin_length');
+
+        $sql = "SELECT a.account_type, a.carrier_id";
+        if ($selCarrier) $sql .= ", c.pin_type, c.pin_length";
+        $sql .= "
+                FROM saving_room_accounts ra
+                JOIN platform_destination_accounts a ON a.id = ra.account_id";
+        if ($selCarrier) $sql .= "
+                LEFT JOIN carriers c ON c.id = a.carrier_id";
+        $sql .= "
+                WHERE ra.room_id = ?
+                LIMIT 1";
+
+        $stmt = $db->prepare($sql);
+        $stmt->execute([$roomId]);
+        $row = $stmt->fetch();
+
+        if ($row) {
+            if (!empty($row['pin_type']) && in_array((string)$row['pin_type'], ['numeric','alphanumeric'], true)) {
+                $pinType = (string)$row['pin_type'];
+            }
+            if (!empty($row['pin_length']) && is_numeric($row['pin_length'])) {
+                $pinLen = (int)$row['pin_length'];
+            }
+        }
+    }
+
+    $pinLen = max(4, min(16, $pinLen));
+
+    if ($pinType === 'alphanumeric') {
+        $alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+        $out = '';
+        for ($i = 0; $i < $pinLen; $i++) {
+            $out .= $alphabet[random_int(0, strlen($alphabet) - 1)];
+        }
+        return $out;
+    }
+
+    $out = '';
+    for ($i = 0; $i < $pinLen; $i++) {
+        $out .= (string)random_int(0, 9);
+    }
+    return $out;
+}
+
+function rotateRoomDestinationUnlockCode(PDO $db, string $roomId, string $reason, array $extraPayload = []): void {
+    if (!hasTable($db, 'saving_room_accounts')) return;
+    if (!hasColumn($db, 'saving_room_accounts', 'unlock_code_enc')) return;
+
+    $code = generateDestinationUnlockCode($db, $roomId);
+    $enc = encryptForDb($code);
+
+    $versionCol = null;
+    if (hasColumn($db, 'saving_room_accounts', 'code_rotation_version')) $versionCol = 'code_rotation_version';
+    else if (hasColumn($db, 'saving_room_accounts', 'unlock_code_version')) $versionCol = 'unlock_code_version';
+
+    $sets = ['unlock_code_enc = ?'];
+    $params = [$enc];
+
+    if (hasColumn($db, 'saving_room_accounts', 'code_rotated_at')) {
+        $sets[] = 'code_rotated_at = NOW()';
+    }
+    if ($versionCol) {
+        $sets[] = "{$versionCol} = COALESCE({$versionCol}, 0) + 1";
+    }
+    if (hasColumn($db, 'saving_room_accounts', 'updated_at')) {
+        $sets[] = 'updated_at = NOW()';
+    }
+
+    $sql = 'UPDATE saving_room_accounts SET ' . implode(', ', $sets) . ' WHERE room_id = ?';
+    $params[] = $roomId;
+
+    $st = $db->prepare($sql);
+    $st->execute($params);
+    if ($st->rowCount() < 1) return;
+
+    $version = null;
+    if ($versionCol) {
+        $v = $db->prepare("SELECT {$versionCol} FROM saving_room_accounts WHERE room_id = ?");
+        $v->execute([$roomId]);
+        $version = (int)$v->fetchColumn();
+    }
+
+    activityLog($db, $roomId, 'destination_code_rotated', array_merge([
+        'reason' => $reason,
+        'version' => $version,
+    ], $extraPayload));
+}
+
+function expirePendingSwapRequests(PDO $db, string $roomId): int {
+    $candidates = [
+        'saving_room_slot_swap_requests',
+        'saving_room_swap_requests',
+        'saving_room_slot_swaps',
+    ];
+
+    $expired = 0;
+
+    foreach ($candidates as $t) {
+        if (!hasTable($db, $t)) continue;
+        if (!hasColumn($db, $t, 'room_id') || !hasColumn($db, $t, 'status')) continue;
+
+        if (!enumAllows($db, $t, 'status', 'expired')) continue;
+
+        $pendingValues = [];
+        foreach (['pending','open'] as $v) {
+            if (enumAllows($db, $t, 'status', $v)) $pendingValues[] = $v;
+        }
+        if (!$pendingValues) continue;
+
+        $in = implode(',', array_fill(0, count($pendingValues), '?'));
+        $sql = "UPDATE {$t} SET status='expired'";
+        if (hasColumn($db, $t, 'resolved_at')) $sql .= ', resolved_at=NOW()';
+        if (hasColumn($db, $t, 'updated_at')) $sql .= ', updated_at=NOW()';
+        $sql .= " WHERE room_id = ? AND status IN ({$in})";
+
+        $params = array_merge([$roomId], $pendingValues);
+        $st = $db->prepare($sql);
+        $st->execute($params);
+        $expired += $st->rowCount();
+    }
+
+    return $expired;
+}
+
+function syncRotationQueueToParticipants(PDO $db, string $roomId, array $allowedParticipantStatuses, bool $forceQueued = false): void {
+    if (!hasTable($db, 'saving_room_rotation_queue') || !hasTable($db, 'saving_room_participants')) return;
+
+    $allowed = array_values(array_filter(array_unique(array_map('strval', $allowedParticipantStatuses))));
+    if (!$allowed) return;
+
+    $in = implode(',', array_fill(0, count($allowed), '?'));
+
+    // Remove queue entries for participants no longer eligible.
+    $del = $db->prepare("DELETE q
+                         FROM saving_room_rotation_queue q
+                         LEFT JOIN saving_room_participants p
+                           ON p.room_id = q.room_id
+                          AND p.user_id = q.user_id
+                         WHERE q.room_id = ?
+                           AND (p.user_id IS NULL OR p.status NOT IN ({$in}))");
+    $del->execute(array_merge([$roomId], $allowed));
+
+    // Fetch positions already taken.
+    $posStmt = $db->prepare('SELECT position FROM saving_room_rotation_queue WHERE room_id = ? ORDER BY position ASC');
+    $posStmt->execute([$roomId]);
+    $usedPositions = [];
+    foreach ($posStmt->fetchAll() as $r) {
+        $usedPositions[(int)$r['position']] = true;
+    }
+
+    $order = [];
+    if (hasColumn($db, 'saving_room_participants', 'approved_at')) $order[] = 'p.approved_at ASC';
+    if (hasColumn($db, 'saving_room_participants', 'joined_at')) $order[] = 'p.joined_at ASC';
+    if (!$order) $order[] = 'p.user_id ASC';
+
+    // Participants that need a slot.
+    $need = $db->prepare("SELECT p.user_id
+                          FROM saving_room_participants p
+                          LEFT JOIN saving_room_rotation_queue q
+                            ON q.room_id = p.room_id
+                           AND q.user_id = p.user_id
+                          WHERE p.room_id = ?
+                            AND p.status IN ({$in})
+                            AND q.user_id IS NULL
+                          ORDER BY " . implode(', ', $order));
+    $need->execute(array_merge([$roomId], $allowed));
+    $missing = $need->fetchAll();
+
+    if (!$missing) return;
+
+    $nextPos = 1;
+    foreach ($missing as $m) {
+        $uid = (int)$m['user_id'];
+        while (isset($usedPositions[$nextPos])) $nextPos++;
+
+        $status = $forceQueued ? 'queued' : 'queued';
+
+        $db->prepare("INSERT IGNORE INTO saving_room_rotation_queue (room_id, user_id, position, status)
+                      VALUES (?, ?, ?, ?)")
+           ->execute([$roomId, $uid, $nextPos, $status]);
+
+        $usedPositions[$nextPos] = true;
+        $nextPos++;
+    }
 }
 
 function notifyOnce(PDO $db, int $userId, string $eventKey, string $tier, string $title, string $body, array $data = [], ?string $refType = null, ?string $refId = null, string $channelMask = ''): void {
@@ -158,24 +386,47 @@ function updateTrustAfterCompletion(PDO $db, int $userId): void {
 }
 
 function initTypeBRotation(PDO $db, string $roomId): void {
-    $cnt = $db->prepare('SELECT COUNT(*) FROM saving_room_rotation_queue WHERE room_id = ?');
-    $cnt->execute([$roomId]);
-    if ((int)$cnt->fetchColumn() > 0) return;
+    if (!hasTable($db, 'saving_room_rotation_queue') || !hasTable($db, 'saving_room_rotation_windows')) return;
 
-    $parts = $db->prepare("SELECT user_id FROM saving_room_participants WHERE room_id = ? AND status='active' ORDER BY joined_at ASC");
-    $parts->execute([$roomId]);
-    $rows = $parts->fetchAll();
-    if (!$rows) return;
+    // If any rotation window exists, assume initialization is complete.
+    $wCnt = $db->prepare('SELECT COUNT(*) FROM saving_room_rotation_windows WHERE room_id = ?');
+    $wCnt->execute([$roomId]);
+    if ((int)$wCnt->fetchColumn() > 0) return;
 
-    $pos = 1;
-    foreach ($rows as $r) {
-        $db->prepare("INSERT IGNORE INTO saving_room_rotation_queue (room_id, user_id, position, status)
-                      VALUES (?, ?, ?, 'queued')")
-           ->execute([$roomId, (int)$r['user_id'], $pos]);
-        $pos++;
+    // Ensure a queue exists (some installs may pre-create it during swap window).
+    $qCnt = $db->prepare('SELECT COUNT(*) FROM saving_room_rotation_queue WHERE room_id = ?');
+    $qCnt->execute([$roomId]);
+    $hasQueue = ((int)$qCnt->fetchColumn() > 0);
+
+    if (!$hasQueue) {
+        $parts = $db->prepare("SELECT user_id FROM saving_room_participants WHERE room_id = ? AND status='active' ORDER BY joined_at ASC");
+        $parts->execute([$roomId]);
+        $rows = $parts->fetchAll();
+        if (!$rows) return;
+
+        $pos = 1;
+        foreach ($rows as $r) {
+            $db->prepare("INSERT IGNORE INTO saving_room_rotation_queue (room_id, user_id, position, status)
+                          VALUES (?, ?, ?, 'queued')")
+               ->execute([$roomId, (int)$r['user_id'], $pos]);
+            $pos++;
+        }
     }
 
-    $firstUser = (int)$rows[0]['user_id'];
+    // Pick the first eligible user in position order.
+    $firstStmt = $db->prepare("SELECT q.user_id
+                               FROM saving_room_rotation_queue q
+                               JOIN saving_room_participants p
+                                 ON p.room_id = q.room_id
+                                AND p.user_id = q.user_id
+                               WHERE q.room_id = ?
+                                 AND q.status IN ('queued','active_window')
+                                 AND p.status = 'active'
+                               ORDER BY q.position ASC
+                               LIMIT 1");
+    $firstStmt->execute([$roomId]);
+    $firstUser = (int)$firstStmt->fetchColumn();
+    if ($firstUser < 1) return;
 
     $db->prepare("INSERT IGNORE INTO saving_room_rotation_windows (room_id, user_id, rotation_index, status)
                   VALUES (?, ?, 1, 'pending_votes')")
@@ -269,6 +520,10 @@ function recordEscrowSettlement(PDO $db, string $roomId, int $removedUserId, str
 
 $db = db();
 
+$supportsSwapWindow = hasTable($db, 'saving_rooms')
+    && hasColumn($db, 'saving_rooms', 'swap_window_ends_at')
+    && enumAllows($db, 'saving_rooms', 'room_state', 'swap_window');
+
 // ───────────────────────────────────────────────────────────
 //  1) Lock lobby when start date arrives
 // ───────────────────────────────────────────────────────────
@@ -282,49 +537,169 @@ foreach ($roomsToLock as $r) {
 }
 
 // ───────────────────────────────────────────────────────────
-//  2) Start rooms
+//  2) Enter swap window at scheduled start
 // ───────────────────────────────────────────────────────────
-$roomsToStart = $db->query("SELECT id, participation_amount, saving_type FROM saving_rooms WHERE room_state='lobby' AND start_at <= NOW() LIMIT 500")->fetchAll();
-foreach ($roomsToStart as $r) {
-    $roomId = (string)$r['id'];
+if ($supportsSwapWindow) {
+    $roomsToSwap = $db->query("SELECT id, saving_type FROM saving_rooms WHERE room_state='lobby' AND start_at <= NOW() LIMIT 500")->fetchAll();
 
-    $roomStmt = $db->prepare("SELECT id, start_at, periodicity, participation_amount, maker_user_id FROM saving_rooms WHERE id = ?");
-    $roomStmt->execute([$roomId]);
-    $room = $roomStmt->fetch();
+    foreach ($roomsToSwap as $r) {
+        $roomId = (string)$r['id'];
+        $savingType = (string)($r['saving_type'] ?? '');
 
-    $db->prepare("UPDATE saving_rooms SET room_state='active', lobby_state='locked', updated_at=NOW() WHERE id = ? AND room_state='lobby'")
-       ->execute([$roomId]);
+        $db->beginTransaction();
 
-    // Promote approved participants to active
-    $db->prepare("UPDATE saving_room_participants SET status='active' WHERE room_id = ? AND status='approved'")
-       ->execute([$roomId]);
+        $upd = $db->prepare("UPDATE saving_rooms
+                             SET room_state='swap_window', lobby_state='locked', swap_window_ends_at = DATE_ADD(start_at, INTERVAL 24 HOUR), updated_at=NOW()
+                             WHERE id = ? AND room_state='lobby'");
+        $upd->execute([$roomId]);
 
-    // Create first contribution cycle due at the scheduled start date (cycle_index=1)
-    // Grace window ends 48 hours after due.
-    $db->prepare("INSERT IGNORE INTO saving_room_contribution_cycles (room_id, cycle_index, due_at, grace_ends_at, status)
-                  VALUES (?, 1, ?, DATE_ADD(?, INTERVAL 48 HOUR), 'open')")
-       ->execute([$roomId, $room['start_at'], $room['start_at']]);
-
-    // Ensure each active participant has a contribution row for cycle 1
-    $cycleIdStmt = $db->prepare("SELECT id FROM saving_room_contribution_cycles WHERE room_id = ? AND cycle_index = 1");
-    $cycleIdStmt->execute([$roomId]);
-    $cycleId = (int)$cycleIdStmt->fetchColumn();
-
-    if ($cycleId > 0) {
-        $parts = $db->prepare("SELECT user_id FROM saving_room_participants WHERE room_id = ? AND status = 'active'");
-        $parts->execute([$roomId]);
-        $amount = (string)$room['participation_amount'];
-        foreach ($parts->fetchAll() as $p) {
-            ensureContributionRow($db, $roomId, (int)$p['user_id'], $cycleId, $amount);
+        if ($upd->rowCount() < 1) {
+            $db->rollBack();
+            continue;
         }
+
+        if ($savingType === 'B') {
+            syncRotationQueueToParticipants($db, $roomId, ['approved'], true);
+
+            // Normalize queue status to "queued" for swap-window slot semantics.
+            if (hasTable($db, 'saving_room_rotation_queue') && hasColumn($db, 'saving_room_rotation_queue', 'status') && enumAllows($db, 'saving_room_rotation_queue', 'status', 'queued')) {
+                $db->prepare("UPDATE saving_room_rotation_queue SET status='queued' WHERE room_id = ?")
+                   ->execute([$roomId]);
+            }
+        }
+
+        rotateRoomDestinationUnlockCode($db, $roomId, 'swap_window_started');
+
+        $endsStmt = $db->prepare('SELECT swap_window_ends_at FROM saving_rooms WHERE id = ?');
+        $endsStmt->execute([$roomId]);
+        $swapEnds = (string)$endsStmt->fetchColumn();
+
+        activityLog($db, $roomId, 'swap_window_started', ['swap_window_ends_at' => $swapEnds]);
+
+        $db->commit();
+
+        logLine("Swap window started: {$roomId}");
     }
 
-    activityLog($db, $roomId, 'room_started', []);
-    logLine("Room started: {$roomId}");
+    // During swap window, free slots for participants who retract (status=exited_prestart).
+    $swapRooms = $db->query("SELECT id, saving_type FROM saving_rooms WHERE room_state='swap_window' LIMIT 500")->fetchAll();
+    foreach ($swapRooms as $r) {
+        if ((string)($r['saving_type'] ?? '') !== 'B') continue;
+        syncRotationQueueToParticipants($db, (string)$r['id'], ['approved'], true);
+    }
+
+} else {
+    // Legacy behavior for installs that don't yet support swap windows.
+    $roomsToStart = $db->query("SELECT id FROM saving_rooms WHERE room_state='lobby' AND start_at <= NOW() LIMIT 500")->fetchAll();
+    foreach ($roomsToStart as $r) {
+        $roomId = (string)$r['id'];
+
+        $roomStmt = $db->prepare("SELECT id, start_at, periodicity, participation_amount, maker_user_id FROM saving_rooms WHERE id = ?");
+        $roomStmt->execute([$roomId]);
+        $room = $roomStmt->fetch();
+
+        $db->prepare("UPDATE saving_rooms SET room_state='active', lobby_state='locked', updated_at=NOW() WHERE id = ? AND room_state='lobby'")
+           ->execute([$roomId]);
+
+        // Promote approved participants to active
+        $db->prepare("UPDATE saving_room_participants SET status='active' WHERE room_id = ? AND status='approved'")
+           ->execute([$roomId]);
+
+        // Create first contribution cycle due at the scheduled start date (cycle_index=1)
+        // Grace window ends 48 hours after due.
+        $db->prepare("INSERT IGNORE INTO saving_room_contribution_cycles (room_id, cycle_index, due_at, grace_ends_at, status)
+                      VALUES (?, 1, ?, DATE_ADD(?, INTERVAL 48 HOUR), 'open')")
+           ->execute([$roomId, $room['start_at'], $room['start_at']]);
+
+        // Ensure each active participant has a contribution row for cycle 1
+        $cycleIdStmt = $db->prepare("SELECT id FROM saving_room_contribution_cycles WHERE room_id = ? AND cycle_index = 1");
+        $cycleIdStmt->execute([$roomId]);
+        $cycleId = (int)$cycleIdStmt->fetchColumn();
+
+        if ($cycleId > 0) {
+            $parts = $db->prepare("SELECT user_id FROM saving_room_participants WHERE room_id = ? AND status = 'active'");
+            $parts->execute([$roomId]);
+            $amount = (string)$room['participation_amount'];
+            foreach ($parts->fetchAll() as $p) {
+                ensureContributionRow($db, $roomId, (int)$p['user_id'], $cycleId, $amount);
+            }
+        }
+
+        activityLog($db, $roomId, 'room_started', []);
+        logLine("Room started: {$roomId}");
+    }
 }
 
 // ───────────────────────────────────────────────────────────
-//  2b) Ensure future contribution cycles exist
+//  2b) End swap window → activate room and start contributions
+// ───────────────────────────────────────────────────────────
+if ($supportsSwapWindow) {
+    $swapEnded = $db->query("SELECT id, saving_type, participation_amount
+                             FROM saving_rooms
+                             WHERE room_state='swap_window'
+                               AND swap_window_ends_at IS NOT NULL
+                               AND swap_window_ends_at <= NOW()
+                             LIMIT 500")->fetchAll();
+
+    foreach ($swapEnded as $r) {
+        $roomId = (string)$r['id'];
+        $savingType = (string)($r['saving_type'] ?? '');
+
+        $db->beginTransaction();
+
+        $upd = $db->prepare("UPDATE saving_rooms SET room_state='active', updated_at=NOW() WHERE id = ? AND room_state='swap_window'");
+        $upd->execute([$roomId]);
+
+        if ($upd->rowCount() < 1) {
+            $db->rollBack();
+            continue;
+        }
+
+        // Promote approved participants to active
+        $db->prepare("UPDATE saving_room_participants SET status='active' WHERE room_id = ? AND status='approved'")
+           ->execute([$roomId]);
+
+        if ($savingType === 'B') {
+            syncRotationQueueToParticipants($db, $roomId, ['active']);
+        }
+
+        $dueAt = (new DateTimeImmutable('now'))->modify('+24 hours')->format('Y-m-d H:i:s');
+        $graceEndsAt = (new DateTimeImmutable($dueAt))->modify('+48 hours')->format('Y-m-d H:i:s');
+
+        $db->prepare("INSERT IGNORE INTO saving_room_contribution_cycles (room_id, cycle_index, due_at, grace_ends_at, status)
+                      VALUES (?, 1, ?, ?, 'open')")
+           ->execute([$roomId, $dueAt, $graceEndsAt]);
+
+        $cycleIdStmt = $db->prepare("SELECT id FROM saving_room_contribution_cycles WHERE room_id = ? AND cycle_index = 1");
+        $cycleIdStmt->execute([$roomId]);
+        $cycleId = (int)$cycleIdStmt->fetchColumn();
+
+        if ($cycleId > 0) {
+            $parts = $db->prepare("SELECT user_id FROM saving_room_participants WHERE room_id = ? AND status = 'active'");
+            $parts->execute([$roomId]);
+            $amount = (string)$r['participation_amount'];
+            foreach ($parts->fetchAll() as $p) {
+                ensureContributionRow($db, $roomId, (int)$p['user_id'], $cycleId, $amount);
+            }
+        }
+
+        $expiredSwaps = expirePendingSwapRequests($db, $roomId);
+
+        activityLog($db, $roomId, 'swap_window_ended', ['expired_swap_requests' => $expiredSwaps]);
+        activityLog($db, $roomId, 'room_started', []);
+
+        if ($savingType === 'B') {
+            initTypeBRotation($db, $roomId);
+        }
+
+        $db->commit();
+
+        logLine("Swap window ended / room active: {$roomId}");
+    }
+}
+
+// ───────────────────────────────────────────────────────────
+//  2c) Ensure future contribution cycles exist
 // ───────────────────────────────────────────────────────────
 $activeRooms = $db->query("SELECT id, periodicity FROM saving_rooms WHERE room_state='active' LIMIT 800")->fetchAll();
 foreach ($activeRooms as $r) {
@@ -856,12 +1231,24 @@ foreach ($pendingWins as $w) {
     $expires = (new DateTimeImmutable('now'))->modify('+72 hours')->format('Y-m-d H:i:s');
     $disputeEnds = (new DateTimeImmutable('now'))->modify('+24 hours')->format('Y-m-d H:i:s');
 
-    $db->prepare("UPDATE saving_room_rotation_windows
-                  SET status='revealed', revealed_at=NOW(), expires_at=?, dispute_window_ends_at=?
-                  WHERE id = ? AND status='pending_votes'")
-       ->execute([$expires, $disputeEnds, (int)$w['id']]);
+    $db->beginTransaction();
+
+    $upd = $db->prepare("UPDATE saving_room_rotation_windows
+                          SET status='revealed', revealed_at=NOW(), expires_at=?, dispute_window_ends_at=?
+                          WHERE id = ? AND status='pending_votes'");
+    $upd->execute([$expires, $disputeEnds, (int)$w['id']]);
+
+    if ($upd->rowCount() < 1) {
+        $db->rollBack();
+        continue;
+    }
+
+    // Rotate the destination unlock code before the window becomes visible.
+    rotateRoomDestinationUnlockCode($db, $roomId, 'typeB_turn_revealed', ['rotation_index' => $rotationIndex]);
 
     activityLog($db, $roomId, 'typeB_turn_revealed', ['rotation_index' => $rotationIndex, 'expires_at' => $expires]);
+
+    $db->commit();
 
     notifyOnce(
         $db,
@@ -928,6 +1315,9 @@ foreach ($expiredWins as $w) {
 
     $db->prepare("UPDATE saving_room_rotation_queue SET status='completed' WHERE room_id = ? AND user_id = ? AND status='active_window'")
        ->execute([$roomId, (int)$w['user_id']]);
+
+    // Immediately rotate the destination unlock code so the previous turn user cannot use it in the gap.
+    rotateRoomDestinationUnlockCode($db, $roomId, 'typeB_turn_expired', ['rotation_index' => $rotationIndex]);
 
     activityLog($db, $roomId, 'typeB_turn_expired', ['rotation_index' => $rotationIndex]);
 
