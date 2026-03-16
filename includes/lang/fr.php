@@ -216,7 +216,7 @@ return [
     'admin.carriers_intro_html' => 'Définissez la politique PIN et les modèles USSD (utilisés par l’app mobile et par <em>Créer un verrou → Portefeuille mobile money</em>). Le flux portefeuille est conçu pour des modèles qui demandent le nouveau PIN dans le composeur, donc <strong>Changer le PIN</strong> doit inclure <code>{old_pin}</code> mais pas <code>{new_pin}</code>. Le modèle <strong>Solde</strong> doit inclure <code>{new_pin}</code>.',
 
     'admin.destination_accounts_title' => 'Comptes de destination (Salles d’épargne)',
-    'admin.destination_accounts_intro' => 'Ces comptes reçoivent les dépôts pour les salles d’épargne. Les codes de déverrouillage sont stockés chiffrés et ne sont révélés aux participants qu’après consensus.',
+    'admin.destination_accounts_intro' => 'Ces comptes reçoivent les dépôts pour les salles d’épargne. Les codes de déverrouillage sont stockés par salle (chiffrés) et tournent automatiquement ; les admins peuvent les faire tourner par salle si besoin.',
 
     'admin.escrow_title' => 'Règlements de séquestre (Salles d’épargne)',
     'admin.escrow_intro' => 'File opérationnelle pour remboursements / redistribution après retraits (avertissements) ou sorties approuvées. Les règlements sont enregistrés automatiquement ; marquez-les comme traités après traitement hors plateforme.',
@@ -1055,8 +1055,16 @@ return [
     'rooms.field.escrow_policy' => 'Politique d’escrow en cas de suppression d’une sanction',
     'rooms.escrow.redistribute' => 'Redistribution proportionnelle',
     'rooms.escrow.refund_minus_fee' => 'Retour moins frais de plateforme',
-    'rooms.btn.create_room' => 'Créer la salle',
 
+    'rooms.field.destination_account' => 'Compte de destination (optionnel)',
+    'rooms.destination_account.type_any' => 'Tout type',
+    'rooms.destination_account.type_mobile_money' => 'Mobile money',
+    'rooms.destination_account.type_bank' => 'Banque',
+    'rooms.destination_account.type_crypto' => 'Portefeuille crypto',
+    'rooms.destination_account.auto' => 'Sélection automatique',
+    'rooms.destination_account_hint' => 'Optionnel : choisissez un compte de destination. Sinon, un compte actif est sélectionné automatiquement.',
+
+    'rooms.btn.create_room' => 'Créer la salle',
     'rooms.purpose.education' => 'Éducation',
     'rooms.purpose.travel' => 'Voyage',
     'rooms.purpose.business' => 'Entreprise',

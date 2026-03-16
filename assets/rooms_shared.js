@@ -509,6 +509,9 @@
     const privacy_mode = (document.getElementById('cr-privacy') || {}).checked ? 1 : 0;
     const escrow_policy = (document.getElementById('cr-escrow') || {}).value;
 
+    const destination_account_type = (document.getElementById('cr-dest-type') || {}).value;
+    const destination_account_id = parseInt(((document.getElementById('cr-dest-account') || {}).value)||'0',10);
+
     if(!goal){
       setMsg('cr-msg', STR.err_goal_required, false);
       return;
@@ -530,7 +533,7 @@
     }
 
     try{
-      const r = await postStrong('/api/rooms.php', {
+      const payload = {
         action:'create_room',
         goal_text: goal,
         purpose_category,
@@ -545,7 +548,16 @@
         reveal_at,
         privacy_mode,
         escrow_policy,
-      });
+      };
+
+      if(destination_account_type){
+        payload.destination_account_type = destination_account_type;
+      }
+      if(destination_account_id > 0){
+        payload.destination_account_id = destination_account_id;
+      }
+
+      const r = await postStrong('/api/rooms.php', payload);
 
       if(!r || !r.success) throw new Error((r && r.error) ? r.error : STR.failed);
 
@@ -567,8 +579,84 @@
     await loadMyRooms();
   }
 
+  let createDestAccounts = [];
+  let createDestInitDone = false;
+
+  function maskTail(s, n){
+    const str = String(s||'').trim();
+    if(!str) return '';
+    const keep = Math.max(2, Math.min(10, (n||4)));
+    const tail = str.slice(-keep);
+    return '••••' + tail;
+  }
+
+  function buildCreateDestOptions(){
+    const typeSel = document.getElementById('cr-dest-type');
+    const acctSel = document.getElementById('cr-dest-account');
+    if(!typeSel || !acctSel) return;
+
+    const firstOpt = acctSel.querySelector('option');
+    const autoText = firstOpt ? String(firstOpt.textContent||'Auto select') : 'Auto select';
+
+    const t = String(typeSel.value||'');
+
+    acctSel.innerHTML = '';
+
+    const opt0 = document.createElement('option');
+    opt0.value = '';
+    opt0.textContent = autoText;
+    acctSel.appendChild(opt0);
+
+    (createDestAccounts||[]).forEach(a => {
+      if(!a) return;
+      if(t && String(a.account_type||'') !== t) return;
+      const opt = document.createElement('option');
+      opt.value = String(a.id||'');
+      opt.textContent = a.summary || a.display_label || (String(a.account_type||'') + ' #' + String(a.id||''));
+      acctSel.appendChild(opt);
+    });
+  }
+
+  async function initCreateDestAccounts(){
+    const typeSel = document.getElementById('cr-dest-type');
+    const acctSel = document.getElementById('cr-dest-account');
+    if(!typeSel || !acctSel || createDestInitDone) return;
+    createDestInitDone = true;
+
+    typeSel.addEventListener('change', buildCreateDestOptions);
+
+    try{
+      const r = await get('/api/rooms.php?action=destination_accounts');
+      if(r && r.success){
+        createDestAccounts = Array.isArray(r.accounts) ? r.accounts : [];
+
+        // Back-compat: if the server did not return a summary, build a minimal one.
+        createDestAccounts = createDestAccounts.map(a => {
+          if(a && !a.summary){
+            if(a.account_type === 'mobile_money' && a.mobile_money_number){
+              a.summary = (a.display_label ? (a.display_label + ' — ') : '') + 'Mobile money ' + maskTail(a.mobile_money_number, 4);
+            } else if(a.account_type === 'bank' && (a.bank_name || a.bank_account_number)){
+              a.summary = (a.display_label ? (a.display_label + ' — ') : '') + (a.bank_name ? (a.bank_name + ' ') : 'Bank ') + maskTail(a.bank_account_number, 4);
+            } else if(a.account_type === 'crypto_wallet' && (a.crypto_address || a.crypto_wallet_address)){
+              const addr = a.crypto_address || a.crypto_wallet_address;
+              const net = a.crypto_network || a.crypto_wallet_network;
+              const head = String(addr||'').slice(0, 6);
+              const tail = String(addr||'').slice(-4);
+              a.summary = (a.display_label ? (a.display_label + ' — ') : '') + (net ? (net + ' ') : '') + head + '…' + tail;
+            }
+          }
+          return a;
+        });
+      }
+    }catch(e){
+      // best effort
+    }
+
+    buildCreateDestOptions();
+  }
+
   function initCreate(){
-    // no-op
+    initCreateDestAccounts();
   }
 
   window.Rooms = window.Rooms || {};

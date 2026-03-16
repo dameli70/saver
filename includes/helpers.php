@@ -204,6 +204,54 @@ function hasProfileImageUrlColumn(): bool {
     }
 }
 
+function dbHasTable(string $table): bool {
+    static $cache = [];
+    if (array_key_exists($table, $cache)) return (bool)$cache[$table];
+
+    try {
+        $db = getDB();
+        $stmt = $db->prepare("SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ? LIMIT 1");
+        $stmt->execute([$table]);
+        $cache[$table] = (bool)$stmt->fetchColumn();
+    } catch (Throwable) {
+        $cache[$table] = false;
+    }
+
+    return (bool)$cache[$table];
+}
+
+function dbHasColumn(string $table, string $column): bool {
+    static $cache = [];
+    $key = $table . '.' . $column;
+    if (array_key_exists($key, $cache)) return (bool)$cache[$key];
+
+    try {
+        $db = getDB();
+        $stmt = $db->prepare("SELECT 1 FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ? LIMIT 1");
+        $stmt->execute([$table, $column]);
+        $cache[$key] = (bool)$stmt->fetchColumn();
+    } catch (Throwable) {
+        $cache[$key] = false;
+    }
+
+    return (bool)$cache[$key];
+}
+
+function generateRandomUnlockCode(int $length = 12): string {
+    $len = max(6, min(64, (int)$length));
+
+    // Human-friendly alphabet (no 0/1/I/O).
+    $alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    $out = '';
+
+    $max = strlen($alphabet) - 1;
+    for ($i = 0; $i < $len; $i++) {
+        $out .= $alphabet[random_int(0, $max)];
+    }
+
+    return $out;
+}
+
 function sqlRoomUserDisplayNameExpr(string $alias = 'u', string $idCol = 'id'): string {
     if (!hasRoomDisplayNameColumn()) {
         return "CONCAT('User #', {$alias}.{$idCol})";

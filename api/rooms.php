@@ -13,6 +13,7 @@ header('Content-Type: application/json');
 startSecureSession();
 
 $body = json_decode(file_get_contents('php://input'), true);
+if (!is_array($body)) $body = [];
 $action = $body['action'] ?? ($_GET['action'] ?? '');
 
 function ensureUserTrustRowRooms(int $userId): void {
@@ -114,10 +115,141 @@ function countApprovedParticipants(string $roomId): int {
     return (int)$stmt->fetchColumn();
 }
 
+function ensureRoomSlotPositionAssigned(PDO $db, string $roomId, int $userId): void {
+    if (!dbHasColumn('saving_room_participants', 'slot_position')) return;
+
+    $cur = $db->prepare('SELECT slot_position FROM saving_room_participants WHERE room_id = ? AND user_id = ?');
+    $cur->execute([$roomId, (int)$userId]);
+    $curSlot = $cur->fetchColumn();
+
+    if ($curSlot !== null && $curSlot !== '') return;
+
+    $maxStmt = $db->prepare("SELECT COALESCE(MAX(slot_position), 0) FROM saving_room_participants WHERE room_id = ?");
+    $maxStmt->execute([$roomId]);
+    $next = (int)$maxStmt->fetchColumn() + 1;
+
+    $db->prepare('UPDATE saving_room_participants SET slot_position = ? WHERE room_id = ? AND user_id = ?')
+       ->execute([$next, $roomId, (int)$userId]);
+}
+
+function getRoomSwapWindowInfo(array $room): array {
+    $opens = null;
+    $closes = null;
+
+    if (!empty($room['swap_window_opens_at'])) {
+        $opens = (string)$room['swap_window_opens_at'];
+    } else if (!empty($room['swap_window_starts_at'])) {
+        $opens = (string)$room['swap_window_starts_at'];
+    } else if (!empty($room['swap_window_start_at'])) {
+        $opens = (string)$room['swap_window_start_at'];
+    }
+
+    if (!empty($room['swap_window_closes_at'])) {
+        $closes = (string)$room['swap_window_closes_at'];
+    } else if (!empty($room['swap_window_ends_at'])) {
+        $closes = (string)$room['swap_window_ends_at'];
+    } else if (!empty($room['swap_window_end_at'])) {
+        $closes = (string)$room['swap_window_end_at'];
+    }
+
+    if ($closes === null && !empty($room['start_at'])) {
+        $closes = (string)$room['start_at'];
+    }
+
+    $now = time();
+    $openOk = true;
+    $closeOk = true;
+
+    if ($opens !== null) {
+        $ts = strtotime($opens);
+        $openOk = !$ts || $now >= $ts;
+    }
+    if ($closes !== null) {
+        $ts = strtotime($closes);
+        $closeOk = !$ts || $now < $ts;
+    }
+
+    return [
+        'opens_at' => $opens,
+        'closes_at' => $closes,
+        'is_open' => ($openOk && $closeOk) ? 1 : 0,
+    ];
+}
+
+function swapRoomSlotPositions(PDO $db, string $roomId, int $userA, int $userB): bool {
+    $queueCount = $db->prepare('SELECT COUNT(*) FROM saving_room_rotation_queue WHERE room_id = ?');
+    $queueCount->execute([$roomId]);
+    $hasQueue = (int)$queueCount->fetchColumn() > 0;
+
+    if ($hasQueue) {
+        $posStmt = $db->prepare('SELECT user_id, position FROM saving_room_rotation_queue WHERE room_id = ? AND user_id IN (?, ?)');
+        $posStmt->execute([$roomId, (int)$userA, (int)$userB]);
+        $rows = $posStmt->fetchAll();
+
+        if (count($rows) !== 2) return false;
+
+        $posA = null;
+        $posB = null;
+        foreach ($rows as $r) {
+            if ((int)$r['user_id'] === $userA) $posA = (int)$r['position'];
+            if ((int)$r['user_id'] === $userB) $posB = (int)$r['position'];
+        }
+        if ($posA === null || $posB === null) return false;
+
+        $db->prepare('UPDATE saving_room_rotation_queue SET position = 0 WHERE room_id = ? AND user_id = ?')
+           ->execute([$roomId, (int)$userA]);
+        $db->prepare('UPDATE saving_room_rotation_queue SET position = ? WHERE room_id = ? AND user_id = ?')
+           ->execute([$posA, $roomId, (int)$userB]);
+        $db->prepare('UPDATE saving_room_rotation_queue SET position = ? WHERE room_id = ? AND user_id = ?')
+           ->execute([$posB, $roomId, (int)$userA]);
+
+        return true;
+    }
+
+    if (dbHasColumn('saving_room_participants', 'slot_position')) {
+        ensureRoomSlotPositionAssigned($db, $roomId, $userA);
+        ensureRoomSlotPositionAssigned($db, $roomId, $userB);
+
+        $posStmt = $db->prepare("SELECT user_id, slot_position
+                                 FROM saving_room_participants
+                                 WHERE room_id = ? AND user_id IN (?, ?)");
+        $posStmt->execute([$roomId, (int)$userA, (int)$userB]);
+        $rows = $posStmt->fetchAll();
+        if (count($rows) !== 2) return false;
+
+        $posA = null;
+        $posB = null;
+        foreach ($rows as $r) {
+            if ((int)$r['user_id'] === $userA) $posA = (int)$r['slot_position'];
+            if ((int)$r['user_id'] === $userB) $posB = (int)$r['slot_position'];
+        }
+        if ($posA === null || $posB === null) return false;
+
+        $db->prepare('UPDATE saving_room_participants SET slot_position = 0 WHERE room_id = ? AND user_id = ?')
+           ->execute([$roomId, (int)$userA]);
+        $db->prepare('UPDATE saving_room_participants SET slot_position = ? WHERE room_id = ? AND user_id = ?')
+           ->execute([$posA, $roomId, (int)$userB]);
+        $db->prepare('UPDATE saving_room_participants SET slot_position = ? WHERE room_id = ? AND user_id = ?')
+           ->execute([$posB, $roomId, (int)$userA]);
+
+        return true;
+    }
+
+    return false;
+}
+
 function roomExistsAndJoinable(string $roomId): array {
     $db = getDB();
-    $stmt = $db->prepare("SELECT id, maker_user_id, room_state, lobby_state, visibility, required_trust_level, max_participants, min_participants, start_at, reveal_at, periodicity, participation_amount, saving_type, goal_text, purpose_category, privacy_mode, escrow_policy, extensions_used
-                          FROM saving_rooms WHERE id = ?");
+
+    $cols = "id, maker_user_id, room_state, lobby_state, visibility, required_trust_level, max_participants, min_participants, start_at, reveal_at, periodicity, participation_amount, saving_type, goal_text, purpose_category, privacy_mode, escrow_policy, extensions_used";
+
+    foreach (['swap_window_opens_at','swap_window_closes_at','swap_window_starts_at','swap_window_ends_at','swap_window_start_at','swap_window_end_at'] as $c) {
+        if (dbHasColumn('saving_rooms', $c)) {
+            $cols .= ", {$c}";
+        }
+    }
+
+    $stmt = $db->prepare("SELECT {$cols} FROM saving_rooms WHERE id = ?");
     $stmt->execute([$roomId]);
     $room = $stmt->fetch();
     if (!$room) jsonResponse(['error' => 'Room not found'], 404);
@@ -310,6 +442,72 @@ if ($action === 'discover') {
     ]);
 }
 
+// ── DESTINATION ACCOUNTS (active, masked; for room creation) ─
+if ($action === 'destination_accounts') {
+    requireLogin();
+    requireVerifiedEmail();
+
+    $db = getDB();
+
+    if (!dbHasTable('platform_destination_accounts')) {
+        jsonResponse(['success' => true, 'accounts' => []]);
+    }
+
+    $sel = "id, account_type";
+    $sel .= dbHasColumn('platform_destination_accounts', 'display_label') ? ", display_label" : ", NULL AS display_label";
+    $sel .= ", mobile_money_number, bank_name, bank_account_number";
+    $sel .= dbHasColumn('platform_destination_accounts', 'crypto_network') ? ", crypto_network" : ", NULL AS crypto_network";
+    $sel .= dbHasColumn('platform_destination_accounts', 'crypto_address') ? ", crypto_address" : ", NULL AS crypto_address";
+    // legacy naming (if any)
+    $sel .= dbHasColumn('platform_destination_accounts', 'crypto_wallet_network') ? ", crypto_wallet_network" : ", NULL AS crypto_wallet_network";
+    $sel .= dbHasColumn('platform_destination_accounts', 'crypto_wallet_address') ? ", crypto_wallet_address" : ", NULL AS crypto_wallet_address";
+
+    $rows = $db->query("SELECT {$sel} FROM platform_destination_accounts WHERE is_active = 1 ORDER BY id ASC")->fetchAll();
+
+    $maskTail = function(string $s, int $n = 4): string {
+        $str = trim($s);
+        if ($str === '') return '';
+        $keep = max(2, min(10, $n));
+        return '••••' . substr($str, -$keep);
+    };
+
+    $out = [];
+    foreach ($rows as $r) {
+        $type = (string)($r['account_type'] ?? '');
+        $label = $r['display_label'] ? (string)$r['display_label'] : '';
+
+        $summary = $label !== '' ? ($label . ' — ') : '';
+
+        if ($type === 'mobile_money') {
+            $summary .= 'Mobile money ' . $maskTail((string)($r['mobile_money_number'] ?? ''), 4);
+        } else if ($type === 'bank') {
+            $bank = trim((string)($r['bank_name'] ?? ''));
+            $summary .= ($bank !== '' ? ($bank . ' ') : 'Bank ');
+            $summary .= $maskTail((string)($r['bank_account_number'] ?? ''), 4);
+        } else if ($type === 'crypto_wallet') {
+            $net = trim((string)($r['crypto_network'] ?? ($r['crypto_wallet_network'] ?? '')));
+            $addr = trim((string)($r['crypto_address'] ?? ($r['crypto_wallet_address'] ?? '')));
+            $summary .= ($net !== '' ? ($net . ' ') : '');
+            if ($addr !== '') {
+                $summary .= substr($addr, 0, 6) . '…' . substr($addr, -4);
+            } else {
+                $summary .= 'Crypto wallet';
+            }
+        } else {
+            $summary .= strtoupper($type);
+        }
+
+        $out[] = [
+            'id' => (int)$r['id'],
+            'account_type' => $type,
+            'display_label' => $label !== '' ? $label : null,
+            'summary' => $summary,
+        ];
+    }
+
+    jsonResponse(['success' => true, 'accounts' => $out]);
+}
+
 // ── MY ROOMS (for UI navigation) ────────────────────────────
 if ($action === 'my_rooms') {
     requireLogin();
@@ -486,15 +684,148 @@ if ($action === 'room_detail') {
     $destinationAccount = null;
     $canSeeDest = (((int)$room['maker_user_id'] === $userId) || isAdmin($userId) || in_array((string)$myStatus, ['approved','active'], true));
     if ($canSeeDest) {
-        $da = $db->prepare("SELECT a.id, a.account_type, a.carrier_id, a.mobile_money_number,
-                                   a.bank_name, a.bank_account_name, a.bank_account_number, a.bank_routing_number, a.bank_swift, a.bank_iban,
-                                   a.code_rotated_at, a.code_rotation_version
+        $sel = "a.id, a.account_type";
+
+        if (dbHasColumn('platform_destination_accounts', 'display_label')) {
+            $sel .= ', a.display_label';
+        }
+
+        $sel .= ", a.carrier_id, a.mobile_money_number,
+                a.bank_name, a.bank_account_name, a.bank_account_number, a.bank_routing_number, a.bank_swift, a.bank_iban";
+
+        foreach (['crypto_network','crypto_address'] as $c) {
+            if (dbHasColumn('platform_destination_accounts', $c)) {
+                $sel .= ", a.{$c}";
+            }
+        }
+
+        if (dbHasColumn('platform_destination_accounts', 'code_rotated_at')) {
+            $sel .= ', a.code_rotated_at';
+        }
+        if (dbHasColumn('platform_destination_accounts', 'code_rotation_version')) {
+            $sel .= ', a.code_rotation_version';
+        }
+
+        if (dbHasColumn('saving_room_accounts', 'code_rotated_at')) {
+            $sel .= ', ra.code_rotated_at AS room_code_rotated_at';
+        }
+        if (dbHasColumn('saving_room_accounts', 'code_rotation_version')) {
+            $sel .= ', ra.code_rotation_version AS room_code_rotation_version';
+        }
+
+        $da = $db->prepare("SELECT {$sel}
                             FROM saving_room_accounts ra
                             JOIN platform_destination_accounts a ON a.id = ra.account_id
                             WHERE ra.room_id = ?
                             LIMIT 1");
         $da->execute([$roomId]);
         $destinationAccount = $da->fetch() ?: null;
+    }
+
+    $swapWindow = getRoomSwapWindowInfo($room);
+
+    $slots = null;
+    $slotSwaps = null;
+
+    $canSeeSlots = (((int)$room['maker_user_id'] === $userId) || isAdmin($userId) || in_array((string)$myStatus, ['approved','active'], true));
+    if ($canSeeSlots) {
+        $slots = [];
+
+        $q = $db->prepare("SELECT q.user_id, q.position, q.status AS queue_status,
+                                  p.status AS participant_status,
+                                  {$uNameExpr} AS display_name
+                           FROM saving_room_rotation_queue q
+                           JOIN saving_room_participants p
+                             ON p.room_id = q.room_id
+                            AND p.user_id = q.user_id
+                           JOIN users u ON u.id = q.user_id
+                           WHERE q.room_id = ?
+                           ORDER BY q.position ASC");
+        $q->execute([$roomId]);
+        $rows = $q->fetchAll();
+
+        if ($rows) {
+            foreach ($rows as $r) {
+                $slots[] = [
+                    'user_id' => (int)$r['user_id'],
+                    'display_name' => $r['display_name'],
+                    'position' => (int)$r['position'],
+                    'queue_status' => $r['queue_status'],
+                    'participant_status' => $r['participant_status'],
+                ];
+            }
+        } else if (dbHasColumn('saving_room_participants', 'slot_position')) {
+            $p = $db->prepare("SELECT p.user_id, p.slot_position AS position, p.status AS participant_status,
+                                      {$uNameExpr} AS display_name
+                               FROM saving_room_participants p
+                               JOIN users u ON u.id = p.user_id
+                               WHERE p.room_id = ?
+                                 AND p.status IN ('approved','active')
+                               ORDER BY p.slot_position ASC");
+            $p->execute([$roomId]);
+            foreach ($p->fetchAll() as $r) {
+                $slots[] = [
+                    'user_id' => (int)$r['user_id'],
+                    'display_name' => $r['display_name'],
+                    'position' => (int)$r['position'],
+                    'participant_status' => $r['participant_status'],
+                ];
+            }
+        } else {
+            $p = $db->prepare("SELECT p.user_id, p.status AS participant_status,
+                                      {$uNameExpr} AS display_name,
+                                      p.joined_at
+                               FROM saving_room_participants p
+                               JOIN users u ON u.id = p.user_id
+                               WHERE p.room_id = ?
+                                 AND p.status IN ('approved','active')
+                               ORDER BY p.joined_at ASC");
+            $p->execute([$roomId]);
+            $i = 1;
+            foreach ($p->fetchAll() as $r) {
+                $slots[] = [
+                    'user_id' => (int)$r['user_id'],
+                    'display_name' => $r['display_name'],
+                    'position' => $i,
+                    'participant_status' => $r['participant_status'],
+                ];
+                $i++;
+            }
+        }
+
+        if (dbHasTable('saving_room_slot_swaps')) {
+            $uNameExpr2 = sqlRoomUserDisplayNameExpr('u2', 'id');
+
+            $swapSel = "s.id, s.from_user_id, {$uNameExpr} AS from_name,
+                        s.to_user_id, {$uNameExpr2} AS to_name,
+                        s.status, s.created_at";
+            $swapSel .= dbHasColumn('saving_room_slot_swaps', 'responded_at') ? ', s.responded_at' : ', NULL AS responded_at';
+            $swapSel .= dbHasColumn('saving_room_slot_swaps', 'expires_at') ? ', s.expires_at' : ', NULL AS expires_at';
+
+            $sw = $db->prepare("SELECT {$swapSel}
+                                FROM saving_room_slot_swaps s
+                                JOIN users u ON u.id = s.from_user_id
+                                JOIN users u2 ON u2.id = s.to_user_id
+                                WHERE s.room_id = ?
+                                  AND s.status IN ('pending','accepted','declined','cancelled')
+                                ORDER BY s.created_at DESC
+                                LIMIT 50");
+            $sw->execute([$roomId]);
+            $slotSwaps = [];
+            foreach ($sw->fetchAll() as $r) {
+                $slotSwaps[] = [
+                    'id' => (int)$r['id'],
+                    'from_user_id' => (int)$r['from_user_id'],
+                    'from_name' => $r['from_name'],
+                    'to_user_id' => (int)$r['to_user_id'],
+                    'to_name' => $r['to_name'],
+                    'status' => $r['status'],
+                    'created_at' => $r['created_at'],
+                    'responded_at' => $r['responded_at'],
+                    'expires_at' => $r['expires_at'],
+                ];
+            }
+        }
     }
 
     $unlock = null;
@@ -756,6 +1087,9 @@ if ($action === 'room_detail') {
                 'status' => $activeCycle['status'],
             ] : null,
             'destination_account' => $destinationAccount,
+            'swap_window' => $swapWindow,
+            'slots' => $slots,
+            'slot_swaps' => $slotSwaps,
             'unlock' => $unlock,
             'rotation' => $rotation,
             'exit_request' => $exitRequest,
@@ -763,6 +1097,311 @@ if ($action === 'room_detail') {
         'participants' => $participants,
         'escrow_settlements' => $settlements,
     ]);
+}
+
+// ── SLOTS (Type B queue / lobby slots) ─────────────────────
+if ($action === 'list_slots') {
+    requireLogin();
+    requireVerifiedEmail();
+
+    $userId = (int)getCurrentUserId();
+    $roomId = (string)($_GET['room_id'] ?? '');
+    if ($roomId === '' || strlen($roomId) !== 36) jsonResponse(['error' => 'Invalid room_id'], 400);
+
+    $room = roomExistsAndJoinable($roomId);
+
+    $db = getDB();
+    $myStmt = $db->prepare('SELECT status FROM saving_room_participants WHERE room_id = ? AND user_id = ?');
+    $myStmt->execute([$roomId, $userId]);
+    $myStatus = $myStmt->fetchColumn();
+
+    $canSeeSlots = (((int)$room['maker_user_id'] === $userId) || isAdmin($userId) || in_array((string)$myStatus, ['approved','active'], true));
+    if (!$canSeeSlots) jsonResponse(['error' => 'Not an eligible participant'], 403);
+
+    $uNameExpr = sqlRoomUserDisplayNameExpr('u', 'id');
+
+    $swapWindow = getRoomSwapWindowInfo($room);
+    $slots = [];
+
+    $q = $db->prepare("SELECT q.user_id, q.position, q.status AS queue_status,
+                              p.status AS participant_status,
+                              {$uNameExpr} AS display_name
+                       FROM saving_room_rotation_queue q
+                       JOIN saving_room_participants p
+                         ON p.room_id = q.room_id
+                        AND p.user_id = q.user_id
+                       JOIN users u ON u.id = q.user_id
+                       WHERE q.room_id = ?
+                       ORDER BY q.position ASC");
+    $q->execute([$roomId]);
+    $rows = $q->fetchAll();
+
+    if ($rows) {
+        foreach ($rows as $r) {
+            $slots[] = [
+                'user_id' => (int)$r['user_id'],
+                'display_name' => $r['display_name'],
+                'position' => (int)$r['position'],
+                'queue_status' => $r['queue_status'],
+                'participant_status' => $r['participant_status'],
+            ];
+        }
+    } else if (dbHasColumn('saving_room_participants', 'slot_position')) {
+        $p = $db->prepare("SELECT p.user_id, p.slot_position AS position, p.status AS participant_status,
+                                  {$uNameExpr} AS display_name
+                           FROM saving_room_participants p
+                           JOIN users u ON u.id = p.user_id
+                           WHERE p.room_id = ?
+                             AND p.status IN ('approved','active')
+                           ORDER BY p.slot_position ASC");
+        $p->execute([$roomId]);
+        foreach ($p->fetchAll() as $r) {
+            $slots[] = [
+                'user_id' => (int)$r['user_id'],
+                'display_name' => $r['display_name'],
+                'position' => (int)$r['position'],
+                'participant_status' => $r['participant_status'],
+            ];
+        }
+    } else {
+        $p = $db->prepare("SELECT p.user_id, p.status AS participant_status,
+                                  {$uNameExpr} AS display_name,
+                                  p.joined_at
+                           FROM saving_room_participants p
+                           JOIN users u ON u.id = p.user_id
+                           WHERE p.room_id = ?
+                             AND p.status IN ('approved','active')
+                           ORDER BY p.joined_at ASC");
+        $p->execute([$roomId]);
+        $i = 1;
+        foreach ($p->fetchAll() as $r) {
+            $slots[] = [
+                'user_id' => (int)$r['user_id'],
+                'display_name' => $r['display_name'],
+                'position' => $i,
+                'participant_status' => $r['participant_status'],
+            ];
+            $i++;
+        }
+    }
+
+    $slotSwaps = null;
+    if (dbHasTable('saving_room_slot_swaps')) {
+        $uNameExpr2 = sqlRoomUserDisplayNameExpr('u2', 'id');
+
+        $swapSel = "s.id, s.from_user_id, {$uNameExpr} AS from_name,
+                    s.to_user_id, {$uNameExpr2} AS to_name,
+                    s.status, s.created_at";
+        $swapSel .= dbHasColumn('saving_room_slot_swaps', 'responded_at') ? ', s.responded_at' : ', NULL AS responded_at';
+        $swapSel .= dbHasColumn('saving_room_slot_swaps', 'expires_at') ? ', s.expires_at' : ', NULL AS expires_at';
+
+        $sw = $db->prepare("SELECT {$swapSel}
+                            FROM saving_room_slot_swaps s
+                            JOIN users u ON u.id = s.from_user_id
+                            JOIN users u2 ON u2.id = s.to_user_id
+                            WHERE s.room_id = ?
+                              AND s.status IN ('pending','accepted','declined','cancelled')
+                            ORDER BY s.created_at DESC
+                            LIMIT 50");
+        $sw->execute([$roomId]);
+        $slotSwaps = [];
+        foreach ($sw->fetchAll() as $r) {
+            $slotSwaps[] = [
+                'id' => (int)$r['id'],
+                'from_user_id' => (int)$r['from_user_id'],
+                'from_name' => $r['from_name'],
+                'to_user_id' => (int)$r['to_user_id'],
+                'to_name' => $r['to_name'],
+                'status' => $r['status'],
+                'created_at' => $r['created_at'],
+                'responded_at' => $r['responded_at'],
+                'expires_at' => $r['expires_at'],
+            ];
+        }
+    }
+
+    jsonResponse([
+        'success' => true,
+        'swap_window' => $swapWindow,
+        'slots' => $slots,
+        'slot_swaps' => $slotSwaps,
+    ]);
+}
+
+if ($action === 'request_swap') {
+    requireLogin();
+    requireVerifiedEmail();
+    requireCsrf();
+    requireStrongAuth();
+
+    $userId = (int)getCurrentUserId();
+    $roomId = (string)($body['room_id'] ?? '');
+    $toUserId = (int)($body['to_user_id'] ?? 0);
+
+    if ($roomId === '' || strlen($roomId) !== 36) jsonResponse(['error' => 'Invalid room_id'], 400);
+    if ($toUserId < 1) jsonResponse(['error' => 'to_user_id required'], 400);
+    if ($toUserId === $userId) jsonResponse(['error' => 'Cannot swap with yourself'], 400);
+
+    if (!dbHasTable('saving_room_slot_swaps')) {
+        jsonResponse(['error' => 'Slot swaps are unavailable. Apply database migrations.'], 409);
+    }
+
+    $room = roomExistsAndJoinable($roomId);
+    $swapWindow = getRoomSwapWindowInfo($room);
+    if (empty($swapWindow['is_open'])) jsonResponse(['error' => 'Swap window is closed'], 403);
+
+    $db = getDB();
+
+    $me = $db->prepare('SELECT status FROM saving_room_participants WHERE room_id = ? AND user_id = ?');
+    $me->execute([$roomId, $userId]);
+    $myStatus = (string)$me->fetchColumn();
+    if (!in_array($myStatus, ['approved','active'], true)) jsonResponse(['error' => 'Not an eligible participant'], 403);
+
+    $them = $db->prepare('SELECT status FROM saving_room_participants WHERE room_id = ? AND user_id = ?');
+    $them->execute([$roomId, $toUserId]);
+    $toStatus = (string)$them->fetchColumn();
+    if (!in_array($toStatus, ['approved','active'], true)) jsonResponse(['error' => 'Target user is not an eligible participant'], 403);
+
+    $existing = $db->prepare("SELECT id FROM saving_room_slot_swaps
+                              WHERE room_id = ?
+                                AND status = 'pending'
+                                AND ((from_user_id = ? AND to_user_id = ?)
+                                     OR (from_user_id = ? AND to_user_id = ?))
+                              LIMIT 1");
+    $existing->execute([$roomId, $userId, $toUserId, $toUserId, $userId]);
+    if ($existing->fetchColumn()) jsonResponse(['error' => 'A swap request between these users is already pending'], 409);
+
+    $expiresAt = (string)($swapWindow['closes_at'] ?? '');
+    if ($expiresAt === '') $expiresAt = (string)($room['start_at'] ?? '');
+
+    $cols = ['room_id','from_user_id','to_user_id','status'];
+    $vals = [$roomId, $userId, $toUserId, 'pending'];
+
+    if (dbHasColumn('saving_room_slot_swaps', 'expires_at')) {
+        $cols[] = 'expires_at';
+        $vals[] = $expiresAt !== '' ? $expiresAt : null;
+    }
+
+    $ph = implode(',', array_fill(0, count($cols), '?'));
+    $db->prepare('INSERT INTO saving_room_slot_swaps (' . implode(',', $cols) . ') VALUES (' . $ph . ')')
+       ->execute($vals);
+
+    $swapId = (int)$db->lastInsertId();
+
+    activityLog($roomId, 'slot_swap_requested', ['swap_id' => $swapId]);
+
+    auditLog('room_slot_swap_request');
+    jsonResponse(['success' => true, 'swap_id' => $swapId, 'expires_at' => $expiresAt]);
+}
+
+if ($action === 'respond_swap') {
+    requireLogin();
+    requireVerifiedEmail();
+    requireCsrf();
+    requireStrongAuth();
+
+    $userId = (int)getCurrentUserId();
+    $swapId = (int)($body['swap_id'] ?? ($body['request_id'] ?? 0));
+    $decision = (string)($body['decision'] ?? '');
+
+    if ($swapId < 1) jsonResponse(['error' => 'swap_id required'], 400);
+    if (!in_array($decision, ['accept','decline'], true)) jsonResponse(['error' => 'Invalid decision'], 400);
+
+    if (!dbHasTable('saving_room_slot_swaps')) {
+        jsonResponse(['error' => 'Slot swaps are unavailable. Apply database migrations.'], 409);
+    }
+
+    $db = getDB();
+
+    $sel = 'id, room_id, from_user_id, to_user_id, status';
+    $sel .= dbHasColumn('saving_room_slot_swaps', 'expires_at') ? ', expires_at' : ', NULL AS expires_at';
+
+    $stmt = $db->prepare("SELECT {$sel} FROM saving_room_slot_swaps WHERE id = ? LIMIT 1");
+    $stmt->execute([$swapId]);
+    $swap = $stmt->fetch();
+
+    if (!$swap) jsonResponse(['error' => 'Swap request not found'], 404);
+    if ((int)$swap['to_user_id'] !== $userId) jsonResponse(['error' => 'Not your swap request'], 403);
+    if ((string)$swap['status'] !== 'pending') jsonResponse(['error' => 'Swap request is not pending'], 409);
+
+    $exp = (string)($swap['expires_at'] ?? '');
+    if ($exp !== '' && time() >= strtotime($exp)) {
+        $db->prepare("UPDATE saving_room_slot_swaps SET status='cancelled', responded_at=NOW() WHERE id = ? AND status='pending'")
+           ->execute([$swapId]);
+        jsonResponse(['error' => 'Swap request has expired'], 403);
+    }
+
+    $room = roomExistsAndJoinable((string)$swap['room_id']);
+    $swapWindow = getRoomSwapWindowInfo($room);
+    if (empty($swapWindow['is_open'])) jsonResponse(['error' => 'Swap window is closed'], 403);
+
+    if ($decision === 'decline') {
+        $db->prepare("UPDATE saving_room_slot_swaps SET status='declined', responded_at=NOW() WHERE id = ? AND status='pending'")
+           ->execute([$swapId]);
+
+        activityLog((string)$swap['room_id'], 'slot_swap_declined', ['swap_id' => $swapId]);
+
+        auditLog('room_slot_swap_decline');
+        jsonResponse(['success' => true]);
+    }
+
+    $db->beginTransaction();
+
+    $upd = $db->prepare("UPDATE saving_room_slot_swaps SET status='accepted', responded_at=NOW() WHERE id = ? AND status='pending'");
+    $upd->execute([$swapId]);
+
+    if ($upd->rowCount() < 1) {
+        $db->commit();
+        auditLog('room_slot_swap_accept');
+        jsonResponse(['success' => true, 'accepted' => 1]);
+    }
+
+    $ok = swapRoomSlotPositions($db, (string)$swap['room_id'], (int)$swap['from_user_id'], (int)$swap['to_user_id']);
+    if (!$ok) {
+        $db->rollBack();
+        jsonResponse(['error' => 'Slots are not available to swap in this room'], 409);
+    }
+
+    activityLog((string)$swap['room_id'], 'slot_swap_accepted', ['swap_id' => $swapId]);
+
+    $db->commit();
+
+    auditLog('room_slot_swap_accept');
+    jsonResponse(['success' => true, 'accepted' => 1]);
+}
+
+if ($action === 'cancel_swap') {
+    requireLogin();
+    requireVerifiedEmail();
+    requireCsrf();
+    requireStrongAuth();
+
+    $userId = (int)getCurrentUserId();
+    $swapId = (int)($body['swap_id'] ?? ($body['request_id'] ?? 0));
+
+    if ($swapId < 1) jsonResponse(['error' => 'swap_id required'], 400);
+
+    if (!dbHasTable('saving_room_slot_swaps')) {
+        jsonResponse(['error' => 'Slot swaps are unavailable. Apply database migrations.'], 409);
+    }
+
+    $db = getDB();
+
+    $stmt = $db->prepare('SELECT id, room_id, from_user_id, status FROM saving_room_slot_swaps WHERE id = ? LIMIT 1');
+    $stmt->execute([$swapId]);
+    $swap = $stmt->fetch();
+
+    if (!$swap) jsonResponse(['error' => 'Swap request not found'], 404);
+    if ((int)$swap['from_user_id'] !== $userId) jsonResponse(['error' => 'Not your swap request'], 403);
+    if ((string)$swap['status'] !== 'pending') jsonResponse(['error' => 'Swap request is not pending'], 409);
+
+    $db->prepare("UPDATE saving_room_slot_swaps SET status='cancelled', responded_at=NOW() WHERE id = ? AND status='pending'")
+       ->execute([$swapId]);
+
+    activityLog((string)$swap['room_id'], 'slot_swap_cancelled', ['swap_id' => $swapId]);
+
+    auditLog('room_slot_swap_cancel');
+    jsonResponse(['success' => true]);
 }
 
 // ── ACTIVITY (polling fallback) ─────────────────────────────
@@ -917,11 +1556,67 @@ if ($action === 'create_room') {
 
     $db = getDB();
 
-    // Select a default active destination account.
-    $acctId = (int)$db->query("SELECT id FROM platform_destination_accounts WHERE is_active = 1 ORDER BY id ASC LIMIT 1")->fetchColumn();
-    if ($acctId < 1) {
-        jsonResponse(['error' => 'No active destination account is configured. Ask an admin to create one.'], 500);
+    $acctSelect = "id, account_type";
+    foreach (['unlock_code_enc','code_rotated_at','code_rotation_version'] as $c) {
+        if (dbHasColumn('platform_destination_accounts', $c)) {
+            $acctSelect .= ", {$c}";
+        }
     }
+
+    $destinationAccountId = (int)($body['destination_account_id'] ?? 0);
+    $destinationAccountType = (string)($body['destination_account_type'] ?? '');
+
+    $allowedDestTypes = ['mobile_money','bank','crypto_wallet'];
+    if ($destinationAccountType !== '' && !in_array($destinationAccountType, $allowedDestTypes, true)) {
+        jsonResponse(['error' => 'Invalid destination_account_type'], 400);
+    }
+
+    $acct = null;
+
+    if ($destinationAccountId > 0) {
+        $acctStmt = $db->prepare("SELECT {$acctSelect}
+                                  FROM platform_destination_accounts
+                                  WHERE id = ? AND is_active = 1
+                                  LIMIT 1");
+        $acctStmt->execute([$destinationAccountId]);
+        $acct = $acctStmt->fetch();
+        if (!$acct) {
+            jsonResponse(['error' => 'Destination account not found or inactive'], 400);
+        }
+    } else {
+        $sql = "SELECT {$acctSelect}
+                FROM platform_destination_accounts
+                WHERE is_active = 1";
+        $params = [];
+
+        if ($destinationAccountType !== '') {
+            $sql .= " AND account_type = ?";
+            $params[] = $destinationAccountType;
+        }
+
+        $sql .= " ORDER BY id ASC LIMIT 1";
+
+        $acctStmt = $db->prepare($sql);
+        $acctStmt->execute($params);
+        $acct = $acctStmt->fetch();
+
+        if (!$acct) {
+            jsonResponse(['error' => 'No active destination account is configured. Ask an admin to create one.'], 500);
+        }
+    }
+
+    $acctId = (int)$acct['id'];
+
+    $acctUnlockEnc = null;
+    if (is_array($acct) && array_key_exists('unlock_code_enc', $acct)) {
+        $v = $acct['unlock_code_enc'];
+        if ($v !== null && $v !== '') {
+            $acctUnlockEnc = (string)$v;
+        }
+    }
+
+    $acctCodeRotatedAt = (is_array($acct) && array_key_exists('code_rotated_at', $acct)) ? ($acct['code_rotated_at'] ?? null) : null;
+    $acctCodeRotationVersion = (is_array($acct) && array_key_exists('code_rotation_version', $acct)) ? (int)($acct['code_rotation_version'] ?? 1) : 1;
 
     $roomId = generateUUID();
 
@@ -957,9 +1652,30 @@ if ($action === 'create_room') {
                   VALUES (?, ?, 'approved', NOW())")
        ->execute([$roomId, $userId]);
 
-    // Link destination account.
-    $db->prepare("INSERT INTO saving_room_accounts (room_id, account_id) VALUES (?, ?)")
-       ->execute([$roomId, $acctId]);
+    ensureRoomSlotPositionAssigned($db, $roomId, $userId);
+
+    // Link destination account + snapshot per-room unlock code (if supported by schema).
+    $cols = ['room_id', 'account_id'];
+    $vals = [$roomId, $acctId];
+
+    if (dbHasColumn('saving_room_accounts', 'unlock_code_enc')) {
+        $cols[] = 'unlock_code_enc';
+        $vals[] = $acctUnlockEnc;
+    }
+
+    if (dbHasColumn('saving_room_accounts', 'code_rotated_at')) {
+        $cols[] = 'code_rotated_at';
+        $vals[] = $acctCodeRotatedAt;
+    }
+
+    if (dbHasColumn('saving_room_accounts', 'code_rotation_version')) {
+        $cols[] = 'code_rotation_version';
+        $vals[] = $acctCodeRotationVersion;
+    }
+
+    $placeholders = implode(',', array_fill(0, count($cols), '?'));
+    $db->prepare('INSERT INTO saving_room_accounts (' . implode(',', $cols) . ') VALUES (' . $placeholders . ')')
+       ->execute($vals);
 
     activityLog($roomId, 'room_created', ['visibility' => $visibility, 'saving_type' => $savingType]);
 
@@ -1235,6 +1951,8 @@ if ($action === 'respond_invite') {
                   VALUES (?, ?, 'approved', NOW())
                   ON DUPLICATE KEY UPDATE status='approved', approved_at=NOW()")
        ->execute([$roomId, $userId]);
+
+    ensureRoomSlotPositionAssigned($db, $roomId, $userId);
 
     activityLog($roomId, 'invite_accepted', []);
 
@@ -1523,6 +2241,8 @@ if ($action === 'review_join') {
 
         $db->prepare("UPDATE saving_room_participants SET status='approved', approved_at=NOW() WHERE room_id = ? AND user_id = ?")
            ->execute([(string)$req['room_id'], (int)$req['user_id']]);
+
+        ensureRoomSlotPositionAssigned($db, (string)$req['room_id'], (int)$req['user_id']);
 
         activityLog((string)$req['room_id'], 'join_approved', []);
 
@@ -1823,19 +2543,44 @@ if ($action === 'typeA_reveal') {
         ], 403);
     }
 
-    // Resolve destination account + decrypt unlock code
-    $acctStmt = $db->prepare("SELECT a.id, a.unlock_code_enc
+    // Resolve destination account + decrypt per-room unlock code
+    $sel = "a.id";
+    if (dbHasColumn('platform_destination_accounts', 'unlock_code_enc')) {
+        $sel .= ", a.unlock_code_enc AS template_unlock_code_enc";
+    } else {
+        $sel .= ", NULL AS template_unlock_code_enc";
+    }
+
+    if (dbHasColumn('saving_room_accounts', 'unlock_code_enc')) {
+        $sel .= ', ra.unlock_code_enc AS room_unlock_code_enc';
+    } else {
+        $sel .= ', NULL AS room_unlock_code_enc';
+    }
+
+    $acctStmt = $db->prepare("SELECT {$sel}
                               FROM saving_room_accounts ra
                               JOIN platform_destination_accounts a ON a.id = ra.account_id
                               WHERE ra.room_id = ?
                               LIMIT 1");
     $acctStmt->execute([$roomId]);
     $acct = $acctStmt->fetch();
-    if (!$acct || empty($acct['unlock_code_enc'])) {
+
+    if (!$acct) {
         jsonResponse(['error' => 'Destination account is not configured for this room'], 500);
     }
 
-    $unlockCode = decryptFromDb((string)$acct['unlock_code_enc']);
+    $enc = '';
+    if (!empty($acct['room_unlock_code_enc'])) {
+        $enc = (string)$acct['room_unlock_code_enc'];
+    } else if (!empty($acct['template_unlock_code_enc'])) {
+        $enc = (string)$acct['template_unlock_code_enc'];
+    }
+
+    if ($enc === '') {
+        jsonResponse(['error' => 'Destination account is not configured for this room'], 500);
+    }
+
+    $unlockCode = decryptFromDb($enc);
 
     // Create / update unlock event status
     $ev = $db->prepare('SELECT status, revealed_at, expires_at FROM saving_room_unlock_events WHERE room_id = ?');
@@ -2313,16 +3058,39 @@ if ($action === 'typeB_reveal') {
         jsonResponse(['error' => 'Unlock window has expired'], 403);
     }
 
-    $acctStmt = $db->prepare("SELECT a.unlock_code_enc
+    $sel = "";
+    if (dbHasColumn('platform_destination_accounts', 'unlock_code_enc')) {
+        $sel .= "a.unlock_code_enc AS template_unlock_code_enc";
+    } else {
+        $sel .= "NULL AS template_unlock_code_enc";
+    }
+
+    if (dbHasColumn('saving_room_accounts', 'unlock_code_enc')) {
+        $sel .= ', ra.unlock_code_enc AS room_unlock_code_enc';
+    } else {
+        $sel .= ', NULL AS room_unlock_code_enc';
+    }
+
+    $acctStmt = $db->prepare("SELECT {$sel}
                               FROM saving_room_accounts ra
                               JOIN platform_destination_accounts a ON a.id = ra.account_id
                               WHERE ra.room_id = ?
                               LIMIT 1");
     $acctStmt->execute([$roomId]);
-    $enc = $acctStmt->fetchColumn();
-    if (!$enc) jsonResponse(['error' => 'Destination account is not configured for this room'], 500);
+    $acct = $acctStmt->fetch();
 
-    $unlockCode = decryptFromDb((string)$enc);
+    if (!$acct) jsonResponse(['error' => 'Destination account is not configured for this room'], 500);
+
+    $enc = '';
+    if (!empty($acct['room_unlock_code_enc'])) {
+        $enc = (string)$acct['room_unlock_code_enc'];
+    } else if (!empty($acct['template_unlock_code_enc'])) {
+        $enc = (string)$acct['template_unlock_code_enc'];
+    }
+
+    if ($enc === '') jsonResponse(['error' => 'Destination account is not configured for this room'], 500);
+
+    $unlockCode = decryptFromDb($enc);
 
     auditLog('room_typeB_reveal');
 

@@ -216,7 +216,7 @@ return [
     'admin.carriers_intro_html' => 'Define carrier PIN policy and USSD templates (used by the mobile app and by <em>Create Lock → Mobile money wallet</em>). The wallet flow is designed for templates that prompt for the new PIN in the dialer, so <strong>Change PIN</strong> should include <code>{old_pin}</code> but not <code>{new_pin}</code>. The <strong>Balance</strong> template should include <code>{new_pin}</code>.',
 
     'admin.destination_accounts_title' => 'Destination accounts (Saving Rooms)',
-    'admin.destination_accounts_intro' => 'These accounts receive deposits for saving rooms. Unlock codes are stored encrypted and are only revealed to participants after consensus.',
+    'admin.destination_accounts_intro' => 'These accounts receive deposits for saving rooms. Unlock codes are stored per-room (encrypted) and rotated automatically; admins can rotate them per room when needed.',
 
     'admin.escrow_title' => 'Escrow settlements (Saving Rooms)',
     'admin.escrow_intro' => 'Operational queue for refunds / redistribution after removals (strikes) or approved exits. Settlements are recorded automatically; mark them processed after handling them off-platform.',
@@ -1088,6 +1088,15 @@ return [
     'rooms.field.escrow_policy' => 'Escrow policy on strike removal',
     'rooms.escrow.redistribute' => 'Proportional redistribution',
     'rooms.escrow.refund_minus_fee' => 'Return minus platform fee',
+
+    'rooms.field.destination_account' => 'Destination account (optional)',
+    'rooms.destination_account.type_any' => 'Any type',
+    'rooms.destination_account.type_mobile_money' => 'Mobile money',
+    'rooms.destination_account.type_bank' => 'Bank',
+    'rooms.destination_account.type_crypto' => 'Crypto wallet',
+    'rooms.destination_account.auto' => 'Auto select',
+    'rooms.destination_account_hint' => 'Optional: choose a destination account. If left blank, an active account is selected automatically.',
+
     'rooms.btn.create_room' => 'Create room',
 
     'rooms.purpose.education' => 'Education',

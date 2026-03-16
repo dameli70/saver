@@ -266,34 +266,53 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--code-bg);border:
     <div style="display:grid;grid-template-columns:1fr;gap:12px;margin-bottom:12px;">
       <div class="field">
         <label>Account type</label>
-        <input id="da-type" placeholder="mobile_money or bank" value="mobile_money">
+        <select id="da-type" onchange="syncDestinationAccountFields()">
+          <option value="mobile_money">mobile_money</option>
+          <option value="bank">bank</option>
+          <option value="crypto_wallet">crypto_wallet</option>
+        </select>
       </div>
 
       <div class="field">
-        <label>Carrier ID (mobile money)</label>
-        <input id="da-carrier" placeholder="e.g. 1">
-      </div>
-      <div class="field">
-        <label>Mobile money number</label>
-        <input id="da-mm" placeholder="e.g. +233...">
+        <label>Label (optional)</label>
+        <input id="da-label" placeholder="e.g. Main escrow">
       </div>
 
-      <div class="field">
-        <label>Bank name</label>
-        <input id="da-bank" placeholder="e.g. ABC Bank">
-      </div>
-      <div class="field">
-        <label>Bank account name (optional)</label>
-        <input id="da-bank-name" placeholder="e.g. <?= htmlspecialchars(APP_NAME) ?> ESCROW">
-      </div>
-      <div class="field">
-        <label>Bank account number</label>
-        <input id="da-bank-num" placeholder="e.g. 1234567890">
+      <div id="da-mobile-fields">
+        <div class="field">
+          <label>Carrier ID (mobile money)</label>
+          <input id="da-carrier" placeholder="e.g. 1">
+        </div>
+        <div class="field">
+          <label>Mobile money number</label>
+          <input id="da-mm" placeholder="e.g. +233...">
+        </div>
       </div>
 
-      <div class="field">
-        <label>Unlock code</label>
-        <input id="da-code" placeholder="PIN / password / passphrase">
+      <div id="da-bank-fields" style="display:none;">
+        <div class="field">
+          <label>Bank name</label>
+          <input id="da-bank" placeholder="e.g. ABC Bank">
+        </div>
+        <div class="field">
+          <label>Bank account name (optional)</label>
+          <input id="da-bank-name" placeholder="e.g. <?= htmlspecialchars(APP_NAME) ?> ESCROW">
+        </div>
+        <div class="field">
+          <label>Bank account number</label>
+          <input id="da-bank-num" placeholder="e.g. 1234567890">
+        </div>
+      </div>
+
+      <div id="da-crypto-fields" style="display:none;">
+        <div class="field">
+          <label>Crypto network</label>
+          <input id="da-crypto-network" placeholder="e.g. BTC / ETH / TRC20">
+        </div>
+        <div class="field">
+          <label>Wallet address</label>
+          <input id="da-crypto-address" placeholder="e.g. 0x...">
+        </div>
       </div>
 
       <label class="chk" style="margin:0;"><input type="checkbox" id="da-active" checked> <span>Active</span></label>
@@ -315,6 +334,33 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--code-bg);border:
             <th>Rotated</th>
             <th>Version</th>
             <th>Active</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <hr>
+    <div class="card-title" style="font-size:12px;">Room unlock codes</div>
+    <div class="p" style="margin-top:0;">Unlock codes are stored encrypted. They are never shown in plaintext and must be entered again when rotating.</div>
+
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
+      <button class="btn btn-ghost btn-sm" onclick="loadRoomAccounts()">↻ Refresh</button>
+    </div>
+    <div id="ra-msg" class="msg"></div>
+
+    <div class="table-wrap">
+      <table class="table" id="ra-table" style="min-width:1300px;">
+        <thead>
+          <tr>
+            <th>Room</th>
+            <th>Type</th>
+            <th>State</th>
+            <th>Account</th>
+            <th>Has code</th>
+            <th>Rotated</th>
+            <th>Version</th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -633,6 +679,19 @@ function carrierWalletCellHtml(c){
 let usersCache = [];
 let carriersCache = [];
 let destAccountsCache = [];
+let roomAccountsCache = [];
+
+function syncDestinationAccountFields(){
+  const t = (document.getElementById('da-type') && document.getElementById('da-type').value) ? document.getElementById('da-type').value : 'mobile_money';
+
+  const mm = document.getElementById('da-mobile-fields');
+  const bank = document.getElementById('da-bank-fields');
+  const crypto = document.getElementById('da-crypto-fields');
+
+  if(mm) mm.style.display = (t === 'mobile_money') ? 'block' : 'none';
+  if(bank) bank.style.display = (t === 'bank') ? 'block' : 'none';
+  if(crypto) crypto.style.display = (t === 'crypto_wallet') ? 'block' : 'none';
+}
 
 function trustSelectHtml(userId, cur){
   const lvl = parseInt(String(cur||'1'), 10);
@@ -1086,19 +1145,28 @@ async function loadDestinationAccounts(){
     tbody.innerHTML='';
     destAccountsCache.forEach(a => {
       const tr = document.createElement('tr');
-      const details = (a.account_type === 'mobile_money')
-        ? `carrier ${a.carrier_id||''} · ${a.mobile_money_number||''}`
-        : `${a.bank_name||''} · ${a.bank_account_number||''}`;
+      const lbl = a.display_label ? (String(a.display_label) + ' · ') : '';
+
+      let details = '';
+      if(a.account_type === 'mobile_money'){
+        details = `${lbl}carrier ${a.carrier_id||''} · ${a.mobile_money_number||''}`;
+      }else if(a.account_type === 'bank'){
+        details = `${lbl}${a.bank_name||''} · ${a.bank_account_number||''}`;
+      }else{
+        details = `${lbl}${a.crypto_network||''} · ${a.crypto_address||''}`;
+      }
+
+      const canRotate = !!a.code_rotation_version;
 
       tr.innerHTML = `
         <td>${a.id}</td>
         <td>${esc(a.account_type)}</td>
         <td>${esc(details)}</td>
-        <td>${fmt(a.code_rotated_at)}</td>
-        <td>${esc(a.code_rotation_version||'')}</td>
+        <td>${canRotate ? fmt(a.code_rotated_at) : '—'}</td>
+        <td>${canRotate ? esc(a.code_rotation_version||'') : '—'}</td>
         <td>${a.is_active ? '✓' : '—'}</td>
         <td>
-          <button class="btn btn-blue btn-sm" onclick="rotateDestinationAccount(${a.id})">Rotate code</button>
+          ${canRotate ? `<button class="btn btn-blue btn-sm" onclick="rotateDestinationAccount(${a.id})">Rotate code</button>` : ''}
           <button class="btn btn-blue btn-sm" onclick="toggleDestinationAccountActive(${a.id}, ${a.is_active?1:0})">Active</button>
         </td>
       `;
@@ -1262,35 +1330,128 @@ async function createDestinationAccount(){
   document.getElementById('da-msg').className = 'msg';
 
   const account_type = document.getElementById('da-type').value.trim();
+  const display_label = document.getElementById('da-label').value.trim();
+
   const carrier_id = parseInt(document.getElementById('da-carrier').value||'0',10);
   const mobile_money_number = document.getElementById('da-mm').value.trim();
+
   const bank_name = document.getElementById('da-bank').value.trim();
   const bank_account_name = document.getElementById('da-bank-name').value.trim();
   const bank_account_number = document.getElementById('da-bank-num').value.trim();
-  const unlock_code = document.getElementById('da-code').value;
+
+  const crypto_network = document.getElementById('da-crypto-network').value.trim();
+  const crypto_address = document.getElementById('da-crypto-address').value.trim();
+
   const is_active = document.getElementById('da-active').checked ? 1 : 0;
 
   try{
     const r = await postCsrf('/api/admin.php', {
       action:'destination_account_create',
       account_type,
+      display_label,
       carrier_id,
       mobile_money_number,
       bank_name,
       bank_account_name,
       bank_account_number,
-      unlock_code,
+      crypto_network,
+      crypto_address,
       is_active,
     });
 
     if(!r.success) throw new Error(r.error||'Failed');
 
     setMsg('da-msg','Destination account created.', true);
-    document.getElementById('da-code').value='';
+
+    document.getElementById('da-label').value='';
+    document.getElementById('da-carrier').value='';
+    document.getElementById('da-mm').value='';
+    document.getElementById('da-bank').value='';
+    document.getElementById('da-bank-name').value='';
+    document.getElementById('da-bank-num').value='';
+    document.getElementById('da-crypto-network').value='';
+    document.getElementById('da-crypto-address').value='';
+
     await loadDestinationAccounts();
 
   }catch(e){
     setMsg('da-msg', e.message||'Failed', false);
+  }
+}
+
+async function loadRoomAccounts(){
+  const tbody = document.querySelector('#ra-table tbody');
+  const msg = document.getElementById('ra-msg');
+  if(!tbody || !msg) return;
+
+  tbody.innerHTML = '<tr><td colspan="8" class="k">Loading…</td></tr>';
+  msg.className = 'msg';
+
+  try{
+    const r = await get('/api/admin.php?action=room_accounts');
+    if(!r.success) throw new Error(r.error||'Failed');
+    roomAccountsCache = r.rooms || [];
+
+    if(!roomAccountsCache.length){
+      tbody.innerHTML = '<tr><td colspan="8" class="k">No rooms.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML='';
+    roomAccountsCache.forEach(x => {
+      const tr = document.createElement('tr');
+      const goal = String(x.goal_text||'');
+      const goalShort = goal.length > 40 ? goal.slice(0,40) + '…' : goal;
+
+      let acct = '';
+      if(x.account_type === 'mobile_money'){
+        acct = `carrier · ${x.mobile_money_number||''}`;
+      }else if(x.account_type === 'bank'){
+        acct = `${x.bank_name||''} · ${x.bank_account_number||''}`;
+      }else if(x.account_type === 'crypto_wallet'){
+        acct = `${x.crypto_network||''} · ${x.crypto_address||''}`;
+      }
+
+      const hasCode = x.has_code ? '✓' : '—';
+      const ver = x.code_rotation_version ? esc(x.code_rotation_version) : '—';
+      const rot = x.code_rotated_at ? fmt(x.code_rotated_at) : '—';
+
+      tr.innerHTML = `
+        <td title="${esc(goal)}">${esc(goalShort)}<div class="k" style="font-size:10px;">${esc(x.room_id)}</div></td>
+        <td>${esc(x.saving_type||'')}</td>
+        <td>${esc(x.room_state||'')}</td>
+        <td>${esc(acct || ('Account ' + String(x.account_id||'')))}</td>
+        <td>${hasCode}</td>
+        <td>${rot}</td>
+        <td>${ver}</td>
+        <td>
+          <button class="btn btn-blue btn-sm" onclick="rotateRoomAccount(${JSON.stringify(x.room_id)})">Rotate code</button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+  }catch(e){
+    tbody.innerHTML = '<tr><td colspan="8" class="k">Failed to load rooms.</td></tr>';
+    setMsg('ra-msg', e.message||'Failed', false);
+  }
+}
+
+async function rotateRoomAccount(roomId){
+  document.getElementById('ra-msg').className = 'msg';
+
+  const unlock_code = prompt('Enter new unlock code');
+  if(!unlock_code) return;
+
+  try{
+    const r = await postCsrf('/api/admin.php', {action:'room_account_rotate', room_id: roomId, unlock_code});
+    if(!r.success) throw new Error(r.error||'Failed');
+
+    setMsg('ra-msg','Unlock code rotated.', true);
+    await loadRoomAccounts();
+
+  }catch(e){
+    setMsg('ra-msg', e.message||'Failed', false);
   }
 }
 
@@ -1371,7 +1532,11 @@ initCarrierTemplateUi();
 if(ADMIN_PAGE === 'users') loadUsers();
 if(ADMIN_PAGE === 'codes') loadCodes();
 if(ADMIN_PAGE === 'carriers') loadCarriers();
-if(ADMIN_PAGE === 'destination_accounts') loadDestinationAccounts();
+if(ADMIN_PAGE === 'destination_accounts'){
+  syncDestinationAccountFields();
+  loadDestinationAccounts();
+  loadRoomAccounts();
+}
 if(ADMIN_PAGE === 'escrow') loadEscrowSettlements();
 if(ADMIN_PAGE === 'disputes') loadDisputes();
 if(ADMIN_PAGE === 'audit') loadAudit();

@@ -436,7 +436,8 @@ CREATE TABLE IF NOT EXISTS saving_rooms (
     reveal_at             DATETIME NOT NULL,
 
     lobby_state           ENUM('open','locked') NOT NULL DEFAULT 'open',
-    room_state            ENUM('lobby','active','closed','cancelled') NOT NULL DEFAULT 'lobby',
+    room_state            ENUM('lobby','swap_window','active','closed','cancelled') NOT NULL DEFAULT 'lobby',
+    swap_window_ends_at   DATETIME NULL,
 
     privacy_mode          TINYINT(1) NOT NULL DEFAULT 1,
     escrow_policy         ENUM('redistribute','refund_minus_fee') NOT NULL DEFAULT 'redistribute',
@@ -570,7 +571,8 @@ CREATE TABLE IF NOT EXISTS saving_room_contributions (
 CREATE TABLE IF NOT EXISTS platform_destination_accounts (
     id                   INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
 
-    account_type          ENUM('mobile_money','bank') NOT NULL,
+    account_type          ENUM('mobile_money','bank','crypto_wallet') NOT NULL,
+    display_label         VARCHAR(120) NULL,
 
     carrier_id            INT UNSIGNED NULL,
     mobile_money_number   VARCHAR(64) NULL,
@@ -582,9 +584,8 @@ CREATE TABLE IF NOT EXISTS platform_destination_accounts (
     bank_swift            VARCHAR(64) NULL,
     bank_iban             VARCHAR(64) NULL,
 
-    unlock_code_enc       TEXT NOT NULL,
-    code_rotated_at       DATETIME NULL,
-    code_rotation_version INT UNSIGNED NOT NULL DEFAULT 1,
+    crypto_network        VARCHAR(64) NULL,
+    crypto_address        VARCHAR(180) NULL,
 
     is_active             TINYINT(1) NOT NULL DEFAULT 1,
 
@@ -598,7 +599,13 @@ CREATE TABLE IF NOT EXISTS platform_destination_accounts (
 CREATE TABLE IF NOT EXISTS saving_room_accounts (
     room_id     CHAR(36) PRIMARY KEY,
     account_id  INT UNSIGNED NOT NULL,
+
+    unlock_code_enc       TEXT NULL,
+    code_rotated_at       DATETIME NULL,
+    code_rotation_version INT UNSIGNED NOT NULL DEFAULT 1,
+
     created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at  DATETIME NULL,
 
     FOREIGN KEY (room_id) REFERENCES saving_rooms(id) ON DELETE CASCADE,
     FOREIGN KEY (account_id) REFERENCES platform_destination_accounts(id) ON DELETE RESTRICT,
@@ -623,6 +630,7 @@ CREATE TABLE IF NOT EXISTS saving_room_rotation_queue (
     user_id     INT UNSIGNED NOT NULL,
     position    INT UNSIGNED NOT NULL,
     status      ENUM('queued','active_window','completed','skipped_removed') NOT NULL DEFAULT 'queued',
+    slot_locked_at DATETIME NULL,
     created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
 
     PRIMARY KEY (room_id, user_id),
@@ -670,6 +678,31 @@ CREATE TABLE IF NOT EXISTS saving_room_unlock_votes (
 
     FOREIGN KEY (room_id) REFERENCES saving_rooms(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+-- ───────────────────────────────────────────────────────────
+-- Slot swap requests (pre-start)
+-- ───────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS saving_room_slot_swaps (
+    id           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    room_id      CHAR(36) NOT NULL,
+    from_user_id INT UNSIGNED NOT NULL,
+    to_user_id   INT UNSIGNED NOT NULL,
+
+    status       ENUM('pending','accepted','declined','expired','cancelled') NOT NULL DEFAULT 'pending',
+    expires_at   DATETIME NOT NULL,
+
+    created_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
+    responded_at DATETIME NULL,
+    updated_at   DATETIME NULL,
+
+    INDEX idx_room_status (room_id, status),
+    INDEX idx_from_status (from_user_id, status),
+    INDEX idx_to_status (to_user_id, status),
+
+    FOREIGN KEY (room_id) REFERENCES saving_rooms(id) ON DELETE CASCADE,
+    FOREIGN KEY (from_user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (to_user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 -- ───────────────────────────────────────────────────────────
