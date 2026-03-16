@@ -210,6 +210,9 @@
   #ls-sidebar .topbar-r .btn.btn-sm{padding:11px 12px;font-size:11px;min-height:42px;}
   #ls-sidebar .topbar-r .btn.nav-btn{justify-content:flex-start;gap:12px;}
   #ls-sidebar .topbar-r .btn.nav-btn .nav-ico{opacity:1;color:color-mix(in srgb, var(--accent) 70%, var(--text));}
+  #ls-sidebar .topbar-r a[href^="dashboard.php"]:hover .nav-ico,
+  #ls-sidebar .topbar-r a[href$="dashboard.php"]:hover .nav-ico{color:var(--green);}
+
   #ls-sidebar .topbar-r .btn.nav-btn .nav-lbl{font-family:var(--sans);
     font-size:12px;
     letter-spacing:.2px;
