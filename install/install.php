@@ -433,7 +433,7 @@ function applySqlFile(PDO $db, string $path, bool $ignoreDuplicateErrors): void 
             $head = stripLeadingSqlComments($trim);
             // Some migrations include SELECT/SHOW fallbacks (e.g. "SELECT 1").
             // If a statement returns a result set, fully consume all rowsets.
-            if (preg_match('/^(SELECT|SHOW|DESCRIBE|EXPLAIN|WITH|CALL)\b/i', $head)) {
+            if (preg_match('/^(SELECT|SHOW|DESCRIBE|EXPLAIN|WITH|CALL|EXECUTE)\b/i', $head)) {
                 $q = $db->query($stmt);
                 if ($q) {
                     do {
