@@ -804,6 +804,8 @@ function updateLocksSegCounts(){
 
   const src = allLocksSession || [];
 
+  const allowedFilters = ['all','sealed','ready','wallet','starred'];
+
   const counts = {
     all: src.filter(l => matchesQuery(l) && matchesSoon(l)).length,
     sealed: src.filter(l => matchesQuery(l) && matchesSoon(l) && matchesFilterFor('sealed', l)).length,
@@ -813,8 +815,15 @@ function updateLocksSegCounts(){
   };
 
   seg.querySelectorAll('button[data-filter]').forEach(b => {
-    const f = b.getAttribute('data-filter') || 'all';
-    if(!b.getAttribute('data-label')) b.setAttribute('data-label', String(b.textContent||'').trim());
+    const f0 = b.getAttribute('data-filter') || 'all';
+    const f = allowedFilters.includes(f0) ? f0 : 'all';
+
+    if(!b.getAttribute('data-label')){
+      const raw = String(b.textContent||'').trim();
+      const base0 = raw.replace(/\s*\(\d+\)\s*$/, '').trim();
+      b.setAttribute('data-label', base0);
+    }
+
     const base = b.getAttribute('data-label') || '';
     const n = (typeof counts[f] === 'number') ? counts[f] : counts.all;
     b.textContent = `${base} (${n})`;

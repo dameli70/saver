@@ -853,8 +853,10 @@ function openConfirmSheet(lockId, label){
 
   setTimeout(async ()=>{
     if(!pendingLock || confirmMode !== 'lock' || pendingLock.lock_id !== lockId) return;
-    await postCsrf('api/confirm.php',{lock_id:lockId,action:'auto_save'});
-    bar.style.display='block';
+    const r = await postCsrf('api/confirm.php',{lock_id:lockId,action:'auto_save'});
+    if(r && r.success && (String(r.status||'') === 'auto_saved' || String(r.already_set||'') === 'auto_saved')){
+      bar.style.display='block';
+    }
   }, 120000);
 }
 
