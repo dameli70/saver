@@ -14,23 +14,79 @@
   padding:16px;
   backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
   transition:transform .18s,box-shadow .18s,border-color .18s,background .18s;
+  display:flex;flex-direction:column;gap:12px;
 }
 @media(hover:hover){
   .room:hover{border-color:var(--b2);box-shadow:var(--shadow-card-hover);transform:translateY(-2px);}
 }
 
-.room-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px;}
-.room-goal{font-family:var(--display);font-weight:700;font-size:14px;line-height:1.25;letter-spacing:-.2px;}
-.badge{font-size:9px;letter-spacing:2px;text-transform:uppercase;border:1px solid rgb(var(--accent-rgb) / .28);
+/* Header hierarchy
+   New DOM: .room-head > (.room-title/.room-goal) + (.room-badges)
+   Back-compat: existing .room-top wrapper is treated as the header. */
+.room-top,.room-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;}
+.room-title{min-width:0;flex:1;}
+.room-goal{font-family:var(--display);font-weight:700;font-size:14px;line-height:1.25;letter-spacing:-.2px;min-width:0;}
+.room-sub{font-size:12px;line-height:1.6;color:var(--muted);margin-top:6px;}
+
+.room-badges{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap;}
+@media(max-width:520px){.room-badges{justify-content:flex-start;width:100%;}}
+
+/* Room-specific badge styling (do not override global .badge component) */
+.room .badge{font-size:9px;letter-spacing:2px;text-transform:uppercase;border:1px solid rgb(var(--accent-rgb) / .28);
   color:color-mix(in srgb, var(--accent) 85%, white 0%);
   padding:6px 10px;border-radius:999px;
   background:rgb(var(--accent-rgb) / .08);
 }
 
+/* Status chips (open/pending/restricted/etc.) */
+.status-chip,.chip{display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  font-family:var(--mono);
+  font-size:9px;letter-spacing:1.6px;text-transform:uppercase;
+  padding:6px 10px;border-radius:999px;
+  border:1px solid var(--b1);
+  background:linear-gradient(180deg, var(--s2), var(--s1));
+  color:var(--muted);
+  white-space:nowrap;
+}
+.status-chip.ok,.chip.ok,.status-chip.open,.chip.open{background:color-mix(in srgb, var(--green) 10%, transparent);
+  border-color:color-mix(in srgb, var(--green) 24%, transparent);
+  color:var(--green);
+}
+.status-chip.warn,.chip.warn,.status-chip.pending,.chip.pending{background:color-mix(in srgb, var(--orange) 10%, transparent);
+  border-color:color-mix(in srgb, var(--orange) 24%, transparent);
+  color:var(--orange);
+}
+.status-chip.err,.chip.err,.status-chip.closed,.chip.closed,.status-chip.restricted,.chip.restricted{background:color-mix(in srgb, var(--red) 10%, transparent);
+  border-color:color-mix(in srgb, var(--red) 26%, transparent);
+  color:var(--red);
+}
+.status-chip.info,.chip.info,.status-chip.member,.chip.member{background:rgb(var(--blue-rgb) / .10);
+  border-color:rgb(var(--blue-rgb) / .26);
+  color:var(--blue);
+}
+
+/* Meta section
+   New DOM: .room-meta > .meta-grid (items with .meta-item + (.meta-k/.meta-v) or dt/dd)
+   Back-compat: old .meta uses inline HTML with <br> + <b>. */
+.room-meta{border-top:1px solid var(--b1);padding-top:12px;}
+.room > .meta{border-top:1px solid var(--b1);padding-top:12px;}
 .meta{font-size:12px;line-height:1.7;color:var(--muted);}
 .meta b{color:var(--text);font-weight:600;}
 
-.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;}
+.meta-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 14px;}
+@media(max-width:520px){.meta-grid{grid-template-columns:1fr;}}
+
+.meta-item{min-width:0;}
+.meta-item{display:flex;flex-direction:column;gap:4px;}
+.meta-k,.meta-label,.meta-item dt{font-family:var(--mono);font-size:10px;letter-spacing:1.6px;text-transform:uppercase;
+  color:var(--muted);line-height:1.2;
+}
+.meta-v,.meta-value,.meta-item dd{margin:0;font-family:var(--mono);font-size:13px;letter-spacing:.2px;
+  color:var(--text);line-height:1.35;
+}
+
+.actions,.room-actions{display:flex;gap:10px;flex-wrap:wrap;}
+@media(max-width:420px){.actions .btn,.room-actions .btn{flex:1 1 100%;}}
 
 .cat-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
 .cat-btn{padding:10px 12px;min-height:38px;font-size:10px;}
