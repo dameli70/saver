@@ -582,12 +582,53 @@
   let createDestAccounts = [];
   let createDestInitDone = false;
 
-  function maskTail(s, n){
-    const str = String(s||'').trim();
-    if(!str) return '';
-    const keep = Math.max(2, Math.min(10, (n||4)));
-    const tail = str.slice(-keep);
-    return '••••' + tail;
+  function destAccountSummary(a){
+    if(!a) return '';
+
+    const type = String(a.account_type||'');
+    const label = a.display_label ? String(a.display_label) : '';
+
+    let core = '';
+
+    if(type === 'mobile_money'){
+      const masked = a.mobile_money_masked ? String(a.mobile_money_masked) : '';
+      core = masked ? tf('rooms.destination_account.summary.mobile_money', {masked}, `Mobile money ${masked}`)
+                    : tr('rooms.destination_account.summary.mobile_money_short', 'Mobile money');
+
+    }else if(type === 'bank'){
+      const bankName = a.bank_name ? String(a.bank_name) : '';
+      const masked = a.bank_account_masked ? String(a.bank_account_masked) : '';
+
+      if(bankName && masked){
+        core = tf('rooms.destination_account.summary.bank_named', {bank: bankName, masked}, `${bankName} ${masked}`);
+      }else if(masked){
+        core = tf('rooms.destination_account.summary.bank', {masked}, `Bank ${masked}`);
+      }else if(bankName){
+        core = bankName;
+      }else{
+        core = tr('rooms.destination_account.summary.bank_short', 'Bank');
+      }
+
+    }else if(type === 'crypto_wallet'){
+      const net = a.crypto_network ? String(a.crypto_network) : '';
+      const addr = a.crypto_address_masked ? String(a.crypto_address_masked) : '';
+
+      if(net && addr){
+        core = tf('rooms.destination_account.summary.crypto_wallet_with_network', {network: net, addr}, `Crypto wallet (${net}) ${addr}`);
+      }else if(net){
+        core = tf('rooms.destination_account.summary.crypto_wallet_with_network_no_addr', {network: net}, `Crypto wallet (${net})`);
+      }else if(addr){
+        core = tf('rooms.destination_account.summary.crypto_wallet', {addr}, `Crypto wallet ${addr}`);
+      }else{
+        core = tr('rooms.destination_account.summary.crypto_wallet_no_addr', 'Crypto wallet');
+      }
+
+    }else{
+      core = type ? type.toUpperCase() : '';
+    }
+
+    if(label) return label + ' — ' + core;
+    return core;
   }
 
   function buildCreateDestOptions(){
@@ -612,7 +653,7 @@
       if(t && String(a.account_type||'') !== t) return;
       const opt = document.createElement('option');
       opt.value = String(a.id||'');
-      opt.textContent = a.summary || a.display_label || (String(a.account_type||'') + ' #' + String(a.id||''));
+      opt.textContent = destAccountSummary(a) || a.display_label || (String(a.account_type||'') + ' #' + String(a.id||''));
       acctSel.appendChild(opt);
     });
   }
@@ -629,24 +670,6 @@
       const r = await get('/api/rooms.php?action=destination_accounts');
       if(r && r.success){
         createDestAccounts = Array.isArray(r.accounts) ? r.accounts : [];
-
-        // Back-compat: if the server did not return a summary, build a minimal one.
-        createDestAccounts = createDestAccounts.map(a => {
-          if(a && !a.summary){
-            if(a.account_type === 'mobile_money' && a.mobile_money_number){
-              a.summary = (a.display_label ? (a.display_label + ' — ') : '') + 'Mobile money ' + maskTail(a.mobile_money_number, 4);
-            } else if(a.account_type === 'bank' && (a.bank_name || a.bank_account_number)){
-              a.summary = (a.display_label ? (a.display_label + ' — ') : '') + (a.bank_name ? (a.bank_name + ' ') : 'Bank ') + maskTail(a.bank_account_number, 4);
-            } else if(a.account_type === 'crypto_wallet' && (a.crypto_address || a.crypto_wallet_address)){
-              const addr = a.crypto_address || a.crypto_wallet_address;
-              const net = a.crypto_network || a.crypto_wallet_network;
-              const head = String(addr||'').slice(0, 6);
-              const tail = String(addr||'').slice(-4);
-              a.summary = (a.display_label ? (a.display_label + ' — ') : '') + (net ? (net + ' ') : '') + head + '…' + tail;
-            }
-          }
-          return a;
-        });
       }
     }catch(e){
       // best effort

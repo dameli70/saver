@@ -342,8 +342,8 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--code-bg);border:
     </div>
 
     <hr>
-    <div class="card-title" style="font-size:12px;">Room unlock codes</div>
-    <div class="p" style="margin-top:0;">Unlock codes are stored encrypted. They are never shown in plaintext and must be entered again when rotating.</div>
+    <div class="card-title" style="font-size:12px;"><?php e('admin.rooms.unlock_codes_title'); ?></div>
+    <div class="p" style="margin-top:0;"><?php e('admin.rooms.unlock_codes_note'); ?></div>
 
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
       <button class="btn btn-ghost btn-sm" onclick="loadRoomAccounts()">↻ Refresh</button>
@@ -354,7 +354,7 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--code-bg);border:
       <table class="table" id="ra-table" style="min-width:1300px;">
         <thead>
           <tr>
-            <th>Room</th>
+            <th><?php e('admin.th.room'); ?></th>
             <th>Type</th>
             <th>State</th>
             <th>Account</th>
@@ -385,7 +385,7 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--code-bg);border:
         <thead>
           <tr>
             <th>ID</th>
-            <th>Room</th>
+            <th><?php e('admin.th.room'); ?></th>
             <th>Removed user</th>
             <th>Policy</th>
             <th>Total</th>
@@ -419,7 +419,7 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--code-bg);border:
         <thead>
           <tr>
             <th>ID</th>
-            <th>Room</th>
+            <th><?php e('admin.th.room'); ?></th>
             <th>Rotation</th>
             <th>Status</th>
             <th>Acks</th>
@@ -536,6 +536,10 @@ const ADMIN_PAGE = <?= json_encode($adminPage) ?>;
 <script src="assets/admin_shared.js"></script>
 <script src="assets/admin_users.js"></script>
 <script>
+const I18N = (window.LS_I18N && window.LS_I18N.strings) ? window.LS_I18N.strings : {};
+function i18n(key, fallback){
+  return (Object.prototype.hasOwnProperty.call(I18N, key) ? I18N[key] : null) || fallback || key;
+}
 
 function normalizeUssdTemplate(raw, requiredPlaceholder){
   const ph = (requiredPlaceholder === 'new_pin') ? '{new_pin}' : '{old_pin}';
@@ -1166,7 +1170,7 @@ async function loadDestinationAccounts(){
         <td>${canRotate ? esc(a.code_rotation_version||'') : '—'}</td>
         <td>${a.is_active ? '✓' : '—'}</td>
         <td>
-          ${canRotate ? `<button class="btn btn-blue btn-sm" onclick="rotateDestinationAccount(${a.id})">Rotate code</button>` : ''}
+          ${canRotate ? `<button class="btn btn-blue btn-sm" onclick="rotateDestinationAccount(${a.id})">${esc(i18n('admin.rooms.rotate_code', 'Rotate code'))}</button>` : ''}
           <button class="btn btn-blue btn-sm" onclick="toggleDestinationAccountActive(${a.id}, ${a.is_active?1:0})">Active</button>
         </td>
       `;
@@ -1393,7 +1397,7 @@ async function loadRoomAccounts(){
     roomAccountsCache = r.rooms || [];
 
     if(!roomAccountsCache.length){
-      tbody.innerHTML = '<tr><td colspan="8" class="k">No rooms.</td></tr>';
+      tbody.innerHTML = `<tr><td colspan="8" class="k">${esc(i18n('admin.rooms.no_rooms', 'No rooms.'))}</td></tr>`;
       return;
     }
 
@@ -1425,14 +1429,14 @@ async function loadRoomAccounts(){
         <td>${rot}</td>
         <td>${ver}</td>
         <td>
-          <button class="btn btn-blue btn-sm" onclick="rotateRoomAccount(${JSON.stringify(x.room_id)})">Rotate code</button>
+          <button class="btn btn-blue btn-sm" onclick="rotateRoomAccount(${JSON.stringify(x.room_id)})">${esc(i18n('admin.rooms.rotate_code', 'Rotate code'))}</button>
         </td>
       `;
       tbody.appendChild(tr);
     });
 
   }catch(e){
-    tbody.innerHTML = '<tr><td colspan="8" class="k">Failed to load rooms.</td></tr>';
+    tbody.innerHTML = `<tr><td colspan="8" class="k">${esc(i18n('admin.rooms.failed_to_load_rooms', 'Failed to load rooms.'))}</td></tr>`;
     setMsg('ra-msg', e.message||'Failed', false);
   }
 }
@@ -1440,14 +1444,14 @@ async function loadRoomAccounts(){
 async function rotateRoomAccount(roomId){
   document.getElementById('ra-msg').className = 'msg';
 
-  const unlock_code = prompt('Enter new unlock code');
+  const unlock_code = prompt(i18n('admin.rooms.prompt_enter_new_unlock_code', 'Enter new unlock code'));
   if(!unlock_code) return;
 
   try{
     const r = await postCsrf('/api/admin.php', {action:'room_account_rotate', room_id: roomId, unlock_code});
     if(!r.success) throw new Error(r.error||'Failed');
 
-    setMsg('ra-msg','Unlock code rotated.', true);
+    setMsg('ra-msg', i18n('admin.rooms.unlock_code_rotated', 'Unlock code rotated.'), true);
     await loadRoomAccounts();
 
   }catch(e){
@@ -1458,14 +1462,14 @@ async function rotateRoomAccount(roomId){
 async function rotateDestinationAccount(id){
   document.getElementById('da-msg').className = 'msg';
 
-  const unlock_code = prompt('Enter new unlock code');
+  const unlock_code = prompt(i18n('admin.rooms.prompt_enter_new_unlock_code', 'Enter new unlock code'));
   if(!unlock_code) return;
 
   try{
     const r = await postCsrf('/api/admin.php', {action:'destination_account_rotate', account_id:id, unlock_code});
     if(!r.success) throw new Error(r.error||'Failed');
 
-    setMsg('da-msg','Unlock code rotated.', true);
+    setMsg('da-msg', i18n('admin.rooms.unlock_code_rotated', 'Unlock code rotated.'), true);
     await loadDestinationAccounts();
 
   }catch(e){

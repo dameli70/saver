@@ -879,17 +879,23 @@ function renderRoom(){
       const makerVote = (r.rotation && r.rotation.maker_vote) ? r.rotation.maker_vote : 'none';
 
       if(cur){
-        document.getElementById('typeb-turn').textContent = `#${cur.rotation_index} · ${cur.turn_user_name || 'user'}`;
-        document.getElementById('typeb-consensus').textContent = `${approvals}/${required} required (you: ${myVote} · eligible ${eligible})`;
+        const turnUser = cur.turn_user_name || tr('common.user', null, 'user');
+        document.getElementById('typeb-turn').textContent = `#${cur.rotation_index} · ${turnUser}`;
+        document.getElementById('typeb-consensus').textContent = tr('room.rotation.consensus_you_required', {
+          approvals,
+          required,
+          vote: myVote,
+          eligible,
+        }, `${approvals}/${required} required (you: ${myVote} · eligible ${eligible})`);
 
         if(cur.status === 'revealed'){
-          document.getElementById('typeb-window').textContent = `Revealed · expires ${fmt(cur.expires_at)}`;
+          document.getElementById('typeb-window').textContent = tr('room.unlock.window_revealed_expires', {ts: fmt(cur.expires_at)}, `Revealed · expires ${fmt(cur.expires_at)}`);
         } else if(cur.status === 'blocked_dispute'){
-          document.getElementById('typeb-window').textContent = 'Blocked (dispute)';
+          document.getElementById('typeb-window').textContent = tr('room.rotation.blocked_dispute', null, 'Blocked (dispute)');
         } else if(cur.status === 'blocked_debt'){
-          document.getElementById('typeb-window').textContent = 'Blocked (unpaid contribution)';
+          document.getElementById('typeb-window').textContent = tr('room.rotation.blocked_debt', null, 'Blocked (unpaid contribution)');
         } else {
-          document.getElementById('typeb-window').textContent = 'Pending votes';
+          document.getElementById('typeb-window').textContent = tr('room.rotation.pending_votes', null, 'Pending votes');
         }
 
         document.getElementById('typeb-maker').textContent = makerVote;
@@ -913,10 +919,20 @@ function renderRoom(){
           dispWrap.style.display = showDispute ? 'block' : 'none';
 
           if(showDispute){
+            const windowTs = fmt(cur.dispute_window_ends_at);
+            const windowTxt = within
+              ? tr('room.dispute.window_ends_fmt', {ts: windowTs}, 'window ends ' + windowTs)
+              : tr('room.dispute.window_ended_fmt', {ts: windowTs}, 'window ended ' + windowTs);
+
             if(dispute){
-              const who = dispute.raised_by_name || 'participant';
-              const windowTxt = within ? ('window ends ' + fmt(cur.dispute_window_ends_at)) : ('window ended ' + fmt(cur.dispute_window_ends_at));
-              meta.textContent = `${dispute.status} · ${dispute.ack_count}/${dispute.threshold_required} acknowledgements · raised by ${who} · ${windowTxt}`;
+              const who = dispute.raised_by_name || tr('common.participant', null, 'participant');
+              meta.textContent = tr('room.dispute.meta_fmt', {
+                status: String(dispute.status||''),
+                ack_count: dispute.ack_count,
+                required: dispute.threshold_required,
+                who,
+                window: windowTxt,
+              }, `${dispute.status} · ${dispute.ack_count}/${dispute.threshold_required} acknowledgements · raised by ${who} · ${windowTxt}`);
 
               form.style.display = 'none';
 
@@ -927,7 +943,7 @@ function renderRoom(){
                 ackBtn.disabled = !canAck;
               }
             } else {
-              meta.textContent = within ? ('No dispute · window ends ' + fmt(cur.dispute_window_ends_at)) : ('No dispute · window ended ' + fmt(cur.dispute_window_ends_at));
+              meta.textContent = tr('room.dispute.meta_none_fmt', {window: windowTxt}, `No dispute · ${windowTxt}`);
               actions.style.display = 'none';
               form.style.display = (within && r.my_status === 'active') ? 'block' : 'none';
             }
@@ -960,7 +976,7 @@ function renderRoom(){
       const er = r.exit_request;
 
       if(!er){
-        if(meta) meta.textContent = 'No open exit request.';
+        if(meta) meta.textContent = tr('room.exit.no_open_request', null, 'No open exit request.');
         if(actReq) actReq.style.display = 'block';
         if(actVote) actVote.style.display = 'none';
         if(actCancel) actCancel.style.display = 'none';
@@ -970,7 +986,13 @@ function renderRoom(){
         const required = (er.votes && typeof er.votes.required !== 'undefined') ? er.votes.required : 0;
         const myVote = er.my_vote ? er.my_vote : '—';
 
-        if(meta) meta.textContent = `Open · requested by ${er.requested_by_name} · approvals ${approvals}/${required} · maker ${makerVote} · your vote ${myVote}`;
+        if(meta) meta.textContent = tr('room.exit.meta_open_fmt', {
+          name: String(er.requested_by_name||''),
+          approvals,
+          required,
+          maker: makerVote,
+          vote: myVote,
+        }, `Open · requested by ${er.requested_by_name} · approvals ${approvals}/${required} · maker ${makerVote} · your vote ${myVote}`);
 
         if(actReq) actReq.style.display = 'none';
 
@@ -1016,12 +1038,12 @@ async function loadRoom(){
   document.getElementById('room-msg').className='msg';
   try{
     const res = await get('/api/rooms.php?action=room_detail&room_id=' + encodeURIComponent(ROOM_ID) + inviteParam());
-    if(!res.success) throw new Error(res.error||'Failed');
+    if(!res.success) throw new Error(res.error||STR.failed);
     roomCache = res.room;
     roomCache.escrow_settlements = res.escrow_settlements || [];
     renderRoom();
   }catch(e){
-    setMsg('room-msg', e.message||'Failed', false);
+    setMsg('room-msg', e.message||STR.failed, false);
   }
 }
 
@@ -1032,7 +1054,7 @@ async function pollFeed(){
 
   try{
     const r = await get('/api/rooms.php?action=activity&room_id=' + encodeURIComponent(ROOM_ID) + inviteParam() + '&since_id=' + encodeURIComponent(lastEventId) + '&limit=100');
-    if(!r.success) throw new Error(r.error||'Failed');
+    if(!r.success) throw new Error(r.error||STR.failed);
 
     const events = r.events || [];
     events.forEach(addFeedItem);
@@ -1041,7 +1063,7 @@ async function pollFeed(){
     }
 
   }catch(e){
-    setMsg('feed-msg', e.message||'Failed to load activity', false);
+    setMsg('feed-msg', e.message||STR.feed_failed, false);
   }
 }
 
@@ -1054,49 +1076,7 @@ function addFeedItem(ev){
 
   const payload = ev.payload || {};
 
-  let line = '';
-  if(ev.event_type === 'room_created') line = 'Room created';
-  else if(ev.event_type === 'join_requested') line = 'New join request';
-  else if(ev.event_type === 'join_approved') line = 'Join request approved';
-  else if(ev.event_type === 'join_declined') line = 'Join request declined';
-  else if(ev.event_type === 'lobby_locked') line = 'Lobby locked';
-  else if(ev.event_type === 'room_started') line = 'Room started';
-  else if(ev.event_type === 'grace_window_started') line = 'Contribution grace window started';
-  else if(ev.event_type === 'contribution_confirmed') line = '✓ Contributed';
-  else if(ev.event_type === 'strike_logged') line = 'Strike logged';
-  else if(ev.event_type === 'participant_removed') line = 'Participant removed';
-  else if(ev.event_type === 'escrow_settlement_recorded') line = 'Escrow settlement recorded';
-  else if(ev.event_type === 'escrow_settlement_processed') line = 'Escrow settlement processed';
-  else if(ev.event_type === 'invite_created') line = 'Invite created';
-  else if(ev.event_type === 'invite_accepted') line = 'Invite accepted';
-  else if(ev.event_type === 'invite_declined') line = 'Invite declined';
-  else if(ev.event_type === 'invite_revoked') line = 'Invite revoked';
-  else if(ev.event_type === 'unlock_vote_updated') line = 'Unlock vote updated';
-  else if(ev.event_type === 'unlock_revealed') line = 'Unlock revealed';
-  else if(ev.event_type === 'unlock_expired') line = 'Unlock expired';
-  else if(ev.event_type === 'rotation_queue_created') line = 'Rotation queue created';
-  else if(ev.event_type === 'rotation_vote_updated') line = 'Rotation vote updated';
-  else if(ev.event_type === 'typeB_turn_revealed') line = 'Type B turn revealed';
-  else if(ev.event_type === 'typeB_turn_expired') line = 'Type B turn expired';
-  else if(ev.event_type === 'typeB_turn_advanced') line = 'Type B turn advanced';
-  else if(ev.event_type === 'rotation_blocked_dispute') line = 'Rotation blocked (dispute)';
-  else if(ev.event_type === 'rotation_blocked_debt') line = 'Rotation blocked (unpaid contribution)';
-  else if(ev.event_type === 'rotation_unblocked_debt') line = 'Rotation unblocked (debt cleared)';
-  else if(ev.event_type === 'dispute_raised') line = 'Dispute raised';
-  else if(ev.event_type === 'dispute_ack_updated') line = 'Dispute acknowledgment updated';
-  else if(ev.event_type === 'dispute_validated') line = 'Dispute validated';
-  else if(ev.event_type === 'dispute_dismissed') line = 'Dispute dismissed';
-  else if(ev.event_type === 'rotation_unblocked') line = 'Rotation unblocked';
-  else if(ev.event_type === 'underfilled_alerted') line = 'Underfilled alert sent';
-  else if(ev.event_type === 'underfilled_resolved') line = 'Underfilled room resolved';
-  else if(ev.event_type === 'room_auto_cancelled_underfilled') line = 'Room auto-cancelled (underfilled)';
-  else if(ev.event_type === 'room_cancelled_by_maker') line = 'Room cancelled by maker';
-  else if(ev.event_type === 'exit_requested') line = 'Exit request opened';
-  else if(ev.event_type === 'exit_vote_updated') line = 'Exit request vote updated';
-  else if(ev.event_type === 'exit_approved') line = 'Exit request approved';
-  else if(ev.event_type === 'exit_cancelled') line = 'Exit request cancelled';
-  else if(ev.event_type === 'room_closed') line = 'Room closed';
-  else line = ev.event_type;
+  const line = FEED_EVENT_LABELS[ev.event_type] || ev.event_type;
 
   const extraTxt = formatActivityExtra(ev.event_type, payload);
   const extra = extraTxt ? ' — ' + esc(extraTxt) : '';
@@ -1117,11 +1097,11 @@ async function requestJoin(){
 
     const res = await postStrong('/api/rooms.php', payload);
 
-    if(!res.success) throw new Error(res.error||'Failed');
-    setMsg('room-msg','Join request sent.', true);
+    if(!res.success) throw new Error(res.error||STR.failed);
+    setMsg('room-msg', STR.join_request_sent, true);
     await loadRoom();
   }catch(e){
-    setMsg('room-msg', e.message||'Failed', false);
+    setMsg('room-msg', e.message||STR.failed, false);
   }finally{
     btn.disabled=false;
   }
@@ -1130,17 +1110,17 @@ async function requestJoin(){
 async function respondInvite(decision){
   const r = roomCache;
   if(!r || !r.my_invite){
-    setMsg('invite-msg','No active invite.', false);
+    setMsg('invite-msg', STR.invite_no_active, false);
     return;
   }
 
   try{
     const res = await postStrong('/api/rooms.php', {action:'respond_invite', invite_id: r.my_invite.id, decision});
-    if(!res.success) throw new Error(res.error||'Failed');
-    setMsg('invite-msg', decision === 'accept' ? 'Invite accepted.' : 'Invite declined.', true);
+    if(!res.success) throw new Error(res.error||STR.failed);
+    setMsg('invite-msg', decision === 'accept' ? STR.invite_accepted : STR.invite_declined, true);
     await loadRoom();
   }catch(e){
-    setMsg('invite-msg', e.message||'Failed', false);
+    setMsg('invite-msg', e.message||STR.failed, false);
   }
 }
 
@@ -1155,20 +1135,20 @@ async function loadUnlistedInviteInfo(force=false){
 
   try{
     const res = await get('/api/rooms.php?action=unlisted_invite_info&room_id=' + encodeURIComponent(ROOM_ID));
-    if(!res.success) throw new Error(res.error||'Failed');
+    if(!res.success) throw new Error(res.error||STR.failed);
 
     const inv = res.invite;
     if(!inv){
-      if(meta) meta.textContent = 'No link generated.';
+      if(meta) meta.textContent = tr('room.unlisted.none', null, 'No link generated.');
       return;
     }
 
-    const activeTxt = inv.is_active ? 'active' : 'inactive';
+    const activeTxt = inv.is_active ? STR.active : STR.inactive;
     const exp = inv.expires_at ? fmt(inv.expires_at) : '—';
-    if(meta) meta.textContent = `Link status: ${activeTxt} · expires ${exp}`;
+    if(meta) meta.textContent = tr('room.unlisted.link_status_fmt', {status: activeTxt, exp}, `Link status: ${activeTxt} · expires ${exp}`);
 
   }catch(e){
-    setMsg('unlisted-msg', e.message||'Failed', false);
+    setMsg('unlisted-msg', e.message||STR.failed, false);
   }
 }
 
@@ -1182,7 +1162,7 @@ async function generateUnlistedLink(){
 
   try{
     const res = await postStrong('/api/rooms.php', {action:'unlisted_invite_create', room_id: ROOM_ID});
-    if(!res.success) throw new Error(res.error||'Failed');
+    if(!res.success) throw new Error(res.error||STR.failed);
 
     if(input) input.value = res.link || '';
     if(wrap) wrap.style.display='block';
@@ -1192,13 +1172,13 @@ async function generateUnlistedLink(){
     await loadUnlistedInviteInfo(true);
 
   }catch(e){
-    setMsg('unlisted-msg', e.message||'Failed', false);
+    setMsg('unlisted-msg', e.message||STR.failed, false);
   }
 }
 
 async function revokeUnlistedLink(){
   document.getElementById('unlisted-msg').className='msg';
-  const ok = confirm('Revoke the current unlisted link?');
+  const ok = confirm(tr('room.confirm.unlisted_revoke', null, 'Revoke the current unlisted link?'));
   if(!ok) return;
 
   const wrap = document.getElementById('unlisted-link-wrap');
@@ -1208,11 +1188,11 @@ async function revokeUnlistedLink(){
 
   try{
     const res = await postStrong('/api/rooms.php', {action:'unlisted_invite_revoke', room_id: ROOM_ID});
-    if(!res.success) throw new Error(res.error||'Failed');
+    if(!res.success) throw new Error(res.error||STR.failed);
     setMsg('unlisted-msg', tr('room.unlisted.link_revoked', null, 'Link revoked.'), true);
     await loadUnlistedInviteInfo(true);
   }catch(e){
-    setMsg('unlisted-msg', e.message||'Failed', false);
+    setMsg('unlisted-msg', e.message||STR.failed, false);
   }
 }
 
@@ -1232,7 +1212,7 @@ async function loadInvites(force=false){
 
   try{
     const res = await get('/api/rooms.php?action=maker_invites&room_id=' + encodeURIComponent(ROOM_ID));
-    if(!res.success) throw new Error(res.error||'Failed');
+    if(!res.success) throw new Error(res.error||STR.failed);
 
     const rows = res.invites || [];
     if(!rows.length){
@@ -1244,7 +1224,7 @@ async function loadInvites(force=false){
 
     rows.forEach(x => {
       const tr=document.createElement('tr');
-      const revokeBtn = (x.status === 'active') ? `<button class="btn btn-red btn-sm" onclick="revokeInvite(${x.id})">Revoke</button>` : '';
+      const revokeBtn = (x.status === 'active') ? `<button class="btn btn-red btn-sm" onclick="revokeInvite(${x.id})">${esc(STR.revoke)}</button>` : '';
       tr.innerHTML = `
         <td>${esc(x.email)}</td>
         <td>${esc(x.status)}</td>
@@ -1256,7 +1236,7 @@ async function loadInvites(force=false){
     });
 
   }catch(e){
-    setMsg('invites-msg', e.message||'Failed', false);
+    setMsg('invites-msg', e.message||STR.failed, false);
   }
 }
 
@@ -1264,39 +1244,39 @@ async function sendInvite(){
   const input = document.getElementById('invite-email');
   const email = (input ? input.value : '').trim();
   if(!email){
-    setMsg('invites-msg','Email required.', false);
+    setMsg('invites-msg', STR.email_required, false);
     return;
   }
 
   try{
     const res = await postStrong('/api/rooms.php', {action:'invite_user', room_id: ROOM_ID, email});
-    if(!res.success) throw new Error(res.error||'Failed');
+    if(!res.success) throw new Error(res.error||STR.failed);
     if(input) input.value='';
-    setMsg('invites-msg','Invite sent.', true);
+    setMsg('invites-msg', STR.invite_sent, true);
     await loadInvites(true);
   }catch(e){
-    setMsg('invites-msg', e.message||'Failed', false);
+    setMsg('invites-msg', e.message||STR.failed, false);
   }
 }
 
 async function revokeInvite(inviteId){
-  const ok = confirm('Revoke this invite?');
+  const ok = confirm(tr('room.confirm.invite_revoke', null, 'Revoke this invite?'));
   if(!ok) return;
 
   try{
     const res = await postStrong('/api/rooms.php', {action:'revoke_invite', invite_id: inviteId});
-    if(!res.success) throw new Error(res.error||'Failed');
-    setMsg('invites-msg','Invite revoked.', true);
+    if(!res.success) throw new Error(res.error||STR.failed);
+    setMsg('invites-msg', STR.invite_revoked, true);
     await loadInvites(true);
   }catch(e){
-    setMsg('invites-msg', e.message||'Failed', false);
+    setMsg('invites-msg', e.message||STR.failed, false);
   }
 }
 
 async function confirmContribution(){
   const r = roomCache;
   if(!r || !r.active_cycle){
-    setMsg('contrib-msg','No active cycle.', false);
+    setMsg('contrib-msg', STR.no_active_cycle, false);
     return;
   }
 
@@ -1305,37 +1285,39 @@ async function confirmContribution(){
 
   try{
     const res = await postStrong('/api/rooms.php', {action:'confirm_contribution', room_id: ROOM_ID, cycle_id: r.active_cycle.id, amount, reference});
-    if(!res.success) throw new Error(res.error||'Failed');
-    setMsg('contrib-msg','Contribution confirmed.', true);
+    if(!res.success) throw new Error(res.error||STR.failed);
+    setMsg('contrib-msg', STR.contribution_confirmed, true);
     await pollFeed();
   }catch(e){
-    setMsg('contrib-msg', e.message||'Failed', false);
+    setMsg('contrib-msg', e.message||STR.failed, false);
   }
 }
 
 async function unlockVote(vote){
   try{
     const res = await postStrong('/api/rooms.php', {action:'typeA_vote', room_id: ROOM_ID, vote});
-    if(!res.success) throw new Error(res.error||'Failed');
-    setMsg('unlock-msg','Saved.', true);
+    if(!res.success) throw new Error(res.error||STR.failed);
+    setMsg('unlock-msg', STR.saved, true);
     await loadRoom();
   }catch(e){
-    setMsg('unlock-msg', e.message||'Failed', false);
+    setMsg('unlock-msg', e.message||STR.failed, false);
   }
 }
 
 async function unlockReveal(){
   try{
     const res = await postStrong('/api/rooms.php', {action:'typeA_reveal', room_id: ROOM_ID});
-    if(!res.success) throw new Error(res.error||'Failed');
+    if(!res.success) throw new Error(res.error||STR.failed);
 
     const wrap = document.getElementById('unlock-code-wrap');
     const input = document.getElementById('unlock-code');
     const exp = document.getElementById('unlock-code-exp');
 
+    const ts = fmt(res.expires_at);
+
     wrap.style.display='block';
     input.value = String(res.code||'');
-    exp.textContent = `Expires at ${fmt(res.expires_at)}`;
+    exp.textContent = tr('room.code.expires_at_fmt', {ts}, 'Expires at ' + ts);
 
     if (unlockClearTimer) clearTimeout(unlockClearTimer);
     unlockClearTimer = setTimeout(()=>{
@@ -1343,38 +1325,40 @@ async function unlockReveal(){
       wrap.style.display='none';
     }, 30000);
 
-    setMsg('unlock-msg','Code revealed. It will auto-clear in 30 seconds.', true);
+    setMsg('unlock-msg', tr('room.code.revealed_autoclear_30s', null, 'Code revealed. It will auto-clear in 30 seconds.'), true);
     await loadRoom();
     await pollFeed();
 
   }catch(e){
-    setMsg('unlock-msg', e.message||'Failed', false);
+    setMsg('unlock-msg', e.message||STR.failed, false);
   }
 }
 
 async function typeBVote(vote){
   try{
     const res = await postStrong('/api/rooms.php', {action:'typeB_vote', room_id: ROOM_ID, vote});
-    if(!res.success) throw new Error(res.error||'Failed');
-    setMsg('typeb-msg','Saved.', true);
+    if(!res.success) throw new Error(res.error||STR.failed);
+    setMsg('typeb-msg', STR.saved, true);
     await loadRoom();
   }catch(e){
-    setMsg('typeb-msg', e.message||'Failed', false);
+    setMsg('typeb-msg', e.message||STR.failed, false);
   }
 }
 
 async function typeBReveal(){
   try{
     const res = await postStrong('/api/rooms.php', {action:'typeB_reveal', room_id: ROOM_ID});
-    if(!res.success) throw new Error(res.error||'Failed');
+    if(!res.success) throw new Error(res.error||STR.failed);
 
     const wrap = document.getElementById('typeb-code-wrap');
     const input = document.getElementById('typeb-code');
     const exp = document.getElementById('typeb-code-exp');
 
+    const ts = fmt(res.expires_at);
+
     wrap.style.display='block';
     input.value = String(res.code||'');
-    exp.textContent = `Expires at ${fmt(res.expires_at)}`;
+    exp.textContent = tr('room.code.expires_at_fmt', {ts}, 'Expires at ' + ts);
 
     if (unlockClearTimer) clearTimeout(unlockClearTimer);
     unlockClearTimer = setTimeout(()=>{
@@ -1382,11 +1366,11 @@ async function typeBReveal(){
       wrap.style.display='none';
     }, 30000);
 
-    setMsg('typeb-msg','Code revealed. It will auto-clear in 30 seconds.', true);
+    setMsg('typeb-msg', tr('room.code.revealed_autoclear_30s', null, 'Code revealed. It will auto-clear in 30 seconds.'), true);
     await pollFeed();
 
   }catch(e){
-    setMsg('typeb-msg', e.message||'Failed', false);
+    setMsg('typeb-msg', e.message||STR.failed, false);
   }
 }
 
@@ -1398,14 +1382,14 @@ async function typeBRaiseDispute(){
 
   try{
     const res = await postStrong('/api/rooms.php', {action:'typeB_raise_dispute', room_id: ROOM_ID, reason});
-    if(!res.success) throw new Error(res.error||'Failed');
+    if(!res.success) throw new Error(res.error||STR.failed);
 
-    setMsg(msgId,'Dispute raised.', true);
+    setMsg(msgId, tr('room.dispute.raised', null, 'Dispute raised.'), true);
     await loadRoom();
     await pollFeed();
 
   }catch(e){
-    setMsg(msgId, e.message||'Failed', false);
+    setMsg(msgId, e.message||STR.failed, false);
   }
 }
 
@@ -1416,20 +1400,20 @@ async function typeBAckDispute(){
   const r = roomCache;
   const dispute = (r && r.rotation) ? r.rotation.dispute : null;
   if(!dispute){
-    setMsg(msgId,'No dispute to acknowledge.', false);
+    setMsg(msgId, tr('room.dispute.none_to_ack', null, 'No dispute to acknowledge.'), false);
     return;
   }
 
   try{
     const res = await postStrong('/api/rooms.php', {action:'typeB_ack_dispute', room_id: ROOM_ID, dispute_id: dispute.id});
-    if(!res.success) throw new Error(res.error||'Failed');
+    if(!res.success) throw new Error(res.error||STR.failed);
 
-    setMsg(msgId,'Acknowledged.', true);
+    setMsg(msgId, tr('room.dispute.acknowledged', null, 'Acknowledged.'), true);
     await loadRoom();
     await pollFeed();
 
   }catch(e){
-    setMsg(msgId, e.message||'Failed', false);
+    setMsg(msgId, e.message||STR.failed, false);
   }
 }
 
@@ -1437,19 +1421,19 @@ async function createExitRequest(){
   const msgId = 'exit-msg';
   document.getElementById(msgId).className='msg';
 
-  const ok = confirm('Request to exit this room? This requires approvals and will record a refund-minus-fee settlement.');
+  const ok = confirm(tr('room.confirm.exit_request', null, 'Request to exit this room? This requires approvals and will record a refund-minus-fee settlement.'));
   if(!ok) return;
 
   try{
     const res = await postStrong('/api/rooms.php', {action:'typeB_exit_request_create', room_id: ROOM_ID});
-    if(!res.success) throw new Error(res.error||'Failed');
+    if(!res.success) throw new Error(res.error||STR.failed);
 
-    setMsg(msgId,'Exit request submitted.', true);
+    setMsg(msgId, tr('room.exit.request_submitted', null, 'Exit request submitted.'), true);
     await loadRoom();
     await pollFeed();
 
   }catch(e){
-    setMsg(msgId, e.message||'Failed', false);
+    setMsg(msgId, e.message||STR.failed, false);
   }
 }
 
@@ -1460,20 +1444,20 @@ async function voteExit(vote){
   const r = roomCache;
   const er = r ? r.exit_request : null;
   if(!er){
-    setMsg(msgId,'No open exit request.', false);
+    setMsg(msgId, tr('room.exit.no_open_request', null, 'No open exit request.'), false);
     return;
   }
 
   try{
     const res = await postStrong('/api/rooms.php', {action:'typeB_exit_request_vote', room_id: ROOM_ID, exit_request_id: er.id, vote});
-    if(!res.success) throw new Error(res.error||'Failed');
+    if(!res.success) throw new Error(res.error||STR.failed);
 
-    setMsg(msgId, res.approved ? 'Exit approved.' : 'Vote saved.', true);
+    setMsg(msgId, res.approved ? tr('room.exit.approved', null, 'Exit approved.') : STR.vote_saved, true);
     await loadRoom();
     await pollFeed();
 
   }catch(e){
-    setMsg(msgId, e.message||'Failed', false);
+    setMsg(msgId, e.message||STR.failed, false);
   }
 }
 
@@ -1484,23 +1468,23 @@ async function cancelExitRequest(){
   const r = roomCache;
   const er = r ? r.exit_request : null;
   if(!er){
-    setMsg(msgId,'No open exit request.', false);
+    setMsg(msgId, tr('room.exit.no_open_request', null, 'No open exit request.'), false);
     return;
   }
 
-  const ok = confirm('Cancel your exit request?');
+  const ok = confirm(tr('room.confirm.exit_cancel', null, 'Cancel your exit request?'));
   if(!ok) return;
 
   try{
     const res = await postStrong('/api/rooms.php', {action:'typeB_exit_request_cancel', room_id: ROOM_ID, exit_request_id: er.id});
-    if(!res.success) throw new Error(res.error||'Failed');
+    if(!res.success) throw new Error(res.error||STR.failed);
 
-    setMsg(msgId,'Exit request cancelled.', true);
+    setMsg(msgId, tr('room.exit.request_cancelled', null, 'Exit request cancelled.'), true);
     await loadRoom();
     await pollFeed();
 
   }catch(e){
-    setMsg(msgId, e.message||'Failed', false);
+    setMsg(msgId, e.message||STR.failed, false);
   }
 }
 
@@ -1554,16 +1538,17 @@ function loadUnderfillDecision(){
   }
 
   card.style.display='block';
-  document.getElementById('underfill-meta').textContent = `Decision deadline: ${fmt(r.underfill.decision_deadline_at)}`;
+  const ts = fmt(r.underfill.decision_deadline_at);
+  document.getElementById('underfill-meta').textContent = tr('room.underfill.decision_deadline_fmt', {ts}, `Decision deadline: ${ts}`);
 }
 
 async function underfillExtend(){
   const msg = document.getElementById('underfill-msg');
   msg.className='msg';
 
-  const rawStart = prompt('Enter new start date/time (YYYY-MM-DDTHH:MM)');
+  const rawStart = prompt(tr('room.underfill.prompt_new_start_dt', null, 'Enter new start date/time (YYYY-MM-DDTHH:MM)'));
   if(!rawStart) return;
-  const rawReveal = prompt('Enter new reveal date/time (YYYY-MM-DDTHH:MM)');
+  const rawReveal = prompt(tr('room.underfill.prompt_new_reveal_dt', null, 'Enter new reveal date/time (YYYY-MM-DDTHH:MM)'));
   if(!rawReveal) return;
 
   const startIso = (function(){
@@ -1581,17 +1566,17 @@ async function underfillExtend(){
   })();
 
   if(!startIso || !revealIso){
-    setMsg('underfill-msg','Invalid date/time format.', false);
+    setMsg('underfill-msg', tr('room.underfill.invalid_datetime', null, 'Invalid date/time format.'), false);
     return;
   }
 
   try{
     const res = await postStrong('/api/rooms.php', {action:'underfill_decide', room_id: ROOM_ID, decision:'extend_start', new_start_at:startIso, new_reveal_at:revealIso});
-    if(!res.success) throw new Error(res.error||'Failed');
-    setMsg('underfill-msg','Saved.', true);
+    if(!res.success) throw new Error(res.error||STR.failed);
+    setMsg('underfill-msg', STR.saved, true);
     await loadRoom();
   }catch(e){
-    setMsg('underfill-msg', e.message||'Failed', false);
+    setMsg('underfill-msg', e.message||STR.failed, false);
   }
 }
 
@@ -1599,21 +1584,21 @@ async function underfillLowerMin(){
   const msg = document.getElementById('underfill-msg');
   msg.className='msg';
 
-  const newMinStr = prompt('Enter new minimum participants');
+  const newMinStr = prompt(tr('room.underfill.prompt_new_min_participants', null, 'Enter new minimum participants'));
   if(!newMinStr) return;
   const newMin = parseInt(newMinStr, 10);
   if(!newMin || newMin < 2){
-    setMsg('underfill-msg','Minimum must be at least 2', false);
+    setMsg('underfill-msg', tr('room.underfill.min_at_least_2', null, 'Minimum must be at least 2'), false);
     return;
   }
 
   try{
     const res = await postStrong('/api/rooms.php', {action:'underfill_decide', room_id: ROOM_ID, decision:'lower_min', new_min_participants:newMin});
-    if(!res.success) throw new Error(res.error||'Failed');
-    setMsg('underfill-msg','Saved.', true);
+    if(!res.success) throw new Error(res.error||STR.failed);
+    setMsg('underfill-msg', STR.saved, true);
     await loadRoom();
   }catch(e){
-    setMsg('underfill-msg', e.message||'Failed', false);
+    setMsg('underfill-msg', e.message||STR.failed, false);
   }
 }
 
@@ -1623,11 +1608,11 @@ async function underfillCancel(){
 
   try{
     const res = await postStrong('/api/rooms.php', {action:'underfill_decide', room_id: ROOM_ID, decision:'cancel'});
-    if(!res.success) throw new Error(res.error||'Failed');
-    setMsg('underfill-msg','Room cancelled.', true);
+    if(!res.success) throw new Error(res.error||STR.failed);
+    setMsg('underfill-msg', tr('room.underfill.room_cancelled', null, 'Room cancelled.'), true);
     await loadRoom();
   }catch(e){
-    setMsg('underfill-msg', e.message||'Failed', false);
+    setMsg('underfill-msg', e.message||STR.failed, false);
   }
 }
 
@@ -1635,23 +1620,23 @@ async function loadJoinRequests(){
   document.getElementById('maker-msg').className='msg';
 
   const tbody = document.querySelector('#req-table tbody');
-  tbody.innerHTML = '<tr><td colspan="5" class="k">Loading…</td></tr>';
+  tbody.innerHTML = `<tr><td colspan="5" class="k">${esc(STR.loading)}</td></tr>`;
 
   try{
     const res = await get('/api/rooms.php?action=maker_join_requests&room_id=' + encodeURIComponent(ROOM_ID));
-    if(!res.success) throw new Error(res.error||'Failed');
+    if(!res.success) throw new Error(res.error||STR.failed);
 
     const rows = res.requests || [];
     if(!rows.length){
-      tbody.innerHTML = '<tr><td colspan="5" class="k">No pending requests.</td></tr>';
+      tbody.innerHTML = `<tr><td colspan="5" class="k">${esc(tr('room.requests.none_pending', null, 'No pending requests.'))}</td></tr>`;
       return;
     }
 
     tbody.innerHTML='';
     rows.forEach(r => {
       const tr=document.createElement('tr');
-      const snap = `L${r.snapshot_level} · strikes ${r.snapshot_strikes_6m}` + (r.snapshot_restricted_until ? ' · restricted' : '');
-      const cur = `L${r.current_level||'?'} · strikes ${r.current_strikes_6m||0}` + (r.current_restricted_until ? ' · restricted' : '');
+      const snap = `L${r.snapshot_level} · ${STR.strikes} ${r.snapshot_strikes_6m}` + (r.snapshot_restricted_until ? (' · ' + STR.restricted) : '');
+      const cur = `L${r.current_level||'?'} · ${STR.strikes} ${r.current_strikes_6m||0}` + (r.current_restricted_until ? (' · ' + STR.restricted) : '');
 
       tr.innerHTML = `
         <td>${esc(r.display_name || ('User #' + r.user_id))}</td>
@@ -1659,8 +1644,8 @@ async function loadJoinRequests(){
         <td>${esc(cur)}</td>
         <td>${esc(fmt(r.created_at))}</td>
         <td>
-          <button class="btn btn-blue btn-sm" onclick="reviewJoin(${r.id}, 'approve')">Approve</button>
-          <button class="btn btn-red btn-sm" onclick="reviewJoin(${r.id}, 'decline')">Decline</button>
+          <button class="btn btn-blue btn-sm" onclick="reviewJoin(${r.id}, 'approve')">${esc(STR.approve)}</button>
+          <button class="btn btn-red btn-sm" onclick="reviewJoin(${r.id}, 'decline')">${esc(STR.decline)}</button>
         </td>
       `;
 
@@ -1668,27 +1653,31 @@ async function loadJoinRequests(){
     });
 
   }catch(e){
-    tbody.innerHTML = '<tr><td colspan="5" class="k">Failed to load requests.</td></tr>';
-    setMsg('maker-msg', e.message||'Failed', false);
+    tbody.innerHTML = `<tr><td colspan="5" class="k">${esc(tr('room.requests.failed_to_load', null, 'Failed to load requests.'))}</td></tr>`;
+    setMsg('maker-msg', e.message||STR.failed, false);
   }
 }
 
 async function reviewJoin(requestId, decision){
   document.getElementById('maker-msg').className='msg';
 
-  const ok = confirm((decision==='approve') ? 'Approve this user?' : 'Decline this user?');
+  const ok = confirm(
+    (decision === 'approve')
+      ? tr('room.requests.confirm_approve_user', null, 'Approve this user?')
+      : tr('room.requests.confirm_decline_user', null, 'Decline this user?')
+  );
   if(!ok) return;
 
   try{
     const res = await postStrong('/api/rooms.php', {action:'review_join', request_id: requestId, decision});
-    if(!res.success) throw new Error(res.error||'Failed');
+    if(!res.success) throw new Error(res.error||STR.failed);
 
-    setMsg('maker-msg', 'Saved.', true);
+    setMsg('maker-msg', STR.saved, true);
     await loadJoinRequests();
     await loadRoom();
 
   }catch(e){
-    setMsg('maker-msg', e.message||'Failed', false);
+    setMsg('maker-msg', e.message||STR.failed, false);
   }
 }
 

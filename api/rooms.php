@@ -456,19 +456,36 @@ if ($action === 'destination_accounts') {
     $sel = "id, account_type";
     $sel .= dbHasColumn('platform_destination_accounts', 'display_label') ? ", display_label" : ", NULL AS display_label";
     $sel .= ", mobile_money_number, bank_name, bank_account_number";
+
+    // Optional crypto columns (keep backward compatibility with older schemas)
     $sel .= dbHasColumn('platform_destination_accounts', 'crypto_network') ? ", crypto_network" : ", NULL AS crypto_network";
     $sel .= dbHasColumn('platform_destination_accounts', 'crypto_address') ? ", crypto_address" : ", NULL AS crypto_address";
+
     // legacy naming (if any)
     $sel .= dbHasColumn('platform_destination_accounts', 'crypto_wallet_network') ? ", crypto_wallet_network" : ", NULL AS crypto_wallet_network";
     $sel .= dbHasColumn('platform_destination_accounts', 'crypto_wallet_address') ? ", crypto_wallet_address" : ", NULL AS crypto_wallet_address";
 
     $rows = $db->query("SELECT {$sel} FROM platform_destination_accounts WHERE is_active = 1 ORDER BY id ASC")->fetchAll();
 
-    $maskTail = function(string $s, int $n = 4): string {
+    $maskTail = function(string $s, int $n = 4): ?string {
         $str = trim($s);
-        if ($str === '') return '';
+        if ($str === '') return null;
         $keep = max(2, min(10, $n));
         return '••••' . substr($str, -$keep);
+    };
+
+    $maskCrypto = function(string $addr): ?string {
+        $a = trim($addr);
+        if ($a === '') return null;
+
+        // For typical wallet addresses, show head + tail.
+        // For short identifiers, fall back to a tail mask.
+        if (strlen($a) >= 12) {
+            return substr($a, 0, 6) . '…' . substr($a, -4);
+        }
+
+        $tail = substr($a, -min(4, strlen($a)));
+        return '••••' . $tail;
     };
 
     $out = [];
@@ -476,32 +493,34 @@ if ($action === 'destination_accounts') {
         $type = (string)($r['account_type'] ?? '');
         $label = $r['display_label'] ? (string)$r['display_label'] : '';
 
-        $summary = $label !== '' ? ($label . ' — ') : '';
+        $mobileMasked = null;
+        $bankName = null;
+        $bankMasked = null;
+        $cryptoNet = null;
+        $cryptoAddrMasked = null;
 
         if ($type === 'mobile_money') {
-            $summary .= 'Mobile money ' . $maskTail((string)($r['mobile_money_number'] ?? ''), 4);
+            $mobileMasked = $maskTail((string)($r['mobile_money_number'] ?? ''), 4);
         } else if ($type === 'bank') {
-            $bank = trim((string)($r['bank_name'] ?? ''));
-            $summary .= ($bank !== '' ? ($bank . ' ') : 'Bank ');
-            $summary .= $maskTail((string)($r['bank_account_number'] ?? ''), 4);
+            $bn = trim((string)($r['bank_name'] ?? ''));
+            $bankName = ($bn !== '') ? $bn : null;
+            $bankMasked = $maskTail((string)($r['bank_account_number'] ?? ''), 4);
         } else if ($type === 'crypto_wallet') {
             $net = trim((string)($r['crypto_network'] ?? ($r['crypto_wallet_network'] ?? '')));
             $addr = trim((string)($r['crypto_address'] ?? ($r['crypto_wallet_address'] ?? '')));
-            $summary .= ($net !== '' ? ($net . ' ') : '');
-            if ($addr !== '') {
-                $summary .= substr($addr, 0, 6) . '…' . substr($addr, -4);
-            } else {
-                $summary .= 'Crypto wallet';
-            }
-        } else {
-            $summary .= strtoupper($type);
+            $cryptoNet = ($net !== '') ? $net : null;
+            $cryptoAddrMasked = $maskCrypto($addr);
         }
 
         $out[] = [
             'id' => (int)$r['id'],
             'account_type' => $type,
             'display_label' => $label !== '' ? $label : null,
-            'summary' => $summary,
+            'mobile_money_masked' => $mobileMasked,
+            'bank_name' => $bankName,
+            'bank_account_masked' => $bankMasked,
+            'crypto_network' => $cryptoNet,
+            'crypto_address_masked' => $cryptoAddrMasked,
         ];
     }
 
