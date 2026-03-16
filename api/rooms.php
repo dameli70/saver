@@ -2879,6 +2879,21 @@ if ($action === 'typeB_vote') {
         jsonResponse(['error' => 'Voting is closed for the current rotation window'], 403);
     }
 
+    $existingVoteStmt = $db->prepare("SELECT vote
+                                     FROM saving_room_unlock_votes
+                                     WHERE room_id = ?
+                                       AND user_id = ?
+                                       AND scope='typeB_turn_unlock'
+                                       AND target_rotation_index = ?
+                                     LIMIT 1");
+    $existingVoteStmt->execute([$roomId, $userId, $rotationIndex]);
+    $existingVote = (string)($existingVoteStmt->fetchColumn() ?: '');
+
+    if ($existingVote === $vote) {
+        auditLog('room_typeB_vote');
+        jsonResponse(['success' => true, 'no_change' => 1]);
+    }
+
     $db->prepare("INSERT INTO saving_room_unlock_votes (room_id, user_id, scope, target_rotation_index, vote)
                   VALUES (?, ?, 'typeB_turn_unlock', ?, ?)
                   ON DUPLICATE KEY UPDATE vote=VALUES(vote), updated_at=NOW()")
