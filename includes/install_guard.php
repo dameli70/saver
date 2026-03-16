@@ -50,15 +50,24 @@ function isAppInstalled(): bool {
     // Note: when installed.flag exists, we return true early above and never reach here.
     try {
         $dsn = "mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=" . DB_CHARSET;
-        $pdo = new PDO($dsn, DB_USER, DB_PASS, [
+        $opts = [
             PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
             PDO::ATTR_EMULATE_PREPARES => false,
-        ]);
+        ];
+        if (extension_loaded('pdo_mysql')) {
+            $opts[PDO::MYSQL_ATTR_USE_BUFFERED_QUERY] = true;
+        }
+
+        $pdo = new PDO($dsn, DB_USER, DB_PASS, $opts);
+        if (extension_loaded('pdo_mysql')) {
+            $pdo->setAttribute(PDO::MYSQL_ATTR_USE_BUFFERED_QUERY, true);
+        }
 
         $stmt = $pdo->prepare("SELECT table_name FROM information_schema.tables WHERE table_schema = ? AND table_name IN ('users','locks','audit_log')");
         $stmt->execute([DB_NAME]);
         $names = array_column($stmt->fetchAll(), 'table_name');
+        $stmt->closeCursor();
 
         return count(array_intersect(['users','locks','audit_log'], $names)) === 3;
 

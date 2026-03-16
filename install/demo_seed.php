@@ -54,6 +54,10 @@ function demoSeedNow(string $modify = 'now'): string {
 }
 
 function seedDemoData(PDO $db, int $adminUserId, string $demoPassword = 'DemoPass123!'): array {
+    if (extension_loaded('pdo_mysql')) {
+        $db->setAttribute(PDO::MYSQL_ATTR_USE_BUFFERED_QUERY, true);
+    }
+
     $fetchColumn = static function (PDOStatement $stmt) {
         $v = $stmt->fetchColumn();
         $stmt->closeCursor();

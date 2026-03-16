@@ -297,10 +297,15 @@ function connectPdoServer(string $host, string $charset, string $user, string $p
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         PDO::ATTR_EMULATE_PREPARES => false,
     ];
-    if (defined('PDO::MYSQL_ATTR_USE_BUFFERED_QUERY')) {
+    if (extension_loaded('pdo_mysql')) {
         $opts[PDO::MYSQL_ATTR_USE_BUFFERED_QUERY] = true;
     }
-    return new PDO($dsn, $user, $pass, $opts);
+
+    $pdo = new PDO($dsn, $user, $pass, $opts);
+    if (extension_loaded('pdo_mysql')) {
+        $pdo->setAttribute(PDO::MYSQL_ATTR_USE_BUFFERED_QUERY, true);
+    }
+    return $pdo;
 }
 
 function connectPdoDb(string $host, string $dbName, string $charset, string $user, string $pass): PDO {
@@ -310,10 +315,15 @@ function connectPdoDb(string $host, string $dbName, string $charset, string $use
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         PDO::ATTR_EMULATE_PREPARES => false,
     ];
-    if (defined('PDO::MYSQL_ATTR_USE_BUFFERED_QUERY')) {
+    if (extension_loaded('pdo_mysql')) {
         $opts[PDO::MYSQL_ATTR_USE_BUFFERED_QUERY] = true;
     }
-    return new PDO($dsn, $user, $pass, $opts);
+
+    $pdo = new PDO($dsn, $user, $pass, $opts);
+    if (extension_loaded('pdo_mysql')) {
+        $pdo->setAttribute(PDO::MYSQL_ATTR_USE_BUFFERED_QUERY, true);
+    }
+    return $pdo;
 }
 
 function splitSqlStatements(string $sql): array {
@@ -384,6 +394,29 @@ function splitSqlStatements(string $sql): array {
     return $out;
 }
 
+function stripLeadingSqlComments(string $sql): string {
+    $s = ltrim($sql);
+    while ($s !== '') {
+        if (str_starts_with($s, '--')) {
+            $pos = strpos($s, "\n");
+            $s = $pos === false ? '' : ltrim(substr($s, $pos + 1));
+            continue;
+        }
+        if (str_starts_with($s, '#')) {
+            $pos = strpos($s, "\n");
+            $s = $pos === false ? '' : ltrim(substr($s, $pos + 1));
+            continue;
+        }
+        if (str_starts_with($s, '/*')) {
+            $end = strpos($s, '*/');
+            $s = $end === false ? '' : ltrim(substr($s, $end + 2));
+            continue;
+        }
+        break;
+    }
+    return $s;
+}
+
 function applySqlFile(PDO $db, string $path, bool $ignoreDuplicateErrors): void {
     $sql = file_get_contents($path);
     if ($sql === false) throw new RuntimeException("Failed to read SQL file: {$path}");
@@ -397,12 +430,15 @@ function applySqlFile(PDO $db, string $path, bool $ignoreDuplicateErrors): void 
         if (preg_match('/^USE\s+/i', $trim)) continue;
 
         try {
+            $head = stripLeadingSqlComments($trim);
             // Some migrations include SELECT/SHOW fallbacks (e.g. "SELECT 1").
-            // Using exec() on those can leave an unbuffered result set open.
-            if (preg_match('/^(SELECT|SHOW|DESCRIBE|EXPLAIN|WITH|CALL)\b/i', $trim)) {
+            // If a statement returns a result set, fully consume all rowsets.
+            if (preg_match('/^(SELECT|SHOW|DESCRIBE|EXPLAIN|WITH|CALL)\b/i', $head)) {
                 $q = $db->query($stmt);
                 if ($q) {
-                    $q->fetchAll();
+                    do {
+                        $q->fetchAll();
+                    } while ($q->nextRowset());
                     $q->closeCursor();
                 }
             } else {
@@ -413,7 +449,8 @@ function applySqlFile(PDO $db, string $path, bool $ignoreDuplicateErrors): void 
             if ($ignoreDuplicateErrors && in_array($code, [1050, 1060, 1061, 1062, 1068, 1091], true)) {
                 continue;
             }
-            throw $e;
+            $snippet = preg_replace('/\s+/', ' ', substr($head ?: $trim, 0, 220));
+            throw new RuntimeException('SQL error in ' . basename($path) . ': ' . $e->getMessage() . ' | ' . $snippet, 0, $e);
         }
     }
 }
