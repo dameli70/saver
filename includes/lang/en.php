@@ -1147,6 +1147,7 @@ return [
     'room.ov.lobby' => 'Lobby',
     'room.ov.state' => 'State',
     'room.ov.start_date' => 'Start date',
+    'room.ov.period' => 'Period',
     'room.ov.reveal_date' => 'Reveal date',
     'room.ov.countdown' => 'Countdown',
     'room.ov.your_status' => 'Your status',

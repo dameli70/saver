@@ -941,6 +941,7 @@ return [
     'room.ov.lobby' => 'Lobby',
     'room.ov.state' => 'État',
     'room.ov.start_date' => 'Date de début',
+    'room.ov.period' => 'Période',
     'room.ov.reveal_date' => 'Date de révélation',
     'room.ov.countdown' => 'Compte à rebours',
     'room.ov.your_status' => 'Votre statut',

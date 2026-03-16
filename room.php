@@ -776,13 +776,44 @@ function formatActivityExtra(eventType, payload){
 }
 function destSummary(a){
   if(!a) return '—';
+
+  function alreadyMasked(s){
+    s = String(s||'');
+    return s.includes('•') || s.includes('…') || s.includes('*');
+  }
+  function maskTail(s, tail=4){
+    s = String(s||'').trim();
+    if(!s) return '';
+    if(alreadyMasked(s)) return s;
+    if(s.length <= tail) return s;
+    return '••••' + s.slice(-tail);
+  }
+  function maskCrypto(addr){
+    addr = String(addr||'').trim();
+    if(!addr) return '';
+    if(alreadyMasked(addr)) return addr;
+    if(addr.length <= 12) return addr;
+    return addr.slice(0, 6) + '…' + addr.slice(-4);
+  }
+
   if(a.account_type === 'mobile_money'){
     const carrier = a.carrier_id ? tr('room.dest.carrier', {id: a.carrier_id}, 'carrier ' + a.carrier_id) : tr('room.dest.mobile_money', null, 'mobile money');
-    return carrier + ' · ' + (a.mobile_money_number||'');
+    return carrier + ' · ' + maskTail(a.mobile_money_number||'');
   }
   if(a.account_type === 'bank'){
-    return (a.bank_name||tr('room.dest.bank', null, 'Bank')) + ' · ' + (a.bank_account_number||'');
+    const name = a.bank_name || tr('room.dest.bank', null, 'Bank');
+    return name + ' · ' + maskTail(a.bank_account_number||'');
   }
+  if(a.account_type === 'crypto_wallet'){
+    const net = String(a.crypto_network || a.network || '').trim();
+    const addr = String(a.crypto_address || a.address || '').trim();
+    const shown = addr ? ((net ? '(' + net + ') ' : '') + maskCrypto(addr)) : '';
+    if(shown){
+      return tr('rooms.destination_account.summary.crypto_wallet', {addr: shown}, 'Crypto wallet ' + shown);
+    }
+    return tr('rooms.destination_account.summary.crypto_wallet_no_addr', null, 'Crypto wallet');
+  }
+
   return '—';
 }
 
@@ -841,14 +872,16 @@ function renderRoom(){
   const utcTitle = tr('rooms.utc_title', null, 'Stored/enforced in UTC');
 
   document.getElementById('room-title').textContent = r.goal_text || tr('page.room', null, 'Room');
+
+  const periodicityLabel = prettyPeriodicity(r.periodicity) || String(r.periodicity||'');
   document.getElementById('room-sub').innerHTML = tr('room.ov.subtitle_html', {
     type: esc(r.saving_type),
     level: esc(r.required_trust_level),
-    periodicity: esc(r.periodicity),
+    periodicity: esc(periodicityLabel),
     start_local: esc(startLocal),
     start_utc: esc(startUtc),
     utc_title: esc(utcTitle),
-  }, `Type ${esc(r.saving_type)} · Level ${esc(r.required_trust_level)} · ${esc(r.periodicity)} · Starts <b>${esc(startLocal)}</b> <span class="utc-pill" title="${esc(utcTitle)}">${esc(startUtc)}</span>`);
+  }, `Type ${esc(r.saving_type)} · Level ${esc(r.required_trust_level)} · ${esc(periodicityLabel)} · Starts <b>${esc(startLocal)}</b> <span class="utc-pill" title="${esc(utcTitle)}">${esc(startUtc)}</span>`);
 
   const ov = document.getElementById('room-overview');
 
@@ -880,7 +913,7 @@ function renderRoom(){
 
   const items = [];
   items.push({k: tr('room.ov.participation_amount', null, 'Participation amount'), v: esc(r.participation_amount||'—')});
-  items.push({k: tr('rooms.field.periodicity', null, 'Period'), v: esc(prettyPeriodicity(r.periodicity)||'—')});
+  items.push({k: tr('room.ov.period', null, 'Period'), v: esc(prettyPeriodicity(r.periodicity)||'—')});
   items.push({k: tr('room.ov.start_date', null, 'Start date'), v: esc(startLocal||'—')});
 
   if(r.saving_type === 'B'){
