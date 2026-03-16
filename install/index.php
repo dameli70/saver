@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../includes/install_guard.php';
 require_once __DIR__ . '/../includes/i18n.php';
+require_once __DIR__ . '/demo_seed.php';
 i18nBootstrap();
 
 function hashLoginPasswordInstaller(string $password): string {
@@ -252,6 +253,8 @@ $vals = [
     'init_db' => 1,
     'apply_migrations' => 1,
 
+    'seed_demo' => 0,
+
     'admin_email' => '',
 ];
 
@@ -283,6 +286,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $vals['init_db'] = !empty($_POST['init_db']) ? 1 : 0;
     $vals['apply_migrations'] = !empty($_POST['apply_migrations']) ? 1 : 0;
+    $vals['seed_demo'] = !empty($_POST['seed_demo']) ? 1 : 0;
 
     if ($vals['db_host'] === '') $errors[] = 'Database host is required.';
     if ($vals['db_name'] === '') $errors[] = 'Database name is required.';
@@ -293,6 +297,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($adminPass !== $adminPass2) $errors[] = 'Admin passwords do not match.';
 
     if (!in_array($vals['app_env'], ['development', 'production'], true)) $errors[] = 'Invalid APP_ENV.';
+    if (!in_array((int)$vals['seed_demo'], [0, 1], true)) $errors[] = 'Invalid demo seed flag.';
+    if (!empty($vals['seed_demo']) && ($vals['app_env'] ?? 'development') !== 'development') {
+        $errors[] = 'Demo data seeding is only allowed in APP_ENV=development.';
+    }
     if ($vals['app_name'] === '') $errors[] = 'APP_NAME is required.';
     if (!filter_var($vals['mail_from'], FILTER_VALIDATE_EMAIL)) $errors[] = 'MAIL_FROM must be a valid email.';
     if ($vals['app_logo_url'] !== '' && !preg_match('#^(https?://|/|\./|\.\./|assets/)#', $vals['app_logo_url'])) {
@@ -359,6 +367,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             createInitialAdmin($dbPdo, $vals['admin_email'], $adminPass);
 
+            $adminEmailLower = strtolower(trim((string)$vals['admin_email']));
+            $adminIdStmt = $dbPdo->prepare('SELECT id FROM users WHERE email = ? LIMIT 1');
+            $adminIdStmt->execute([$adminEmailLower]);
+            $adminUserId = (int)$adminIdStmt->fetchColumn();
+            if ($adminUserId <= 0) {
+                throw new RuntimeException('Failed to resolve Super Admin user id.');
+            }
+
+            if (!empty($vals['seed_demo'])) {
+                $demo = seedDemoData($dbPdo, $adminUserId, 'DemoPass123!');
+                startInstallerSession();
+                $_SESSION['install_demo_seed'] = [
+                    'demo_password' => $demo['demo_password'] ?? 'DemoPass123!',
+                    'users' => $demo['users'] ?? [],
+                    'rooms' => $demo['rooms'] ?? [],
+                    'invites' => $demo['invites'] ?? [],
+                ];
+            }
+
             $vals['app_hmac_secret'] = bin2hex(random_bytes(32));
             updateConfigFile($configPath, $vals);
 
@@ -368,7 +395,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new RuntimeException('Failed to write config/installed.flag (make config/ writable).');
             }
 
-            header('Location: ' . ($basePath ? $basePath : '') . '/login.php');
+            $loginUrl = ($basePath ? $basePath : '') . '/login.php';
+            if (!empty($vals['seed_demo'])) {
+                $loginUrl .= '?demo=1';
+            }
+            header('Location: ' . $loginUrl);
             exit;
 
         } catch (Throwable $e) {
@@ -466,6 +497,8 @@ hr{border:none;border-top:1px solid var(--b1);margin:16px 0;}
           <div class="chk"><input type="checkbox" name="init_db" value="1" <?= $vals['init_db'] ? 'checked' : '' ?>> <span>Initialize database schema (config/schema.sql)</span></div>
           <div style="height:10px"></div>
           <div class="chk"><input type="checkbox" name="apply_migrations" value="1" <?= $vals['apply_migrations'] ? 'checked' : '' ?>> <span>Apply migrations (config/migrations/*.sql)</span></div>
+          <div style="height:10px"></div>
+          <div class="chk"><input type="checkbox" name="seed_demo" value="1" <?= !empty($vals['seed_demo']) ? 'checked' : '' ?>> <span>Seed demo data (10 Togolese users, rooms, KYC, packages) — development only</span></div>
         </div>
 
         <div>

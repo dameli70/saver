@@ -6,7 +6,7 @@
 //    php install/install.php
 //
 //  Usage (non-interactive):
-//    php install/install.php --non-interactive --init-db=1 --apply-migrations=1 \
+//    php install/install.php --non-interactive --init-db=1 --apply-migrations=1 --seed-demo=1 \
 //      --db-host=localhost --db-name=locksmith --db-user=root --db-pass='' \
 //      --app-env=development --app-name=Controle --app-logo-url='' --mail-from=no-reply@localhost \
 //      --email-verify-ttl-hours=24 \
@@ -23,6 +23,8 @@ if (PHP_SAPI !== 'cli') {
 requireExt('openssl');
 requireExt('pdo_mysql');
 requireExt('mbstring');
+
+require_once __DIR__ . '/demo_seed.php';
 
 $args = parseArgs($argv);
 if (!empty($args['help'])) {
@@ -120,10 +122,17 @@ $vals['app_hmac_secret'] = bin2hex(random_bytes(32));
 
 $initDb = (($args['init-db'] ?? '') === '1');
 $applyMigrations = (($args['apply-migrations'] ?? '') === '1');
+$seedDemo = (($args['seed-demo'] ?? '') === '1');
 
 if (!$nonInteractive) {
     $initDb = $initDb || promptYesNo('Initialize database schema now?', true);
     $applyMigrations = $applyMigrations || promptYesNo('Apply migrations now? (safe to re-run)', true);
+    $seedDemo = $seedDemo || promptYesNo('Seed demo data (10 Togolese users/rooms)? (development only)', false);
+}
+
+if ($seedDemo && ($vals['app_env'] ?? 'development') !== 'development') {
+    fwrite(STDERR, "Demo data seeding is only allowed in APP_ENV=development.\n");
+    exit(1);
 }
 
 fwrite(STDOUT, "Validating MySQL credentials...\n");
@@ -169,6 +178,34 @@ try {
 
     createInitialAdmin($dbPdo, $adminEmail, $adminPass);
 
+    if ($seedDemo) {
+        $adminEmailLower = strtolower(trim($adminEmail));
+        $st = $dbPdo->prepare('SELECT id FROM users WHERE email = ? LIMIT 1');
+        $st->execute([$adminEmailLower]);
+        $adminUserId = (int)$st->fetchColumn();
+        if ($adminUserId <= 0) {
+            throw new RuntimeException('Failed to resolve Super Admin user id.');
+        }
+
+        fwrite(STDOUT, "Seeding demo data (10 users + rooms)...\n");
+        $demo = seedDemoData($dbPdo, $adminUserId, 'DemoPass123!');
+
+        if (!empty($demo['seeded'])) {
+            fwrite(STDOUT, "Demo users password: " . ($demo['demo_password'] ?? 'DemoPass123!') . "\n");
+            if (!empty($demo['users']) && is_array($demo['users'])) {
+                foreach ($demo['users'] as $u) {
+                    $email = (string)($u['email'] ?? '');
+                    $name = (string)($u['display'] ?? '');
+                    if ($email !== '') {
+                        fwrite(STDOUT, "  - {$name} <{$email}>\n");
+                    }
+                }
+            }
+        } else {
+            fwrite(STDOUT, "Demo seed skipped: " . ($demo['reason'] ?? 'unknown') . "\n");
+        }
+    }
+
 } catch (Throwable $e) {
     fwrite(STDERR, "\nERROR: " . $e->getMessage() . "\n");
     fwrite(STDERR, "Config was NOT written. Check DB_HOST/DB_USER/DB_PASS (and DB_NAME if not initializing).\n");
@@ -195,7 +232,7 @@ Run:
   php install/install.php
 
 Non-interactive example:
-  php install/install.php --non-interactive --init-db=1 --apply-migrations=1 \
+  php install/install.php --non-interactive --init-db=1 --apply-migrations=1 --seed-demo=1 \
     --db-host=localhost --db-name=locksmith --db-user=root --db-pass='' \
     --app-env=development --app-name=Controle --app-logo-url='' --mail-from=no-reply@localhost \
     --email-verify-ttl-hours=24 \

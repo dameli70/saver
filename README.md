@@ -19,6 +19,8 @@ Controle is a multi-page PHP app that lets users generate and store **time-locke
 
 On first access, the app redirects to `/install/index.php` until installation is complete.
 
+For development/testing, the installer also supports seeding demo data (10 Togolese users + rooms). Demo users share the login password `DemoPass123!`.
+
 ### CLI installer
 
 ```bash
