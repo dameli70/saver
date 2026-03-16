@@ -1,0 +1,776 @@
+<?php
+// ============================================================
+//  Controle — Demo data seeder (installer only)
+//
+//  Creates 10 Togolese demo users + sample rooms/levels/etc.
+//  Intended for development/testing installs.
+// ============================================================
+
+function demoSeedHasTable(PDO $db, string $table): bool {
+    $stmt = $db->prepare("SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ? LIMIT 1");
+    $stmt->execute([$table]);
+    return (bool)$stmt->fetchColumn();
+}
+
+function demoSeedHasColumn(PDO $db, string $table, string $column): bool {
+    $stmt = $db->prepare("SELECT 1 FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ? LIMIT 1");
+    $stmt->execute([$table, $column]);
+    return (bool)$stmt->fetchColumn();
+}
+
+function demoSeedGenerateUuid(): string {
+    $b = random_bytes(16);
+    $b[6] = chr((ord($b[6]) & 0x0f) | 0x40);
+    $b[8] = chr((ord($b[8]) & 0x3f) | 0x80);
+    return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($b), 4));
+}
+
+function demoSeedHashLoginPassword(string $password): string {
+    return password_hash($password, PASSWORD_ARGON2ID, [
+        'memory_cost' => 65536,
+        'time_cost'   => 4,
+        'threads'     => 2,
+    ]);
+}
+
+function demoSeedHashVaultVerifier(string $passphrase): string {
+    return password_hash($passphrase, PASSWORD_ARGON2ID, [
+        'memory_cost' => 65536,
+        'time_cost'   => 4,
+        'threads'     => 2,
+    ]);
+}
+
+function demoSeedNow(string $modify = 'now'): string {
+    $dt = new DateTime('now', new DateTimeZone('UTC'));
+    if ($modify !== 'now') {
+        $dt->modify($modify);
+    }
+    return $dt->format('Y-m-d H:i:s');
+}
+
+function seedDemoData(PDO $db, int $adminUserId, string $demoPassword = 'DemoPass123!'): array {
+    $existing = (int)$db->query('SELECT COUNT(*) FROM users')->fetchColumn();
+    if ($existing > 1) {
+        return [
+            'seeded' => 0,
+            'skipped' => 1,
+            'reason' => 'Users already exist',
+            'demo_password' => $demoPassword,
+            'users' => [],
+            'rooms' => [],
+            'invites' => [],
+        ];
+    }
+
+    $has = function(string $table, ?string $col = null) use ($db): bool {
+        if ($col === null) return demoSeedHasTable($db, $table);
+        return demoSeedHasTable($db, $table) && demoSeedHasColumn($db, $table, $col);
+    };
+
+    $out = [
+        'seeded' => 0,
+        'skipped' => 0,
+        'demo_password' => $demoPassword,
+        'users' => [],
+        'rooms' => [],
+        'invites' => [],
+    ];
+
+    $pkgId = [];
+    if ($has('packages')) {
+        $rows = $db->query("SELECT id, slug FROM packages WHERE is_active = 1")->fetchAll();
+        foreach ($rows as $r) {
+            $pkgId[(string)$r['slug']] = (int)$r['id'];
+        }
+    }
+
+    $users = [
+        [
+            'display' => 'Kossi Mensah',
+            'email' => 'kossi.mensah@example.com',
+            'trust_level' => 3,
+            'package_slug' => 'control_max',
+            'kyc_status' => 'approved',
+            'onboarding_complete' => 1,
+            'require_webauthn' => 0,
+            'vault_active_slot' => 1,
+        ],
+        [
+            'display' => 'Akossiwa Dossa',
+            'email' => 'akossiwa.dossa@example.com',
+            'trust_level' => 2,
+            'package_slug' => 'controle_plus',
+            'kyc_status' => 'submitted',
+            'onboarding_complete' => 1,
+            'require_webauthn' => 0,
+            'vault_active_slot' => 1,
+        ],
+        [
+            'display' => 'Kodjo Amegashie',
+            'email' => 'kodjo.amegashie@example.com',
+            'trust_level' => 1,
+            'package_slug' => null,
+            'kyc_status' => 'draft',
+            'onboarding_complete' => 0,
+            'require_webauthn' => 0,
+            'vault_active_slot' => 1,
+        ],
+        [
+            'display' => 'Sena Adjorlolo',
+            'email' => 'sena.adjorlolo@example.com',
+            'trust_level' => 1,
+            'package_slug' => null,
+            'kyc_status' => 'draft',
+            'onboarding_complete' => 0,
+            'require_webauthn' => 0,
+            'vault_active_slot' => 1,
+        ],
+        [
+            'display' => 'Komla Afi',
+            'email' => 'komla.afi@example.com',
+            'trust_level' => 2,
+            'package_slug' => 'controle_plus',
+            'kyc_status' => 'submitted',
+            'onboarding_complete' => 1,
+            'require_webauthn' => 1,
+            'vault_active_slot' => 1,
+        ],
+        [
+            'display' => 'Mawuli Kponton',
+            'email' => 'mawuli.kponton@example.com',
+            'trust_level' => 3,
+            'package_slug' => 'control_max',
+            'kyc_status' => 'approved',
+            'onboarding_complete' => 1,
+            'restricted' => 1,
+            'require_webauthn' => 0,
+            'vault_active_slot' => 1,
+        ],
+        [
+            'display' => 'Yaovi Tchalla',
+            'email' => 'yaovi.tchalla@example.com',
+            'trust_level' => 2,
+            'package_slug' => null,
+            'kyc_status' => 'rejected',
+            'onboarding_complete' => 1,
+            'require_webauthn' => 0,
+            'vault_active_slot' => 1,
+        ],
+        [
+            'display' => 'Efui Koffi',
+            'email' => 'efui.koffi@example.com',
+            'trust_level' => 1,
+            'package_slug' => null,
+            'kyc_status' => 'draft',
+            'onboarding_complete' => 0,
+            'require_webauthn' => 0,
+            'vault_active_slot' => 1,
+        ],
+        [
+            'display' => 'Sessi Atakpama',
+            'email' => 'sessi.atakpama@example.com',
+            'trust_level' => 2,
+            'package_slug' => 'controle_plus',
+            'kyc_status' => 'draft',
+            'onboarding_complete' => 1,
+            'require_webauthn' => 0,
+            'vault_active_slot' => 1,
+        ],
+        [
+            'display' => 'Dela Tété',
+            'email' => 'dela.tete@example.com',
+            'trust_level' => 3,
+            'package_slug' => null,
+            'kyc_status' => 'approved',
+            'onboarding_complete' => 1,
+            'vault_rotate' => 1,
+            'require_webauthn' => 0,
+            'vault_active_slot' => 2,
+        ],
+    ];
+
+    $userCols = ['email', 'login_hash', 'vault_verifier', 'vault_verifier_salt', 'is_admin', 'email_verified_at'];
+    if ($has('users', 'room_display_name')) $userCols[] = 'room_display_name';
+    if ($has('users', 'profile_image_url')) $userCols[] = 'profile_image_url';
+    if ($has('users', 'require_webauthn')) $userCols[] = 'require_webauthn';
+    if ($has('users', 'vault_active_slot')) $userCols[] = 'vault_active_slot';
+
+    $hasVaultAlt = $has('users', 'vault_verifier_alt') && $has('users', 'vault_verifier_alt_salt');
+    if ($hasVaultAlt) {
+        $userCols[] = 'vault_verifier_alt';
+        $userCols[] = 'vault_verifier_alt_salt';
+        if ($has('users', 'vault_verifier_alt_set_at')) $userCols[] = 'vault_verifier_alt_set_at';
+    }
+
+    if ($has('users', 'onboarding_completed_at')) $userCols[] = 'onboarding_completed_at';
+
+    $addrCols = ['address_line1','address_line2','address_city','address_region','address_postal_code','address_country'];
+    foreach ($addrCols as $c) {
+        if ($has('users', $c)) $userCols[] = $c;
+    }
+
+    $userSql = 'INSERT INTO users (' . implode(', ', $userCols) . ') VALUES (' . implode(', ', array_fill(0, count($userCols), '?')) . ')';
+    $insUser = $db->prepare($userSql);
+
+    $insTrust = null;
+    if ($has('user_trust')) {
+        $insTrust = $db->prepare('INSERT IGNORE INTO user_trust (user_id, trust_level, completed_reveals_count, last_level_change_at) VALUES (?, ?, ?, NOW())');
+    }
+
+    $insPrefs = null;
+    if ($has('notification_preferences')) {
+        $insPrefs = $db->prepare('INSERT INTO notification_preferences (user_id, important_json, informational_json, created_at, updated_at) VALUES (?, ?, ?, NOW(), NOW())');
+    }
+
+    $insRestriction = null;
+    if ($has('user_restrictions')) {
+        $insRestriction = $db->prepare('INSERT INTO user_restrictions (user_id, restricted_until, reason, created_at, updated_at) VALUES (?, ?, ?, NOW(), NOW())');
+    }
+
+    $insUserPkg = null;
+    if ($has('user_packages') && $has('packages')) {
+        $insUserPkg = $db->prepare('INSERT INTO user_packages (user_id, package_id, assigned_by_user_id, is_active, assigned_at, updated_at)
+                                    VALUES (?, ?, ?, 1, NOW(), NOW())
+                                    ON DUPLICATE KEY UPDATE package_id=VALUES(package_id), assigned_by_user_id=VALUES(assigned_by_user_id), is_active=1, updated_at=NOW()');
+    }
+
+    $insPurchase = null;
+    if ($has('package_purchases') && $has('packages')) {
+        $insPurchase = $db->prepare('INSERT INTO package_purchases (user_id, package_id, status, created_at, decided_at, decided_by_user_id, note)
+                                     VALUES (?, ?, ?, ?, ?, ?, ?)');
+    }
+
+    $insKyc = null;
+    if ($has('kyc_submissions')) {
+        $insKyc = $db->prepare("INSERT INTO kyc_submissions (user_id, status, admin_note, created_at, submitted_at, decided_at, decided_by_user_id)
+                                VALUES (?, ?, ?, NOW(), ?, ?, ?)
+                                ON DUPLICATE KEY UPDATE status=VALUES(status), admin_note=VALUES(admin_note), submitted_at=VALUES(submitted_at), decided_at=VALUES(decided_at), decided_by_user_id=VALUES(decided_by_user_id), updated_at=NOW()");
+    }
+
+    $insNotif = null;
+    if ($has('notifications')) {
+        $insNotif = $db->prepare('INSERT INTO notifications (user_id, tier, channel_mask, title, body, data_json, created_at) VALUES (?, ?, ?, ?, ?, ?, NOW())');
+    }
+
+    $createdUsers = [];
+
+    $db->beginTransaction();
+
+    // Ensure admin trust row exists for rooms features.
+    if ($insTrust) {
+        $insTrust->execute([(int)$adminUserId, 3, 0]);
+    }
+
+    foreach ($users as $u) {
+        $email = strtolower(trim((string)$u['email']));
+
+        $vaultSalt = bin2hex(random_bytes(32));
+        $vaultVerifier = demoSeedHashVaultVerifier(bin2hex(random_bytes(32)) . $vaultSalt);
+
+        $altHash = null;
+        $altSalt = null;
+        if ($hasVaultAlt && !empty($u['vault_rotate'])) {
+            $altSalt = bin2hex(random_bytes(32));
+            $altHash = demoSeedHashVaultVerifier(bin2hex(random_bytes(32)) . $altSalt);
+        }
+
+        $vals = [];
+        foreach ($userCols as $col) {
+            if ($col === 'email') $vals[] = $email;
+            else if ($col === 'login_hash') $vals[] = demoSeedHashLoginPassword($demoPassword);
+            else if ($col === 'vault_verifier') $vals[] = $vaultVerifier;
+            else if ($col === 'vault_verifier_salt') $vals[] = $vaultSalt;
+            else if ($col === 'is_admin') $vals[] = 0;
+            else if ($col === 'email_verified_at') $vals[] = demoSeedNow('now');
+            else if ($col === 'room_display_name') $vals[] = (string)$u['display'];
+            else if ($col === 'profile_image_url') $vals[] = null;
+            else if ($col === 'require_webauthn') $vals[] = !empty($u['require_webauthn']) ? 1 : 0;
+            else if ($col === 'vault_active_slot') {
+                $slot = !empty($u['vault_active_slot']) ? (int)$u['vault_active_slot'] : 1;
+                if ($slot === 2 && !$hasVaultAlt) $slot = 1;
+                $vals[] = in_array($slot, [1, 2], true) ? $slot : 1;
+            }
+            else if ($col === 'onboarding_completed_at') $vals[] = !empty($u['onboarding_complete']) ? demoSeedNow('-2 days') : null;
+            else if ($col === 'vault_verifier_alt') $vals[] = $altHash;
+            else if ($col === 'vault_verifier_alt_salt') $vals[] = $altSalt;
+            else if ($col === 'vault_verifier_alt_set_at') $vals[] = $altHash ? demoSeedNow('-1 day') : null;
+            else if ($col === 'address_line1') $vals[] = 'Rue du Marché';
+            else if ($col === 'address_line2') $vals[] = null;
+            else if ($col === 'address_city') $vals[] = 'Lomé';
+            else if ($col === 'address_region') $vals[] = 'Maritime';
+            else if ($col === 'address_postal_code') $vals[] = 'BP 100';
+            else if ($col === 'address_country') $vals[] = 'Togo';
+            else $vals[] = null;
+        }
+
+        $insUser->execute($vals);
+        $userId = (int)$db->lastInsertId();
+
+        $createdUsers[] = [
+            'id' => $userId,
+            'email' => $email,
+            'display' => (string)$u['display'],
+            'trust_level' => (int)$u['trust_level'],
+        ];
+
+        if ($insTrust) {
+            $insTrust->execute([$userId, (int)$u['trust_level'], 0]);
+        }
+
+        if ($insPrefs) {
+            $important = json_encode([
+                'email_time_lock_reminders' => 0,
+            ], JSON_UNESCAPED_UNICODE);
+            $informational = json_encode([
+                'skip_setup' => !empty($u['onboarding_complete']) ? 1 : 0,
+            ], JSON_UNESCAPED_UNICODE);
+            $insPrefs->execute([$userId, $important, $informational]);
+        }
+
+        if ($insRestriction && !empty($u['restricted'])) {
+            $insRestriction->execute([$userId, demoSeedNow('+10 days'), 'Demo restriction period']);
+        }
+
+        if ($insUserPkg && !empty($u['package_slug']) && isset($pkgId[(string)$u['package_slug']])) {
+            $insUserPkg->execute([$userId, $pkgId[(string)$u['package_slug']], $adminUserId]);
+        }
+
+        if ($insPurchase && $has('package_purchases') && $has('packages')) {
+            if ($email === 'sena.adjorlolo@example.com' && isset($pkgId['controle_plus'])) {
+                $insPurchase->execute([$userId, $pkgId['controle_plus'], 'pending', demoSeedNow('-1 day'), null, null, 'Demo pending purchase']);
+            }
+            if ($email === 'yaovi.tchalla@example.com' && isset($pkgId['control_max'])) {
+                $insPurchase->execute([$userId, $pkgId['control_max'], 'rejected', demoSeedNow('-8 days'), demoSeedNow('-7 days'), $adminUserId, 'Demo rejected purchase']);
+            }
+        }
+
+        if ($insKyc) {
+            $st = (string)($u['kyc_status'] ?? 'draft');
+            $submittedAt = null;
+            $decidedAt = null;
+            $decidedBy = null;
+            $note = null;
+
+            if ($st === 'submitted') {
+                $submittedAt = demoSeedNow('-3 days');
+                $note = null;
+            } else if ($st === 'approved') {
+                $submittedAt = demoSeedNow('-10 days');
+                $decidedAt = demoSeedNow('-7 days');
+                $decidedBy = $adminUserId;
+                $note = 'Approved (demo)';
+            } else if ($st === 'rejected') {
+                $submittedAt = demoSeedNow('-10 days');
+                $decidedAt = demoSeedNow('-6 days');
+                $decidedBy = $adminUserId;
+                $note = 'Rejected (demo)';
+            }
+
+            $insKyc->execute([$userId, $st, $note, $submittedAt, $decidedAt, $decidedBy]);
+        }
+
+        if ($insNotif) {
+            $insNotif->execute([
+                $userId,
+                'informational',
+                'inapp',
+                'Welcome (demo)',
+                'This is a demo account created during installation for testing purposes.',
+                json_encode(['demo' => 1], JSON_UNESCAPED_UNICODE),
+            ]);
+        }
+    }
+
+    $out['users'] = $createdUsers;
+
+    // Destination accounts (optional, used by saving rooms)
+    $destinationAccountIds = [];
+    if ($has('platform_destination_accounts')) {
+        $carrierMixx = null;
+        if ($has('carriers')) {
+            $st = $db->prepare('SELECT id FROM carriers WHERE name = ? LIMIT 1');
+            $st->execute(['Mixx by YAS']);
+            $carrierMixx = (int)$st->fetchColumn();
+            if ($carrierMixx <= 0) {
+                $st->execute(['Moov Money']);
+                $carrierMixx = (int)$st->fetchColumn();
+            }
+        }
+
+        $insAcc = $db->prepare("INSERT INTO platform_destination_accounts
+            (account_type, display_label, carrier_id, mobile_money_number, bank_name, bank_account_name, bank_account_number, bank_routing_number, bank_swift, bank_iban, crypto_network, crypto_address, is_active, created_at, updated_at)
+            VALUES
+            (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW(), NOW())");
+
+        // Mobile money (Mixx)
+        $insAcc->execute(['mobile_money', 'Mixx (demo)', $carrierMixx ?: null, '+228 90 00 00 00', null, null, null, null, null, null, null, null]);
+        $destinationAccountIds['mixx'] = (int)$db->lastInsertId();
+
+        // Bank
+        $insAcc->execute(['bank', 'Ecobank Togo (demo)', null, null, 'Ecobank Togo', 'Controle Demo', 'TG1234567890', null, null, null, null, null]);
+        $destinationAccountIds['bank'] = (int)$db->lastInsertId();
+
+        // Crypto wallet (USDT TRC20)
+        $insAcc->execute(['crypto_wallet', 'USDT TRC20 (demo)', null, null, null, null, null, null, null, null, 'TRON', 'TQn9Y2Xb1cYvRzJm9bq9bYqYd1c9rY9bQy']);
+        $destinationAccountIds['crypto'] = (int)$db->lastInsertId();
+    }
+
+    // Saving rooms + participants
+    if ($has('saving_rooms') && $has('saving_room_participants')) {
+        $idByEmail = [];
+        foreach ($createdUsers as $r) {
+            $idByEmail[(string)$r['email']] = (int)$r['id'];
+        }
+
+        $roomCols = [
+            'id', 'maker_user_id', 'purpose_category', 'goal_text', 'saving_type', 'visibility',
+            'required_trust_level', 'min_participants', 'max_participants', 'participation_amount',
+            'periodicity', 'start_at', 'reveal_at', 'lobby_state', 'room_state', 'privacy_mode',
+            'escrow_policy', 'extensions_used',
+        ];
+        $roomSql = 'INSERT INTO saving_rooms (' . implode(', ', $roomCols) . ') VALUES (' . implode(', ', array_fill(0, count($roomCols), '?')) . ')';
+        $insRoom = $db->prepare($roomSql);
+
+        $partColsBase = ['room_id', 'user_id', 'status'];
+        $partCols = $partColsBase;
+        if ($has('saving_room_participants', 'joined_at')) $partCols[] = 'joined_at';
+        if ($has('saving_room_participants', 'approved_at')) $partCols[] = 'approved_at';
+        if ($has('saving_room_participants', 'slot_position')) $partCols[] = 'slot_position';
+        $partSql = 'INSERT INTO saving_room_participants (' . implode(', ', $partCols) . ') VALUES (' . implode(', ', array_fill(0, count($partCols), '?')) . ')';
+        $insPart = $db->prepare($partSql);
+
+        $insJoinReq = null;
+        if ($has('saving_room_join_requests')) {
+            $insJoinReq = $db->prepare('INSERT INTO saving_room_join_requests (room_id, user_id, status, snapshot_level, snapshot_strikes_6m, snapshot_restricted_until, created_at)
+                                        VALUES (?, ?, ?, ?, ?, ?, NOW())');
+        }
+
+        $insInvite = null;
+        if ($has('saving_room_invites')) {
+            $insInvite = $db->prepare('INSERT INTO saving_room_invites (room_id, invite_mode, invite_token_hash, invited_user_id, invited_email, status, expires_at, created_at)
+                                       VALUES (?, ?, ?, ?, ?, ?, ?, NOW())');
+        }
+
+        $insRoomAccount = null;
+        if ($has('saving_room_accounts') && $destinationAccountIds) {
+            $sraCols = ['room_id', 'account_id'];
+            if ($has('saving_room_accounts', 'unlock_code_enc')) $sraCols[] = 'unlock_code_enc';
+            if ($has('saving_room_accounts', 'code_rotation_version')) $sraCols[] = 'code_rotation_version';
+            if ($has('saving_room_accounts', 'created_at')) $sraCols[] = 'created_at';
+            if ($has('saving_room_accounts', 'updated_at')) $sraCols[] = 'updated_at';
+
+            $sql = 'INSERT INTO saving_room_accounts (' . implode(', ', $sraCols) . ') VALUES (' . implode(', ', array_fill(0, count($sraCols), '?')) . ')';
+            $insRoomAccount = $db->prepare($sql);
+        }
+
+        // Room A (public, lobby)
+        $roomA = demoSeedGenerateUuid();
+        $makerA = $idByEmail['kossi.mensah@example.com'];
+        $insRoom->execute([
+            $roomA,
+            $makerA,
+            'business',
+            'Démarrage d’un petit commerce à Lomé (démo)',
+            'A',
+            'public',
+            1,
+            3,
+            5,
+            '10000.00',
+            'weekly',
+            demoSeedNow('+10 days'),
+            demoSeedNow('+60 days'),
+            'open',
+            'lobby',
+            1,
+            'redistribute',
+            0,
+        ]);
+
+        $participantsA = [
+            [$makerA, 'approved'],
+            [$idByEmail['akossiwa.dossa@example.com'], 'approved'],
+            [$idByEmail['efui.koffi@example.com'], 'approved'],
+            [$idByEmail['kodjo.amegashie@example.com'], 'pending'],
+        ];
+        $slot = 1;
+        foreach ($participantsA as $p) {
+            $vals = [];
+            foreach ($partCols as $col) {
+                if ($col === 'room_id') $vals[] = $roomA;
+                else if ($col === 'user_id') $vals[] = (int)$p[0];
+                else if ($col === 'status') $vals[] = (string)$p[1];
+                else if ($col === 'joined_at') $vals[] = demoSeedNow('-1 day');
+                else if ($col === 'approved_at') $vals[] = ($p[1] === 'approved') ? demoSeedNow('-1 day') : null;
+                else if ($col === 'slot_position') $vals[] = $slot;
+                else $vals[] = null;
+            }
+            $insPart->execute($vals);
+            $slot++;
+        }
+
+        if ($insJoinReq) {
+            $lvl = 1;
+            if ($insTrust) {
+                $st = $db->prepare('SELECT trust_level FROM user_trust WHERE user_id = ?');
+                $st->execute([(int)$idByEmail['kodjo.amegashie@example.com']]);
+                $lvl = (int)($st->fetchColumn() ?: 1);
+            }
+            $insJoinReq->execute([$roomA, (int)$idByEmail['kodjo.amegashie@example.com'], 'pending', $lvl, 0, null]);
+        }
+
+        
+
+        // Room B (public, active Type B)
+        $roomB = demoSeedGenerateUuid();
+        $makerB = $idByEmail['akossiwa.dossa@example.com'];
+        $insRoom->execute([
+            $roomB,
+            $makerB,
+            'community',
+            'Tontine de quartier (démo)',
+            'B',
+            'public',
+            2,
+            4,
+            6,
+            '5000.00',
+            'weekly',
+            demoSeedNow('-7 days'),
+            demoSeedNow('+45 days'),
+            'locked',
+            'active',
+            0,
+            'redistribute',
+            0,
+        ]);
+
+        $participantsB = [
+            [$makerB, 'active'],
+            [$idByEmail['komla.afi@example.com'], 'active'],
+            [$idByEmail['yaovi.tchalla@example.com'], 'active'],
+            [$idByEmail['sessi.atakpama@example.com'], 'active'],
+            [$idByEmail['dela.tete@example.com'], 'active'],
+        ];
+        $slot = 1;
+        foreach ($participantsB as $p) {
+            $vals = [];
+            foreach ($partCols as $col) {
+                if ($col === 'room_id') $vals[] = $roomB;
+                else if ($col === 'user_id') $vals[] = (int)$p[0];
+                else if ($col === 'status') $vals[] = (string)$p[1];
+                else if ($col === 'joined_at') $vals[] = demoSeedNow('-12 days');
+                else if ($col === 'approved_at') $vals[] = demoSeedNow('-12 days');
+                else if ($col === 'slot_position') $vals[] = $slot;
+                else $vals[] = null;
+            }
+            $insPart->execute($vals);
+            $slot++;
+        }
+
+        // Room C (private, lobby)
+        $roomC = demoSeedGenerateUuid();
+        $makerC = $idByEmail['mawuli.kponton@example.com'];
+        $insRoom->execute([
+            $roomC,
+            $makerC,
+            'education',
+            'Frais de scolarité (démo)',
+            'A',
+            'private',
+            3,
+            2,
+            3,
+            '15000.00',
+            'monthly',
+            demoSeedNow('+20 days'),
+            demoSeedNow('+110 days'),
+            'open',
+            'lobby',
+            1,
+            'refund_minus_fee',
+            0,
+        ]);
+
+        $vals = [];
+        foreach ($partCols as $col) {
+            if ($col === 'room_id') $vals[] = $roomC;
+            else if ($col === 'user_id') $vals[] = (int)$makerC;
+            else if ($col === 'status') $vals[] = 'approved';
+            else if ($col === 'joined_at') $vals[] = demoSeedNow('-1 day');
+            else if ($col === 'approved_at') $vals[] = demoSeedNow('-1 day');
+            else if ($col === 'slot_position') $vals[] = 1;
+            else $vals[] = null;
+        }
+        $insPart->execute($vals);
+
+        $inviteToken = bin2hex(random_bytes(16));
+        if ($insInvite) {
+            $insInvite->execute([
+                $roomC,
+                'private_user',
+                hash('sha256', $inviteToken),
+                (int)$idByEmail['kossi.mensah@example.com'],
+                null,
+                'active',
+                demoSeedNow('+30 days'),
+            ]);
+            $out['invites'][] = [
+                'room_id' => $roomC,
+                'invite_mode' => 'private_user',
+                'token' => $inviteToken,
+                'invited_email' => 'kossi.mensah@example.com',
+            ];
+        }
+
+        // Room D (closed, to populate trust passport)
+        $roomD = demoSeedGenerateUuid();
+        $makerD = $makerA;
+        $insRoom->execute([
+            $roomD,
+            $makerD,
+            'emergency',
+            'Caisse urgence (démo)',
+            'A',
+            'unlisted',
+            1,
+            2,
+            4,
+            '3000.00',
+            'weekly',
+            demoSeedNow('-50 days'),
+            demoSeedNow('-5 days'),
+            'locked',
+            'closed',
+            1,
+            'redistribute',
+            0,
+        ]);
+
+        $completed = [
+            $makerD,
+            $idByEmail['efui.koffi@example.com'],
+            $idByEmail['akossiwa.dossa@example.com'],
+        ];
+        $slot = 1;
+        foreach ($completed as $uid) {
+            $vals = [];
+            foreach ($partCols as $col) {
+                if ($col === 'room_id') $vals[] = $roomD;
+                else if ($col === 'user_id') $vals[] = (int)$uid;
+                else if ($col === 'status') $vals[] = 'completed';
+                else if ($col === 'joined_at') $vals[] = demoSeedNow('-52 days');
+                else if ($col === 'approved_at') $vals[] = demoSeedNow('-52 days');
+                else if ($col === 'slot_position') $vals[] = $slot;
+                else $vals[] = null;
+            }
+            $insPart->execute($vals);
+            $slot++;
+        }
+
+        if ($has('user_completed_reveals')) {
+            $insComp = $db->prepare('INSERT INTO user_completed_reveals (user_id, room_id, started_at, unlocked_at, duration_days, qualified_for_level, created_at)
+                                     VALUES (?, ?, ?, ?, ?, 1, NOW())');
+            foreach ($completed as $uid) {
+                $insComp->execute([(int)$uid, $roomD, demoSeedNow('-50 days'), demoSeedNow('-5 days'), 45]);
+            }
+
+            if ($insTrust) {
+                $db->prepare('UPDATE user_trust SET completed_reveals_count = completed_reveals_count + 1 WHERE user_id IN (' . implode(',', array_fill(0, count($completed), '?')) . ')')
+                   ->execute(array_values(array_map('intval', $completed)));
+            }
+        }
+
+        // Type B rotation scaffolding (optional)
+        if ($has('saving_room_rotation_queue') && $has('saving_room_rotation_windows')) {
+            $queue = $db->prepare('INSERT IGNORE INTO saving_room_rotation_queue (room_id, user_id, position, status, created_at) VALUES (?, ?, ?, ?, NOW())');
+            $window = $db->prepare("INSERT IGNORE INTO saving_room_rotation_windows (room_id, user_id, rotation_index, status, expires_at, created_at)
+                                    VALUES (?, ?, ?, 'pending_votes', ?, NOW())");
+
+            $pos = 1;
+            foreach ($participantsB as $p) {
+                $queue->execute([$roomB, (int)$p[0], $pos, ($pos === 2 ? 'active_window' : 'queued')]);
+                $pos++;
+            }
+
+            $activeUser = (int)$participantsB[1][0];
+            $window->execute([$roomB, $activeUser, 1, demoSeedNow('+12 hours')]);
+        }
+
+        if ($has('saving_room_contribution_cycles') && $has('saving_room_contributions')) {
+            $insCycle = $db->prepare('INSERT IGNORE INTO saving_room_contribution_cycles (room_id, cycle_index, due_at, grace_ends_at, status, created_at)
+                                      VALUES (?, ?, ?, ?, ?, NOW())');
+            $insCycle->execute([$roomB, 1, demoSeedNow('-1 day'), demoSeedNow('+2 days'), 'grace']);
+            $insCycle->execute([$roomB, 2, demoSeedNow('+6 days'), demoSeedNow('+9 days'), 'open']);
+
+            $cycleIdStmt = $db->prepare('SELECT id FROM saving_room_contribution_cycles WHERE room_id = ? AND cycle_index = ?');
+            $cycleIdStmt->execute([$roomB, 1]);
+            $cycle1 = (int)$cycleIdStmt->fetchColumn();
+
+            if ($cycle1 > 0) {
+                $insContrib = $db->prepare("INSERT INTO saving_room_contributions (room_id, user_id, cycle_id, amount, status, reference, confirmed_at, created_at)
+                                            VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
+                                            ON DUPLICATE KEY UPDATE amount=VALUES(amount), status=VALUES(status), reference=VALUES(reference), confirmed_at=VALUES(confirmed_at)");
+
+                // Mix of paid / missed
+                $insContrib->execute([$roomB, (int)$makerB, $cycle1, '5000.00', 'paid', 'DEMO-PAID-001', demoSeedNow('-12 hours')]);
+                $insContrib->execute([$roomB, (int)$participantsB[1][0], $cycle1, '5000.00', 'paid_in_grace', 'DEMO-PAID-002', demoSeedNow('-2 hours')]);
+                $insContrib->execute([$roomB, (int)$participantsB[2][0], $cycle1, '5000.00', 'unpaid', null, null]);
+                $insContrib->execute([$roomB, (int)$participantsB[3][0], $cycle1, '5000.00', 'unpaid', null, null]);
+                $insContrib->execute([$roomB, (int)$participantsB[4][0], $cycle1, '5000.00', 'paid', 'DEMO-PAID-003', demoSeedNow('-10 hours')]);
+            }
+        }
+
+        if ($has('saving_room_activity')) {
+            $act = $db->prepare('INSERT INTO saving_room_activity (room_id, event_type, public_payload_json, created_at) VALUES (?, ?, ?, NOW())');
+            $act->execute([$roomA, 'room_seeded', json_encode(['demo' => 1], JSON_UNESCAPED_UNICODE)]);
+            $act->execute([$roomB, 'room_seeded', json_encode(['demo' => 1], JSON_UNESCAPED_UNICODE)]);
+            $act->execute([$roomC, 'room_seeded', json_encode(['demo' => 1], JSON_UNESCAPED_UNICODE)]);
+            $act->execute([$roomD, 'room_seeded', json_encode(['demo' => 1], JSON_UNESCAPED_UNICODE)]);
+        }
+
+        // Saving room accounts mapping (if available)
+        if ($insRoomAccount && $destinationAccountIds) {
+            $sraCols = [];
+            // Recompute $sraCols the same way we did above.
+            $sraCols = ['room_id', 'account_id'];
+            if ($has('saving_room_accounts', 'unlock_code_enc')) $sraCols[] = 'unlock_code_enc';
+            if ($has('saving_room_accounts', 'code_rotation_version')) $sraCols[] = 'code_rotation_version';
+            if ($has('saving_room_accounts', 'created_at')) $sraCols[] = 'created_at';
+            if ($has('saving_room_accounts', 'updated_at')) $sraCols[] = 'updated_at';
+
+            $insertRoomAccount = function(string $roomId, int $accountId) use ($db, $sraCols): void {
+                $vals = [];
+                foreach ($sraCols as $c) {
+                    if ($c === 'room_id') $vals[] = $roomId;
+                    else if ($c === 'account_id') $vals[] = $accountId;
+                    else if ($c === 'unlock_code_enc') $vals[] = null;
+                    else if ($c === 'code_rotation_version') $vals[] = 1;
+                    else if ($c === 'created_at') $vals[] = demoSeedNow('now');
+                    else if ($c === 'updated_at') $vals[] = demoSeedNow('now');
+                    else $vals[] = null;
+                }
+
+                $sql = 'INSERT IGNORE INTO saving_room_accounts (' . implode(', ', $sraCols) . ') VALUES (' . implode(', ', array_fill(0, count($sraCols), '?')) . ')';
+                $db->prepare($sql)->execute($vals);
+            };
+
+            if (!empty($destinationAccountIds['mixx'])) $insertRoomAccount($roomA, (int)$destinationAccountIds['mixx']);
+            if (!empty($destinationAccountIds['bank'])) $insertRoomAccount($roomB, (int)$destinationAccountIds['bank']);
+            if (!empty($destinationAccountIds['crypto'])) $insertRoomAccount($roomC, (int)$destinationAccountIds['crypto']);
+        }
+
+        $out['rooms'] = [
+            ['id' => $roomA, 'visibility' => 'public', 'saving_type' => 'A'],
+            ['id' => $roomB, 'visibility' => 'public', 'saving_type' => 'B'],
+            ['id' => $roomC, 'visibility' => 'private', 'saving_type' => 'A'],
+            ['id' => $roomD, 'visibility' => 'unlisted', 'saving_type' => 'A'],
+        ];
+    }
+
+    $db->commit();
+
+    $out['seeded'] = 1;
+    return $out;
+}

@@ -14,6 +14,15 @@ if (isLoggedIn()) {
     exit;
 }
 
+$demoSeed = null;
+if (!empty($_SESSION['install_demo_seed']) && is_array($_SESSION['install_demo_seed'])) {
+    $demoSeed = $_SESSION['install_demo_seed'];
+    unset($_SESSION['install_demo_seed']);
+} else if (!empty($_GET['demo'])) {
+    // Fallback hint if the installer redirected with ?demo=1 but the session was lost.
+    $demoSeed = ['demo_password' => 'DemoPass123!'];
+}
+
 header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none';");
 header("X-Frame-Options: DENY");
 header("X-Content-Type-Options: nosniff");
@@ -48,6 +57,29 @@ header("Referrer-Policy: no-referrer");
     <div class="sub"><?php e('login.subtitle'); ?></div>
 
     <div id="err" class="msg msg-err"></div>
+
+    <?php if (!empty($demoSeed)): ?>
+      <div class="msg msg-ok show" style="margin-top:10px;">
+        <strong>Demo data seeded.</strong><br>
+        Demo users password: <code><?= htmlspecialchars((string)($demoSeed['demo_password'] ?? 'DemoPass123!')) ?></code><br>
+        <?php
+          $demoEmails = [];
+          if (!empty($demoSeed['users']) && is_array($demoSeed['users'])) {
+              foreach ($demoSeed['users'] as $u) {
+                  if (!empty($u['email'])) $demoEmails[] = (string)$u['email'];
+              }
+          }
+          $demoEmails = array_values(array_unique($demoEmails));
+          $sample = array_slice($demoEmails, 0, 5);
+        ?>
+        <?php if ($sample): ?>
+          Example emails: <span style="font-family:var(--mono);font-size:12px;"><?= htmlspecialchars(implode(', ', $sample)) ?></span>
+          <?php if (count($demoEmails) > 5): ?>…<?php endif; ?>
+        <?php else: ?>
+          Example email: <span style="font-family:var(--mono);font-size:12px;">kossi.mensah@example.com</span>
+        <?php endif; ?>
+      </div>
+    <?php endif; ?>
 
     <form id="f">
       <div class="field"><label><?php e('common.email'); ?></label>

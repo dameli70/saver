@@ -9,6 +9,7 @@ Both installers:
 - write `config/database.php`
 - optionally initialize the database schema and apply migrations
 - create the initial **Super Admin** user
+- optionally seed demo data (10 Togolese users + rooms + trust levels + KYC)
 - write `config/installed.flag` so the app can bypass the installer on future requests
 
 ## Run (interactive)
@@ -22,7 +23,7 @@ php install/install.php
 ## Run (non-interactive)
 
 ```bash
-php install/install.php --non-interactive --init-db=1 --apply-migrations=1 \
+php install/install.php --non-interactive --init-db=1 --apply-migrations=1 --seed-demo=1 \
   --db-host=localhost --db-name=locksmith --db-user=root --db-pass='' \
   --app-env=development --app-name=Controle --app-logo-url='' --mail-from=no-reply@localhost \
   --email-verify-ttl-hours=24 \
@@ -30,6 +31,8 @@ php install/install.php --non-interactive --init-db=1 --apply-migrations=1 \
   --smtp-user=user --smtp-pass=pass --smtp-verify-peer=1 \
   --admin-email=admin@example.com --admin-pass='change_me_please'
 ```
+
+Demo accounts are created with a shared password: `DemoPass123!`.
 
 ## Notes
 
