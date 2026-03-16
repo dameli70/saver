@@ -156,10 +156,15 @@ function connectPdoServer(string $host, string $charset, string $user, string $p
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         PDO::ATTR_EMULATE_PREPARES => false,
     ];
-    if (defined('PDO::MYSQL_ATTR_USE_BUFFERED_QUERY')) {
+    if (extension_loaded('pdo_mysql')) {
         $opts[PDO::MYSQL_ATTR_USE_BUFFERED_QUERY] = true;
     }
-    return new PDO($dsn, $user, $pass, $opts);
+
+    $pdo = new PDO($dsn, $user, $pass, $opts);
+    if (extension_loaded('pdo_mysql')) {
+        $pdo->setAttribute(PDO::MYSQL_ATTR_USE_BUFFERED_QUERY, true);
+    }
+    return $pdo;
 }
 
 function connectPdoDb(string $host, string $db, string $charset, string $user, string $pass): PDO {
@@ -169,10 +174,15 @@ function connectPdoDb(string $host, string $db, string $charset, string $user, s
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         PDO::ATTR_EMULATE_PREPARES => false,
     ];
-    if (defined('PDO::MYSQL_ATTR_USE_BUFFERED_QUERY')) {
+    if (extension_loaded('pdo_mysql')) {
         $opts[PDO::MYSQL_ATTR_USE_BUFFERED_QUERY] = true;
     }
-    return new PDO($dsn, $user, $pass, $opts);
+
+    $pdo = new PDO($dsn, $user, $pass, $opts);
+    if (extension_loaded('pdo_mysql')) {
+        $pdo->setAttribute(PDO::MYSQL_ATTR_USE_BUFFERED_QUERY, true);
+    }
+    return $pdo;
 }
 
 function splitSqlStatements(string $sql): array {
@@ -188,6 +198,29 @@ function splitSqlStatements(string $sql): array {
     return array_values(array_filter($parts, fn($p) => $p !== ''));
 }
 
+function stripLeadingSqlComments(string $sql): string {
+    $s = ltrim($sql);
+    while ($s !== '') {
+        if (str_starts_with($s, '--')) {
+            $pos = strpos($s, "\n");
+            $s = $pos === false ? '' : ltrim(substr($s, $pos + 1));
+            continue;
+        }
+        if (str_starts_with($s, '#')) {
+            $pos = strpos($s, "\n");
+            $s = $pos === false ? '' : ltrim(substr($s, $pos + 1));
+            continue;
+        }
+        if (str_starts_with($s, '/*')) {
+            $end = strpos($s, '*/');
+            $s = $end === false ? '' : ltrim(substr($s, $end + 2));
+            continue;
+        }
+        break;
+    }
+    return $s;
+}
+
 function applySqlFile(PDO $pdo, string $path, bool $ignoreDuplicates): void {
     $sql = file_get_contents($path);
     if ($sql === false) {
@@ -201,13 +234,15 @@ function applySqlFile(PDO $pdo, string $path, bool $ignoreDuplicates): void {
         if (preg_match('/^USE\s+/i', $trim)) continue;
 
         try {
-            // Some migrations contain "SELECT 1" / "SHOW ..." fallbacks.
-            // Using exec() for statements that return result sets can leave an
-            // unbuffered cursor open and break subsequent queries.
-            if (preg_match('/^(SELECT|SHOW|DESCRIBE|EXPLAIN|WITH|CALL)\b/i', $trim)) {
+            $head = stripLeadingSqlComments($trim);
+            // Some migrations contain SELECT/SHOW fallbacks.
+            // If a statement returns a result set, we must fully consume it.
+            if (preg_match('/^(SELECT|SHOW|DESCRIBE|EXPLAIN|WITH|CALL)\b/i', $head)) {
                 $q = $pdo->query($stmt);
                 if ($q) {
-                    $q->fetchAll();
+                    do {
+                        $q->fetchAll();
+                    } while ($q->nextRowset());
                     $q->closeCursor();
                 }
             } else {
@@ -222,7 +257,8 @@ function applySqlFile(PDO $pdo, string $path, bool $ignoreDuplicates): void {
             )) {
                 continue;
             }
-            throw $e;
+            $snippet = preg_replace('/\s+/', ' ', substr($head ?: $trim, 0, 220));
+            throw new RuntimeException('SQL error in ' . basename($path) . ': ' . $msg . ' | ' . $snippet, 0, $e);
         }
     }
 }
@@ -234,7 +270,9 @@ function ensureMigrationsTable(PDO $pdo): void {
 function migrationApplied(PDO $pdo, string $filename): bool {
     $stmt = $pdo->prepare("SELECT filename FROM schema_migrations WHERE filename = ?");
     $stmt->execute([$filename]);
-    return (bool)$stmt->fetch();
+    $v = (bool)$stmt->fetch();
+    $stmt->closeCursor();
+    return $v;
 }
 
 function markMigrationApplied(PDO $pdo, string $filename): void {
