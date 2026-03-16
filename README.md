@@ -8,7 +8,7 @@ Controle is a multi-page PHP app that lets users generate and store **time-locke
 - Users must verify their email before accessing the dashboard
 
 ## Requirements
-- PHP 8.1+ (with `openssl`, `pdo_mysql`, `mbstring` extensions)
+- PHP 8.0+ (with `openssl`, `pdo_mysql`, `mbstring` extensions)
 - MySQL 8.0+ or MariaDB 10.6+
 - Apache or Nginx
 - HTTPS in production (secure cookies + Clipboard API)

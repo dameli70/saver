@@ -542,7 +542,7 @@ function normalizeDisplayText(?string $s): ?string {
     return $decoded;
 }
 
-function jsonResponse(array $data, int $status = 200): never {
+function jsonResponse(array $data, int $status = 200): void {
     http_response_code($status);
     header('Content-Type: application/json; charset=utf-8');
     // Prevent caching of any API responses
