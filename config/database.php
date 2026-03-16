@@ -51,6 +51,82 @@ define('PBKDF2_ITERATIONS', 310000);
 
 date_default_timezone_set('UTC');
 
+
+
+function isApiRequest(): bool {
+    try {
+        $script = (string)($_SERVER['SCRIPT_NAME'] ?? '');
+        $uri    = (string)($_SERVER['REQUEST_URI'] ?? '');
+
+        // Primary signal: anything under /api/ is an API request.
+        if (preg_match('#/api/#', $script) || preg_match('#/api/#', $uri)) return true;
+
+        // Secondary signals: clients that explicitly want JSON.
+        $accept = strtolower((string)($_SERVER['HTTP_ACCEPT'] ?? ''));
+        if (str_contains($accept, 'application/json') || str_contains($accept, '+json')) return true;
+
+        $ctype = strtolower((string)($_SERVER['CONTENT_TYPE'] ?? $_SERVER['HTTP_CONTENT_TYPE'] ?? ''));
+        if (str_contains($ctype, 'application/json')) return true;
+
+        $xrw = strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? ''));
+        if ($xrw === 'xmlhttprequest') return true;
+
+    } catch (Throwable) {
+        // Fall through
+    }
+
+    return false;
+}
+
+function dbUnavailableResponse(?string $devDetail = null): void {
+    $isDev = defined('APP_ENV') && APP_ENV === 'development';
+    $msg = ($isDev && $devDetail) ? ('DB: ' . $devDetail) : 'Database unavailable';
+
+    if (PHP_SAPI === 'cli') {
+        fwrite(STDERR, $msg . "\n");
+        exit(1);
+    }
+
+    http_response_code(503);
+
+    if (!headers_sent()) {
+        header('Cache-Control: no-store, no-cache, must-revalidate');
+        header('Pragma: no-cache');
+    }
+
+    if (isApiRequest()) {
+        if (!headers_sent()) {
+            header('Content-Type: application/json; charset=utf-8');
+        }
+        echo json_encode(['error' => $msg], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    if (!headers_sent()) {
+        header('Content-Type: text/html; charset=utf-8');
+    }
+
+    $app = defined('APP_NAME') ? (string)APP_NAME : 'Application';
+    $safeApp = htmlspecialchars($app, ENT_QUOTES, 'UTF-8');
+    $safeMsg = htmlspecialchars($msg, ENT_QUOTES, 'UTF-8');
+
+    echo "<!doctype html>\n";
+    echo "<html lang=\"en\">\n";
+    echo "<head>\n";
+    echo "  <meta charset=\"utf-8\">\n";
+    echo "  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n";
+    echo "  <title>{$safeApp} — Service unavailable</title>\n";
+    echo "  <style>body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;margin:40px;color:#111}h1{margin:0 0 10px}p{margin:0 0 10px;color:#333}code{background:#f3f3f3;padding:2px 4px;border-radius:4px}</style>\n";
+    echo "</head>\n";
+    echo "<body>\n";
+    echo "  <h1>Service unavailable</h1>\n";
+    echo "  <p>{$safeMsg}</p>\n";
+    echo "  <p>Please try again in a moment.</p>\n";
+    echo "</body>\n";
+    echo "</html>";
+    exit;
+}
+
 function getDB(): PDO {
     static $pdo = null;
     if ($pdo === null) {
@@ -70,10 +146,7 @@ function getDB(): PDO {
                 // Ignore if the DB user lacks permission to set session timezone.
             }
         } catch (PDOException $e) {
-            if (APP_ENV === 'development') {
-                die(json_encode(['error' => 'DB: ' . $e->getMessage()]));
-            }
-            die(json_encode(['error' => 'Database unavailable']));
+            dbUnavailableResponse($e->getMessage());
         }
     }
     return $pdo;

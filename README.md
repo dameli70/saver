@@ -8,7 +8,7 @@ Controle is a multi-page PHP app that lets users generate and store **time-locke
 - Users must verify their email before accessing the dashboard
 
 ## Requirements
-- PHP 8.1+ (with `openssl`, `pdo_mysql`, `mbstring` extensions)
+- PHP 8.0+ (with `openssl`, `pdo_mysql`, `mbstring` extensions)
 - MySQL 8.0+ or MariaDB 10.6+
 - Apache or Nginx
 - HTTPS in production (secure cookies + Clipboard API)
@@ -36,7 +36,7 @@ Run the schema:
 mysql -u root -p < config/schema.sql
 ```
 
-If you are upgrading an existing install, apply migrations in `config/migrations/`.
+Then apply migrations in `config/migrations/` (recommended for a fresh install too, to enable all features).
 
 ### 2) Configuration
 Edit `config/database.php`:
@@ -63,9 +63,17 @@ Pages:
 - `backup.php` — local export/import + cloud backups
 - `vault_settings.php` — vault / passphrase / recovery settings
 - `notifications.php` — in-app notifications
-- `rooms.php` / `room.php` — saving rooms (discovery + room detail)
+- `rooms.php` — saving rooms (discover)
+- `rooms_my.php` — your rooms
+- `rooms_create.php` — create a room
+- `room.php` — room detail
+- `kyc.php` — identity & address verification
 - `admin.php` — super admin dashboard (requires admin)
+- `admin_kyc.php` — KYC review (admin)
+- `admin_system_backups.php` — system backup downloads (admin)
 - `account.php` — account overview (vault passphrase, trust passport, email verification)
+- `account_user.php` — user profile management (password, avatar, rooms nickname)
+- `trust_passport.php` — trust passport details
 - `security.php` — security settings hub (password, passkeys, TOTP, sessions)
 - `logout.php` — destroys session
 
@@ -91,9 +99,22 @@ API:
 - `api/wallet_create.php` / `api/wallet_locks.php` — wallet PIN locks
 - `api/wallet_confirm.php` / `api/wallet_reveal.php` / `api/wallet_delete.php` / `api/wallet_fail.php` — wallet lock lifecycle
 - `api/admin.php` — super admin data endpoints
+- `api/kyc.php` / `api/kyc_upload.php` / `api/kyc_doc.php` — KYC submission + document upload/download
+- `api/admin_kyc.php` — admin review for KYC
+- `api/system_backups.php` — admin list/download for daily SQL backups
 
 Workers:
 - `scripts/rooms_worker.php` — cron worker for saving rooms
+- `scripts/daily_backup.php` — daily system SQL backup (requires `mysqldump` + `gzip`)
+
+## Cron Jobs
+
+Example crontab (adjust paths + PHP binary):
+
+```cron
+*/2 * * * * /usr/bin/php /var/www/controle/scripts/rooms_worker.php
+15 3 * * * /usr/bin/php /var/www/controle/scripts/daily_backup.php
+```
 
 ## Security Model (high level)
 - **Zero plaintext storage**: the server never stores plaintext codes.

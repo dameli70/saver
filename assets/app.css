@@ -210,6 +210,9 @@
   #ls-sidebar .topbar-r .btn.btn-sm{padding:11px 12px;font-size:11px;min-height:42px;}
   #ls-sidebar .topbar-r .btn.nav-btn{justify-content:flex-start;gap:12px;}
   #ls-sidebar .topbar-r .btn.nav-btn .nav-ico{opacity:1;color:color-mix(in srgb, var(--accent) 70%, var(--text));}
+  #ls-sidebar .topbar-r a[href^="dashboard.php"]:hover .nav-ico,
+  #ls-sidebar .topbar-r a[href$="dashboard.php"]:hover .nav-ico{color:var(--green);}
+
   #ls-sidebar .topbar-r .btn.nav-btn .nav-lbl{font-family:var(--sans);
     font-size:12px;
     letter-spacing:.2px;
@@ -236,17 +239,19 @@
   #ls-sidebar .nav-dd-panel{gap:8px;margin-top:8px;}
 
   #ls-sidebar[data-collapsed="1"] .topbar-r .nav-lbl{display:none;}
-  #ls-sidebar[data-collapsed="1"] .topbar-r .btn.nav-btn{flex-direction:row;justify-content:center;}
+  #ls-sidebar[data-collapsed="1"] .topbar-r .btn.nav-btn{flex-direction:row;justify-content:center;padding-left:0;padding-right:0;}
   #ls-sidebar[data-collapsed="1"] .user-pill{display:none;}
 
-  .topbar{left:0;right:0;margin-left:calc(16px + 260px + 16px);margin-right:16px;border-radius:var(--radius-card);
+  /* Shift the whole app shell so every page clears the fixed sidebar.
+     This avoids relying on per-page .app-body sizing (wide pages could overlap). */
+  #ls-sidebar ~ #app-shell{margin-left:calc(16px + 260px + 16px);margin-right:16px;}
+  #ls-sidebar[data-collapsed="1"] ~ #app-shell{margin-left:calc(16px + 84px + 16px);}
+
+  /* Desktop: keep the topbar "card" styling, but do not add extra margins (shell handles it). */
+  #ls-sidebar ~ #app-shell .topbar{border-radius:var(--radius-card);
     border:1px solid var(--b1);border-bottom:1px solid var(--b1);
     justify-content:flex-start;
   }
-  #ls-sidebar[data-collapsed="1"] ~ #app-shell .topbar{margin-left:calc(16px + 84px + 16px);}
-
-  .app-body{margin-left:calc(16px + 260px + 16px);margin-right:16px;max-width:none;}
-  #ls-sidebar[data-collapsed="1"] ~ #app-shell .app-body{margin-left:calc(16px + 84px + 16px);}
 }
 
 /* Mobile drawer (injected by assets/app.js). */
@@ -548,11 +553,12 @@ a.btn:visited{color:inherit;}
 .btn.nav-btn .nav-ico{display:inline-flex;align-items:center;justify-content:center;
   width:20px;height:20px;flex:0 0 20px;
   font-size:18px;line-height:1;color:inherit;opacity:.95;
+  overflow:hidden;text-align:center;
   filter:drop-shadow(0 1px 0 rgba(0,0,0,.25));
 }
 
 @media(min-width:981px){
-  #ls-sidebar[data-collapsed="1"] .btn.nav-btn .nav-ico{font-size:20px;}
+  #ls-sidebar[data-collapsed="1"] .btn.nav-btn .nav-ico{font-size:18px;}
 }
 .btn.nav-btn .nav-lbl{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 

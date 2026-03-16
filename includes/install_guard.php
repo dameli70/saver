@@ -43,9 +43,11 @@ function isAppInstalled(): bool {
     // If core PHP extensions are missing, route to installer so it can show a clear error.
     if (!extension_loaded('pdo_mysql')) return false;
 
-    // Best-effort schema check:
+    // Best-effort schema check when installed.flag is missing:
     // - If DB is reachable and required tables are missing => not installed
-    // - If DB is temporarily unreachable => treat as installed (avoid redirect loops)
+    // - If DB is unreachable/throws => treat as not installed so fresh deployments
+    //   redirect to the installer instead of showing 503 pages.
+    // Note: when installed.flag exists, we return true early above and never reach here.
     try {
         $dsn = "mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=" . DB_CHARSET;
         $pdo = new PDO($dsn, DB_USER, DB_PASS, [
@@ -61,7 +63,7 @@ function isAppInstalled(): bool {
         return count(array_intersect(['users','locks','audit_log'], $names)) === 3;
 
     } catch (Throwable) {
-        return true;
+        return false;
     }
 }
 

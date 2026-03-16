@@ -48,29 +48,23 @@ header("Referrer-Policy: no-referrer");
 
     <div class="page-head">
       <div>
-        <div class="page-title"><?php e('page.rooms'); ?></div>
-        <div class="page-sub"><?php e('rooms.intro'); ?></div>
+        <div class="page-title"><?php e('rooms.my_rooms_title'); ?></div>
+        <div class="page-sub"><?php e('rooms.my_rooms_sub'); ?></div>
       </div>
       <div class="page-actions">
-        <a class="btn btn-ghost btn-sm" href="rooms_my.php"><?php e('rooms.my_rooms_title'); ?></a>
+        <a class="btn btn-ghost btn-sm" href="rooms.php"><?php e('rooms.discover_title'); ?></a>
         <a class="btn btn-primary btn-sm" href="rooms_create.php"><?php e('common.create'); ?></a>
       </div>
     </div>
 
-    <div id="eligibility" style="color:var(--muted);font-size:12px;line-height:1.6;margin:-8px 0 18px 0;"></div>
-
-  <div class="card" style="margin-bottom:14px;">
-    <div class="card-title"><?php e('rooms.categories'); ?></div>
-    <div class="cat-row" id="cat-row"></div>
-  </div>
-
-  <div class="grid">
-    <div class="card" style="grid-column:1/-1;">
-      <div class="card-title"><?php e('rooms.discover_title'); ?></div>
-      <div id="rooms-msg" class="msg"></div>
-      <div id="rooms-wrap" class="rooms"></div>
+    <div class="grid">
+      <div class="card" style="grid-column:1/-1;">
+        <div class="card-title"><?php e('rooms.my_rooms_title'); ?></div>
+        <div id="myrooms-msg" class="msg"></div>
+        <div id="myrooms-wrap" class="rooms"></div>
+      </div>
     </div>
-  </div>
+
   </div>
 
 <script>
@@ -78,9 +72,8 @@ const CSRF = <?= json_encode($csrf) ?>;
 </script>
 <script src="assets/rooms_shared.js"></script>
 <script>
-if(window.Rooms && typeof Rooms.initDiscover === 'function') Rooms.initDiscover();
+if(window.Rooms && typeof Rooms.initMyRooms === 'function') Rooms.initMyRooms();
 </script>
 </div>
 </body>
 </html>
- 
