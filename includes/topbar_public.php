@@ -77,4 +77,5 @@ if (!function_exists('topbarHref')) {
   </div>
 </div>
 
+<script src="<?= htmlspecialchars(topbarHref('assets/loading_overlay.js'), ENT_QUOTES, 'UTF-8') ?>"></script>
 <script src="<?= htmlspecialchars(topbarHref('assets/ui_modal.js'), ENT_QUOTES, 'UTF-8') ?>"></script>
