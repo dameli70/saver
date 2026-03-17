@@ -162,8 +162,8 @@ header("Referrer-Policy: no-referrer");
         </div>
 
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
-          <button class="btn btn-blue btn-sm" onclick="typeBVote('approve')"><?php e('room.rotation.btn_approve'); ?></button>
-          <button class="btn btn-red btn-sm" onclick="typeBVote('reject')"><?php e('room.rotation.btn_reject'); ?></button>
+          <button class="btn btn-blue btn-sm" id="typeb-vote-approve" onclick="typeBVote('approve')"><?php e('room.rotation.btn_approve'); ?></button>
+          <button class="btn btn-red btn-sm" id="typeb-vote-reject" onclick="typeBVote('reject')"><?php e('room.rotation.btn_reject'); ?></button>
           <button class="btn btn-primary btn-sm" id="typeb-reveal-btn" onclick="typeBReveal()" style="display:none;"><?php e('room.rotation.btn_reveal_code'); ?></button>
         </div>
 
@@ -982,6 +982,14 @@ function renderRoom(){
 
         document.getElementById('typeb-maker').textContent = makerVote;
 
+        const approveBtn = document.getElementById('typeb-vote-approve');
+        const rejectBtn = document.getElementById('typeb-vote-reject');
+        const voteCast = (myVote === 'approve' || myVote === 'reject');
+        const votingOpen = (r.room_state === 'active' && r.my_status === 'active' && cur.status === 'pending_votes');
+        const canVoteNow = votingOpen && !voteCast;
+        if(approveBtn) approveBtn.disabled = !canVoteNow;
+        if(rejectBtn) rejectBtn.disabled = !canVoteNow;
+
         const canRevealB = (r.room_state === 'active' && r.my_status === 'active' && cur.status === 'revealed' && (cur.can_reveal_code === 1));
         document.getElementById('typeb-reveal-btn').style.display = canRevealB ? 'inline-flex' : 'none';
 
@@ -1527,13 +1535,20 @@ async function unlockReveal(){
 }
 
 async function typeBVote(vote){
+  const a = document.getElementById('typeb-vote-approve');
+  const b = document.getElementById('typeb-vote-reject');
+
+  if(a) a.disabled = true;
+  if(b) b.disabled = true;
+
   try{
     const res = await postStrong('/api/rooms.php', {action:'typeB_vote', room_id: ROOM_ID, vote});
     if(!res.success) throw new Error(res.error||STR.failed);
-    setMsg('typeb-msg', STR.saved, true);
+    setMsg('typeb-msg', res.no_change ? STR.saved : STR.saved, true);
     await loadRoom();
   }catch(e){
     setMsg('typeb-msg', e.message||STR.failed, false);
+    await loadRoom();
   }
 }
 
