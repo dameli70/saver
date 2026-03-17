@@ -81,9 +81,30 @@
     }
 
     if(methods && methods.totp){
-      const code = prompt(tr('login.enter_totp', 'Enter your 6-digit authenticator code'));
-      if(!code) return false;
-      const r = await rawPostCsrf('api/totp.php', {action:'reauth', code});
+      const msg = tr('login.enter_totp', 'Enter your 6-digit authenticator code');
+      let code = null;
+
+      if(window.LS && typeof window.LS.prompt === 'function'){
+        code = await window.LS.prompt({
+          title: tr('common.confirm', 'Confirm'),
+          message: msg,
+          placeholder: '123456',
+          inputMode: 'numeric',
+          validate: (v)=> (/^\d{6}$/.test(String(v||'').trim()) ? true : msg),
+        });
+      } else if (typeof window.uiPrompt === 'function'){
+        code = await window.uiPrompt({
+          title: tr('common.confirm', 'Confirm'),
+          message: msg,
+          placeholder: '123456',
+          inputMode: 'numeric',
+          validate: (v)=> (/^\d{6}$/.test(String(v||'').trim()) ? true : msg),
+        });
+      }
+
+      const c = String(code||'').trim();
+      if(!c) return false;
+      const r = await rawPostCsrf('api/totp.php', {action:'reauth', code: c});
       return !!(r && r.success);
     }
 

@@ -409,9 +409,30 @@ async function ensureReauth(methods){
   }
 
   if(methods && methods.totp){
-    const code = prompt(STR.enter_6_digit_code);
-    if(!code) return false;
-    const r = await postCsrf('api/totp.php', {action:'reauth', code});
+    const msg = STR.enter_6_digit_code;
+    let code = null;
+
+    if(window.LS && typeof window.LS.prompt === 'function'){
+      code = await window.LS.prompt({
+        title: STR.confirm,
+        message: msg,
+        placeholder: '123456',
+        inputMode: 'numeric',
+        validate: (v)=> (/^\d{6}$/.test(String(v||'').trim()) ? true : msg),
+      });
+    } else if (typeof window.uiPrompt === 'function'){
+      code = await window.uiPrompt({
+        title: STR.confirm,
+        message: msg,
+        placeholder: '123456',
+        inputMode: 'numeric',
+        validate: (v)=> (/^\d{6}$/.test(String(v||'').trim()) ? true : msg),
+      });
+    }
+
+    const c = String(code||'').trim();
+    if(!c) return false;
+    const r = await postCsrf('api/totp.php', {action:'reauth', code: c});
     return !!r.success;
   }
 
@@ -1273,8 +1294,10 @@ function renderWalletPending(list){
     btnFail.type = 'button';
     btnFail.textContent = STR.wallet_pending_btn_fail;
     btnFail.onclick = async () => {
-      const ok = confirm(STR.wallet_pending_confirm_fail);
-      if(!ok) return;
+      const ok = (window.LS && typeof window.LS.confirm === 'function')
+    ? await window.LS.confirm(STR.wallet_pending_confirm_fail, {title: STR.confirm, confirmText: STR.wallet_pending_btn_fail, cancelText: STR.cancel, danger: true})
+    : (typeof window.uiConfirm === 'function' ? await window.uiConfirm({title: STR.confirm, message: STR.wallet_pending_confirm_fail, okText: STR.wallet_pending_btn_fail, cancelText: STR.cancel, danger: true}) : false);
+  if(!ok) return;
       try{
         const r = await postCsrfWithReauth('api/wallet_fail.php', {wallet_lock_id: w.id});
         if(!r.success) throw new Error(r.error||STR.failed);

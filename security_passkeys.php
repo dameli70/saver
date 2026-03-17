@@ -150,8 +150,14 @@ $requirePasskeyForLogin = !empty($securityUser['require_webauthn']);
         cancelText: <?= json_encode(t('common.cancel')) ?>,
         danger: true,
       });
-    }else{
-      shouldDelete = confirm('Delete this passkey?');
+    } else if (typeof window.uiConfirm === 'function'){
+      shouldDelete = await window.uiConfirm({
+        title: <?= json_encode(t('common.confirm')) ?>,
+        message: 'Delete this passkey?',
+        okText: 'Delete',
+        cancelText: <?= json_encode(t('common.cancel')) ?>,
+        danger: true,
+      });
     }
 
     if(!shouldDelete) return;
@@ -168,7 +174,24 @@ $requirePasskeyForLogin = !empty($securityUser['require_webauthn']);
 
     if(!window.PublicKeyCredential){ api.showMsg(err, 'Passkeys not supported in this browser'); return; }
 
-    const label = prompt('Label for this passkey (optional)') || '';
+    let label = '';
+    if(window.LS && typeof window.LS.prompt === 'function'){
+      const v = await window.LS.prompt({
+        title: <?= json_encode(t('common.confirm')) ?>,
+        message: 'Label for this passkey (optional)',
+        placeholder: 'e.g. MacBook',
+        initialValue: '',
+      });
+      label = (v === null) ? '' : String(v||'');
+    } else if (typeof window.uiPrompt === 'function'){
+      const v = await window.uiPrompt({
+        title: <?= json_encode(t('common.confirm')) ?>,
+        message: 'Label for this passkey (optional)',
+        placeholder: 'e.g. MacBook',
+        initialValue: '',
+      });
+      label = (v === null) ? '' : String(v||'');
+    }
     const btn = document.getElementById('passkey-add');
     const txt = document.getElementById('passkey-add-txt');
 

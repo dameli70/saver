@@ -203,9 +203,30 @@
     }
 
     if(methods && methods.totp){
-      const code = prompt(STR.prompt_auth_code);
-      if(!code) return false;
-      const r = await postCsrf('api/totp.php', {action:'reauth', code});
+      const msg = STR.prompt_auth_code;
+      let code = null;
+
+      if(window.LS && typeof window.LS.prompt === 'function'){
+        code = await window.LS.prompt({
+          title: tr('common.confirm', 'Confirm'),
+          message: msg,
+          placeholder: '123456',
+          inputMode: 'numeric',
+          validate: (v)=> (/^\d{6}$/.test(String(v||'').trim()) ? true : msg),
+        });
+      } else if (typeof window.uiPrompt === 'function'){
+        code = await window.uiPrompt({
+          title: tr('common.confirm', 'Confirm'),
+          message: msg,
+          placeholder: '123456',
+          inputMode: 'numeric',
+          validate: (v)=> (/^\d{6}$/.test(String(v||'').trim()) ? true : msg),
+        });
+      }
+
+      const c = String(code||'').trim();
+      if(!c) return false;
+      const r = await postCsrf('api/totp.php', {action:'reauth', code: c});
       return !!(r && r.success);
     }
 

@@ -111,8 +111,46 @@
     setTimeout(()=>t.remove(), ms);
   };
 
-  
+  const UI_MODAL_SRC = (function(){
+    try{
+      const cs = document.currentScript;
+      if(cs && cs.src) return new URL('ui_modal.js', cs.src).href;
+    }catch{}
+    return 'assets/ui_modal.js';
+  })();
 
+  let uiModalLoadPromise = null;
+  function ensureUiModal(){
+    if(typeof window.uiConfirm === 'function' && typeof window.uiPrompt === 'function') return Promise.resolve(true);
+    if(uiModalLoadPromise) return uiModalLoadPromise;
+
+    uiModalLoadPromise = new Promise((resolve, reject)=>{
+      function done(){
+        if(typeof window.uiConfirm === 'function' && typeof window.uiPrompt === 'function') resolve(true);
+        else reject(new Error('ui_modal.js loaded but uiConfirm/uiPrompt missing'));
+      }
+
+      const existing = document.querySelector('script[src*="ui_modal.js"]');
+      if(existing){
+        existing.addEventListener('load', done, {once:true});
+        existing.addEventListener('error', ()=>reject(new Error('Failed to load ui_modal.js')), {once:true});
+        return;
+      }
+
+      const s = document.createElement('script');
+      s.src = UI_MODAL_SRC;
+      s.async = true;
+      s.addEventListener('load', done);
+      s.addEventListener('error', ()=>reject(new Error('Failed to load ui_modal.js')));
+      (document.head || document.documentElement).appendChild(s);
+    });
+
+    uiModalLoadPromise.catch(()=>{ uiModalLoadPromise = null; });
+    return uiModalLoadPromise;
+  }
+
+  // Centralized confirm: delegate to the shared ui_modal.js implementation.
+  // Backward compatible with the previous LS.confirm(message, opts) signature.
   LS.confirm = function(message, opts){
     const o = (opts && typeof opts === 'object') ? opts : {};
 
@@ -121,100 +159,33 @@
     const cancelText = (o.cancelText != null) ? String(o.cancelText) : STR.cancel;
     const danger = !!o.danger;
 
-    let overlay = document.getElementById('ls-confirm-overlay');
-    if(!overlay){
-      overlay = document.createElement('div');
-      overlay.id = 'ls-confirm-overlay';
-      overlay.className = 'ls-modal-overlay';
-      overlay.innerHTML = `
-        <div class="ls-modal" role="dialog" aria-modal="true" aria-labelledby="ls-confirm-title">
-          <button class="ls-modal-x" type="button" aria-label="${LS.esc(STR.close)}">×</button>
-          <div class="ls-modal-title" id="ls-confirm-title"></div>
-          <div class="ls-modal-sub" id="ls-confirm-msg" style="white-space:pre-wrap;"></div>
-          <div class="ls-modal-actions" id="ls-confirm-actions" style="display:flex;flex-direction:column;gap:10px;margin-top:18px;"></div>
-        </div>
-      `;
-      document.body.appendChild(overlay);
-    }
-
-    const modal = overlay.querySelector('.ls-modal');
-    const titleEl = overlay.querySelector('#ls-confirm-title');
-    const msgEl = overlay.querySelector('#ls-confirm-msg');
-    const actions = overlay.querySelector('#ls-confirm-actions');
-    const closeBtn = overlay.querySelector('.ls-modal-x');
-
-    if(titleEl) titleEl.textContent = title;
-    if(msgEl) msgEl.textContent = String(message || '');
-
-    if(actions){
-      actions.innerHTML = '';
-
-      const okBtn = document.createElement('button');
-      okBtn.type = 'button';
-      okBtn.className = danger ? 'btn btn-red' : 'btn btn-primary';
-      okBtn.textContent = confirmText;
-      okBtn.style.width = '100%';
-
-      const cancelBtn = document.createElement('button');
-      cancelBtn.type = 'button';
-      cancelBtn.className = 'btn btn-ghost';
-      cancelBtn.textContent = cancelText;
-      cancelBtn.style.width = '100%';
-
-      actions.appendChild(okBtn);
-      actions.appendChild(cancelBtn);
-
-      overlay.classList.add('show');
-
-      const prevFocus = document.activeElement;
-
-      let releaseTrap = null;
-      let resolved = false;
-
-      return new Promise(resolve => {
-        function cleanup(){
-          overlay.classList.remove('show');
-
-          if(releaseTrap) releaseTrap();
-
-          overlay.removeEventListener('click', onClickOut);
-          if(closeBtn) closeBtn.removeEventListener('click', onCancel);
-          cancelBtn.removeEventListener('click', onCancel);
-          okBtn.removeEventListener('click', onOk);
-
-          if(prevFocus && prevFocus.focus) setTimeout(()=>prevFocus.focus(), 0);
-        }
-
-        function onCancel(){
-          if(resolved) return;
-          resolved = true;
-          cleanup();
-          resolve(false);
-        }
-
-        function onOk(){
-          if(resolved) return;
-          resolved = true;
-          cleanup();
-          resolve(true);
-        }
-
-        function onClickOut(e){
-          if(e.target === overlay) onCancel();
-        }
-
-        try{ if(modal) releaseTrap = trapFocus(modal, onCancel); }catch{}
-
-        overlay.addEventListener('click', onClickOut);
-        if(closeBtn) closeBtn.addEventListener('click', onCancel);
-        cancelBtn.addEventListener('click', onCancel);
-        okBtn.addEventListener('click', onOk);
-
-        setTimeout(()=>{ okBtn.focus(); }, 10);
+    return ensureUiModal().then(()=>{
+      return window.uiConfirm({
+        title,
+        message: String(message || ''),
+        okText: confirmText,
+        cancelText,
+        danger,
       });
-    }
+    }).catch(()=>false);
+  };
 
-    return Promise.resolve(false);
+  LS.prompt = function(opts){
+    const o = (opts && typeof opts === 'object') ? opts : {};
+
+    return ensureUiModal().then(()=>{
+      return window.uiPrompt({
+        title: (o.title != null) ? String(o.title) : '',
+        message: (o.message != null) ? String(o.message) : '',
+        placeholder: (o.placeholder != null) ? String(o.placeholder) : '',
+        initialValue: (o.initialValue != null) ? String(o.initialValue) : '',
+        validate: (typeof o.validate === 'function') ? o.validate : null,
+        inputType: (o.inputType != null) ? String(o.inputType) : null,
+        inputMode: (o.inputMode != null) ? String(o.inputMode) : null,
+        okText: (o.okText != null) ? String(o.okText) : null,
+        cancelText: (o.cancelText != null) ? String(o.cancelText) : null,
+      });
+    }).catch(()=>null);
   };
 
   LS.parseUtc = function(ts){

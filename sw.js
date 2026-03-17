@@ -19,6 +19,7 @@ const ASSETS = [
   './assets/app.css',
   './assets/auth.css',
   './assets/app.js',
+  './assets/ui_modal.js',
   './assets/theme.js',
   './assets/security.js',
   './assets/security_page.css',

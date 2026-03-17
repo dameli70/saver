@@ -700,7 +700,13 @@ async function bulkDeleteSelected(){
   }
 
   const msg = fmt(tr('my_codes.bulk_delete_confirm', 'Delete {n} selected items?'), {n: keys.length});
-  if(!confirm(msg)) return;
+
+  {
+    const ok2 = (window.LS && typeof window.LS.confirm === 'function')
+      ? await window.LS.confirm(msg, {title: tr('common.confirm', 'Confirm'), danger: true})
+      : (typeof window.uiConfirm === 'function' ? await window.uiConfirm({title: tr('common.confirm', 'Confirm'), message: msg, danger: true}) : false);
+    if(!ok2) return;
+  }
 
   let ok = 0;
   let fail = 0;
@@ -2098,7 +2104,14 @@ function setPreShareMsg(el, txt, ok){
 async function revokePreShare(){
   if(!currentPreShareId) return;
   if(!requireOnlineAction()) return;
-  if(!confirm(tr('my_codes.share_revoke_confirm', 'Revoke this share link? Anyone with it will lose access.'))) return;
+
+  {
+    const msg = tr('my_codes.share_revoke_confirm', 'Revoke this share link? Anyone with it will lose access.');
+    const ok = (window.LS && typeof window.LS.confirm === 'function')
+      ? await window.LS.confirm(msg, {title: tr('common.confirm', 'Confirm'), danger: true})
+      : (typeof window.uiConfirm === 'function' ? await window.uiConfirm({title: tr('common.confirm', 'Confirm'), message: msg, danger: true}) : false);
+    if(!ok) return;
+  }
 
   const okEl = document.getElementById('ps-ok');
   const errEl = document.getElementById('ps-err');
@@ -2335,7 +2348,13 @@ async function copyVal(id){
 async function revokeShare(){
   if(!currentShareId) return;
   if(!requireOnlineAction()) return;
-  if(!confirm(tr('my_codes.share_revoke_confirm', 'Revoke this share link? Anyone with it will lose access.'))) return;
+  {
+    const msg = tr('my_codes.share_revoke_confirm', 'Revoke this share link? Anyone with it will lose access.');
+    const ok = (window.LS && typeof window.LS.confirm === 'function')
+      ? await window.LS.confirm(msg, {title: tr('common.confirm', 'Confirm'), danger: true})
+      : (typeof window.uiConfirm === 'function' ? await window.uiConfirm({title: tr('common.confirm', 'Confirm'), message: msg, danger: true}) : false);
+    if(!ok) return;
+  }
 
   const okEl = document.getElementById('rv-share-ok');
   const errEl = document.getElementById('rv-share-err');
@@ -2478,7 +2497,12 @@ async function delLock(kind, id, opts){
     ? tr('my_codes.delete_confirm_wallet', 'Permanently delete this wallet code? Encrypted data will be removed.')
     : tr('my_codes.delete_confirm_lock', 'Permanently delete this lock? Encrypted data will be removed.');
 
-  if(!o.skipConfirm && !confirm(msg)) return false;
+  if(!o.skipConfirm){
+    const ok = (window.LS && typeof window.LS.confirm === 'function')
+      ? await window.LS.confirm(msg, {title: tr('common.confirm', 'Confirm'), danger: true})
+      : (typeof window.uiConfirm === 'function' ? await window.uiConfirm({title: tr('common.confirm', 'Confirm'), message: msg, danger: true}) : false);
+    if(!ok) return false;
+  }
 
   const endpoint = (k === 'wallet') ? 'api/wallet_delete.php' : 'api/delete.php';
   const body = (k === 'wallet') ? {wallet_lock_id:id} : {lock_id:id};

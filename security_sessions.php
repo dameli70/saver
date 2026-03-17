@@ -151,8 +151,8 @@ require_once __DIR__ . '/includes/security_page.php';
 
       if(window.LS && typeof window.LS.confirm === 'function'){
         ok = await window.LS.confirm(msg, {title, danger:true, confirmText, cancelText});
-      } else {
-        ok = confirm(msg);
+      } else if (typeof window.uiConfirm === 'function'){
+        ok = await window.uiConfirm({title, message: msg, okText: confirmText, cancelText, danger: true});
       }
 
       if(!ok) return;

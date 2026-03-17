@@ -76,3 +76,5 @@ if (!function_exists('topbarHref')) {
     <?php endif; ?>
   </div>
 </div>
+
+<script src="<?= htmlspecialchars(topbarHref('assets/ui_modal.js'), ENT_QUOTES, 'UTF-8') ?>"></script>

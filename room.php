@@ -425,6 +425,7 @@ const STR = {
   saved: tr('common.saved', null, 'Saved.'),
   vote_saved: tr('room.vote_saved', null, 'Vote saved.'),
   loading: tr('common.loading', null, 'Loading…'),
+  confirm: tr('common.confirm', null, 'Confirm'),
   enter_totp: tr('login.enter_totp', null, 'Enter your 6-digit authenticator code'),
   email_required: tr('common.email_required', null, 'Email required'),
 
@@ -563,9 +564,30 @@ async function ensureReauth(methods){
   }
 
   if(methods && methods.totp){
-    const code = prompt(STR.enter_totp);
-    if(!code) return false;
-    const r = await postCsrf('api/totp.php', {action:'reauth', code});
+    const msg = STR.enter_totp;
+    let code = null;
+
+    if(window.LS && typeof window.LS.prompt === 'function'){
+      code = await window.LS.prompt({
+        title: STR.confirm,
+        message: msg,
+        placeholder: '123456',
+        inputMode: 'numeric',
+        validate: (v)=> (/^\d{6}$/.test(String(v||'').trim()) ? true : msg),
+      });
+    } else if (typeof window.uiPrompt === 'function'){
+      code = await window.uiPrompt({
+        title: STR.confirm,
+        message: msg,
+        placeholder: '123456',
+        inputMode: 'numeric',
+        validate: (v)=> (/^\d{6}$/.test(String(v||'').trim()) ? true : msg),
+      });
+    }
+
+    const c = String(code||'').trim();
+    if(!c) return false;
+    const r = await postCsrf('api/totp.php', {action:'reauth', code: c});
     return !!r.success;
   }
 
@@ -1378,7 +1400,10 @@ async function generateUnlistedLink(){
 
 async function revokeUnlistedLink(){
   document.getElementById('unlisted-msg').className='msg';
-  const ok = confirm(tr('room.confirm.unlisted_revoke', null, 'Revoke the current unlisted link?'));
+  const msg = tr('room.confirm.unlisted_revoke', null, 'Revoke the current unlisted link?');
+  const ok = (window.LS && typeof window.LS.confirm === 'function')
+    ? await window.LS.confirm(msg, {title: STR.confirm, danger: true})
+    : (typeof window.uiConfirm === 'function' ? await window.uiConfirm({title: STR.confirm, message: msg, danger: true}) : false);
   if(!ok) return;
 
   const wrap = document.getElementById('unlisted-link-wrap');
@@ -1460,7 +1485,10 @@ async function sendInvite(){
 }
 
 async function revokeInvite(inviteId){
-  const ok = confirm(tr('room.confirm.invite_revoke', null, 'Revoke this invite?'));
+  const msg = tr('room.confirm.invite_revoke', null, 'Revoke this invite?');
+  const ok = (window.LS && typeof window.LS.confirm === 'function')
+    ? await window.LS.confirm(msg, {title: STR.confirm, danger: true})
+    : (typeof window.uiConfirm === 'function' ? await window.uiConfirm({title: STR.confirm, message: msg, danger: true}) : false);
   if(!ok) return;
 
   try{
@@ -1626,7 +1654,25 @@ async function typeBConfirmWithdrawal(){
   document.getElementById(msgId).className='msg';
 
   try{
-    const ref = prompt(tr('room.rotation.withdrawal_reference_prompt', null, 'Optional reference / note (leave blank if none):'));
+    const msg = tr('room.rotation.withdrawal_reference_prompt', null, 'Optional reference / note (leave blank if none):');
+
+    let ref = null;
+    if(window.LS && typeof window.LS.prompt === 'function'){
+      ref = await window.LS.prompt({
+        title: STR.confirm,
+        message: msg,
+        placeholder: '',
+        initialValue: '',
+      });
+    } else if (typeof window.uiPrompt === 'function'){
+      ref = await window.uiPrompt({
+        title: STR.confirm,
+        message: msg,
+        placeholder: '',
+        initialValue: '',
+      });
+    }
+
     if(ref === null) return;
 
     const res = await postStrong('/api/rooms.php', {action:'typeB_confirm_withdrawal', room_id: ROOM_ID, reference: String(ref||'')});
@@ -1688,7 +1734,10 @@ async function createExitRequest(){
   const msgId = 'exit-msg';
   document.getElementById(msgId).className='msg';
 
-  const ok = confirm(tr('room.confirm.exit_request', null, 'Request to exit this room? This requires approvals and will record a refund-minus-fee settlement.'));
+  const msg = tr('room.confirm.exit_request', null, 'Request to exit this room? This requires approvals and will record a refund-minus-fee settlement.');
+  const ok = (window.LS && typeof window.LS.confirm === 'function')
+    ? await window.LS.confirm(msg, {title: STR.confirm, danger: true})
+    : (typeof window.uiConfirm === 'function' ? await window.uiConfirm({title: STR.confirm, message: msg, danger: true}) : false);
   if(!ok) return;
 
   try{
@@ -1739,7 +1788,10 @@ async function cancelExitRequest(){
     return;
   }
 
-  const ok = confirm(tr('room.confirm.exit_cancel', null, 'Cancel your exit request?'));
+  const msg = tr('room.confirm.exit_cancel', null, 'Cancel your exit request?');
+  const ok = (window.LS && typeof window.LS.confirm === 'function')
+    ? await window.LS.confirm(msg, {title: STR.confirm, danger: true})
+    : (typeof window.uiConfirm === 'function' ? await window.uiConfirm({title: STR.confirm, message: msg, danger: true}) : false);
   if(!ok) return;
 
   try{
@@ -1813,9 +1865,23 @@ async function underfillExtend(){
   const msg = document.getElementById('underfill-msg');
   msg.className='msg';
 
-  const rawStart = prompt(tr('room.underfill.prompt_new_start_dt', null, 'Enter new start date/time (YYYY-MM-DDTHH:MM)'));
+  const msgStart = tr('room.underfill.prompt_new_start_dt', null, 'Enter new start date/time (YYYY-MM-DDTHH:MM)');
+  const msgReveal = tr('room.underfill.prompt_new_reveal_dt', null, 'Enter new reveal date/time (YYYY-MM-DDTHH:MM)');
+
+  let rawStart = null;
+  if(window.LS && typeof window.LS.prompt === 'function'){
+    rawStart = await window.LS.prompt({title: STR.confirm, message: msgStart, placeholder: 'YYYY-MM-DDTHH:MM'});
+  } else if (typeof window.uiPrompt === 'function'){
+    rawStart = await window.uiPrompt({title: STR.confirm, message: msgStart, placeholder: 'YYYY-MM-DDTHH:MM'});
+  }
   if(!rawStart) return;
-  const rawReveal = prompt(tr('room.underfill.prompt_new_reveal_dt', null, 'Enter new reveal date/time (YYYY-MM-DDTHH:MM)'));
+
+  let rawReveal = null;
+  if(window.LS && typeof window.LS.prompt === 'function'){
+    rawReveal = await window.LS.prompt({title: STR.confirm, message: msgReveal, placeholder: 'YYYY-MM-DDTHH:MM'});
+  } else if (typeof window.uiPrompt === 'function'){
+    rawReveal = await window.uiPrompt({title: STR.confirm, message: msgReveal, placeholder: 'YYYY-MM-DDTHH:MM'});
+  }
   if(!rawReveal) return;
 
   const startIso = (function(){
@@ -1851,7 +1917,35 @@ async function underfillLowerMin(){
   const msg = document.getElementById('underfill-msg');
   msg.className='msg';
 
-  const newMinStr = prompt(tr('room.underfill.prompt_new_min_participants', null, 'Enter new minimum participants'));
+  const msgPrompt = tr('room.underfill.prompt_new_min_participants', null, 'Enter new minimum participants');
+
+  let newMinStr = null;
+  if(window.LS && typeof window.LS.prompt === 'function'){
+    newMinStr = await window.LS.prompt({
+      title: STR.confirm,
+      message: msgPrompt,
+      placeholder: '2',
+      inputMode: 'numeric',
+      validate: (v)=> {
+        const n = parseInt(String(v||'').trim(), 10);
+        if(!n || n < 2) return tr('room.underfill.min_at_least_2', null, 'Minimum must be at least 2');
+        return true;
+      },
+    });
+  } else if (typeof window.uiPrompt === 'function'){
+    newMinStr = await window.uiPrompt({
+      title: STR.confirm,
+      message: msgPrompt,
+      placeholder: '2',
+      inputMode: 'numeric',
+      validate: (v)=> {
+        const n = parseInt(String(v||'').trim(), 10);
+        if(!n || n < 2) return tr('room.underfill.min_at_least_2', null, 'Minimum must be at least 2');
+        return true;
+      },
+    });
+  }
+
   if(!newMinStr) return;
   const newMin = parseInt(newMinStr, 10);
   if(!newMin || newMin < 2){
@@ -1870,7 +1964,10 @@ async function underfillLowerMin(){
 }
 
 async function underfillCancel(){
-  const ok = confirm(tr('room.confirm.room_cancel', null, 'Cancel this room?'));
+  const msg = tr('room.confirm.room_cancel', null, 'Cancel this room?');
+  const ok = (window.LS && typeof window.LS.confirm === 'function')
+    ? await window.LS.confirm(msg, {title: STR.confirm, danger: true})
+    : (typeof window.uiConfirm === 'function' ? await window.uiConfirm({title: STR.confirm, message: msg, danger: true}) : false);
   if(!ok) return;
 
   try{
@@ -1928,11 +2025,13 @@ async function loadJoinRequests(){
 async function reviewJoin(requestId, decision){
   document.getElementById('maker-msg').className='msg';
 
-  const ok = confirm(
-    (decision === 'approve')
-      ? tr('room.requests.confirm_approve_user', null, 'Approve this user?')
-      : tr('room.requests.confirm_decline_user', null, 'Decline this user?')
-  );
+  const msg = (decision === 'approve')
+    ? tr('room.requests.confirm_approve_user', null, 'Approve this user?')
+    : tr('room.requests.confirm_decline_user', null, 'Decline this user?');
+
+  const ok = (window.LS && typeof window.LS.confirm === 'function')
+    ? await window.LS.confirm(msg, {title: STR.confirm, danger: (decision !== 'approve')})
+    : (typeof window.uiConfirm === 'function' ? await window.uiConfirm({title: STR.confirm, message: msg, danger: (decision !== 'approve')}) : false);
   if(!ok) return;
 
   try{

@@ -266,9 +266,30 @@ async function ensureReauth(methods){
   }
 
   if(methods && methods.totp){
-    const code = prompt(STR.enterTotp);
-    if(!code) return false;
-    const r = await post('api/totp.php', {action:'reauth', code});
+    const msg = STR.enterTotp;
+    let code = null;
+
+    if(window.LS && typeof window.LS.prompt === 'function'){
+      code = await window.LS.prompt({
+        title: (window.LS && typeof window.LS.t === 'function') ? (window.LS.t('common.confirm') || 'Confirm') : 'Confirm',
+        message: msg,
+        placeholder: '123456',
+        inputMode: 'numeric',
+        validate: (v)=> (/^\d{6}$/.test(String(v||'').trim()) ? true : msg),
+      });
+    } else if (typeof window.uiPrompt === 'function'){
+      code = await window.uiPrompt({
+        title: (window.LS && typeof window.LS.t === 'function') ? (window.LS.t('common.confirm') || 'Confirm') : 'Confirm',
+        message: msg,
+        placeholder: '123456',
+        inputMode: 'numeric',
+        validate: (v)=> (/^\d{6}$/.test(String(v||'').trim()) ? true : msg),
+      });
+    }
+
+    const c = String(code||'').trim();
+    if(!c) return false;
+    const r = await post('api/totp.php', {action:'reauth', code: c});
     return !!r.success;
   }
 
@@ -468,7 +489,10 @@ cloudList.addEventListener('click', async (e)=>{
   }
 
   if(act==='restore'){
-    if(!confirm(STR.confirmRestore)) return;
+    const ok = (window.LS && typeof window.LS.confirm === 'function')
+      ? await window.LS.confirm(STR.confirmRestore, {title: (window.LS && typeof window.LS.t === 'function') ? (window.LS.t('common.confirm') || 'Confirm') : 'Confirm', danger: true})
+      : (typeof window.uiConfirm === 'function' ? await window.uiConfirm({title: (window.LS && typeof window.LS.t === 'function') ? (window.LS.t('common.confirm') || 'Confirm') : 'Confirm', message: STR.confirmRestore, danger: true}) : false);
+    if(!ok) return;
     btn.disabled=true; btn.innerHTML='<span class="spin"></span>';
     try{
       const r=await postStrong('api/backup.php',{action:'cloud_restore',id});
@@ -482,7 +506,10 @@ cloudList.addEventListener('click', async (e)=>{
   }
 
   if(act==='del'){
-    if(!confirm(STR.confirmDelete)) return;
+    const ok = (window.LS && typeof window.LS.confirm === 'function')
+      ? await window.LS.confirm(STR.confirmDelete, {title: (window.LS && typeof window.LS.t === 'function') ? (window.LS.t('common.confirm') || 'Confirm') : 'Confirm', danger: true})
+      : (typeof window.uiConfirm === 'function' ? await window.uiConfirm({title: (window.LS && typeof window.LS.t === 'function') ? (window.LS.t('common.confirm') || 'Confirm') : 'Confirm', message: STR.confirmDelete, danger: true}) : false);
+    if(!ok) return;
     btn.disabled=true; btn.innerHTML='<span class="spin"></span>';
     try{
       const r=await postStrong('api/backup.php',{action:'cloud_delete',id});
