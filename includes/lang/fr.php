@@ -763,6 +763,9 @@ return [
     'room.activity.minimum_lowered' => 'Minimum abaissé',
     'room.activity.request' => 'Demande n°{id}',
     'room.activity.ack' => 'Accusés {a}/{b}',
+    'room.activity.swap_id' => 'Échange n°{id}',
+    'room.activity.ends' => 'Se termine {ts}',
+    'room.activity.expired_swap_requests' => 'Demandes expirées {n}',
 
     'room.dest.carrier' => 'opérateur {id}',
     'room.dest.mobile_money' => 'mobile money',
@@ -812,6 +815,45 @@ return [
     'room.exit.request_submitted' => 'Demande de sortie envoyée.',
     'room.exit.approved' => 'Sortie approuvée.',
     'room.exit.request_cancelled' => 'Demande de sortie annulée.',
+
+    // Fenêtre d’échange (Type B)
+    'room.swap.title' => 'Fenêtre d’échange (Type B)',
+    'room.swap.sub' => 'Pendant cette fenêtre, vous pouvez demander à échanger votre position de paiement avec un autre participant.',
+    'room.swap.status' => 'Statut',
+    'room.swap.closes' => 'Se termine',
+    'room.swap.open' => 'Ouverte',
+    'room.swap.closed' => 'Fermée',
+
+    'room.swap.slots_title' => 'Ordre actuel des positions',
+    'room.swap.slots_th_pos' => 'Position',
+    'room.swap.slots_th_participant' => 'Participant',
+    'room.swap.slots_empty' => 'Ordre des positions indisponible.',
+
+    'room.swap.request_to' => 'Demander un échange avec',
+    'room.swap.select_placeholder' => 'Sélectionner un participant',
+    'room.swap.select_required' => 'Sélectionnez un participant.',
+    'room.swap.btn_request' => 'Demander un échange',
+
+    'room.swap.requests_title' => 'Demandes d’échange',
+    'room.swap.requests_th_from' => 'De',
+    'room.swap.requests_th_to' => 'À',
+    'room.swap.requests_th_status' => 'Statut',
+    'room.swap.requests_th_created' => 'Créé',
+    'room.swap.requests_th_actions' => 'Actions',
+    'room.swap.requests_empty' => 'Aucune demande d’échange pour le moment.',
+
+    'room.swap.btn_accept' => 'Accepter',
+    'room.swap.btn_decline' => 'Refuser',
+
+    'room.swap.status_pending' => 'en attente',
+    'room.swap.status_accepted' => 'acceptée',
+    'room.swap.status_declined' => 'refusée',
+    'room.swap.status_cancelled' => 'annulée',
+
+    'room.swap.msg_requested' => 'Demande d’échange envoyée.',
+    'room.swap.msg_cancelled' => 'Demande d’échange annulée.',
+    'room.swap.msg_accepted' => 'Échange accepté. Positions mises à jour.',
+    'room.swap.msg_declined' => 'Échange refusé.',
 
     'room.underfill.decision_deadline_fmt' => 'Date limite de décision : {ts}',
     'room.underfill.prompt_new_start_dt' => 'Saisissez la nouvelle date/heure de début (YYYY-MM-DDTHH:MM)',
@@ -869,6 +911,13 @@ return [
     'room.feed.exit_approved' => 'Demande de sortie approuvée',
     'room.feed.exit_cancelled' => 'Demande de sortie annulée',
     'room.feed.room_closed' => 'Salle clôturée',
+
+    'room.feed.swap_window_started' => 'Fenêtre d’échange démarrée',
+    'room.feed.swap_window_ended' => 'Fenêtre d’échange terminée',
+    'room.feed.slot_swap_requested' => 'Échange demandé',
+    'room.feed.slot_swap_accepted' => 'Échange accepté',
+    'room.feed.slot_swap_declined' => 'Échange refusé',
+    'room.feed.slot_swap_cancelled' => 'Échange annulé',
 
     'room.feed.typeB_code_accessed' => 'Code Type B consulté',
     'room.feed.typeB_delegate_set' => 'Délégation Type B définie',
