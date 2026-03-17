@@ -189,6 +189,8 @@ try {
         }
 
         fwrite(STDOUT, "Seeding demo data (10 users + rooms)...\n");
+        // Ensure demo-seeded unlock_code_enc values are decryptable later.
+        $GLOBALS['DEMO_SEED_APP_HMAC_SECRET'] = (string)$vals['app_hmac_secret'];
         $demo = seedDemoData($dbPdo, $adminUserId, 'DemoPass123!');
 
         if (!empty($demo['seeded'])) {
