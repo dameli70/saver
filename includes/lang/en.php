@@ -969,6 +969,9 @@ return [
     'room.activity.minimum_lowered' => 'Minimum lowered',
     'room.activity.request' => 'Request #{id}',
     'room.activity.ack' => 'Ack {a}/{b}',
+    'room.activity.swap_id' => 'Swap #{id}',
+    'room.activity.ends' => 'Ends {ts}',
+    'room.activity.expired_swap_requests' => 'Expired swap requests {n}',
 
     'room.dest.carrier' => 'carrier {id}',
     'room.dest.mobile_money' => 'mobile money',
@@ -1018,6 +1021,45 @@ return [
     'room.exit.request_submitted' => 'Exit request submitted.',
     'room.exit.approved' => 'Exit approved.',
     'room.exit.request_cancelled' => 'Exit request cancelled.',
+
+    // Swap window (Type B)
+    'room.swap.title' => 'Swap window (Type B)',
+    'room.swap.sub' => 'Request to swap your payout slot with another participant during this window.',
+    'room.swap.status' => 'Status',
+    'room.swap.closes' => 'Closes',
+    'room.swap.open' => 'Open',
+    'room.swap.closed' => 'Closed',
+
+    'room.swap.slots_title' => 'Current slot order',
+    'room.swap.slots_th_pos' => 'Position',
+    'room.swap.slots_th_participant' => 'Participant',
+    'room.swap.slots_empty' => 'Slot order unavailable.',
+
+    'room.swap.request_to' => 'Request swap with',
+    'room.swap.select_placeholder' => 'Select a participant',
+    'room.swap.select_required' => 'Select a participant.',
+    'room.swap.btn_request' => 'Request swap',
+
+    'room.swap.requests_title' => 'Swap requests',
+    'room.swap.requests_th_from' => 'From',
+    'room.swap.requests_th_to' => 'To',
+    'room.swap.requests_th_status' => 'Status',
+    'room.swap.requests_th_created' => 'Created',
+    'room.swap.requests_th_actions' => 'Actions',
+    'room.swap.requests_empty' => 'No swap requests yet.',
+
+    'room.swap.btn_accept' => 'Accept',
+    'room.swap.btn_decline' => 'Decline',
+
+    'room.swap.status_pending' => 'pending',
+    'room.swap.status_accepted' => 'accepted',
+    'room.swap.status_declined' => 'declined',
+    'room.swap.status_cancelled' => 'cancelled',
+
+    'room.swap.msg_requested' => 'Swap request sent.',
+    'room.swap.msg_cancelled' => 'Swap request cancelled.',
+    'room.swap.msg_accepted' => 'Swap accepted. Slots updated.',
+    'room.swap.msg_declined' => 'Swap declined.',
 
     'room.underfill.decision_deadline_fmt' => 'Decision deadline: {ts}',
     'room.underfill.prompt_new_start_dt' => 'Enter new start date/time (YYYY-MM-DDTHH:MM)',
@@ -1075,6 +1117,13 @@ return [
     'room.feed.exit_approved' => 'Exit request approved',
     'room.feed.exit_cancelled' => 'Exit request cancelled',
     'room.feed.room_closed' => 'Room closed',
+
+    'room.feed.swap_window_started' => 'Swap window started',
+    'room.feed.swap_window_ended' => 'Swap window ended',
+    'room.feed.slot_swap_requested' => 'Slot swap requested',
+    'room.feed.slot_swap_accepted' => 'Slot swap accepted',
+    'room.feed.slot_swap_declined' => 'Slot swap declined',
+    'room.feed.slot_swap_cancelled' => 'Slot swap cancelled',
 
     'room.feed.typeB_code_accessed' => 'Type B code accessed',
     'room.feed.typeB_delegate_set' => 'Type B delegate set',

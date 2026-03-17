@@ -24,6 +24,7 @@ $inviteToken = trim((string)($_GET['invite'] ?? ''));
 if (strlen($inviteToken) > 200) $inviteToken = '';
 
 $userEmail = getCurrentUserEmail() ?? '';
+$currentUserId = (int)(getCurrentUserId() ?? 0);
 $isAdmin   = isAdmin();
 $csrf      = getCsrfToken();
 
@@ -245,6 +246,68 @@ header("Referrer-Policy: no-referrer");
         <div id="typeb-msg" class="msg"></div>
       </div>
 
+      <div id="swap-block" style="display:none; margin-top:12px;">
+        <div class="hr"></div>
+        <div class="card-title" style="margin-bottom:10px;"><?php e('room.swap.title'); ?></div>
+        <div class="p" style="margin-bottom:10px;"><?php e('room.swap.sub'); ?></div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div>
+            <div class="k"><?php e('room.swap.status'); ?></div>
+            <div class="v" id="swap-status">—</div>
+          </div>
+          <div>
+            <div class="k"><?php e('room.swap.closes'); ?></div>
+            <div class="v" id="swap-closes">—</div>
+          </div>
+        </div>
+
+        <div id="swap-slots" style="margin-top:12px;">
+          <div class="k"><?php e('room.swap.slots_title'); ?></div>
+          <div class="table-wrap" id="swap-slots-table-wrap" style="margin-top:10px;display:none;">
+            <table class="table" id="swap-slots-table">
+              <thead>
+                <tr>
+                  <th><?php e('room.swap.slots_th_pos'); ?></th>
+                  <th><?php e('room.swap.slots_th_participant'); ?></th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div id="swap-slots-empty" class="k" style="display:none;margin-top:10px;"><?php e('room.swap.slots_empty'); ?></div>
+        </div>
+
+        <div id="swap-request-form" style="margin-top:12px;display:none;">
+          <div class="k"><?php e('room.swap.request_to'); ?></div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:6px;">
+            <select id="swap-to-user" class="ls-input" style="flex:1;min-width:220px;"></select>
+            <button class="btn btn-blue btn-sm" id="swap-request-btn" onclick="requestSwap()"><?php e('room.swap.btn_request'); ?></button>
+          </div>
+        </div>
+
+        <div id="swap-requests" style="margin-top:12px;">
+          <div class="k"><?php e('room.swap.requests_title'); ?></div>
+          <div class="table-wrap" id="swap-requests-table-wrap" style="margin-top:10px;display:none;">
+            <table class="table" id="swap-requests-table">
+              <thead>
+                <tr>
+                  <th><?php e('room.swap.requests_th_from'); ?></th>
+                  <th><?php e('room.swap.requests_th_to'); ?></th>
+                  <th><?php e('room.swap.requests_th_status'); ?></th>
+                  <th><?php e('room.swap.requests_th_created'); ?></th>
+                  <th><?php e('room.swap.requests_th_actions'); ?></th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div id="swap-requests-empty" class="k" style="display:none;margin-top:10px;"><?php e('room.swap.requests_empty'); ?></div>
+        </div>
+
+        <div id="swap-msg" class="msg"></div>
+      </div>
+
       <div id="exit-block" style="display:none; margin-top:12px;">
         <div class="hr"></div>
         <div class="card-title" style="margin-bottom:10px;"><?php e('room.exit_title'); ?></div>
@@ -407,6 +470,7 @@ const CSRF = <?= json_encode($csrf) ?>;
 const ROOM_ID = <?= json_encode($roomId) ?>;
 const INVITE_TOKEN = <?= json_encode($inviteToken) ?>;
 const IS_ADMIN = <?= json_encode($isAdmin ? 1 : 0) ?>;
+const CURRENT_USER_ID = <?= json_encode($currentUserId) ?>;
 
 const I18N = (window.LS_I18N && window.LS_I18N.strings) ? window.LS_I18N.strings : {};
 function tr(key, vars, fallback){
@@ -426,6 +490,7 @@ const STR = {
   vote_saved: tr('room.vote_saved', null, 'Vote saved.'),
   loading: tr('common.loading', null, 'Loading…'),
   confirm: tr('common.confirm', null, 'Confirm'),
+  cancel: tr('common.cancel', null, 'Cancel'),
   enter_totp: tr('login.enter_totp', null, 'Enter your 6-digit authenticator code'),
   email_required: tr('common.email_required', null, 'Email required'),
 
@@ -499,6 +564,13 @@ const FEED_EVENT_LABELS = {
   exit_approved: tr('room.feed.exit_approved', null, 'Exit request approved'),
   exit_cancelled: tr('room.feed.exit_cancelled', null, 'Exit request cancelled'),
   room_closed: tr('room.feed.room_closed', null, 'Room closed'),
+
+  swap_window_started: tr('room.feed.swap_window_started', null, 'Swap window started'),
+  swap_window_ended: tr('room.feed.swap_window_ended', null, 'Swap window ended'),
+  slot_swap_requested: tr('room.feed.slot_swap_requested', null, 'Slot swap requested'),
+  slot_swap_accepted: tr('room.feed.slot_swap_accepted', null, 'Slot swap accepted'),
+  slot_swap_declined: tr('room.feed.slot_swap_declined', null, 'Slot swap declined'),
+  slot_swap_cancelled: tr('room.feed.slot_swap_cancelled', null, 'Slot swap cancelled'),
 };
 
 function apiUrl(url){return url.startsWith('/') ? url.slice(1) : url;}
@@ -860,6 +932,23 @@ function formatActivityExtra(eventType, payload){
     if(payload.rotation_index) bits.push(tr('room.activity.turn', {n: String(payload.rotation_index)}, 'Turn #' + String(payload.rotation_index)));
     if(typeof payload.ack_count === 'number' && typeof payload.required === 'number') bits.push(tr('room.activity.ack', {a: payload.ack_count, b: payload.required}, `Ack ${payload.ack_count}/${payload.required}`));
     return bits.join(' · ');
+  }
+
+  if(eventType === 'swap_window_started'){
+    const bits = [];
+    if(payload.swap_window_ends_at) bits.push(tr('room.activity.ends', {ts: fmt(payload.swap_window_ends_at)}, 'Ends ' + fmt(payload.swap_window_ends_at)));
+    return bits.join(' · ');
+  }
+
+  if(eventType === 'swap_window_ended'){
+    const bits = [];
+    if(typeof payload.expired_swap_requests === 'number') bits.push(tr('room.activity.expired_swap_requests', {n: payload.expired_swap_requests}, 'Expired swap requests ' + payload.expired_swap_requests));
+    return bits.join(' · ');
+  }
+
+  if(eventType === 'slot_swap_requested' || eventType === 'slot_swap_accepted' || eventType === 'slot_swap_declined' || eventType === 'slot_swap_cancelled'){
+    if(payload.swap_id) return tr('room.activity.swap_id', {id: String(payload.swap_id)}, 'Swap #' + String(payload.swap_id));
+    return '';
   }
 
   // Fallback: show primitive key/value pairs (avoid dumping raw JSON).
@@ -1324,6 +1413,8 @@ function renderRoom(){
     }
   }
 
+  renderSwapWindow(r);
+
   const exitBlock = document.getElementById('exit-block');
   if(exitBlock){
     const canUseExit = (r.saving_type === 'B' && r.room_state === 'active' && r.my_status === 'active');
@@ -1391,6 +1482,193 @@ function renderRoom(){
     if(invitesCard) invitesCard.style.display='none';
     const unlistedCard = document.getElementById('unlisted-card');
     if(unlistedCard) unlistedCard.style.display='none';
+  }
+}
+
+function swapStatusText(status){
+  if(status === 'pending') return tr('room.swap.status_pending', null, 'pending');
+  if(status === 'accepted') return tr('room.swap.status_accepted', null, 'accepted');
+  if(status === 'declined') return tr('room.swap.status_declined', null, 'declined');
+  if(status === 'cancelled') return tr('room.swap.status_cancelled', null, 'cancelled');
+  return status ? String(status) : '';
+}
+
+function renderSwapWindow(r){
+  const block = document.getElementById('swap-block');
+  if(!block) return;
+
+  const show = (r.saving_type === 'B' && r.room_state === 'swap_window' && (r.my_status === 'approved' || r.my_status === 'active'));
+  block.style.display = show ? 'block' : 'none';
+  if(!show) return;
+
+  const swapWindow = r.swap_window || {};
+  const isOpen = !!swapWindow.is_open;
+
+  const statusEl = document.getElementById('swap-status');
+  const closesEl = document.getElementById('swap-closes');
+  if(statusEl) statusEl.textContent = isOpen ? tr('room.swap.open', null, 'Open') : tr('room.swap.closed', null, 'Closed');
+  if(closesEl) closesEl.textContent = swapWindow.closes_at ? fmt(swapWindow.closes_at) : '—';
+
+  // Slots table
+  const slots = Array.isArray(r.slots) ? r.slots : [];
+  const slotsWrap = document.getElementById('swap-slots-table-wrap');
+  const slotsEmpty = document.getElementById('swap-slots-empty');
+  const slotsBody = document.querySelector('#swap-slots-table tbody');
+
+  if(slotsBody) slotsBody.innerHTML = '';
+
+  if(slots && slots.length && slotsBody && slotsWrap && slotsEmpty){
+    slotsWrap.style.display = 'block';
+    slotsEmpty.style.display = 'none';
+
+    slots.forEach(s => {
+      const trEl = document.createElement('tr');
+      if((s.user_id|0) === (CURRENT_USER_ID|0)){
+        trEl.style.background = 'var(--ls-surface-1)';
+      }
+      trEl.innerHTML = `<td>#${esc(String(s.position||''))}</td><td>${esc(String(s.display_name||('User #' + s.user_id)))}</td>`;
+      slotsBody.appendChild(trEl);
+    });
+  } else {
+    if(slotsWrap) slotsWrap.style.display = 'none';
+    if(slotsEmpty) slotsEmpty.style.display = 'block';
+  }
+
+  // Request form (only if window is open)
+  const form = document.getElementById('swap-request-form');
+  const sel = document.getElementById('swap-to-user');
+  const btn = document.getElementById('swap-request-btn');
+
+  if(form) form.style.display = isOpen ? 'block' : 'none';
+
+  if(isOpen && sel){
+    const opts = slots.filter(x => x && (x.user_id|0) !== (CURRENT_USER_ID|0));
+    sel.innerHTML = '<option value="0">' + esc(tr('room.swap.select_placeholder', null, 'Select a participant')) + '</option>';
+    opts.forEach(x => {
+      const o = document.createElement('option');
+      o.value = String(x.user_id);
+      o.textContent = String(x.display_name||('User #' + x.user_id));
+      sel.appendChild(o);
+    });
+
+    if(btn) btn.disabled = (opts.length === 0);
+  }
+
+  // Swap requests
+  const swaps = Array.isArray(r.slot_swaps) ? r.slot_swaps : [];
+  const reqWrap = document.getElementById('swap-requests-table-wrap');
+  const reqEmpty = document.getElementById('swap-requests-empty');
+  const reqBody = document.querySelector('#swap-requests-table tbody');
+
+  if(reqBody) reqBody.innerHTML='';
+
+  if(swaps && swaps.length && reqBody && reqWrap && reqEmpty){
+    reqWrap.style.display = 'block';
+    reqEmpty.style.display = 'none';
+
+    swaps.forEach(s => {
+      const trEl = document.createElement('tr');
+      const st = String(s.status||'');
+
+      let actions = '';
+      // Only allow swap actions while the swap window is open; backend also enforces this.
+      if(isOpen && st === 'pending' && (s.to_user_id|0) === (CURRENT_USER_ID|0)){
+        actions = `
+          <button class="btn btn-blue btn-sm" onclick="respondSwap(${s.id}, 'accept')">${esc(tr('room.swap.btn_accept', null, 'Accept'))}</button>
+          <button class="btn btn-red btn-sm" onclick="respondSwap(${s.id}, 'decline')">${esc(tr('room.swap.btn_decline', null, 'Decline'))}</button>
+        `;
+      } else if(isOpen && st === 'pending' && (s.from_user_id|0) === (CURRENT_USER_ID|0)){
+        actions = `<button class="btn btn-ghost btn-sm" onclick="cancelSwap(${s.id})">${esc(STR.cancel)}</button>`;
+      }
+
+      trEl.innerHTML = `
+        <td>${esc(String(s.from_name||('User #' + s.from_user_id)))}</td>
+        <td>${esc(String(s.to_name||('User #' + s.to_user_id)))}</td>
+        <td>${esc(swapStatusText(st))}</td>
+        <td>${esc(fmt(s.created_at))}</td>
+        <td>${actions}</td>
+      `;
+      reqBody.appendChild(trEl);
+    });
+  } else {
+    if(reqWrap) reqWrap.style.display = 'none';
+    if(reqEmpty) reqEmpty.style.display = 'block';
+  }
+}
+
+async function requestSwap(){
+  document.getElementById('swap-msg').className='msg';
+
+  const r = roomCache;
+  if(!r) return;
+
+  const sel = document.getElementById('swap-to-user');
+  const to_user_id = sel ? parseInt(sel.value||'0', 10) : 0;
+  if(!to_user_id) {
+    setMsg('swap-msg', tr('room.swap.select_required', null, 'Select a participant.'), false);
+    return;
+  }
+
+  if(!(r.swap_window && r.swap_window.is_open)){
+    setMsg('swap-msg', tr('room.swap.closed', null, 'Closed'), false);
+    return;
+  }
+
+  const btn = document.getElementById('swap-request-btn');
+  if(btn) btn.disabled = true;
+
+  try{
+    const res = await postStrong('/api/rooms.php', {action:'request_swap', room_id: ROOM_ID, to_user_id});
+    if(!res.success) throw new Error(res.error||STR.failed);
+
+    setMsg('swap-msg', tr('room.swap.msg_requested', null, 'Swap request sent.'), true);
+    if(sel) sel.value = '0';
+
+    await loadRoom();
+    await pollFeed();
+
+  }catch(e){
+    setMsg('swap-msg', e.message||STR.failed, false);
+  }finally{
+    if(btn) btn.disabled = false;
+  }
+}
+
+async function respondSwap(swapId, decision){
+  document.getElementById('swap-msg').className='msg';
+
+  try{
+    const res = await postStrong('/api/rooms.php', {action:'respond_swap', swap_id: swapId, decision});
+    if(!res.success) throw new Error(res.error||STR.failed);
+
+    const msg = (decision === 'accept')
+      ? tr('room.swap.msg_accepted', null, 'Swap accepted. Slots updated.')
+      : tr('room.swap.msg_declined', null, 'Swap declined.');
+
+    setMsg('swap-msg', msg, true);
+
+    await loadRoom();
+    await pollFeed();
+
+  }catch(e){
+    setMsg('swap-msg', e.message||STR.failed, false);
+  }
+}
+
+async function cancelSwap(swapId){
+  document.getElementById('swap-msg').className='msg';
+
+  try{
+    const res = await postStrong('/api/rooms.php', {action:'cancel_swap', swap_id: swapId});
+    if(!res.success) throw new Error(res.error||STR.failed);
+
+    setMsg('swap-msg', tr('room.swap.msg_cancelled', null, 'Swap request cancelled.'), true);
+
+    await loadRoom();
+    await pollFeed();
+
+  }catch(e){
+    setMsg('swap-msg', e.message||STR.failed, false);
   }
 }
 
