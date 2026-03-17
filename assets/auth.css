@@ -51,6 +51,77 @@ body.auth-login::after{
 }
 @media(hover:hover){.box:hover{background:linear-gradient(180deg, var(--s3), var(--s2));border-color:var(--b2);box-shadow:var(--shadow-card-hover);}}
 
+/* Login: animated golden border on hover / focus-within
+   - Uses conic-gradient ring + mask so only the border area is visible.
+   - Triggered on :hover (where available) and :focus-within.
+   - Animation stops when neither hover nor focus-within is active.
+*/
+.auth-login .box-login{position:relative;}
+.auth-login .box-login > *{position:relative;z-index:1;}
+
+@keyframes ls-golden-border-sweep{to{transform:rotate(360deg);}}
+
+.auth-login .box-login::before,
+.auth-login .box-login::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  border-radius:inherit;
+  pointer-events:none;
+  opacity:0;
+  transition:opacity .22s ease;
+
+  /* Border thickness */
+  padding:2px;
+
+  /* A narrow, bright highlight that sweeps around the border */
+  background:conic-gradient(
+    from 0deg,
+    rgb(var(--accent-rgb) / 0) 0 72%,
+    rgb(var(--accent2-rgb) / .22) 76%,
+    rgb(var(--g0-rgb) / .95) 81%,
+    rgb(var(--accent-rgb) / .55) 86%,
+    rgb(var(--accent-rgb) / 0) 92% 100%
+  );
+
+  /* Mask out the inner area so only the border ring is visible */
+  -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;
+  mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite:exclude;
+
+  transform:rotate(0deg);
+}
+
+/* Soft glow layer */
+.auth-login .box-login::after{
+  filter:blur(12px);
+  opacity:0;
+}
+
+@media(hover:hover){
+  .auth-login .box-login:hover::before,
+  .auth-login .box-login:hover::after{
+    opacity:1;
+    animation:ls-golden-border-sweep 1.7s linear infinite;
+  }
+}
+
+.auth-login .box-login:focus-within::before,
+.auth-login .box-login:focus-within::after{
+  opacity:1;
+  animation:ls-golden-border-sweep 1.7s linear infinite;
+}
+
+@media(prefers-reduced-motion: reduce){
+  .auth-login .box-login:hover::before,
+  .auth-login .box-login:hover::after,
+  .auth-login .box-login:focus-within::before,
+  .auth-login .box-login:focus-within::after{
+    animation:none !important;
+  }
+}
+
 .logo{font-family:var(--display);font-weight:700;letter-spacing:-.8px;font-size:30px;margin-bottom:6px;line-height:1.05;}
 .logo span{color:var(--accent);}
 
