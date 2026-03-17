@@ -214,9 +214,30 @@ async function ensureReauth(methods){
   }
 
   if(methods && methods.totp){
-    const code = prompt(<?= json_encode(t('login.enter_totp')) ?>);
-    if(!code) return false;
-    const r = await postCsrf('api/totp.php', {action:'reauth', code});
+    const msg = <?= json_encode(t('login.enter_totp')) ?>;
+    let code = null;
+
+    if(window.LS && typeof window.LS.prompt === 'function'){
+      code = await window.LS.prompt({
+        title: <?= json_encode(t('common.confirm')) ?>,
+        message: msg,
+        placeholder: '123456',
+        inputMode: 'numeric',
+        validate: (v)=> (/^\d{6}$/.test(String(v||'').trim()) ? true : msg),
+      });
+    } else if (typeof window.uiPrompt === 'function'){
+      code = await window.uiPrompt({
+        title: <?= json_encode(t('common.confirm')) ?>,
+        message: msg,
+        placeholder: '123456',
+        inputMode: 'numeric',
+        validate: (v)=> (/^\d{6}$/.test(String(v||'').trim()) ? true : msg),
+      });
+    }
+
+    const c = String(code||'').trim();
+    if(!c) return false;
+    const r = await postCsrf('api/totp.php', {action:'reauth', code: c});
     return !!r.success;
   }
 

@@ -1294,7 +1294,14 @@ foreach ($blockedDebtWins as $w) {
     }
 }
 
-$expiredWins = $db->query("SELECT w.id, w.room_id, w.user_id, w.rotation_index
+$expiredSelect = "w.id, w.room_id, w.user_id, w.rotation_index, w.expires_at";
+if (hasColumn($db, 'saving_room_rotation_windows', 'withdrawal_confirmed_at')) {
+    $expiredSelect .= ", w.withdrawal_confirmed_at";
+} else {
+    $expiredSelect .= ", NULL AS withdrawal_confirmed_at";
+}
+
+$expiredWins = $db->query("SELECT {$expiredSelect}
                            FROM saving_room_rotation_windows w
                            JOIN saving_rooms r ON r.id = w.room_id
                            WHERE r.saving_type='B'
@@ -1307,6 +1314,10 @@ $expiredWins = $db->query("SELECT w.id, w.room_id, w.user_id, w.rotation_index
 foreach ($expiredWins as $w) {
     $roomId = (string)$w['room_id'];
     $rotationIndex = (int)$w['rotation_index'];
+    $endedAt = (string)($w['expires_at'] ?? '');
+    if ($endedAt === '') $endedAt = date('Y-m-d H:i:s');
+
+    $confirmedAt = $w['withdrawal_confirmed_at'] ? (string)$w['withdrawal_confirmed_at'] : '';
 
     $db->beginTransaction();
 
@@ -1321,6 +1332,33 @@ foreach ($expiredWins as $w) {
 
     activityLog($db, $roomId, 'typeB_turn_expired', ['rotation_index' => $rotationIndex]);
 
+    // If the code was accessed but nobody confirmed withdrawal, notify admins.
+    if ($confirmedAt === '' && hasTable($db, 'saving_room_turn_code_views')) {
+        $cv = $db->prepare('SELECT COUNT(*) FROM saving_room_turn_code_views WHERE room_id = ? AND rotation_index = ?');
+        $cv->execute([$roomId, $rotationIndex]);
+        $views = (int)$cv->fetchColumn();
+
+        if ($views > 0) {
+            activityLog($db, $roomId, 'typeB_turn_voided', ['rotation_index' => $rotationIndex]);
+
+            $admins = $db->query("SELECT id FROM users WHERE is_admin = 1")->fetchAll();
+            foreach ($admins as $a) {
+                $aid = (int)$a['id'];
+                notifyOnce(
+                    $db,
+                    $aid,
+                    'typeB_turn_unconfirmed_withdrawal',
+                    'critical',
+                    'Withdrawal not confirmed (Type B)',
+                    'A Type B turn ended and the unlock code was shown, but no withdrawal confirmation was recorded. Review the room activity and follow up.',
+                    ['room_id' => $roomId, 'rotation_index' => $rotationIndex, 'ended_at' => $endedAt],
+                    'room',
+                    $roomId . ':' . $rotationIndex
+                );
+            }
+        }
+    }
+
     $nextIndex = $rotationIndex + 1;
     $guard = 0;
     $nextUserId = null;
@@ -1332,13 +1370,7 @@ foreach ($expiredWins as $w) {
         $next->execute([$roomId]);
         $candidate = $next->fetchColumn();
 
-        if (!$candidate) {
-            $db->prepare("UPDATE saving_room_rotation_queue SET status='queued' WHERE room_id = ? AND status='completed'")
-               ->execute([$roomId]);
-            $next->execute([$roomId]);
-            $candidate = $next->fetchColumn();
-            if (!$candidate) break;
-        }
+        if (!$candidate) break;
 
         $candId = (int)$candidate;
         $st = $db->prepare("SELECT status FROM saving_room_participants WHERE room_id = ? AND user_id = ?");
@@ -1364,11 +1396,48 @@ foreach ($expiredWins as $w) {
            ->execute([$roomId, (int)$nextUserId]);
 
         activityLog($db, $roomId, 'typeB_turn_advanced', ['rotation_index' => $nextIndex]);
+
+        $db->commit();
+
+        logLine("Type B turn expired/advanced: {$roomId} #{$rotationIndex}");
+        continue;
     }
+
+    // One-round Type B: no more queued participants -> close the room.
+    $roomStmt = $db->prepare('SELECT start_at FROM saving_rooms WHERE id = ?');
+    $roomStmt->execute([$roomId]);
+    $startedAt = (string)$roomStmt->fetchColumn();
+    if ($startedAt === '') $startedAt = $endedAt;
+
+    $db->prepare("UPDATE saving_rooms SET room_state='closed', updated_at=NOW() WHERE id = ? AND room_state='active'")
+       ->execute([$roomId]);
+
+    $db->prepare("UPDATE saving_room_participants SET status='completed', completed_at=NOW() WHERE room_id = ? AND status='active'")
+       ->execute([$roomId]);
+
+    $parts = $db->prepare("SELECT user_id FROM saving_room_participants WHERE room_id = ? AND status='completed'");
+    $parts->execute([$roomId]);
+
+    $dur = 0;
+    $stTs = strtotime($startedAt);
+    $endTs = strtotime($endedAt);
+    if ($stTs && $endTs && $endTs >= $stTs) {
+        $dur = (int)floor(($endTs - $stTs) / 86400);
+    }
+
+    foreach ($parts->fetchAll() as $p) {
+        $uid = (int)$p['user_id'];
+        $db->prepare("INSERT IGNORE INTO user_completed_reveals (user_id, room_id, started_at, unlocked_at, duration_days, qualified_for_level)
+                      VALUES (?, ?, ?, ?, ?, 1)")
+           ->execute([$uid, $roomId, $startedAt, $endedAt, $dur]);
+        updateTrustAfterCompletion($db, $uid);
+    }
+
+    activityLog($db, $roomId, 'room_closed', ['reason' => 'rotation_complete']);
 
     $db->commit();
 
-    logLine("Type B turn expired/advanced: {$roomId} #{$rotationIndex}");
+    logLine("Type B room closed after one round: {$roomId}");
 }
 
 logLine('Done.');

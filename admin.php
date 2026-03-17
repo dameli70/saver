@@ -790,7 +790,10 @@ async function createUser(){
 
 async function toggleAdmin(userId, cur){
   const next = cur ? 0 : 1;
-  const ok = confirm(next ? 'Grant admin access?' : 'Remove admin access?');
+  const msg = next ? 'Grant admin access?' : 'Remove admin access?';
+  const ok = (window.LS && typeof window.LS.confirm === 'function')
+    ? await window.LS.confirm(msg, {title: i18n('common.confirm', 'Confirm')})
+    : (typeof window.uiConfirm === 'function' ? await window.uiConfirm({title: i18n('common.confirm', 'Confirm'), message: msg}) : false);
   if(!ok) return;
 
   const r = await postCsrf('/api/admin.php', { action: 'set_admin', user_id: userId, is_admin: next });
@@ -800,7 +803,10 @@ async function toggleAdmin(userId, cur){
 
 async function toggleVerified(userId, cur){
   const next = cur ? 0 : 1;
-  const ok = confirm(next ? 'Mark this email as verified?' : 'Mark this email as unverified?');
+  const msg = next ? 'Mark this email as verified?' : 'Mark this email as unverified?';
+  const ok = (window.LS && typeof window.LS.confirm === 'function')
+    ? await window.LS.confirm(msg, {title: i18n('common.confirm', 'Confirm')})
+    : (typeof window.uiConfirm === 'function' ? await window.uiConfirm({title: i18n('common.confirm', 'Confirm'), message: msg}) : false);
   if(!ok) return;
 
   const r = await postCsrf('/api/admin.php', { action: 'set_verified', user_id: userId, verified: next });
@@ -816,7 +822,10 @@ async function setTrustLevel(userId, trustLevel){
     return;
   }
 
-  const ok = confirm('Set trust level to ' + String(next) + '?');
+  const msg = 'Set trust level to ' + String(next) + '?';
+  const ok = (window.LS && typeof window.LS.confirm === 'function')
+    ? await window.LS.confirm(msg, {title: i18n('common.confirm', 'Confirm')})
+    : (typeof window.uiConfirm === 'function' ? await window.uiConfirm({title: i18n('common.confirm', 'Confirm'), message: msg}) : false);
   if(!ok){
     loadUsers();
     return;
@@ -829,7 +838,10 @@ async function setTrustLevel(userId, trustLevel){
 }
 
 async function deleteUser(userId, email){
-  const ok = confirm(`Delete user ${email}? This will delete all their codes.`);
+  const msg = `Delete user ${email}? This will delete all their codes.`;
+  const ok = (window.LS && typeof window.LS.confirm === 'function')
+    ? await window.LS.confirm(msg, {title: i18n('common.confirm', 'Confirm'), danger: true})
+    : (typeof window.uiConfirm === 'function' ? await window.uiConfirm({title: i18n('common.confirm', 'Confirm'), message: msg, danger: true}) : false);
   if(!ok) return;
 
   const r = await postCsrf('/api/admin.php', { action: 'delete_user', user_id: userId });
@@ -885,7 +897,10 @@ async function loadCodes(){
 }
 
 async function deleteCode(lockId){
-  const ok = confirm('Deactivate this code? It will disappear from the user dashboard.');
+  const msg = 'Deactivate this code? It will disappear from the user dashboard.';
+  const ok = (window.LS && typeof window.LS.confirm === 'function')
+    ? await window.LS.confirm(msg, {title: i18n('common.confirm', 'Confirm'), danger: true})
+    : (typeof window.uiConfirm === 'function' ? await window.uiConfirm({title: i18n('common.confirm', 'Confirm'), message: msg, danger: true}) : false);
   if(!ok) return;
   const r = await postCsrf('/api/admin.php', { action: 'delete_code', lock_id: lockId });
   if(!r.success){ setMsg('codes-msg', r.error||'Failed', false); return; }
@@ -1121,7 +1136,10 @@ async function saveCarrierEdit(){
 
 async function toggleCarrierActive(id, cur){
   const next = cur ? 0 : 1;
-  const ok = confirm(next ? 'Activate this carrier?' : 'Deactivate this carrier?');
+  const msg = next ? 'Activate this carrier?' : 'Deactivate this carrier?';
+  const ok = (window.LS && typeof window.LS.confirm === 'function')
+    ? await window.LS.confirm(msg, {title: i18n('common.confirm', 'Confirm')})
+    : (typeof window.uiConfirm === 'function' ? await window.uiConfirm({title: i18n('common.confirm', 'Confirm'), message: msg}) : false);
   if(!ok) return;
 
   const r = await postCsrf('/api/admin.php', { action:'carrier_set_active', carrier_id: id, is_active: next });
@@ -1251,7 +1269,10 @@ function closeEscrowDetail(e){
 async function markEscrowProcessed(id){
   document.getElementById('esc-msg').className = 'msg';
 
-  const ok = confirm('Mark this escrow settlement as processed?');
+  const msg = 'Mark this escrow settlement as processed?';
+  const ok = (window.LS && typeof window.LS.confirm === 'function')
+    ? await window.LS.confirm(msg, {title: i18n('common.confirm', 'Confirm')})
+    : (typeof window.uiConfirm === 'function' ? await window.uiConfirm({title: i18n('common.confirm', 'Confirm'), message: msg}) : false);
   if(!ok) return;
 
   try{
@@ -1317,7 +1338,13 @@ async function loadDisputes(){
 async function resolveDispute(disputeId, decision){
   document.getElementById('disp-msg').className = 'msg';
 
-  const ok = confirm(decision === 'validated' ? 'Validate this dispute? This will strike the turn user and advance the rotation.' : 'Dismiss this dispute? This will strike the raiser as a false dispute.');
+  const msg = (decision === 'validated')
+    ? 'Validate this dispute? This will strike the turn user and advance the rotation.'
+    : 'Dismiss this dispute? This will strike the raiser as a false dispute.';
+
+  const ok = (window.LS && typeof window.LS.confirm === 'function')
+    ? await window.LS.confirm(msg, {title: i18n('common.confirm', 'Confirm'), danger: (decision !== 'validated')})
+    : (typeof window.uiConfirm === 'function' ? await window.uiConfirm({title: i18n('common.confirm', 'Confirm'), message: msg, danger: (decision !== 'validated')}) : false);
   if(!ok) return;
 
   try{
@@ -1444,7 +1471,25 @@ async function loadRoomAccounts(){
 async function rotateRoomAccount(roomId){
   document.getElementById('ra-msg').className = 'msg';
 
-  const unlock_code = prompt(i18n('admin.rooms.prompt_enter_new_unlock_code', 'Enter new unlock code'));
+  const msg = i18n('admin.rooms.prompt_enter_new_unlock_code', 'Enter new unlock code');
+  let unlock_code = null;
+
+  if(window.LS && typeof window.LS.prompt === 'function'){
+    unlock_code = await window.LS.prompt({
+      title: i18n('common.confirm', 'Confirm'),
+      message: msg,
+      placeholder: '',
+      initialValue: '',
+    });
+  } else if (typeof window.uiPrompt === 'function'){
+    unlock_code = await window.uiPrompt({
+      title: i18n('common.confirm', 'Confirm'),
+      message: msg,
+      placeholder: '',
+      initialValue: '',
+    });
+  }
+
   if(!unlock_code) return;
 
   try{
@@ -1462,7 +1507,25 @@ async function rotateRoomAccount(roomId){
 async function rotateDestinationAccount(id){
   document.getElementById('da-msg').className = 'msg';
 
-  const unlock_code = prompt(i18n('admin.rooms.prompt_enter_new_unlock_code', 'Enter new unlock code'));
+  const msg = i18n('admin.rooms.prompt_enter_new_unlock_code', 'Enter new unlock code');
+  let unlock_code = null;
+
+  if(window.LS && typeof window.LS.prompt === 'function'){
+    unlock_code = await window.LS.prompt({
+      title: i18n('common.confirm', 'Confirm'),
+      message: msg,
+      placeholder: '',
+      initialValue: '',
+    });
+  } else if (typeof window.uiPrompt === 'function'){
+    unlock_code = await window.uiPrompt({
+      title: i18n('common.confirm', 'Confirm'),
+      message: msg,
+      placeholder: '',
+      initialValue: '',
+    });
+  }
+
   if(!unlock_code) return;
 
   try{

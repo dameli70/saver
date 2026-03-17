@@ -110,12 +110,7 @@ function advanceTypeBWindow(PDO $db, string $roomId, int $rotationIndex): void {
         $candidate = $next->fetchColumn();
 
         if (!$candidate) {
-            $db->prepare("UPDATE saving_room_rotation_queue SET status='queued' WHERE room_id = ? AND status='completed'")
-               ->execute([$roomId]);
-
-            $next->execute([$roomId]);
-            $candidate = $next->fetchColumn();
-            if (!$candidate) break;
+            break;
         }
 
         $candId = (int)$candidate;
@@ -142,6 +137,12 @@ function advanceTypeBWindow(PDO $db, string $roomId, int $rotationIndex): void {
            ->execute([$roomId, (int)$nextUserId]);
 
         roomActivity($db, $roomId, 'typeB_turn_advanced', ['rotation_index' => $nextIndex]);
+    } else {
+        $db->prepare("UPDATE saving_rooms SET room_state='closed', updated_at=NOW() WHERE id = ? AND room_state='active'")
+           ->execute([$roomId]);
+        $db->prepare("UPDATE saving_room_participants SET status='completed', completed_at=NOW() WHERE room_id = ? AND status='active'")
+           ->execute([$roomId]);
+        roomActivity($db, $roomId, 'room_closed', []);
     }
 }
 

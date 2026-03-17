@@ -473,6 +473,7 @@ function seedDemoData(PDO $db, int $adminUserId, string $demoPassword = 'DemoPas
         if ($has('saving_room_accounts') && $destinationAccountIds) {
             $sraCols = ['room_id', 'account_id'];
             if ($has('saving_room_accounts', 'unlock_code_enc')) $sraCols[] = 'unlock_code_enc';
+            if ($has('saving_room_accounts', 'code_rotated_at')) $sraCols[] = 'code_rotated_at';
             if ($has('saving_room_accounts', 'code_rotation_version')) $sraCols[] = 'code_rotation_version';
             if ($has('saving_room_accounts', 'created_at')) $sraCols[] = 'created_at';
             if ($has('saving_room_accounts', 'updated_at')) $sraCols[] = 'updated_at';
@@ -480,6 +481,9 @@ function seedDemoData(PDO $db, int $adminUserId, string $demoPassword = 'DemoPas
             $sql = 'INSERT INTO saving_room_accounts (' . implode(', ', $sraCols) . ') VALUES (' . implode(', ', array_fill(0, count($sraCols), '?')) . ')';
             $insRoomAccount = $db->prepare($sql);
         }
+
+        $roomSwap = null;
+        $roomUnlockA = null;
 
         // Room A (public, lobby)
         $roomA = demoSeedGenerateUuid();
@@ -699,20 +703,346 @@ function seedDemoData(PDO $db, int $adminUserId, string $demoPassword = 'DemoPas
             }
         }
 
-        // Type B rotation scaffolding (optional)
+        // Room Swap (public, swap window Type B)
+        if ($has('saving_rooms', 'swap_window_ends_at') && $has('saving_room_slot_swaps')) {
+            $roomSwap = demoSeedGenerateUuid();
+            $makerSwap = $idByEmail['komla.afi@example.com'];
+            $insRoom->execute([
+                $roomSwap,
+                $makerSwap,
+                'community',
+                'Fenêtre d’échange des positions (démo)',
+                'B',
+                'public',
+                2,
+                4,
+                6,
+                '6000.00',
+                'weekly',
+                demoSeedNow('-2 hours'),
+                demoSeedNow('+40 days'),
+                'locked',
+                'swap_window',
+                0,
+                'redistribute',
+                0,
+            ]);
+
+            $db->prepare('UPDATE saving_rooms SET swap_window_ends_at = ? WHERE id = ?')->execute([demoSeedNow('+8 hours'), $roomSwap]);
+
+            $participantsSwap = [
+                [$makerSwap, 'active'],
+                [$idByEmail['dela.tete@example.com'], 'active'],
+                [$idByEmail['yaovi.tchalla@example.com'], 'active'],
+                [$idByEmail['sessi.atakpama@example.com'], 'active'],
+            ];
+
+            $slot = 1;
+            foreach ($participantsSwap as $p) {
+                $vals = [];
+                foreach ($partCols as $col) {
+                    if ($col === 'room_id') $vals[] = $roomSwap;
+                    else if ($col === 'user_id') $vals[] = (int)$p[0];
+                    else if ($col === 'status') $vals[] = (string)$p[1];
+                    else if ($col === 'joined_at') $vals[] = demoSeedNow('-2 days');
+                    else if ($col === 'approved_at') $vals[] = demoSeedNow('-2 days');
+                    else if ($col === 'slot_position') $vals[] = $slot;
+                    else $vals[] = null;
+                }
+                $insPart->execute($vals);
+                $slot++;
+            }
+
+            if ($has('saving_room_slot_swaps', 'expires_at')) {
+                $swapCols = ['room_id','from_user_id','to_user_id','status','expires_at'];
+                if ($has('saving_room_slot_swaps', 'responded_at')) $swapCols[] = 'responded_at';
+                if ($has('saving_room_slot_swaps', 'updated_at')) $swapCols[] = 'updated_at';
+
+                $swapSql = 'INSERT INTO saving_room_slot_swaps (' . implode(', ', $swapCols) . ') VALUES (' . implode(', ', array_fill(0, count($swapCols), '?')) . ')';
+                $insSwap = $db->prepare($swapSql);
+
+                $insertSwap = function(int $fromId, int $toId, string $status, string $expiresAt, ?string $respondedAt) use ($insSwap, $swapCols, $roomSwap): void {
+                    $vals = [];
+                    foreach ($swapCols as $c) {
+                        if ($c === 'room_id') $vals[] = $roomSwap;
+                        else if ($c === 'from_user_id') $vals[] = $fromId;
+                        else if ($c === 'to_user_id') $vals[] = $toId;
+                        else if ($c === 'status') $vals[] = $status;
+                        else if ($c === 'expires_at') $vals[] = $expiresAt;
+                        else if ($c === 'responded_at') $vals[] = $respondedAt;
+                        else if ($c === 'updated_at') $vals[] = $respondedAt;
+                        else $vals[] = null;
+                    }
+                    $insSwap->execute($vals);
+                };
+
+                // Pending + decided + expired swap requests
+                $insertSwap((int)$participantsSwap[0][0], (int)$participantsSwap[1][0], 'pending', demoSeedNow('+6 hours'), null);
+                $insertSwap((int)$participantsSwap[2][0], (int)$participantsSwap[3][0], 'accepted', demoSeedNow('+6 hours'), demoSeedNow('-1 hour'));
+                $insertSwap((int)$participantsSwap[1][0], (int)$participantsSwap[2][0], 'declined', demoSeedNow('+6 hours'), demoSeedNow('-2 hours'));
+                $insertSwap((int)$participantsSwap[3][0], (int)$participantsSwap[0][0], 'expired', demoSeedNow('-1 hour'), null);
+            }
+
+            if ($has('saving_room_activity')) {
+                $act = $db->prepare('INSERT INTO saving_room_activity (room_id, event_type, public_payload_json, created_at) VALUES (?, ?, ?, NOW())');
+                $act->execute([$roomSwap, 'swap_window_started', json_encode(['demo' => 1], JSON_UNESCAPED_UNICODE)]);
+                $act->execute([$roomSwap, 'slot_swap_requested', json_encode(['demo' => 1], JSON_UNESCAPED_UNICODE)]);
+            }
+        }
+
+        // Room Unlock A (public, active Type A near unlock/reveal)
+        if ($has('saving_room_unlock_events') && $has('saving_room_unlock_votes')) {
+            $roomUnlockA = demoSeedGenerateUuid();
+            $makerU = $makerA;
+            $insRoom->execute([
+                $roomUnlockA,
+                $makerU,
+                'business',
+                'Déverrouillage Type A (votes) (démo)',
+                'A',
+                'public',
+                1,
+                3,
+                5,
+                '8000.00',
+                'weekly',
+                demoSeedNow('-20 days'),
+                demoSeedNow('-1 day'),
+                'locked',
+                'active',
+                1,
+                'redistribute',
+                0,
+            ]);
+
+            $participantsU = [
+                [$makerU, 'active'],
+                [$idByEmail['akossiwa.dossa@example.com'], 'active'],
+                [$idByEmail['efui.koffi@example.com'], 'active'],
+            ];
+            $slot = 1;
+            foreach ($participantsU as $p) {
+                $vals = [];
+                foreach ($partCols as $col) {
+                    if ($col === 'room_id') $vals[] = $roomUnlockA;
+                    else if ($col === 'user_id') $vals[] = (int)$p[0];
+                    else if ($col === 'status') $vals[] = (string)$p[1];
+                    else if ($col === 'joined_at') $vals[] = demoSeedNow('-21 days');
+                    else if ($col === 'approved_at') $vals[] = demoSeedNow('-21 days');
+                    else if ($col === 'slot_position') $vals[] = $slot;
+                    else $vals[] = null;
+                }
+                $insPart->execute($vals);
+                $slot++;
+            }
+
+            $ueCols = ['room_id','status'];
+            if ($has('saving_room_unlock_events', 'revealed_at')) $ueCols[] = 'revealed_at';
+            if ($has('saving_room_unlock_events', 'expires_at')) $ueCols[] = 'expires_at';
+            if ($has('saving_room_unlock_events', 'created_at')) $ueCols[] = 'created_at';
+
+            $ueSql = 'INSERT IGNORE INTO saving_room_unlock_events (' . implode(', ', $ueCols) . ') VALUES (' . implode(', ', array_fill(0, count($ueCols), '?')) . ')';
+            $insUE = $db->prepare($ueSql);
+            $ueVals = [];
+            foreach ($ueCols as $c) {
+                if ($c === 'room_id') $ueVals[] = $roomUnlockA;
+                else if ($c === 'status') $ueVals[] = 'pending';
+                else if ($c === 'revealed_at') $ueVals[] = null;
+                else if ($c === 'expires_at') $ueVals[] = null;
+                else if ($c === 'created_at') $ueVals[] = demoSeedNow('-2 days');
+                else $ueVals[] = null;
+            }
+            $insUE->execute($ueVals);
+
+            $voteCols = ['room_id','user_id','scope','target_rotation_index','vote'];
+            if ($has('saving_room_unlock_votes', 'created_at')) $voteCols[] = 'created_at';
+            if ($has('saving_room_unlock_votes', 'updated_at')) $voteCols[] = 'updated_at';
+            $voteSql = 'INSERT IGNORE INTO saving_room_unlock_votes (' . implode(', ', $voteCols) . ') VALUES (' . implode(', ', array_fill(0, count($voteCols), '?')) . ')';
+            $insVote = $db->prepare($voteSql);
+
+            $presetVotes = [
+                [$participantsU[0][0], 'approve'],
+                [$participantsU[1][0], 'approve'],
+                [$participantsU[2][0], 'reject'],
+            ];
+            foreach ($presetVotes as $pv) {
+                $vals = [];
+                foreach ($voteCols as $c) {
+                    if ($c === 'room_id') $vals[] = $roomUnlockA;
+                    else if ($c === 'user_id') $vals[] = (int)$pv[0];
+                    else if ($c === 'scope') $vals[] = 'typeA_room_unlock';
+                    else if ($c === 'target_rotation_index') $vals[] = 0;
+                    else if ($c === 'vote') $vals[] = (string)$pv[1];
+                    else if ($c === 'created_at') $vals[] = demoSeedNow('-3 hours');
+                    else if ($c === 'updated_at') $vals[] = null;
+                    else $vals[] = null;
+                }
+                $insVote->execute($vals);
+            }
+        }
+
+        // Type B rotation scaffolding + disputes/exit requests (optional)
+        $roomBRotationIndex = 1;
+        $roomBActiveUser = (int)$participantsB[1][0];
+
         if ($has('saving_room_rotation_queue') && $has('saving_room_rotation_windows')) {
-            $queue = $db->prepare('INSERT IGNORE INTO saving_room_rotation_queue (room_id, user_id, position, status, created_at) VALUES (?, ?, ?, ?, NOW())');
-            $window = $db->prepare("INSERT IGNORE INTO saving_room_rotation_windows (room_id, user_id, rotation_index, status, expires_at, created_at)
-                                    VALUES (?, ?, ?, 'pending_votes', ?, NOW())");
+            $queueCols = ['room_id','user_id','position','status'];
+            if ($has('saving_room_rotation_queue', 'slot_locked_at')) $queueCols[] = 'slot_locked_at';
+            if ($has('saving_room_rotation_queue', 'created_at')) $queueCols[] = 'created_at';
+
+            $queueSql = 'INSERT IGNORE INTO saving_room_rotation_queue (' . implode(', ', $queueCols) . ') VALUES (' . implode(', ', array_fill(0, count($queueCols), '?')) . ')';
+            $queue = $db->prepare($queueSql);
+
+            $winCols = ['room_id','user_id','rotation_index','status'];
+            if ($has('saving_room_rotation_windows', 'revealed_at')) $winCols[] = 'revealed_at';
+            if ($has('saving_room_rotation_windows', 'expires_at')) $winCols[] = 'expires_at';
+            if ($has('saving_room_rotation_windows', 'dispute_window_ends_at')) $winCols[] = 'dispute_window_ends_at';
+            if ($has('saving_room_rotation_windows', 'created_at')) $winCols[] = 'created_at';
+
+            $winSql = 'INSERT IGNORE INTO saving_room_rotation_windows (' . implode(', ', $winCols) . ') VALUES (' . implode(', ', array_fill(0, count($winCols), '?')) . ')';
+            $window = $db->prepare($winSql);
 
             $pos = 1;
             foreach ($participantsB as $p) {
-                $queue->execute([$roomB, (int)$p[0], $pos, ($pos === 2 ? 'active_window' : 'queued')]);
+                $vals = [];
+                foreach ($queueCols as $c) {
+                    if ($c === 'room_id') $vals[] = $roomB;
+                    else if ($c === 'user_id') $vals[] = (int)$p[0];
+                    else if ($c === 'position') $vals[] = $pos;
+                    else if ($c === 'status') $vals[] = ($pos === 2 ? 'active_window' : 'queued');
+                    else if ($c === 'slot_locked_at') $vals[] = ($pos === 2 ? demoSeedNow('-2 hours') : null);
+                    else if ($c === 'created_at') $vals[] = demoSeedNow('-12 days');
+                    else $vals[] = null;
+                }
+                $queue->execute($vals);
                 $pos++;
             }
 
-            $activeUser = (int)$participantsB[1][0];
-            $window->execute([$roomB, $activeUser, 1, demoSeedNow('+12 hours')]);
+            $vals = [];
+            foreach ($winCols as $c) {
+                if ($c === 'room_id') $vals[] = $roomB;
+                else if ($c === 'user_id') $vals[] = $roomBActiveUser;
+                else if ($c === 'rotation_index') $vals[] = $roomBRotationIndex;
+                else if ($c === 'status') $vals[] = 'revealed';
+                else if ($c === 'revealed_at') $vals[] = demoSeedNow('-3 hours');
+                else if ($c === 'expires_at') $vals[] = demoSeedNow('+60 hours');
+                else if ($c === 'dispute_window_ends_at') $vals[] = demoSeedNow('+21 hours');
+                else if ($c === 'created_at') $vals[] = demoSeedNow('-7 days');
+                else $vals[] = null;
+            }
+            $window->execute($vals);
+        }
+
+        if ($has('saving_room_unlock_votes')) {
+            $voteCols = ['room_id','user_id','scope','target_rotation_index','vote'];
+            if ($has('saving_room_unlock_votes', 'created_at')) $voteCols[] = 'created_at';
+            if ($has('saving_room_unlock_votes', 'updated_at')) $voteCols[] = 'updated_at';
+            $voteSql = 'INSERT IGNORE INTO saving_room_unlock_votes (' . implode(', ', $voteCols) . ') VALUES (' . implode(', ', array_fill(0, count($voteCols), '?')) . ')';
+            $insVote = $db->prepare($voteSql);
+
+            foreach ($participantsB as $i => $p) {
+                $vote = ($i === 2) ? 'reject' : 'approve';
+                $vals = [];
+                foreach ($voteCols as $c) {
+                    if ($c === 'room_id') $vals[] = $roomB;
+                    else if ($c === 'user_id') $vals[] = (int)$p[0];
+                    else if ($c === 'scope') $vals[] = 'typeB_turn_unlock';
+                    else if ($c === 'target_rotation_index') $vals[] = $roomBRotationIndex;
+                    else if ($c === 'vote') $vals[] = $vote;
+                    else if ($c === 'created_at') $vals[] = demoSeedNow('-2 hours');
+                    else if ($c === 'updated_at') $vals[] = null;
+                    else $vals[] = null;
+                }
+                $insVote->execute($vals);
+            }
+        }
+
+        if ($has('saving_room_disputes') && $has('saving_room_dispute_ack') && $has('saving_room_rotation_windows')) {
+            $dispCols = ['room_id','rotation_index','raised_by_user_id','reason','status','threshold_count_required'];
+            if ($has('saving_room_disputes', 'created_at')) $dispCols[] = 'created_at';
+            if ($has('saving_room_disputes', 'updated_at')) $dispCols[] = 'updated_at';
+
+            $dispSql = 'INSERT INTO saving_room_disputes (' . implode(', ', $dispCols) . ') VALUES (' . implode(', ', array_fill(0, count($dispCols), '?')) . ')';
+            $insDisp = $db->prepare($dispSql);
+
+            $raiser = (int)$participantsB[2][0];
+            $dVals = [];
+            foreach ($dispCols as $c) {
+                if ($c === 'room_id') $dVals[] = $roomB;
+                else if ($c === 'rotation_index') $dVals[] = $roomBRotationIndex;
+                else if ($c === 'raised_by_user_id') $dVals[] = $raiser;
+                else if ($c === 'reason') $dVals[] = 'Demo dispute (rotation eligibility)';
+                else if ($c === 'status') $dVals[] = 'escalated_admin';
+                else if ($c === 'threshold_count_required') $dVals[] = 2;
+                else if ($c === 'created_at') $dVals[] = demoSeedNow('-90 minutes');
+                else if ($c === 'updated_at') $dVals[] = demoSeedNow('-60 minutes');
+                else $dVals[] = null;
+            }
+            $insDisp->execute($dVals);
+            $disputeId = (int)$db->lastInsertId();
+
+            if ($disputeId > 0) {
+                $db->prepare('INSERT IGNORE INTO saving_room_dispute_ack (dispute_id, user_id) VALUES (?, ?)')->execute([$disputeId, $raiser]);
+                $db->prepare('INSERT IGNORE INTO saving_room_dispute_ack (dispute_id, user_id) VALUES (?, ?)')->execute([$disputeId, (int)$participantsB[3][0]]);
+
+                $db->prepare("UPDATE saving_room_rotation_windows SET status='blocked_dispute' WHERE room_id = ? AND rotation_index = ? AND status IN ('revealed','pending_votes','blocked_dispute')")
+                   ->execute([$roomB, $roomBRotationIndex]);
+
+                if ($has('saving_room_activity')) {
+                    $act = $db->prepare('INSERT INTO saving_room_activity (room_id, event_type, public_payload_json, created_at) VALUES (?, ?, ?, NOW())');
+                    $act->execute([$roomB, 'dispute_raised', json_encode(['dispute_id' => $disputeId, 'rotation_index' => $roomBRotationIndex, 'demo' => 1], JSON_UNESCAPED_UNICODE)]);
+                    $act->execute([$roomB, 'rotation_blocked_dispute', json_encode(['rotation_index' => $roomBRotationIndex, 'demo' => 1], JSON_UNESCAPED_UNICODE)]);
+                }
+            }
+        }
+
+        if ($has('saving_room_exit_requests')) {
+            $exCols = ['room_id','requested_by_user_id','status'];
+            if ($has('saving_room_exit_requests', 'created_at')) $exCols[] = 'created_at';
+
+            $exSql = 'INSERT INTO saving_room_exit_requests (' . implode(', ', $exCols) . ') VALUES (' . implode(', ', array_fill(0, count($exCols), '?')) . ')';
+            $insEx = $db->prepare($exSql);
+
+            $exVals = [];
+            foreach ($exCols as $c) {
+                if ($c === 'room_id') $exVals[] = $roomB;
+                else if ($c === 'requested_by_user_id') $exVals[] = (int)$participantsB[3][0];
+                else if ($c === 'status') $exVals[] = 'open';
+                else if ($c === 'created_at') $exVals[] = demoSeedNow('-45 minutes');
+                else $exVals[] = null;
+            }
+
+            $insEx->execute($exVals);
+            $exitReqId = (int)$db->lastInsertId();
+
+            if ($exitReqId > 0 && $has('saving_room_unlock_votes')) {
+                $voteCols = ['room_id','user_id','scope','target_rotation_index','vote'];
+                if ($has('saving_room_unlock_votes', 'created_at')) $voteCols[] = 'created_at';
+                if ($has('saving_room_unlock_votes', 'updated_at')) $voteCols[] = 'updated_at';
+                $voteSql = 'INSERT IGNORE INTO saving_room_unlock_votes (' . implode(', ', $voteCols) . ') VALUES (' . implode(', ', array_fill(0, count($voteCols), '?')) . ')';
+                $insVote = $db->prepare($voteSql);
+
+                foreach ($participantsB as $i => $p) {
+                    $vote = ($i === 1) ? 'reject' : 'approve';
+                    $vals = [];
+                    foreach ($voteCols as $c) {
+                        if ($c === 'room_id') $vals[] = $roomB;
+                        else if ($c === 'user_id') $vals[] = (int)$p[0];
+                        else if ($c === 'scope') $vals[] = 'typeB_exit_request';
+                        else if ($c === 'target_rotation_index') $vals[] = $exitReqId;
+                        else if ($c === 'vote') $vals[] = $vote;
+                        else if ($c === 'created_at') $vals[] = demoSeedNow('-40 minutes');
+                        else if ($c === 'updated_at') $vals[] = null;
+                        else $vals[] = null;
+                    }
+                    $insVote->execute($vals);
+                }
+
+                if ($has('saving_room_activity')) {
+                    $act = $db->prepare('INSERT INTO saving_room_activity (room_id, event_type, public_payload_json, created_at) VALUES (?, ?, ?, NOW())');
+                    $act->execute([$roomB, 'exit_requested', json_encode(['exit_request_id' => $exitReqId, 'demo' => 1], JSON_UNESCAPED_UNICODE)]);
+                }
+            }
         }
 
         if ($has('saving_room_contribution_cycles') && $has('saving_room_contributions')) {
@@ -743,6 +1073,8 @@ function seedDemoData(PDO $db, int $adminUserId, string $demoPassword = 'DemoPas
             $act = $db->prepare('INSERT INTO saving_room_activity (room_id, event_type, public_payload_json, created_at) VALUES (?, ?, ?, NOW())');
             $act->execute([$roomA, 'room_seeded', json_encode(['demo' => 1], JSON_UNESCAPED_UNICODE)]);
             $act->execute([$roomB, 'room_seeded', json_encode(['demo' => 1], JSON_UNESCAPED_UNICODE)]);
+            if (!empty($roomSwap)) $act->execute([$roomSwap, 'room_seeded', json_encode(['demo' => 1], JSON_UNESCAPED_UNICODE)]);
+            if (!empty($roomUnlockA)) $act->execute([$roomUnlockA, 'room_seeded', json_encode(['demo' => 1], JSON_UNESCAPED_UNICODE)]);
             $act->execute([$roomC, 'room_seeded', json_encode(['demo' => 1], JSON_UNESCAPED_UNICODE)]);
             $act->execute([$roomD, 'room_seeded', json_encode(['demo' => 1], JSON_UNESCAPED_UNICODE)]);
         }
@@ -753,6 +1085,7 @@ function seedDemoData(PDO $db, int $adminUserId, string $demoPassword = 'DemoPas
             // Recompute $sraCols the same way we did above.
             $sraCols = ['room_id', 'account_id'];
             if ($has('saving_room_accounts', 'unlock_code_enc')) $sraCols[] = 'unlock_code_enc';
+            if ($has('saving_room_accounts', 'code_rotated_at')) $sraCols[] = 'code_rotated_at';
             if ($has('saving_room_accounts', 'code_rotation_version')) $sraCols[] = 'code_rotation_version';
             if ($has('saving_room_accounts', 'created_at')) $sraCols[] = 'created_at';
             if ($has('saving_room_accounts', 'updated_at')) $sraCols[] = 'updated_at';
@@ -762,7 +1095,8 @@ function seedDemoData(PDO $db, int $adminUserId, string $demoPassword = 'DemoPas
                 foreach ($sraCols as $c) {
                     if ($c === 'room_id') $vals[] = $roomId;
                     else if ($c === 'account_id') $vals[] = $accountId;
-                    else if ($c === 'unlock_code_enc') $vals[] = null;
+                    else if ($c === 'unlock_code_enc') $vals[] = 'demo_enc_' . bin2hex(random_bytes(18));
+                    else if ($c === 'code_rotated_at') $vals[] = demoSeedNow('-2 days');
                     else if ($c === 'code_rotation_version') $vals[] = 1;
                     else if ($c === 'created_at') $vals[] = demoSeedNow('now');
                     else if ($c === 'updated_at') $vals[] = demoSeedNow('now');
@@ -775,15 +1109,20 @@ function seedDemoData(PDO $db, int $adminUserId, string $demoPassword = 'DemoPas
 
             if (!empty($destinationAccountIds['mixx'])) $insertRoomAccount($roomA, (int)$destinationAccountIds['mixx']);
             if (!empty($destinationAccountIds['bank'])) $insertRoomAccount($roomB, (int)$destinationAccountIds['bank']);
+            if (!empty($roomSwap) && !empty($destinationAccountIds['bank'])) $insertRoomAccount($roomSwap, (int)$destinationAccountIds['bank']);
+            if (!empty($roomUnlockA) && !empty($destinationAccountIds['mixx'])) $insertRoomAccount($roomUnlockA, (int)$destinationAccountIds['mixx']);
             if (!empty($destinationAccountIds['crypto'])) $insertRoomAccount($roomC, (int)$destinationAccountIds['crypto']);
         }
 
-        $out['rooms'] = [
+        $roomsOut = [
             ['id' => $roomA, 'visibility' => 'public', 'saving_type' => 'A'],
             ['id' => $roomB, 'visibility' => 'public', 'saving_type' => 'B'],
             ['id' => $roomC, 'visibility' => 'private', 'saving_type' => 'A'],
             ['id' => $roomD, 'visibility' => 'unlisted', 'saving_type' => 'A'],
         ];
+        if (!empty($roomSwap)) $roomsOut[] = ['id' => $roomSwap, 'visibility' => 'public', 'saving_type' => 'B'];
+        if (!empty($roomUnlockA)) $roomsOut[] = ['id' => $roomUnlockA, 'visibility' => 'public', 'saving_type' => 'A'];
+        $out['rooms'] = $roomsOut;
     }
 
     $db->commit();

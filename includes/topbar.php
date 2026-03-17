@@ -205,3 +205,6 @@ $topbarActive = function(string $href) use ($topbarCurPage): bool {
   </div>
   <script>try{var a=document.getElementById('app');if(a)a.classList.add('has-bottom-nav');}catch(e){}</script>
 <?php endif; ?>
+
+<script src="assets/loading_overlay.js"></script>
+<script src="assets/ui_modal.js"></script>

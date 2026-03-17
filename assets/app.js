@@ -29,6 +29,10 @@
     cancel: t('common.cancel', 'Cancel'),
     back: t('common.back', 'Back'),
     close: t('common.close', 'Close'),
+    open: t('common.open', 'Open'),
+    logout: t('common.logout', 'Log out'),
+    install: t('common.install', 'Install'),
+    copy: t('common.copy', 'Copy'),
   };
 
   LS.esc = function(s){
@@ -105,6 +109,83 @@
     t.textContent = String(msg||'');
     document.body.appendChild(t);
     setTimeout(()=>t.remove(), ms);
+  };
+
+  const UI_MODAL_SRC = (function(){
+    try{
+      const cs = document.currentScript;
+      if(cs && cs.src) return new URL('ui_modal.js', cs.src).href;
+    }catch{}
+    return 'assets/ui_modal.js';
+  })();
+
+  let uiModalLoadPromise = null;
+  function ensureUiModal(){
+    if(typeof window.uiConfirm === 'function' && typeof window.uiPrompt === 'function') return Promise.resolve(true);
+    if(uiModalLoadPromise) return uiModalLoadPromise;
+
+    uiModalLoadPromise = new Promise((resolve, reject)=>{
+      function done(){
+        if(typeof window.uiConfirm === 'function' && typeof window.uiPrompt === 'function') resolve(true);
+        else reject(new Error('ui_modal.js loaded but uiConfirm/uiPrompt missing'));
+      }
+
+      const existing = document.querySelector('script[src*="ui_modal.js"]');
+      if(existing){
+        existing.addEventListener('load', done, {once:true});
+        existing.addEventListener('error', ()=>reject(new Error('Failed to load ui_modal.js')), {once:true});
+        return;
+      }
+
+      const s = document.createElement('script');
+      s.src = UI_MODAL_SRC;
+      s.async = true;
+      s.addEventListener('load', done);
+      s.addEventListener('error', ()=>reject(new Error('Failed to load ui_modal.js')));
+      (document.head || document.documentElement).appendChild(s);
+    });
+
+    uiModalLoadPromise.catch(()=>{ uiModalLoadPromise = null; });
+    return uiModalLoadPromise;
+  }
+
+  // Centralized confirm: delegate to the shared ui_modal.js implementation.
+  // Backward compatible with the previous LS.confirm(message, opts) signature.
+  LS.confirm = function(message, opts){
+    const o = (opts && typeof opts === 'object') ? opts : {};
+
+    const title = (o.title != null) ? String(o.title) : STR.confirm;
+    const confirmText = (o.confirmText != null) ? String(o.confirmText) : STR.confirm;
+    const cancelText = (o.cancelText != null) ? String(o.cancelText) : STR.cancel;
+    const danger = !!o.danger;
+
+    return ensureUiModal().then(()=>{
+      return window.uiConfirm({
+        title,
+        message: String(message || ''),
+        okText: confirmText,
+        cancelText,
+        danger,
+      });
+    }).catch(()=>false);
+  };
+
+  LS.prompt = function(opts){
+    const o = (opts && typeof opts === 'object') ? opts : {};
+
+    return ensureUiModal().then(()=>{
+      return window.uiPrompt({
+        title: (o.title != null) ? String(o.title) : '',
+        message: (o.message != null) ? String(o.message) : '',
+        placeholder: (o.placeholder != null) ? String(o.placeholder) : '',
+        initialValue: (o.initialValue != null) ? String(o.initialValue) : '',
+        validate: (typeof o.validate === 'function') ? o.validate : null,
+        inputType: (o.inputType != null) ? String(o.inputType) : null,
+        inputMode: (o.inputMode != null) ? String(o.inputMode) : null,
+        okText: (o.okText != null) ? String(o.okText) : null,
+        cancelText: (o.cancelText != null) ? String(o.cancelText) : null,
+      });
+    }).catch(()=>null);
   };
 
   LS.parseUtc = function(ts){
@@ -351,7 +432,11 @@
 
     if(!methods || (!methods.passkey && !methods.totp)){
       LS.toast(STR.enable_totp_or_passkey, 'warn');
-      const go = window.confirm(STR.enable_totp_or_passkey + '\n\nGo to Security setup now?');
+      const go = await LS.confirm(LS.t('js.reauth.go_to_security_setup_confirm') || 'Go to Security setup now?', {
+        title: STR.enable_totp_or_passkey,
+        confirmText: STR.open,
+        cancelText: STR.cancel,
+      });
       if(go){
         window.location.href = 'security.php';
       }
@@ -482,7 +567,11 @@
   LS.copySensitive = async function(text, opts){
     const clearAfterMs = (opts && Number.isFinite(opts.clearAfterMs)) ? opts.clearAfterMs : 30000;
 
-    const ok = confirm(STR.copy_confirm);
+    const ok = await LS.confirm(STR.copy_confirm, {
+      title: STR.confirm,
+      confirmText: STR.copy,
+      cancelText: STR.cancel,
+    });
     if(!ok) return false;
 
     await navigator.clipboard.writeText(String(text||''));
@@ -1418,7 +1507,11 @@
 
         setTimeout(async ()=>{
           if(!deferred) return;
-          const ok = confirm(LS.t('js.pwa_install_confirm') || 'Install this app?');
+          const ok = await LS.confirm(LS.t('js.pwa_install_confirm') || 'Install this app?', {
+            title: STR.confirm,
+            confirmText: STR.install,
+            cancelText: STR.cancel,
+          });
           if(!ok) return;
           deferred.prompt();
           try{ await deferred.userChoice; }catch{}

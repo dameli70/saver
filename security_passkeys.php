@@ -141,7 +141,26 @@ $requirePasskeyForLogin = !empty($securityUser['require_webauthn']);
 
   async function deletePasskey(id){
     api.clearMsg(ok); api.clearMsg(err);
-    if(!confirm('Delete this passkey?')) return;
+
+    let shouldDelete = false;
+    if(window.LS && typeof window.LS.confirm === 'function'){
+      shouldDelete = await window.LS.confirm('Delete this passkey?', {
+        title: <?= json_encode(t('common.confirm')) ?>,
+        confirmText: 'Delete',
+        cancelText: <?= json_encode(t('common.cancel')) ?>,
+        danger: true,
+      });
+    } else if (typeof window.uiConfirm === 'function'){
+      shouldDelete = await window.uiConfirm({
+        title: <?= json_encode(t('common.confirm')) ?>,
+        message: 'Delete this passkey?',
+        okText: 'Delete',
+        cancelText: <?= json_encode(t('common.cancel')) ?>,
+        danger: true,
+      });
+    }
+
+    if(!shouldDelete) return;
 
     const j = await api.postCsrfWithReauth('api/webauthn.php', {action:'delete', id});
     if(!j.success){ api.showMsg(err, j.error || 'Failed'); return; }
@@ -155,7 +174,24 @@ $requirePasskeyForLogin = !empty($securityUser['require_webauthn']);
 
     if(!window.PublicKeyCredential){ api.showMsg(err, 'Passkeys not supported in this browser'); return; }
 
-    const label = prompt('Label for this passkey (optional)') || '';
+    let label = '';
+    if(window.LS && typeof window.LS.prompt === 'function'){
+      const v = await window.LS.prompt({
+        title: <?= json_encode(t('common.confirm')) ?>,
+        message: 'Label for this passkey (optional)',
+        placeholder: 'e.g. MacBook',
+        initialValue: '',
+      });
+      label = (v === null) ? '' : String(v||'');
+    } else if (typeof window.uiPrompt === 'function'){
+      const v = await window.uiPrompt({
+        title: <?= json_encode(t('common.confirm')) ?>,
+        message: 'Label for this passkey (optional)',
+        placeholder: 'e.g. MacBook',
+        initialValue: '',
+      });
+      label = (v === null) ? '' : String(v||'');
+    }
     const btn = document.getElementById('passkey-add');
     const txt = document.getElementById('passkey-add-txt');
 

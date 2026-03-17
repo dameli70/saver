@@ -170,9 +170,11 @@ if ($action === 'login') {
         $hasReqWebauthn = false;
     }
 
+    $hasLast2fa = dbHasColumn('users', 'last_2fa_method') && dbHasColumn('users', 'last_2fa_provider');
+
     $sql = $hasAdminCol
-        ? "SELECT id, email, login_hash, email_verified_at, is_admin" . ($hasTotp ? ", totp_enabled_at" : ", NULL AS totp_enabled_at") . ($hasReqWebauthn ? ", require_webauthn" : ", 0 AS require_webauthn") . " FROM users WHERE email = ?"
-        : "SELECT id, email, login_hash, email_verified_at, 0 AS is_admin" . ($hasTotp ? ", totp_enabled_at" : ", NULL AS totp_enabled_at") . ($hasReqWebauthn ? ", require_webauthn" : ", 0 AS require_webauthn") . " FROM users WHERE email = ?";
+        ? "SELECT id, email, login_hash, email_verified_at, is_admin" . ($hasTotp ? ", totp_enabled_at" : ", NULL AS totp_enabled_at") . ($hasReqWebauthn ? ", require_webauthn" : ", 0 AS require_webauthn") . ($hasLast2fa ? ", last_2fa_method, last_2fa_provider" : ", NULL AS last_2fa_method, NULL AS last_2fa_provider") . " FROM users WHERE email = ?"
+        : "SELECT id, email, login_hash, email_verified_at, 0 AS is_admin" . ($hasTotp ? ", totp_enabled_at" : ", NULL AS totp_enabled_at") . ($hasReqWebauthn ? ", require_webauthn" : ", 0 AS require_webauthn") . ($hasLast2fa ? ", last_2fa_method, last_2fa_provider" : ", NULL AS last_2fa_method, NULL AS last_2fa_provider") . " FROM users WHERE email = ?";
 
     $stmt = $db->prepare($sql);
     $stmt->execute([$email]);
@@ -209,10 +211,19 @@ if ($action === 'login') {
 
         auditLog('login_totp_required', null, (int)$user['id']);
 
-        jsonResponse([
+        $resp = [
             'success' => true,
             'needs_totp' => true,
-        ]);
+        ];
+
+        if ($hasLast2fa) {
+            // Only send the previous TOTP provider if the last method was TOTP.
+            if (!empty($user['last_2fa_method']) && $user['last_2fa_method'] === 'totp' && !empty($user['last_2fa_provider'])) {
+                $resp['totp_provider'] = (string)$user['last_2fa_provider'];
+            }
+        }
+
+        jsonResponse($resp);
     }
 
     session_regenerate_id(true);
@@ -243,6 +254,10 @@ if ($action === 'login_totp') {
     $db = getDB();
 
     $code = trim((string)($body['code'] ?? ''));
+    $provider = trim((string)($body['provider'] ?? ''));
+    $provider = preg_replace('/[\x00-\x1F\x7F]/', '', $provider ?? '');
+    if (strlen($provider) > 255) $provider = substr($provider, 0, 255);
+
     $uid = (int)($_SESSION['pre_2fa_user_id'] ?? 0);
     $ts  = (int)($_SESSION['pre_2fa_ts'] ?? 0);
 
@@ -280,7 +295,19 @@ if ($action === 'login_totp') {
     unset($_SESSION['pre_2fa_user_id'], $_SESSION['pre_2fa_email'], $_SESSION['pre_2fa_verified'], $_SESSION['pre_2fa_is_admin'], $_SESSION['pre_2fa_ts']);
 
     registerCurrentSession((int)$u['id']);
-    $db->prepare('UPDATE users SET last_login = NOW() WHERE id = ?')->execute([(int)$u['id']]);
+
+    $set = ['last_login = NOW()'];
+    $params = [];
+
+    if (dbHasColumn('users', 'last_2fa_method') && dbHasColumn('users', 'last_2fa_provider')) {
+        $set[] = 'last_2fa_method = ?';
+        $params[] = 'totp';
+        $set[] = 'last_2fa_provider = ?';
+        $params[] = ($provider !== '') ? $provider : null;
+    }
+
+    $params[] = (int)$u['id'];
+    $db->prepare('UPDATE users SET ' . implode(', ', $set) . ' WHERE id = ?')->execute($params);
 
     setStrongAuth(900);
     auditLog('login_totp', null, (int)$u['id']);

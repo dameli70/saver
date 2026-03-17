@@ -179,9 +179,30 @@ code{background:var(--code-bg);border:1px solid var(--b1);padding:2px 6px;border
     reauthBtn.addEventListener('click', async () => {
       api.clearMsg(ok); api.clearMsg(err);
       const promptText = tr('login.enter_totp', 'Enter your 6-digit authenticator code');
-      const code = prompt(promptText);
-      if(!code) return;
-      const j = await api.postCsrf('api/totp.php', {action:'reauth', code});
+
+      let code = null;
+      if(window.LS && typeof window.LS.prompt === 'function'){
+        code = await window.LS.prompt({
+          title: tr('common.confirm', 'Confirm'),
+          message: promptText,
+          placeholder: '123456',
+          inputMode: 'numeric',
+          validate: (v)=> (/^\d{6}$/.test(String(v||'').trim()) ? true : promptText),
+        });
+      } else if (typeof window.uiPrompt === 'function'){
+        code = await window.uiPrompt({
+          title: tr('common.confirm', 'Confirm'),
+          message: promptText,
+          placeholder: '123456',
+          inputMode: 'numeric',
+          validate: (v)=> (/^\d{6}$/.test(String(v||'').trim()) ? true : promptText),
+        });
+      }
+
+      const c = String(code||'').trim();
+      if(!c) return;
+
+      const j = await api.postCsrf('api/totp.php', {action:'reauth', code: c});
       if(!j.success){ api.showMsg(err, j.error || 'Failed'); return; }
       api.showMsg(ok, 'Re-auth successful.');
     });
