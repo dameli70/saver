@@ -9,7 +9,7 @@
    - keep API requests network-first
 */
 
-const CACHE = 'controle-v17';
+const CACHE = 'controle-v18';
 
 const ASSETS = [
   './',
@@ -18,6 +18,7 @@ const ASSETS = [
   './assets/base.css',
   './assets/app.css',
   './assets/auth.css',
+  './assets/auth_bg.svg',
   './assets/app.js',
   './assets/ui_modal.js',
   './assets/loading_overlay.js',
@@ -60,6 +61,8 @@ self.addEventListener('fetch', (event) => {
   const criticalAsset = (
     url.pathname.endsWith('/assets/app.css') ||
     url.pathname.endsWith('/assets/base.css') ||
+    url.pathname.endsWith('/assets/auth.css') ||
+    url.pathname.endsWith('/assets/auth_bg.svg') ||
     url.pathname.endsWith('/assets/app.js') ||
     url.pathname.endsWith('/assets/loading_overlay.js')
   );
