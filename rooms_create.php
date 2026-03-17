@@ -18,6 +18,15 @@ $userEmail = getCurrentUserEmail() ?? '';
 $isAdmin   = isAdmin();
 $csrf      = getCsrfToken();
 
+require_once __DIR__ . '/includes/packages.php';
+$userId = (int)getCurrentUserId();
+$pkgLimits = packagesGetUserLimits($userId);
+$pkgUsage  = packagesGetUserUsage($userId);
+
+$roomsLimit = packagesLimitFor('rooms', $pkgLimits);
+$roomsUsage = packagesUsageFor('rooms', $pkgUsage);
+$roomsLimitReached = ($roomsLimit > 0 && $roomsUsage >= $roomsLimit);
+
 header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none';");
 header("X-Frame-Options: DENY");
 header("X-Content-Type-Options: nosniff");
@@ -58,6 +67,21 @@ header("Referrer-Policy: no-referrer");
     </div>
 
     <div class="grid">
+
+      <?php if ($roomsLimitReached): ?>
+      <div class="card" style="grid-column:1/-1;">
+        <div class="card-title"><div class="dot" style="background:var(--orange)"></div><?php e('package_limit.title'); ?></div>
+        <div class="msg msg-warn show" style="display:block;">
+          <div><?php e('package_limit.rooms_reached_fmt', ['cur' => (int)$roomsUsage, 'limit' => (int)$roomsLimit]); ?></div>
+          <div style="margin-top:8px;"><?php e('package_limit.upgrade_note'); ?></div>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
+          <a class="btn btn-primary" href="packages.php"><?php e('package_limit.upgrade_btn'); ?></a>
+          <a class="btn btn-ghost" href="rooms.php"><?php e('common.back'); ?></a>
+        </div>
+      </div>
+      <?php else: ?>
+
       <div class="card" id="create-room" style="grid-column:1/-1;">
         <div class="card-title"><?php e('rooms.create_title'); ?></div>
 
@@ -156,6 +180,8 @@ header("Referrer-Policy: no-referrer");
         <button class="btn btn-primary" onclick="createRoom()"><?php e('rooms.btn.create_room'); ?></button>
         <div id="cr-msg" class="msg"></div>
       </div>
+
+      <?php endif; ?>
     </div>
 
   </div>

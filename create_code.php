@@ -18,6 +18,19 @@ $userEmail = getCurrentUserEmail() ?? '';
 $isAdmin   = isAdmin();
 $csrf      = getCsrfToken();
 
+require_once __DIR__ . '/includes/packages.php';
+$userId = (int)getCurrentUserId();
+$pkgLimits = packagesGetUserLimits($userId);
+$pkgUsage  = packagesGetUserUsage($userId);
+
+$locksLimit = packagesLimitFor('locks', $pkgLimits);
+$locksUsage = packagesUsageFor('locks', $pkgUsage);
+$locksLimitReached = ($locksLimit > 0 && $locksUsage >= $locksLimit);
+
+$walletLimit = packagesLimitFor('wallet_locks', $pkgLimits);
+$walletUsage = packagesUsageFor('wallet_locks', $pkgUsage);
+$walletLimitReached = ($walletLimit > 0 && $walletUsage >= $walletLimit);
+
 header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none';");
 header("X-Frame-Options: DENY");
 header("X-Content-Type-Options: nosniff");
@@ -56,6 +69,25 @@ header("Permissions-Policy: clipboard-write=(self)");
         <a class="btn btn-ghost btn-sm" href="my_codes.php"><?php e('nav.my_codes'); ?></a>
       </div>
     </div>
+
+    <?php if ($locksLimitReached || $walletLimitReached): ?>
+    <div class="card" id="package-limit-precheck">
+      <div class="card-title"><div class="dot" style="background:var(--orange)"></div><?php e('package_limit.title'); ?></div>
+      <div class="msg msg-warn show" style="display:block;">
+        <?php if ($locksLimitReached): ?>
+          <div><?php e('package_limit.codes_reached_fmt', ['cur' => (int)$locksUsage, 'limit' => (int)$locksLimit]); ?></div>
+        <?php endif; ?>
+        <?php if ($walletLimitReached): ?>
+          <div><?php e('package_limit.wallet_reached_fmt', ['cur' => (int)$walletUsage, 'limit' => (int)$walletLimit]); ?></div>
+        <?php endif; ?>
+        <div style="margin-top:8px;"><?php e('package_limit.upgrade_note'); ?></div>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
+        <a class="btn btn-primary" href="packages.php"><?php e('package_limit.upgrade_btn'); ?></a>
+        <a class="btn btn-ghost" href="my_codes.php"><?php e('common.back'); ?></a>
+      </div>
+    </div>
+    <?php endif; ?>
 
     <div class="card" id="vault-unlock-card" style="display:none">
       <div class="card-title"><div class="dot" style="background:var(--orange)"></div><span style="color:var(--orange)"><?php e('nav.vault'); ?></span></div>
@@ -198,6 +230,12 @@ header("Permissions-Policy: clipboard-write=(self)");
 
 <script>
 const CSRF = <?= json_encode($csrf) ?>;
+const LIMIT_LOCKS_REACHED = <?= json_encode($locksLimitReached) ?>;
+const LIMIT_WALLET_REACHED = <?= json_encode($walletLimitReached) ?>;
+const LIMIT_LOCKS_CUR = <?= (int)$locksUsage ?>;
+const LIMIT_LOCKS_MAX = <?= (int)$locksLimit ?>;
+const LIMIT_WALLET_CUR = <?= (int)$walletUsage ?>;
+const LIMIT_WALLET_MAX = <?= (int)$walletLimit ?>;
 const PBKDF2_ITERS = <?= (int)PBKDF2_ITERATIONS ?>;
 const VAULT_CHECK_PLAIN = 'LOCKSMITH_VAULT_CHECK_v1';
 
@@ -229,6 +267,8 @@ function tf(key, vars, fallback){
 const STR = {
   failed: tr('common.failed', 'Failed'),
   loading: tr('common.loading', 'Loading…'),
+
+  package_limit_toast: tr('package_limit.toast', 'Package limit reached.'),
 
   enter_6_digit_code: tr('js.enter_6_digit_code', 'Enter your 6-digit authenticator code'),
   enable_totp_or_passkey: tr('js.enable_totp_or_passkey', 'Enable TOTP or add a passkey in Security'),
@@ -315,9 +355,10 @@ async function postCsrf(url,body){
   const r=await fetch(apiUrl(url),{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRF-Token':CSRF},body:JSON.stringify(body)});
   const j = await r.json().catch(()=>null);
   if(j && j.error_code==='package_limit' && j.redirect_url){
-    // Send the user to the Packages page to request an upgrade.
-    window.location.href = apiUrl(String(j.redirect_url));
-    return j;
+    // Friendly UX: keep the user on this page and show the pre-check card.
+    const card = document.getElementById('package-limit-precheck');
+    const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if(card) card.scrollIntoView({behavior: reduce ? 'auto' : 'smooth', block:'start'});
   }
   return j;
 }
@@ -696,6 +737,7 @@ async function doGenerate(){
   const errEl=document.getElementById('g-err');
   errEl.classList.remove('show');
 
+  if(LIMIT_LOCKS_REACHED){toast(STR.package_limit_toast,'warn');return;}
   if(!vaultPhraseSession){toast(STR.gen_need_vault,'err');return;}
 
   const label=document.getElementById('g-label').value.trim();
@@ -969,7 +1011,14 @@ async function doConfirm(action){
 }
 
 function setCreateMode(mode){
-  createMode = (mode === 'wallet') ? 'wallet' : 'scratch';
+  const allowScratch = !LIMIT_LOCKS_REACHED;
+  const allowWallet = !LIMIT_WALLET_REACHED;
+
+  let next = (mode === 'wallet') ? 'wallet' : 'scratch';
+  if(next === 'scratch' && !allowScratch && allowWallet) next = 'wallet';
+  if(next === 'wallet' && !allowWallet && allowScratch) next = 'scratch';
+
+  createMode = next;
   localStorage.setItem('create_mode', createMode);
 
   document.querySelectorAll('#mode-grid .type-opt').forEach(b => {
@@ -990,6 +1039,28 @@ function checkVaultUnlock() {
   const genCard = document.getElementById('gen-card');
   const walletCard = document.getElementById('wallet-card');
 
+  const scratchOpt = document.querySelector('#mode-grid .type-opt[data-mode="scratch"]');
+  const walletOpt = document.querySelector('#mode-grid .type-opt[data-mode="wallet"]');
+
+  if(scratchOpt){
+    scratchOpt.disabled = !!LIMIT_LOCKS_REACHED;
+    scratchOpt.style.display = LIMIT_LOCKS_REACHED ? 'none' : '';
+  }
+  if(walletOpt){
+    walletOpt.disabled = !!LIMIT_WALLET_REACHED;
+    walletOpt.style.display = LIMIT_WALLET_REACHED ? 'none' : '';
+  }
+
+  if(LIMIT_LOCKS_REACHED && LIMIT_WALLET_REACHED){
+    if(vaultCard) vaultCard.style.display = 'none';
+    if(modeCard) modeCard.style.display = 'none';
+    if(genCard) genCard.style.display = 'none';
+    if(walletCard) walletCard.style.display = 'none';
+    if(genBtn) genBtn.disabled = true;
+    if(wBtn) wBtn.disabled = true;
+    return;
+  }
+
   if (!vaultPhraseSession) {
     if (vaultCard) vaultCard.style.display = 'block';
     if (modeCard) modeCard.style.display = 'none';
@@ -1002,8 +1073,8 @@ function checkVaultUnlock() {
 
   if (vaultCard) vaultCard.style.display = 'none';
   if (modeCard) modeCard.style.display = 'block';
-  if (genBtn) genBtn.disabled = false;
-  if (wBtn) wBtn.disabled = false;
+  if (genBtn) genBtn.disabled = LIMIT_LOCKS_REACHED;
+  if (wBtn) wBtn.disabled = LIMIT_WALLET_REACHED;
 
   setCreateMode(createMode);
 }
@@ -1248,6 +1319,7 @@ async function doWalletSetup(){
   const errEl=document.getElementById('w-err');
   errEl.classList.remove('show');
 
+  if(LIMIT_WALLET_REACHED){toast(STR.package_limit_toast,'warn');return;}
   if(!vaultPhraseSession){toast(STR.gen_need_vault,'err');return;}
 
   const carrierId = parseInt((document.getElementById('w-carrier')||{}).value || '0', 10);
@@ -1420,6 +1492,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   document.querySelectorAll('#mode-grid .type-opt').forEach(b => {
     b.addEventListener('click', () => {
+      if(b.disabled) return;
       setCreateMode(b.dataset.mode);
       setTimeout(() => {
         const first = (createMode === 'wallet') ? document.getElementById('w-oldpin') : document.getElementById('g-label');

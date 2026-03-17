@@ -72,7 +72,7 @@ if ($action === 'login_finish') {
     $credId = b64urlDecode($rawId);
     if ($credId === '') jsonResponse(['error' => 'Invalid credential'], 400);
 
-    $stmt = $db->prepare("SELECT c.id AS cred_row_id, c.user_id, c.public_key_pem, c.sign_count, u.email, u.email_verified_at, u.is_admin FROM webauthn_credentials c JOIN users u ON u.id = c.user_id WHERE c.credential_id = ? LIMIT 1");
+    $stmt = $db->prepare("SELECT c.id AS cred_row_id, c.user_id, c.public_key_pem, c.sign_count, c.label, u.email, u.email_verified_at, u.is_admin FROM webauthn_credentials c JOIN users u ON u.id = c.user_id WHERE c.credential_id = ? LIMIT 1");
     $stmt->execute([$credId]);
     $row = $stmt->fetch();
     if (!$row) jsonResponse(['error' => 'Unknown credential'], 401);
@@ -89,7 +89,20 @@ if ($action === 'login_finish') {
     $_SESSION['is_admin'] = !empty($row['is_admin']) ? 1 : 0;
 
     registerCurrentSession((int)$row['user_id']);
-    $db->prepare('UPDATE users SET last_login = NOW() WHERE id = ?')->execute([(int)$row['user_id']]);
+
+    $set = ['last_login = NOW()'];
+    $params = [];
+
+    if (dbHasColumn('users', 'last_2fa_method') && dbHasColumn('users', 'last_2fa_provider')) {
+        $set[] = 'last_2fa_method = ?';
+        $params[] = 'passkey';
+        $set[] = 'last_2fa_provider = ?';
+        $label = isset($row['label']) ? trim((string)$row['label']) : '';
+        $params[] = ($label !== '') ? $label : null;
+    }
+
+    $params[] = (int)$row['user_id'];
+    $db->prepare('UPDATE users SET ' . implode(', ', $set) . ' WHERE id = ?')->execute($params);
 
     setStrongAuth(900);
     auditLog('login_passkey', null, (int)$row['user_id']);

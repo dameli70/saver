@@ -141,7 +141,20 @@ $requirePasskeyForLogin = !empty($securityUser['require_webauthn']);
 
   async function deletePasskey(id){
     api.clearMsg(ok); api.clearMsg(err);
-    if(!confirm('Delete this passkey?')) return;
+
+    let shouldDelete = false;
+    if(window.LS && typeof window.LS.confirm === 'function'){
+      shouldDelete = await window.LS.confirm('Delete this passkey?', {
+        title: <?= json_encode(t('common.confirm')) ?>,
+        confirmText: 'Delete',
+        cancelText: <?= json_encode(t('common.cancel')) ?>,
+        danger: true,
+      });
+    }else{
+      shouldDelete = confirm('Delete this passkey?');
+    }
+
+    if(!shouldDelete) return;
 
     const j = await api.postCsrfWithReauth('api/webauthn.php', {action:'delete', id});
     if(!j.success){ api.showMsg(err, j.error || 'Failed'); return; }

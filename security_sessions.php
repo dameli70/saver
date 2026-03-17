@@ -142,15 +142,38 @@ require_once __DIR__ . '/includes/security_page.php';
   const logoutAll = document.getElementById('logout-all');
   if(logoutAll){
     logoutAll.addEventListener('click', async () => {
-      if(!confirm('Log out all sessions (including this one)?')) return;
+      let ok = false;
+
+      const msg = 'Log out all sessions (including this one)?';
+      const title = <?= json_encode(t('account.logout_all_sessions_btn')) ?>;
+      const confirmText = <?= json_encode(t('common.logout')) ?>;
+      const cancelText = <?= json_encode(t('common.cancel')) ?>;
+
+      if(window.LS && typeof window.LS.confirm === 'function'){
+        ok = await window.LS.confirm(msg, {title, danger:true, confirmText, cancelText});
+      } else {
+        ok = confirm(msg);
+      }
+
+      if(!ok) return;
 
       logoutAll.disabled = true;
       try{
         const j = await api.postCsrf('api/account.php', {action:'logout_all_sessions'});
-        if(j.success){ window.location = 'login.php'; }
-        else alert(j.error || 'Failed');
+        if(j.success){
+          window.location = 'login.php';
+          return;
+        }
+
+        const m = j.error || 'Failed';
+        if(window.LS && typeof window.LS.toast === 'function') window.LS.toast(m, 'err');
+        api.showMsg(err, m);
+
       }catch{
-        alert('Network error');
+        const m = 'Network error';
+        if(window.LS && typeof window.LS.toast === 'function') window.LS.toast(m, 'err');
+        api.showMsg(err, m);
+
       }finally{
         logoutAll.disabled = false;
       }

@@ -29,6 +29,10 @@
     cancel: t('common.cancel', 'Cancel'),
     back: t('common.back', 'Back'),
     close: t('common.close', 'Close'),
+    open: t('common.open', 'Open'),
+    logout: t('common.logout', 'Log out'),
+    install: t('common.install', 'Install'),
+    copy: t('common.copy', 'Copy'),
   };
 
   LS.esc = function(s){
@@ -105,6 +109,112 @@
     t.textContent = String(msg||'');
     document.body.appendChild(t);
     setTimeout(()=>t.remove(), ms);
+  };
+
+  
+
+  LS.confirm = function(message, opts){
+    const o = (opts && typeof opts === 'object') ? opts : {};
+
+    const title = (o.title != null) ? String(o.title) : STR.confirm;
+    const confirmText = (o.confirmText != null) ? String(o.confirmText) : STR.confirm;
+    const cancelText = (o.cancelText != null) ? String(o.cancelText) : STR.cancel;
+    const danger = !!o.danger;
+
+    let overlay = document.getElementById('ls-confirm-overlay');
+    if(!overlay){
+      overlay = document.createElement('div');
+      overlay.id = 'ls-confirm-overlay';
+      overlay.className = 'ls-modal-overlay';
+      overlay.innerHTML = `
+        <div class="ls-modal" role="dialog" aria-modal="true" aria-labelledby="ls-confirm-title">
+          <button class="ls-modal-x" type="button" aria-label="${LS.esc(STR.close)}">×</button>
+          <div class="ls-modal-title" id="ls-confirm-title"></div>
+          <div class="ls-modal-sub" id="ls-confirm-msg" style="white-space:pre-wrap;"></div>
+          <div class="ls-modal-actions" id="ls-confirm-actions" style="display:flex;flex-direction:column;gap:10px;margin-top:18px;"></div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+    }
+
+    const modal = overlay.querySelector('.ls-modal');
+    const titleEl = overlay.querySelector('#ls-confirm-title');
+    const msgEl = overlay.querySelector('#ls-confirm-msg');
+    const actions = overlay.querySelector('#ls-confirm-actions');
+    const closeBtn = overlay.querySelector('.ls-modal-x');
+
+    if(titleEl) titleEl.textContent = title;
+    if(msgEl) msgEl.textContent = String(message || '');
+
+    if(actions){
+      actions.innerHTML = '';
+
+      const okBtn = document.createElement('button');
+      okBtn.type = 'button';
+      okBtn.className = danger ? 'btn btn-red' : 'btn btn-primary';
+      okBtn.textContent = confirmText;
+      okBtn.style.width = '100%';
+
+      const cancelBtn = document.createElement('button');
+      cancelBtn.type = 'button';
+      cancelBtn.className = 'btn btn-ghost';
+      cancelBtn.textContent = cancelText;
+      cancelBtn.style.width = '100%';
+
+      actions.appendChild(okBtn);
+      actions.appendChild(cancelBtn);
+
+      overlay.classList.add('show');
+
+      const prevFocus = document.activeElement;
+
+      let releaseTrap = null;
+      let resolved = false;
+
+      return new Promise(resolve => {
+        function cleanup(){
+          overlay.classList.remove('show');
+
+          if(releaseTrap) releaseTrap();
+
+          overlay.removeEventListener('click', onClickOut);
+          if(closeBtn) closeBtn.removeEventListener('click', onCancel);
+          cancelBtn.removeEventListener('click', onCancel);
+          okBtn.removeEventListener('click', onOk);
+
+          if(prevFocus && prevFocus.focus) setTimeout(()=>prevFocus.focus(), 0);
+        }
+
+        function onCancel(){
+          if(resolved) return;
+          resolved = true;
+          cleanup();
+          resolve(false);
+        }
+
+        function onOk(){
+          if(resolved) return;
+          resolved = true;
+          cleanup();
+          resolve(true);
+        }
+
+        function onClickOut(e){
+          if(e.target === overlay) onCancel();
+        }
+
+        try{ if(modal) releaseTrap = trapFocus(modal, onCancel); }catch{}
+
+        overlay.addEventListener('click', onClickOut);
+        if(closeBtn) closeBtn.addEventListener('click', onCancel);
+        cancelBtn.addEventListener('click', onCancel);
+        okBtn.addEventListener('click', onOk);
+
+        setTimeout(()=>{ okBtn.focus(); }, 10);
+      });
+    }
+
+    return Promise.resolve(false);
   };
 
   LS.parseUtc = function(ts){
@@ -351,7 +461,11 @@
 
     if(!methods || (!methods.passkey && !methods.totp)){
       LS.toast(STR.enable_totp_or_passkey, 'warn');
-      const go = window.confirm(STR.enable_totp_or_passkey + '\n\nGo to Security setup now?');
+      const go = await LS.confirm(LS.t('js.reauth.go_to_security_setup_confirm') || 'Go to Security setup now?', {
+        title: STR.enable_totp_or_passkey,
+        confirmText: STR.open,
+        cancelText: STR.cancel,
+      });
       if(go){
         window.location.href = 'security.php';
       }
@@ -482,7 +596,11 @@
   LS.copySensitive = async function(text, opts){
     const clearAfterMs = (opts && Number.isFinite(opts.clearAfterMs)) ? opts.clearAfterMs : 30000;
 
-    const ok = confirm(STR.copy_confirm);
+    const ok = await LS.confirm(STR.copy_confirm, {
+      title: STR.confirm,
+      confirmText: STR.copy,
+      cancelText: STR.cancel,
+    });
     if(!ok) return false;
 
     await navigator.clipboard.writeText(String(text||''));
@@ -1418,7 +1536,11 @@
 
         setTimeout(async ()=>{
           if(!deferred) return;
-          const ok = confirm(LS.t('js.pwa_install_confirm') || 'Install this app?');
+          const ok = await LS.confirm(LS.t('js.pwa_install_confirm') || 'Install this app?', {
+            title: STR.confirm,
+            confirmText: STR.install,
+            cancelText: STR.cancel,
+          });
           if(!ok) return;
           deferred.prompt();
           try{ await deferred.userChoice; }catch{}

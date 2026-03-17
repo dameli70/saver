@@ -24,7 +24,7 @@ body{padding:0;}
 
 .field{margin-bottom:14px;}
 .field label{display:block;font-size:10px;letter-spacing:1.8px;text-transform:uppercase;color:var(--muted);margin-bottom:6px;font-family:var(--mono);}
-.field input{width:100%;
+.field input,.field select{width:100%;
   background:linear-gradient(180deg, var(--s2), var(--s1));
   border:1px solid var(--b1);
   color:var(--text);
@@ -59,6 +59,65 @@ body{padding:0;}
 .box .links{display:flex;justify-content:space-between;gap:10px;margin-top:14px;font-size:11px;color:var(--muted);font-family:var(--mono);}
 .box .links a{color:var(--text);text-decoration:none;border-bottom:1px solid transparent;}
 .box .links a:hover{border-bottom-color:var(--text);}
+
+.is-hidden{display:none !important;}
+
+/* Login (multi-stage: credentials → TOTP) */
+.auth-login .box-login{max-width:420px;
+  padding:28px 24px 22px;
+  min-height:clamp(480px, 68vh, 560px);
+}
+@media(max-width:420px){
+  .auth-login .box-login{padding:24px 18px 18px;}
+}
+@media(max-height:740px){
+  .auth-login .box-login{min-height:0;}
+}
+
+.auth-login .box-login .btn{width:100%;}
+
+.auth-login .auth-stage{margin-top:2px;}
+
+.auth-login .auth-form{display:flex;flex-direction:column;}
+.auth-login .auth-form .btn-primary{margin-top:2px;}
+
+.auth-login .auth-alt{margin-top:12px;display:flex;flex-direction:column;gap:10px;}
+
+.auth-login .btn-passkey{background:transparent;
+  border:1px solid var(--b2);
+  color:var(--text);
+}
+@media(hover:hover){
+  .auth-login .btn-passkey:hover{border-color:color-mix(in srgb, var(--accent) 45%, var(--b2));
+    background:linear-gradient(180deg, rgb(var(--accent-rgb) / .08), transparent);
+  }
+}
+
+.auth-login .auth-help{margin:14px 0 12px;
+  color:var(--muted);
+  font-size:12px;
+  line-height:1.6;
+  letter-spacing:.2px;
+}
+
+.auth-login #totp-code{text-align:center;
+  font-size:18px;
+  letter-spacing:4px;
+  font-variant-numeric:tabular-nums;
+}
+
+.auth-login .auth-btn-stack{display:grid;gap:10px;margin-top:10px;}
+
+.auth-footnote{margin-top:12px;
+  color:var(--muted);
+  font-size:11px;
+  line-height:1.6;
+  font-family:var(--mono);
+}
+.auth-center{text-align:center;}
+
+.auth-demo{margin-top:10px;}
+.auth-demo-examples{font-family:var(--mono);font-size:12px;}
 
 .spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(0,0,0,.25);border-top-color:#000;border-radius:50%;animation:spin .55s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg);}}

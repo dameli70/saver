@@ -33,6 +33,10 @@ CREATE TABLE IF NOT EXISTS users (
     totp_enabled_at              DATETIME NULL,
     require_webauthn             TINYINT(1) NOT NULL DEFAULT 0,
 
+    -- Login tracking (non-secret): last used step-up / authenticator hint
+    last_2fa_method              VARCHAR(32) NULL,
+    last_2fa_provider            VARCHAR(255) NULL,
+
     -- Not secret: which vault slot is used for NEW codes (1=primary, 2=rotated)
     vault_active_slot            TINYINT(1) NOT NULL DEFAULT 1,
 

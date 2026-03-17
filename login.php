@@ -41,25 +41,22 @@ header("Referrer-Policy: no-referrer");
 <link rel="stylesheet" href="assets/base.css">
 <link rel="stylesheet" href="assets/app.css">
 <link rel="stylesheet" href="assets/auth.css">
-<style>
-.box{max-width:420px;}
-</style>
 </head>
-<body>
+<body class="auth auth-login">
 <div class="orb orb1"></div><div class="orb orb2"></div>
 
 <div id="app">
   <?php include __DIR__ . '/includes/topbar_public.php'; ?>
 
   <div class="auth-wrap">
-    <div class="box">
+    <div class="box box-login">
     <div class="logo"><?= htmlspecialchars(APP_NAME) ?></div>
     <div class="sub"><?php e('login.subtitle'); ?></div>
 
     <div id="err" class="msg msg-err"></div>
 
     <?php if (!empty($demoSeed)): ?>
-      <div class="msg msg-ok show" style="margin-top:10px;">
+      <div class="msg msg-ok show auth-demo">
         <strong>Demo data seeded.</strong><br>
         Demo users password: <code><?= htmlspecialchars((string)($demoSeed['demo_password'] ?? 'DemoPass123!')) ?></code><br>
         <?php
@@ -73,29 +70,50 @@ header("Referrer-Policy: no-referrer");
           $sample = array_slice($demoEmails, 0, 5);
         ?>
         <?php if ($sample): ?>
-          Example emails: <span style="font-family:var(--mono);font-size:12px;"><?= htmlspecialchars(implode(', ', $sample)) ?></span>
+          Example emails: <span class="auth-demo-examples"><?= htmlspecialchars(implode(', ', $sample)) ?></span>
           <?php if (count($demoEmails) > 5): ?>…<?php endif; ?>
         <?php else: ?>
-          Example email: <span style="font-family:var(--mono);font-size:12px;">kossi.mensah@example.com</span>
+          Example email: <span class="auth-demo-examples">kossi.mensah@example.com</span>
         <?php endif; ?>
       </div>
     <?php endif; ?>
 
-    <form id="f">
-      <div class="field"><label><?php e('common.email'); ?></label>
-        <input type="email" id="email" autocomplete="email" inputmode="email" placeholder="you@example.com" required>
-      </div>
-      <div class="field"><label><?php e('login.login_password'); ?></label>
-        <input type="password" id="pwd" autocomplete="current-password" placeholder="••••••••" required>
-      </div>
-      <button class="btn btn-primary" id="btn" type="submit"><span id="btn-txt"><?php e('login.btn'); ?></span></button>
-    </form>
+    <div class="auth-stage" id="auth-stage">
+      <form id="f" class="auth-form">
+        <div class="field"><label><?php e('common.email'); ?></label>
+          <input type="email" id="email" autocomplete="email" inputmode="email" placeholder="you@example.com" required>
+        </div>
+        <div class="field"><label><?php e('login.login_password'); ?></label>
+          <input type="password" id="pwd" autocomplete="current-password" placeholder="••••••••" required>
+        </div>
+        <button class="btn btn-primary" id="btn" type="submit"><span id="btn-txt"><?php e('login.btn'); ?></span></button>
+      </form>
 
-    <div style="height:10px"></div>
+      <form id="totp-form" class="auth-form is-hidden">
+        <div id="totp-info" class="auth-help"></div>
+        <div class="field"><label><?php e('login.totp_code_label'); ?></label>
+          <input type="text" id="totp-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456" required>
+        </div>
+        <div class="field"><label><?php e('login.totp_authenticator_label'); ?></label>
+          <input type="text" id="totp-provider" autocomplete="off" placeholder="<?php e('login.totp_authenticator_placeholder'); ?>">
+        </div>
+        <button class="btn btn-primary" id="totp-verify-btn" type="submit"><span id="totp-verify-txt"><?php e('login.verify_code_btn'); ?></span></button>
 
-    <button class="btn btn-primary" id="passkey-btn" type="button" style="background:transparent;border:1px solid var(--b2);color:var(--text);">
-      <?php e('login.use_passkey'); ?>
-    </button>
+        <div class="auth-btn-stack">
+          <button class="btn btn-ghost" id="open-auth-btn" type="button"><?php e('login.open_authenticator'); ?></button>
+          <button class="btn btn-ghost" id="totp-start-over" type="button"><?php e('login.start_over'); ?></button>
+        </div>
+
+        <div id="totp-last" class="auth-footnote is-hidden"></div>
+      </form>
+    </div>
+
+    <div class="auth-alt" id="auth-alt">
+      <button class="btn btn-ghost btn-passkey" id="passkey-btn" type="button">
+        <?php e('login.use_passkey'); ?>
+      </button>
+      <div id="passkey-hint" class="auth-footnote auth-center is-hidden"></div>
+    </div>
 
     <div class="links">
       <a href="index.php"><?php e('common.home'); ?></a>
@@ -108,10 +126,32 @@ header("Referrer-Policy: no-referrer");
 
 <script>
 const f=document.getElementById('f');
+const totpForm=document.getElementById('totp-form');
+const totpInfo=document.getElementById('totp-info');
+const totpCode=document.getElementById('totp-code');
+const totpProvider=document.getElementById('totp-provider');
+const totpVerifyBtn=document.getElementById('totp-verify-btn');
+const totpVerifyTxt=document.getElementById('totp-verify-txt');
+const openAuthBtn=document.getElementById('open-auth-btn');
+const totpStartOver=document.getElementById('totp-start-over');
+const totpLast=document.getElementById('totp-last');
+
 const err=document.getElementById('err');
 const btn=document.getElementById('btn');
 const btnTxt=document.getElementById('btn-txt');
+const authAlt=document.getElementById('auth-alt');
 const passkeyBtn=document.getElementById('passkey-btn');
+const passkeyHint=document.getElementById('passkey-hint');
+const links=document.querySelector('.links');
+
+function hideEl(el){
+  if(!el) return;
+  el.classList.add('is-hidden');
+}
+function showEl(el){
+  if(!el) return;
+  el.classList.remove('is-hidden');
+}
 
 const STR={
   emailPwdRequired: <?= json_encode(t('login.email_pwd_required')) ?>,
@@ -125,10 +165,95 @@ const STR={
   passkeysUnsupported: <?= json_encode(t('login.passkeys_unsupported')) ?>,
   passkeyFailed: <?= json_encode(t('login.passkey_failed')) ?>,
   passkeyLoginFailed: <?= json_encode(t('login.passkey_login_failed')) ?>,
+
+  totpInfo: <?= json_encode(t('login.totp_info')) ?>,
+  enter6Digits: <?= json_encode(t('js.enter_6_digit_code')) ?>,
+  verify: <?= json_encode(t('login.verify_code_btn')) ?>,
+  openAuthenticatorHint: <?= json_encode(t('login.open_authenticator_hint')) ?>,
+  lastUsed: <?= json_encode(t('login.last_used')) ?>,
+  lastUsedPasskeyHint: <?= json_encode(t('login.last_used_passkey_hint')) ?>,
 };
+
+const STORAGE={
+  lastMethod: 'ls_last_auth_method',
+  lastTotpProvider: 'ls_last_totp_provider',
+};
+
+function fmt(s, vars){
+  return String(s||'').replace(/\{(\w+)\}/g, (m,k)=>{
+    const v = vars && Object.prototype.hasOwnProperty.call(vars, k) ? vars[k] : null;
+    return (v == null) ? m : String(v);
+  });
+}
+
+function toast(msg, type='ok'){
+  if(window.LS && typeof window.LS.toast === 'function'){
+    LS.toast(msg, type);
+    return;
+  }
+  const t=document.createElement('div');
+  t.className = `toast ${type}`;
+  t.textContent = String(msg||'');
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(), 3200);
+}
 
 function showErr(m){err.textContent=m;err.classList.add('show');}
 function clearErr(){err.textContent='';err.classList.remove('show');}
+
+let stage='creds';
+function setStage(next){
+  stage = next;
+
+  if(stage === 'totp'){
+    hideEl(f);
+    showEl(totpForm);
+    hideEl(authAlt);
+    hideEl(links);
+    setTimeout(()=>totpCode.focus(), 0);
+    return;
+  }
+
+  showEl(f);
+  hideEl(totpForm);
+  showEl(authAlt);
+  if(passkeyHint.textContent) showEl(passkeyHint);
+  else hideEl(passkeyHint);
+  showEl(links);
+}
+
+function rememberLast(method, provider){
+  try{
+    localStorage.setItem(STORAGE.lastMethod, String(method||''));
+    if(typeof provider === 'string'){
+      const p = provider.trim();
+      if(p) localStorage.setItem(STORAGE.lastTotpProvider, p);
+    }
+  }catch{}
+}
+
+function applyLastHints(){
+  try{
+    const method = localStorage.getItem(STORAGE.lastMethod) || '';
+    if(method === 'passkey'){
+      passkeyHint.textContent = STR.lastUsedPasskeyHint;
+      showEl(passkeyHint);
+      return;
+    }
+
+    const p = localStorage.getItem(STORAGE.lastTotpProvider) || '';
+    if(method === 'totp' && p){
+      passkeyHint.textContent = fmt(STR.lastUsed, {name: p});
+      showEl(passkeyHint);
+      return;
+    }
+  }catch{}
+
+  passkeyHint.textContent = '';
+  hideEl(passkeyHint);
+}
+
+applyLastHints();
 
 function b64ToBuf(b64url){
   const b64 = b64url.replace(/-/g,'+').replace(/_/g,'/');
@@ -145,8 +270,32 @@ function bufToB64(buf){
   return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
 }
 
+function setupTotpStage(payload){
+  totpInfo.textContent = STR.totpInfo;
+  totpCode.value = '';
+
+  let provider = '';
+  try{ provider = localStorage.getItem(STORAGE.lastTotpProvider) || ''; }catch{}
+
+  if(payload && typeof payload.totp_provider === 'string' && payload.totp_provider.trim()){
+    provider = payload.totp_provider.trim();
+  }
+  totpProvider.value = provider;
+
+  if(provider){
+    totpLast.textContent = fmt(STR.lastUsed, {name: provider});
+    showEl(totpLast);
+  }else{
+    totpLast.textContent = '';
+    hideEl(totpLast);
+  }
+
+  setStage('totp');
+}
+
 async function doPasswordLogin(e){
   e.preventDefault();
+  if(stage !== 'creds') return;
   clearErr();
 
   const email=document.getElementById('email').value.trim();
@@ -172,18 +321,11 @@ async function doPasswordLogin(e){
     }
 
     if(j.needs_totp){
-      const code = prompt(STR.enterTotp);
-      if(!code){showErr(STR.codeRequired);return;}
-
-      const r2=await fetch('api/auth.php',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({action:'login_totp',code})});
-      const j2=await r2.json();
-      if(!j2.success){showErr(j2.error||STR.failed);return;}
-
-      if(j2.verified){window.location='dashboard.php';}
-      else window.location='account.php';
+      setupTotpStage(j);
       return;
     }
+
+    rememberLast('password');
 
     if(j.verified){window.location='dashboard.php';}
     else window.location='account.php';
@@ -194,6 +336,53 @@ async function doPasswordLogin(e){
     btn.disabled=false;
     passkeyBtn.disabled=false;
     btnTxt.textContent=STR.btnLogin;
+  }
+}
+
+async function doTotpVerify(e){
+  e.preventDefault();
+  if(stage !== 'totp') return;
+  clearErr();
+
+  const code = (totpCode.value || '').trim().replace(/\s+/g,'');
+  if(!/^\d{6}$/.test(code)){
+    showErr(STR.enter6Digits);
+    totpCode.focus();
+    return;
+  }
+
+  totpVerifyBtn.disabled = true;
+  totpVerifyTxt.innerHTML = '<span class="spin"></span>';
+
+  const provider = (totpProvider.value || '').trim();
+
+  try{
+    const r2=await fetch('api/auth.php',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'login_totp',code,provider})});
+    const j2=await r2.json();
+
+    if(!j2.success){
+      const msg = j2.error || STR.failed;
+      showErr(msg);
+      if(/expired/i.test(msg)){
+        setStage('creds');
+      } else {
+        totpCode.select();
+        totpCode.focus();
+      }
+      return;
+    }
+
+    rememberLast('totp', provider);
+
+    if(j2.verified){window.location='dashboard.php';}
+    else window.location='account.php';
+
+  }catch{
+    showErr(STR.networkError);
+  }finally{
+    totpVerifyBtn.disabled = false;
+    totpVerifyTxt.textContent = STR.verify;
   }
 }
 
@@ -236,6 +425,8 @@ async function doPasskeyLogin(){
     const j2=await finish.json();
     if(!j2.success){showErr(j2.error||STR.passkeyLoginFailed);return;}
 
+    rememberLast('passkey');
+
     if(j2.verified){window.location='dashboard.php';}
     else window.location='account.php';
 
@@ -248,6 +439,22 @@ async function doPasskeyLogin(){
   }
 }
 
+openAuthBtn.addEventListener('click', ()=>{
+  toast(STR.openAuthenticatorHint, 'ok');
+  totpCode.focus();
+});
+
+totpStartOver.addEventListener('click', ()=>{
+  clearErr();
+  setStage('creds');
+});
+
+totpCode.addEventListener('input', ()=>{
+  const c = (totpCode.value || '').replace(/\s+/g,'');
+  if(c.length === 6) totpCode.value = c;
+});
+
+totpForm.addEventListener('submit', doTotpVerify);
 f.addEventListener('submit', doPasswordLogin);
 passkeyBtn.addEventListener('click', doPasskeyLogin);
 </script>

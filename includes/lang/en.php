@@ -9,7 +9,9 @@ return [
     'common.home' => 'Home',
     'common.faq' => 'FAQ',
     'common.login' => 'Login',
-    'common.logout' => 'Logout',
+    'common.logout' => 'Log out',
+    'common.copy' => 'Copy',
+    'common.install' => 'Install',
     'common.create_account' => 'Create account',
     'common.email' => 'Email',
     'common.password' => 'Password',
@@ -83,6 +85,15 @@ return [
     'packages.purchase_hint' => 'An admin will review and approve your request.',
     'packages.pending_created' => 'Upgrade request sent. We will review it shortly.',
     'packages.pending_already' => 'You already have a pending upgrade request for this plan.',
+
+    // Package limits (pre-check banners)
+    'package_limit.title' => 'Package limit reached',
+    'package_limit.codes_reached_fmt' => 'Active codes limit reached ({cur}/{limit}).',
+    'package_limit.wallet_reached_fmt' => 'Active wallet locks limit reached ({cur}/{limit}).',
+    'package_limit.rooms_reached_fmt' => 'Active rooms limit reached ({cur}/{limit}).',
+    'package_limit.upgrade_note' => 'To create more, upgrade your package (or wait until one becomes inactive).',
+    'package_limit.upgrade_btn' => 'View packages',
+    'package_limit.toast' => 'Package limit reached. Open Packages to upgrade.',
 
     // Packages (admin)
     'packages.admin_title' => 'Packages (Admin)',
@@ -432,6 +443,16 @@ return [
     'login.passkey_required' => 'This account requires a passkey. Use the passkey button below.',
     'login.failed' => 'Login failed',
     'login.enter_totp' => 'Enter your 6-digit authenticator code',
+    'login.totp_info' => 'Two-factor code required. Open your authenticator app and enter the 6-digit code.',
+    'login.totp_code_label' => '6-digit code',
+    'login.totp_authenticator_label' => 'Authenticator (optional)',
+    'login.totp_authenticator_placeholder' => 'e.g. Google Authenticator',
+    'login.verify_code_btn' => 'Verify',
+    'login.open_authenticator' => 'Open authenticator',
+    'login.open_authenticator_hint' => 'Open your authenticator app and enter the 6-digit code.',
+    'login.start_over' => 'Start over',
+    'login.last_used' => 'Last used: {name}',
+    'login.last_used_passkey_hint' => 'Tip: last time you used a passkey on this device.',
     'login.code_required' => 'Code required',
     'login.network_error' => 'Network error',
     'login.passkeys_unsupported' => 'Passkeys not supported in this browser',
@@ -455,6 +476,7 @@ return [
     'js.reauth_failed' => 'Re-auth failed',
     'js.copy_confirm' => 'Copy to clipboard? Clipboard contents may be readable by other apps until overwritten.',
     'js.pwa_install_confirm' => 'Install this app?',
+    'js.reauth.go_to_security_setup_confirm' => 'Go to Security setup now?',
 
     // Installer
     'install.subtitle' => 'Installation',

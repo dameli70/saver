@@ -10,6 +10,8 @@ return [
     'common.faq' => 'FAQ',
     'common.login' => 'Connexion',
     'common.logout' => 'Déconnexion',
+    'common.copy' => 'Copier',
+    'common.install' => 'Installer',
     'common.create_account' => 'Créer un compte',
     'common.email' => 'E-mail',
     'common.password' => 'Mot de passe',
@@ -83,6 +85,15 @@ return [
     'packages.purchase_hint' => 'Un admin examinera et approuvera votre demande.',
     'packages.pending_created' => 'Demande envoyée. Nous la traiterons bientôt.',
     'packages.pending_already' => 'Vous avez déjà une demande en attente pour ce forfait.',
+
+    // Limites de forfait (bannières de pré-vérification)
+    'package_limit.title' => 'Limite de forfait atteinte',
+    'package_limit.codes_reached_fmt' => 'Limite de codes actifs atteinte ({cur}/{limit}).',
+    'package_limit.wallet_reached_fmt' => 'Limite de verrous wallet actifs atteinte ({cur}/{limit}).',
+    'package_limit.rooms_reached_fmt' => 'Limite de rooms actives atteinte ({cur}/{limit}).',
+    'package_limit.upgrade_note' => 'Pour en créer plus, demandez un upgrade de forfait (ou attendez qu’un élément devienne inactif).',
+    'package_limit.upgrade_btn' => 'Voir les forfaits',
+    'package_limit.toast' => 'Limite de forfait atteinte. Ouvrez Forfaits pour demander un upgrade.',
 
     // Forfaits (admin)
     'packages.admin_title' => 'Forfaits (Admin)',
@@ -524,6 +535,16 @@ return [
     'login.passkey_required' => 'Ce compte exige une passkey. Utilisez le bouton ci-dessous.',
     'login.failed' => 'Échec de la connexion',
     'login.enter_totp' => 'Saisissez votre code d’authentification à 6 chiffres',
+    'login.totp_info' => 'Code à deux facteurs requis. Ouvrez votre application d’authentification et saisissez le code à 6 chiffres.',
+    'login.totp_code_label' => 'Code à 6 chiffres',
+    'login.totp_authenticator_label' => 'Authentificateur (optionnel)',
+    'login.totp_authenticator_placeholder' => 'ex. Google Authenticator',
+    'login.verify_code_btn' => 'Vérifier',
+    'login.open_authenticator' => 'Ouvrir l’authentificateur',
+    'login.open_authenticator_hint' => 'Ouvrez votre application d’authentification et saisissez le code à 6 chiffres.',
+    'login.start_over' => 'Recommencer',
+    'login.last_used' => 'Dernier utilisé : {name}',
+    'login.last_used_passkey_hint' => 'Astuce : la dernière fois, vous avez utilisé une passkey sur cet appareil.',
     'login.code_required' => 'Code requis',
     'login.network_error' => 'Erreur réseau',
     'login.passkeys_unsupported' => 'Les passkeys ne sont pas prises en charge dans ce navigateur',
@@ -547,6 +568,7 @@ return [
     'js.reauth_failed' => 'Échec de la ré-authentification',
     'js.copy_confirm' => 'Copier dans le presse-papiers ? Le contenu du presse-papiers peut être lisible par d’autres applications jusqu’à ce qu’il soit écrasé.',
     'js.pwa_install_confirm' => 'Installer l’application ?',
+    'js.reauth.go_to_security_setup_confirm' => 'Ouvrir la configuration Sécurité maintenant ?',
 
     // Installer
     'install.subtitle' => 'Installation',
