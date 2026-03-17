@@ -45,6 +45,27 @@ function demoSeedHashVaultVerifier(string $passphrase): string {
     ]);
 }
 
+function demoSeedEncryptForDb(string $plaintext): string {
+    // Matches includes/helpers.php encryptForDb() format so seeded unlock codes are usable.
+    //
+    // IMPORTANT: The web installer may have already loaded config/database.php (placeholder secret)
+    // via includes/install_guard.php -> isAppInstalled(). Since PHP constants can't be redefined,
+    // allow the installer to provide the real secret via a global override.
+    $secret = (string)($GLOBALS['DEMO_SEED_APP_HMAC_SECRET']
+        ?? (defined('APP_HMAC_SECRET') ? (string)APP_HMAC_SECRET : 'demo_seed_fallback_secret'));
+
+    $key = hash('sha256', $secret, true);
+
+    $iv = random_bytes(12);
+    $tag = '';
+    $cipher = openssl_encrypt($plaintext, 'aes-256-gcm', $key, OPENSSL_RAW_DATA, $iv, $tag);
+    if ($cipher === false) {
+        throw new RuntimeException('Encryption failed');
+    }
+
+    return base64_encode($iv) . '.' . base64_encode($tag) . '.' . base64_encode($cipher);
+}
+
 function demoSeedNow(string $modify = 'now'): string {
     $dt = new DateTime('now', new DateTimeZone('UTC'));
     if ($modify !== 'now') {
@@ -415,22 +436,97 @@ function seedDemoData(PDO $db, int $adminUserId, string $demoPassword = 'DemoPas
             }
         }
 
-        $insAcc = $db->prepare("INSERT INTO platform_destination_accounts
-            (account_type, display_label, carrier_id, mobile_money_number, bank_name, bank_account_name, bank_account_number, bank_routing_number, bank_swift, bank_iban, crypto_network, crypto_address, is_active, created_at, updated_at)
-            VALUES
-            (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW(), NOW())");
+        $findOrCreateAccount = function(string $type, array $match, array $data) use ($db, $has): int {
+            $where = ["account_type = ?"];
+            $params = [$type];
+
+            foreach ($match as $col => $val) {
+                if ($has('platform_destination_accounts', $col)) {
+                    $where[] = "{$col} = ?";
+                    $params[] = $val;
+                }
+            }
+
+            $sel = $db->prepare('SELECT id FROM platform_destination_accounts WHERE ' . implode(' AND ', $where) . ' LIMIT 1');
+            $sel->execute($params);
+            $existingId = (int)$sel->fetchColumn();
+            $sel->closeCursor();
+            if ($existingId > 0) return $existingId;
+
+            $cols = ['account_type'];
+            $vals = [$type];
+
+            foreach ($data as $col => $val) {
+                if ($has('platform_destination_accounts', $col)) {
+                    $cols[] = $col;
+                    $vals[] = $val;
+                }
+            }
+
+            if ($has('platform_destination_accounts', 'is_active')) {
+                $cols[] = 'is_active';
+                $vals[] = 1;
+            }
+            if ($has('platform_destination_accounts', 'created_at')) {
+                $cols[] = 'created_at';
+                $vals[] = demoSeedNow('now');
+            }
+            if ($has('platform_destination_accounts', 'updated_at')) {
+                $cols[] = 'updated_at';
+                $vals[] = demoSeedNow('now');
+            }
+
+            $sql = 'INSERT INTO platform_destination_accounts (' . implode(', ', $cols) . ') VALUES (' . implode(', ', array_fill(0, count($cols), '?')) . ')';
+            $db->prepare($sql)->execute($vals);
+            return (int)$db->lastInsertId();
+        };
 
         // Mobile money (Mixx)
-        $insAcc->execute(['mobile_money', 'Mixx (demo)', $carrierMixx ?: null, '+228 90 00 00 00', null, null, null, null, null, null, null, null]);
-        $destinationAccountIds['mixx'] = (int)$db->lastInsertId();
+        $destinationAccountIds['mixx'] = $findOrCreateAccount(
+            'mobile_money',
+            ['mobile_money_number' => '+228 90 00 00 00'],
+            [
+                'display_label' => 'Mixx (demo)',
+                'carrier_id' => $carrierMixx ?: null,
+                'mobile_money_number' => '+228 90 00 00 00',
+                // Legacy schema support (010): unlock code stored on platform_destination_accounts
+                'unlock_code_enc' => demoSeedEncryptForDb('1122'),
+                'code_rotated_at' => demoSeedNow('-2 days'),
+                'code_rotation_version' => 1,
+            ]
+        );
 
         // Bank
-        $insAcc->execute(['bank', 'Ecobank Togo (demo)', null, null, 'Ecobank Togo', 'Controle Demo', 'TG1234567890', null, null, null, null, null]);
-        $destinationAccountIds['bank'] = (int)$db->lastInsertId();
+        $destinationAccountIds['bank'] = $findOrCreateAccount(
+            'bank',
+            ['bank_account_number' => 'TG1234567890'],
+            [
+                'display_label' => 'Ecobank Togo (demo)',
+                'bank_name' => 'Ecobank Togo',
+                'bank_account_name' => 'Controle Demo',
+                'bank_account_number' => 'TG1234567890',
+                'bank_routing_number' => null,
+                'bank_swift' => null,
+                'bank_iban' => null,
+                // Legacy schema support (010): unlock code stored on platform_destination_accounts
+                'unlock_code_enc' => demoSeedEncryptForDb('DEMO-BANK-CODE'),
+                'code_rotated_at' => demoSeedNow('-2 days'),
+                'code_rotation_version' => 1,
+            ]
+        );
 
-        // Crypto wallet (USDT TRC20)
-        $insAcc->execute(['crypto_wallet', 'USDT TRC20 (demo)', null, null, null, null, null, null, null, null, 'TRON', 'TQn9Y2Xb1cYvRzJm9bq9bYqYd1c9rY9bQy']);
-        $destinationAccountIds['crypto'] = (int)$db->lastInsertId();
+        // Crypto wallet (optional; schema 029+)
+        if ($has('platform_destination_accounts', 'crypto_network') && $has('platform_destination_accounts', 'crypto_address')) {
+            $destinationAccountIds['crypto'] = $findOrCreateAccount(
+                'crypto_wallet',
+                ['crypto_address' => 'TQn9Y2Xb1cYvRzJm9bq9bYqYd1c9rY9bQy'],
+                [
+                    'display_label' => 'USDT TRC20 (demo)',
+                    'crypto_network' => 'TRON',
+                    'crypto_address' => 'TQn9Y2Xb1cYvRzJm9bq9bYqYd1c9rY9bQy',
+                ]
+            );
+        }
     }
 
     // Saving rooms + participants
@@ -704,7 +800,13 @@ function seedDemoData(PDO $db, int $adminUserId, string $demoPassword = 'DemoPas
         }
 
         // Room Swap (public, swap window Type B)
-        if ($has('saving_rooms', 'swap_window_ends_at') && $has('saving_room_slot_swaps')) {
+        $hasSwapWindowCols = (
+            $has('saving_rooms', 'swap_window_ends_at')
+            || $has('saving_rooms', 'swap_window_closes_at')
+            || $has('saving_rooms', 'swap_window_end_at')
+        );
+
+        if ($hasSwapWindowCols && $has('saving_room_slot_swaps')) {
             $roomSwap = demoSeedGenerateUuid();
             $makerSwap = $idByEmail['komla.afi@example.com'];
             $insRoom->execute([
@@ -728,13 +830,21 @@ function seedDemoData(PDO $db, int $adminUserId, string $demoPassword = 'DemoPas
                 0,
             ]);
 
-            $db->prepare('UPDATE saving_rooms SET swap_window_ends_at = ? WHERE id = ?')->execute([demoSeedNow('+8 hours'), $roomSwap]);
+            // Keep the swap window open so request/accept flows can be tested.
+            $swapEndsAt = demoSeedNow('+8 hours');
+            foreach (['swap_window_closes_at', 'swap_window_ends_at', 'swap_window_end_at'] as $c) {
+                if ($has('saving_rooms', $c)) {
+                    $db->prepare("UPDATE saving_rooms SET {$c} = ? WHERE id = ?")->execute([$swapEndsAt, $roomSwap]);
+                    break;
+                }
+            }
 
             $participantsSwap = [
-                [$makerSwap, 'active'],
-                [$idByEmail['dela.tete@example.com'], 'active'],
-                [$idByEmail['yaovi.tchalla@example.com'], 'active'],
-                [$idByEmail['sessi.atakpama@example.com'], 'active'],
+                [$makerSwap, 'approved'],
+                [$idByEmail['dela.tete@example.com'], 'approved'],
+                [$idByEmail['yaovi.tchalla@example.com'], 'approved'],
+                [$idByEmail['sessi.atakpama@example.com'], 'approved'],
+                [$idByEmail['kossi.mensah@example.com'], 'approved'],
             ];
 
             $slot = 1;
@@ -753,6 +863,34 @@ function seedDemoData(PDO $db, int $adminUserId, string $demoPassword = 'DemoPas
                 $slot++;
             }
 
+            // Populate rotation queue so the UI renders stable slot positions and swap accepts
+            // will exercise the rotation_queue swap path.
+            if ($has('saving_room_rotation_queue')) {
+                $queueCols = ['room_id','user_id','position','status'];
+                if ($has('saving_room_rotation_queue', 'slot_locked_at')) $queueCols[] = 'slot_locked_at';
+                if ($has('saving_room_rotation_queue', 'created_at')) $queueCols[] = 'created_at';
+
+                $queueSql = 'INSERT IGNORE INTO saving_room_rotation_queue (' . implode(', ', $queueCols) . ') VALUES (' . implode(', ', array_fill(0, count($queueCols), '?')) . ')';
+                $queue = $db->prepare($queueSql);
+
+                $pos = 1;
+                foreach ($participantsSwap as $p) {
+                    $vals = [];
+                    foreach ($queueCols as $c) {
+                        if ($c === 'room_id') $vals[] = $roomSwap;
+                        else if ($c === 'user_id') $vals[] = (int)$p[0];
+                        else if ($c === 'position') $vals[] = $pos;
+                        else if ($c === 'status') $vals[] = 'queued';
+                        else if ($c === 'slot_locked_at') $vals[] = null;
+                        else if ($c === 'created_at') $vals[] = demoSeedNow('-2 days');
+                        else $vals[] = null;
+                    }
+                    $queue->execute($vals);
+                    $pos++;
+                }
+            }
+
+            $pendingSwapId = null;
             if ($has('saving_room_slot_swaps', 'expires_at')) {
                 $swapCols = ['room_id','from_user_id','to_user_id','status','expires_at'];
                 if ($has('saving_room_slot_swaps', 'responded_at')) $swapCols[] = 'responded_at';
@@ -761,32 +899,26 @@ function seedDemoData(PDO $db, int $adminUserId, string $demoPassword = 'DemoPas
                 $swapSql = 'INSERT INTO saving_room_slot_swaps (' . implode(', ', $swapCols) . ') VALUES (' . implode(', ', array_fill(0, count($swapCols), '?')) . ')';
                 $insSwap = $db->prepare($swapSql);
 
-                $insertSwap = function(int $fromId, int $toId, string $status, string $expiresAt, ?string $respondedAt) use ($insSwap, $swapCols, $roomSwap): void {
-                    $vals = [];
-                    foreach ($swapCols as $c) {
-                        if ($c === 'room_id') $vals[] = $roomSwap;
-                        else if ($c === 'from_user_id') $vals[] = $fromId;
-                        else if ($c === 'to_user_id') $vals[] = $toId;
-                        else if ($c === 'status') $vals[] = $status;
-                        else if ($c === 'expires_at') $vals[] = $expiresAt;
-                        else if ($c === 'responded_at') $vals[] = $respondedAt;
-                        else if ($c === 'updated_at') $vals[] = $respondedAt;
-                        else $vals[] = null;
-                    }
-                    $insSwap->execute($vals);
-                };
-
-                // Pending + decided + expired swap requests
-                $insertSwap((int)$participantsSwap[0][0], (int)$participantsSwap[1][0], 'pending', demoSeedNow('+6 hours'), null);
-                $insertSwap((int)$participantsSwap[2][0], (int)$participantsSwap[3][0], 'accepted', demoSeedNow('+6 hours'), demoSeedNow('-1 hour'));
-                $insertSwap((int)$participantsSwap[1][0], (int)$participantsSwap[2][0], 'declined', demoSeedNow('+6 hours'), demoSeedNow('-2 hours'));
-                $insertSwap((int)$participantsSwap[3][0], (int)$participantsSwap[0][0], 'expired', demoSeedNow('-1 hour'), null);
+                // One pending swap request so accept/decline flows can be tested.
+                $vals = [];
+                foreach ($swapCols as $c) {
+                    if ($c === 'room_id') $vals[] = $roomSwap;
+                    else if ($c === 'from_user_id') $vals[] = (int)$participantsSwap[0][0];
+                    else if ($c === 'to_user_id') $vals[] = (int)$participantsSwap[1][0];
+                    else if ($c === 'status') $vals[] = 'pending';
+                    else if ($c === 'expires_at') $vals[] = $swapEndsAt;
+                    else if ($c === 'responded_at') $vals[] = null;
+                    else if ($c === 'updated_at') $vals[] = null;
+                    else $vals[] = null;
+                }
+                $insSwap->execute($vals);
+                $pendingSwapId = (int)$db->lastInsertId();
             }
 
             if ($has('saving_room_activity')) {
                 $act = $db->prepare('INSERT INTO saving_room_activity (room_id, event_type, public_payload_json, created_at) VALUES (?, ?, ?, NOW())');
-                $act->execute([$roomSwap, 'swap_window_started', json_encode(['demo' => 1], JSON_UNESCAPED_UNICODE)]);
-                $act->execute([$roomSwap, 'slot_swap_requested', json_encode(['demo' => 1], JSON_UNESCAPED_UNICODE)]);
+                $act->execute([$roomSwap, 'swap_window_started', json_encode(['swap_window_ends_at' => $swapEndsAt], JSON_UNESCAPED_UNICODE)]);
+                $act->execute([$roomSwap, 'slot_swap_requested', json_encode(['swap_id' => $pendingSwapId, 'demo' => 1], JSON_UNESCAPED_UNICODE)]);
             }
         }
 
@@ -1095,7 +1227,7 @@ function seedDemoData(PDO $db, int $adminUserId, string $demoPassword = 'DemoPas
                 foreach ($sraCols as $c) {
                     if ($c === 'room_id') $vals[] = $roomId;
                     else if ($c === 'account_id') $vals[] = $accountId;
-                    else if ($c === 'unlock_code_enc') $vals[] = 'demo_enc_' . bin2hex(random_bytes(18));
+                    else if ($c === 'unlock_code_enc') $vals[] = demoSeedEncryptForDb('DEMO-UNLOCK-' . substr($roomId, 0, 8));
                     else if ($c === 'code_rotated_at') $vals[] = demoSeedNow('-2 days');
                     else if ($c === 'code_rotation_version') $vals[] = 1;
                     else if ($c === 'created_at') $vals[] = demoSeedNow('now');

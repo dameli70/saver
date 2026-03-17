@@ -436,7 +436,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new RuntimeException('Failed to resolve Super Admin user id.');
             }
 
+            // Generate the final APP_HMAC_SECRET now so demo-seeded encrypted fields
+            // (e.g., destination unlock codes) can be decrypted after installation.
+            $vals['app_hmac_secret'] = bin2hex(random_bytes(32));
+
             if (!empty($vals['seed_demo'])) {
+                // Ensure demo_seed.php encrypts using the same secret we will write to config/database.php.
+                $GLOBALS['DEMO_SEED_APP_HMAC_SECRET'] = (string)$vals['app_hmac_secret'];
+
                 $demo = seedDemoData($dbPdo, $adminUserId, 'DemoPass123!');
                 startInstallerSession();
                 $_SESSION['install_demo_seed'] = [
@@ -447,7 +454,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ];
             }
 
-            $vals['app_hmac_secret'] = bin2hex(random_bytes(32));
             updateConfigFile($configPath, $vals);
 
             $flagBody = "installed_at=" . date('c') . "\n";
