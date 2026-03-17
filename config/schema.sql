@@ -695,7 +695,7 @@ CREATE TABLE IF NOT EXISTS saving_room_unlock_votes (
     user_id              INT UNSIGNED NOT NULL,
 
     scope                ENUM('typeA_room_unlock','typeB_turn_unlock','typeB_exit_request') NOT NULL,
-    target_rotation_index INT UNSIGNED NULL,
+    target_rotation_index INT UNSIGNED NOT NULL DEFAULT 0,
 
     vote                 ENUM('approve','reject') NOT NULL,
     created_at           DATETIME DEFAULT CURRENT_TIMESTAMP,

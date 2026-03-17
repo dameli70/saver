@@ -871,7 +871,7 @@ function seedDemoData(PDO $db, int $adminUserId, string $demoPassword = 'DemoPas
                     if ($c === 'room_id') $vals[] = $roomUnlockA;
                     else if ($c === 'user_id') $vals[] = (int)$pv[0];
                     else if ($c === 'scope') $vals[] = 'typeA_room_unlock';
-                    else if ($c === 'target_rotation_index') $vals[] = null;
+                    else if ($c === 'target_rotation_index') $vals[] = 0;
                     else if ($c === 'vote') $vals[] = (string)$pv[1];
                     else if ($c === 'created_at') $vals[] = demoSeedNow('-3 hours');
                     else if ($c === 'updated_at') $vals[] = null;

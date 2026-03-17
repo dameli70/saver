@@ -862,7 +862,7 @@ if ($action === 'room_detail') {
                            ON v.room_id = p.room_id
                           AND v.user_id = p.user_id
                           AND v.scope = 'typeA_room_unlock'
-                          AND v.target_rotation_index IS NULL
+                          AND (v.target_rotation_index = 0 OR v.target_rotation_index IS NULL)
                     WHERE p.room_id = ?
                       AND p.status IN ({$in})";
 
@@ -871,7 +871,14 @@ if ($action === 'room_detail') {
         $st->execute($params);
         $vote = $st->fetch();
 
-        $myVoteStmt = $db->prepare("SELECT vote FROM saving_room_unlock_votes WHERE room_id = ? AND user_id = ? AND scope='typeA_room_unlock' AND target_rotation_index IS NULL");
+        $myVoteStmt = $db->prepare("SELECT vote
+                                    FROM saving_room_unlock_votes
+                                    WHERE room_id = ?
+                                      AND user_id = ?
+                                      AND scope='typeA_room_unlock'
+                                      AND (target_rotation_index = 0 OR target_rotation_index IS NULL)
+                                    ORDER BY id DESC
+                                    LIMIT 1");
         $myVoteStmt->execute([$roomId, $userId]);
         $myVote = $myVoteStmt->fetchColumn();
 
@@ -2656,10 +2663,45 @@ if ($action === 'typeA_vote') {
     $st = (string)$mem->fetchColumn();
     if (!in_array($st, ['approved','active'], true)) jsonResponse(['error' => 'Not an eligible participant'], 403);
 
-    $db->prepare("INSERT INTO saving_room_unlock_votes (room_id, user_id, scope, target_rotation_index, vote)
-                  VALUES (?, ?, 'typeA_room_unlock', NULL, ?)
-                  ON DUPLICATE KEY UPDATE vote=VALUES(vote), updated_at=NOW()")
+    $existingVoteStmt = $db->prepare("SELECT vote
+                                     FROM saving_room_unlock_votes
+                                     WHERE room_id = ?
+                                       AND user_id = ?
+                                       AND scope='typeA_room_unlock'
+                                       AND (target_rotation_index = 0 OR target_rotation_index IS NULL)
+                                     ORDER BY id DESC
+                                     LIMIT 1");
+    $existingVoteStmt->execute([$roomId, $userId]);
+    $existingVote = (string)($existingVoteStmt->fetchColumn() ?: '');
+
+    if ($existingVote !== '') {
+        if ($existingVote === $vote) {
+            auditLog('room_typeA_vote');
+            jsonResponse(['success' => true, 'no_change' => 1]);
+        }
+
+        jsonResponse([
+            'error' => 'Vote already cast and cannot be changed.',
+            'error_code' => 'vote_locked',
+            'existing_vote' => $existingVote,
+        ], 409);
+    }
+
+    // One-shot vote: insert once, no updates.
+    $db->prepare("INSERT IGNORE INTO saving_room_unlock_votes (room_id, user_id, scope, target_rotation_index, vote)
+                  VALUES (?, ?, 'typeA_room_unlock', 0, ?)")
        ->execute([$roomId, $userId, $vote]);
+
+    // Defensive check (handles rare race conditions).
+    $existingVoteStmt->execute([$roomId, $userId]);
+    $storedVote = (string)($existingVoteStmt->fetchColumn() ?: '');
+    if ($storedVote !== $vote) {
+        jsonResponse([
+            'error' => 'Vote already cast and cannot be changed.',
+            'error_code' => 'vote_locked',
+            'existing_vote' => $storedVote,
+        ], 409);
+    }
 
     // Log aggregate only (no user_id)
     $eligibleStatuses = ($room['room_state'] === 'lobby') ? ['approved'] : ['active'];
@@ -2672,7 +2714,7 @@ if ($action === 'typeA_vote') {
                        ON v.room_id = p.room_id
                       AND v.user_id = p.user_id
                       AND v.scope = 'typeA_room_unlock'
-                      AND v.target_rotation_index IS NULL
+                      AND (v.target_rotation_index = 0 OR v.target_rotation_index IS NULL)
                 WHERE p.room_id = ?
                   AND p.status IN ({$in})";
     $params = array_merge([$roomId], $eligibleStatuses);
@@ -2730,7 +2772,7 @@ if ($action === 'typeA_reveal') {
                                  ON v.room_id = p.room_id
                                 AND v.user_id = p.user_id
                                 AND v.scope = 'typeA_room_unlock'
-                                AND v.target_rotation_index IS NULL
+                                AND (v.target_rotation_index = 0 OR v.target_rotation_index IS NULL)
                           WHERE p.room_id = ?
                             AND p.status = 'active'");
     $stmt->execute([$roomId]);
@@ -2889,15 +2931,34 @@ if ($action === 'typeB_vote') {
     $existingVoteStmt->execute([$roomId, $userId, $rotationIndex]);
     $existingVote = (string)($existingVoteStmt->fetchColumn() ?: '');
 
-    if ($existingVote === $vote) {
-        auditLog('room_typeB_vote');
-        jsonResponse(['success' => true, 'no_change' => 1]);
+    if ($existingVote !== '') {
+        if ($existingVote === $vote) {
+            auditLog('room_typeB_vote');
+            jsonResponse(['success' => true, 'no_change' => 1]);
+        }
+
+        jsonResponse([
+            'error' => 'Vote already cast and cannot be changed.',
+            'error_code' => 'vote_locked',
+            'existing_vote' => $existingVote,
+        ], 409);
     }
 
-    $db->prepare("INSERT INTO saving_room_unlock_votes (room_id, user_id, scope, target_rotation_index, vote)
-                  VALUES (?, ?, 'typeB_turn_unlock', ?, ?)
-                  ON DUPLICATE KEY UPDATE vote=VALUES(vote), updated_at=NOW()")
+    // One-shot vote: insert once, no updates.
+    $db->prepare("INSERT IGNORE INTO saving_room_unlock_votes (room_id, user_id, scope, target_rotation_index, vote)
+                  VALUES (?, ?, 'typeB_turn_unlock', ?, ?)")
        ->execute([$roomId, $userId, $rotationIndex, $vote]);
+
+    // Defensive check (handles rare race conditions).
+    $existingVoteStmt->execute([$roomId, $userId, $rotationIndex]);
+    $storedVote = (string)($existingVoteStmt->fetchColumn() ?: '');
+    if ($storedVote !== $vote) {
+        jsonResponse([
+            'error' => 'Vote already cast and cannot be changed.',
+            'error_code' => 'vote_locked',
+            'existing_vote' => $storedVote,
+        ], 409);
+    }
 
     $eligibleStmt = $db->prepare("SELECT COUNT(*) FROM saving_room_participants WHERE room_id = ? AND status = 'active'");
     $eligibleStmt->execute([$roomId]);
@@ -3051,10 +3112,44 @@ if ($action === 'typeB_exit_request_vote') {
     $st = (string)$mem->fetchColumn();
     if ($st !== 'active') jsonResponse(['error' => 'Not an active participant'], 403);
 
-    $db->prepare("INSERT INTO saving_room_unlock_votes (room_id, user_id, scope, target_rotation_index, vote)
-                  VALUES (?, ?, 'typeB_exit_request', ?, ?)
-                  ON DUPLICATE KEY UPDATE vote=VALUES(vote), updated_at=NOW()")
+    $existingVoteStmt = $db->prepare("SELECT vote
+                                     FROM saving_room_unlock_votes
+                                     WHERE room_id = ?
+                                       AND user_id = ?
+                                       AND scope='typeB_exit_request'
+                                       AND target_rotation_index = ?
+                                     LIMIT 1");
+    $existingVoteStmt->execute([$roomId, $userId, $reqId]);
+    $existingVote = (string)($existingVoteStmt->fetchColumn() ?: '');
+
+    if ($existingVote !== '') {
+        if ($existingVote === $vote) {
+            auditLog('room_typeB_exit_vote');
+            jsonResponse(['success' => true, 'no_change' => 1]);
+        }
+
+        jsonResponse([
+            'error' => 'Vote already cast and cannot be changed.',
+            'error_code' => 'vote_locked',
+            'existing_vote' => $existingVote,
+        ], 409);
+    }
+
+    // One-shot vote: insert once, no updates.
+    $db->prepare("INSERT IGNORE INTO saving_room_unlock_votes (room_id, user_id, scope, target_rotation_index, vote)
+                  VALUES (?, ?, 'typeB_exit_request', ?, ?)")
        ->execute([$roomId, $userId, $reqId, $vote]);
+
+    // Defensive check (handles rare race conditions).
+    $existingVoteStmt->execute([$roomId, $userId, $reqId]);
+    $storedVote = (string)($existingVoteStmt->fetchColumn() ?: '');
+    if ($storedVote !== $vote) {
+        jsonResponse([
+            'error' => 'Vote already cast and cannot be changed.',
+            'error_code' => 'vote_locked',
+            'existing_vote' => $storedVote,
+        ], 409);
+    }
 
     $activeCountStmt = $db->prepare("SELECT COUNT(*) FROM saving_room_participants WHERE room_id = ? AND status = 'active'");
     $activeCountStmt->execute([$roomId]);
