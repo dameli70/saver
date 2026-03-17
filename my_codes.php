@@ -1912,8 +1912,29 @@ async function doReveal(){
 
     const payload = (currentReveal.kind === 'wallet') ? (r.wallet_lock || {}) : r;
 
-    const key=await deriveKey(vault, payload.kdf_salt, payload.kdf_iterations);
-    const plain=await aesDecrypt(payload.cipher_blob, payload.iv, payload.auth_tag, key);
+    let plain = null;
+
+    const inbound = (payload && payload.inbound) ? payload.inbound : null;
+    const wrapIters = inbound ? (parseInt(inbound.secret_kdf_iterations || '0', 10) || 0) : 0;
+
+    if(inbound
+      && inbound.secret_cipher_blob
+      && inbound.secret_iv
+      && inbound.secret_auth_tag
+      && inbound.secret_kdf_salt
+      && wrapIters > 0){
+
+      const wrapKey = await deriveKey(vault, inbound.secret_kdf_salt, wrapIters);
+      const secret = await aesDecrypt(inbound.secret_cipher_blob, inbound.secret_iv, inbound.secret_auth_tag, wrapKey);
+
+      const payloadIters = parseInt(payload.kdf_iterations || '0', 10) || 0;
+      const payloadKey = await deriveKey(secret, payload.kdf_salt, payloadIters);
+      plain = await aesDecrypt(payload.cipher_blob, payload.iv, payload.auth_tag, payloadKey);
+
+    }else{
+      const key=await deriveKey(vault, payload.kdf_salt, payload.kdf_iterations);
+      plain=await aesDecrypt(payload.cipher_blob, payload.iv, payload.auth_tag, key);
+    }
 
     revealedPwd=plain;
 

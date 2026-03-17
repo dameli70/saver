@@ -152,12 +152,15 @@ body.page-index .landing-qa p{margin-top:10px;color:var(--muted);font-size:12px;
         <a class="btn btn-primary" href="dashboard.php"><?php e('index.open_dashboard'); ?></a>
         <a class="btn btn-ghost" href="create_code.php"><?php e('index.create_time_lock'); ?></a>
         <a class="btn btn-ghost" href="rooms.php"><?php e('index.explore_rooms'); ?></a>
+        <a class="btn btn-ghost" href="gift_create.php"><?php e('index.send_timed_gift'); ?></a>
       <?php elseif ($loggedIn && !$verified): ?>
         <a class="btn btn-primary" href="account.php"><?php e('index.verify_email_continue'); ?></a>
         <a class="btn btn-ghost" href="logout.php"><?php e('index.switch_account'); ?></a>
+        <a class="btn btn-ghost" href="gift_create.php"><?php e('index.send_timed_gift'); ?></a>
       <?php else: ?>
         <a class="btn btn-primary" href="signup.php"><?php e('index.start_saving'); ?></a>
         <a class="btn btn-ghost" href="login.php"><?php e('index.have_account'); ?></a>
+        <a class="btn btn-ghost" href="gift_create.php"><?php e('index.send_timed_gift'); ?></a>
       <?php endif; ?>
     </div>
 

@@ -120,6 +120,62 @@ function hasLockVaultVerifierSlotColumn(): bool {
     }
 }
 
+function hasLockInboundLinkIdColumn(): bool {
+    static $cached = null;
+    if ($cached !== null) return $cached;
+
+    try {
+        $db = getDB();
+        $stmt = $db->query("SELECT 1 FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'locks' AND column_name = 'inbound_link_id' LIMIT 1");
+        $cached = (bool)$stmt->fetchColumn();
+        return $cached;
+    } catch (Throwable) {
+        $cached = false;
+        return false;
+    }
+}
+
+function hasInboundLockLinksTable(): bool {
+    static $cached = null;
+    if ($cached !== null) return $cached;
+
+    $cached = dbHasTable('inbound_lock_links');
+    return (bool)$cached;
+}
+
+function hasInboundLockLinksWrapColumns(): bool {
+    static $cached = null;
+    if ($cached !== null) return $cached;
+
+    if (!hasInboundLockLinksTable()) {
+        $cached = false;
+        return false;
+    }
+
+    $required = [
+        'secret_cipher_blob',
+        'secret_iv',
+        'secret_auth_tag',
+        'secret_kdf_salt',
+        'secret_kdf_iterations',
+    ];
+
+    foreach ($required as $col) {
+        if (!dbHasColumn('inbound_lock_links', $col)) {
+            $cached = false;
+            return false;
+        }
+    }
+
+    if (!dbHasColumn('inbound_lock_links', 'link_id') && !dbHasColumn('inbound_lock_links', 'id')) {
+        $cached = false;
+        return false;
+    }
+
+    $cached = true;
+    return true;
+}
+
 function hasVaultActiveSlotColumn(): bool {
     static $cached = null;
     if ($cached !== null) return $cached;

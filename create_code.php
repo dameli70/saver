@@ -66,6 +66,7 @@ header("Permissions-Policy: clipboard-write=(self)");
         <div class="page-sub"><?php e('create_code.page_intro'); ?></div>
       </div>
       <div class="page-actions">
+        <a class="btn btn-ghost btn-sm" href="receive_link_create.php"><?php e('create_code.receive_via_link'); ?></a>
         <a class="btn btn-ghost btn-sm" href="my_codes.php"><?php e('nav.my_codes'); ?></a>
       </div>
     </div>

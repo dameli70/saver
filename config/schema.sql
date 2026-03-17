@@ -142,12 +142,61 @@ VALUES
   ('controle_plus', 'Controle+', 10, 3, 3, 1, 1, 10),
   ('control_max',  'Control Max', 100, 20, 20, 1, 1, 20);
 
+-- Inbound lock links (recipient-wrapped inbound secret)
+CREATE TABLE IF NOT EXISTS inbound_lock_links (
+    id                    CHAR(36) PRIMARY KEY,
+    user_id               INT UNSIGNED NOT NULL,
+    token_hash            CHAR(64) NOT NULL,
+
+    mode                  ENUM('recipient_sets_date','sender_sets_date') NOT NULL,
+    reveal_date_fixed     DATETIME NULL,
+
+    max_uses              INT UNSIGNED NOT NULL DEFAULT 1,
+    uses_count            INT UNSIGNED NOT NULL DEFAULT 0,
+
+    expires_at            DATETIME NULL,
+    revoked_at            DATETIME NULL,
+    created_at            DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+    secret_cipher_blob    TEXT NOT NULL,
+    secret_iv             VARCHAR(64) NOT NULL,
+    secret_auth_tag       VARCHAR(64) NOT NULL,
+    secret_kdf_salt       VARCHAR(64) NOT NULL,
+    secret_kdf_iterations INT UNSIGNED NOT NULL DEFAULT 310000,
+
+    UNIQUE KEY uniq_token (token_hash),
+    INDEX idx_user (user_id),
+
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+-- Public gift links
+CREATE TABLE IF NOT EXISTS public_gifts (
+    token_hash     CHAR(64) PRIMARY KEY,
+
+    cipher_blob    TEXT NOT NULL,
+    iv             VARCHAR(64) NOT NULL,
+    auth_tag       VARCHAR(64) NOT NULL,
+    kdf_salt       VARCHAR(64) NOT NULL,
+    kdf_iterations INT UNSIGNED NOT NULL DEFAULT 310000,
+
+    reveal_date    DATETIME NOT NULL,
+    created_at     DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+    expires_at     DATETIME NULL,
+    revoked_at     DATETIME NULL,
+
+    INDEX idx_reveal (reveal_date),
+    INDEX idx_expires (expires_at)
+) ENGINE=InnoDB;
+
 -- Zero-Knowledge lock table
 -- EVERYTHING needed to decrypt lives in the browser.
 -- Server stores only opaque bytes + metadata.
 CREATE TABLE IF NOT EXISTS locks (
     id                   CHAR(36) PRIMARY KEY,
     user_id              INT UNSIGNED NOT NULL,
+    inbound_link_id      CHAR(36) NULL,
     label                VARCHAR(255) NOT NULL,
 
     -- === ZERO-KNOWLEDGE CRYPTO FIELDS ===
@@ -177,9 +226,11 @@ CREATE TABLE IF NOT EXISTS locks (
     created_at           DATETIME DEFAULT CURRENT_TIMESTAMP,
 
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (inbound_link_id) REFERENCES inbound_lock_links(id) ON DELETE SET NULL,
     INDEX idx_user_active (user_id, is_active),
     INDEX idx_status (confirmation_status),
     INDEX idx_reveal (reveal_date),
+    INDEX idx_inbound_link (inbound_link_id),
     INDEX idx_vault_verifier_slot (vault_verifier_slot)
 ) ENGINE=InnoDB;
 

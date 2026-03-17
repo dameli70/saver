@@ -61,6 +61,10 @@ Pages:
 - `verify.php` — handles verification token
 - `dashboard.php` — authenticated, email-verified app UI
 - `create_code.php` — create a new time-locked code (and wallet PIN locks)
+- `receive_link_create.php` — *(authenticated)* generate an inbound “receive via link” URL
+- `receive.php` — *(public)* sender page to submit an encrypted secret to a receive link
+- `gift_create.php` — *(public)* create a timed “gift” link (no signup required)
+- `gift.php` — *(public)* view/decrypt a gift link when it unlocks
 - `my_codes.php` — list/reveal/delete your locks (browser-side decryption)
 - `backup.php` — local export/import + cloud backups
 - `vault_settings.php` — vault / passphrase / recovery settings
@@ -91,6 +95,8 @@ API:
 - `api/confirm.php` — confirm/reject/auto-save flow
 - `api/copied.php` — mark as copied
 - `api/reveal.php` — time-gated retrieval of ciphertext blobs (browser decrypts)
+- `api/inbound_links.php` — inbound “receive via link” APIs (create link, link meta, submit)
+- `api/gifts.php` — public timed “gift” link APIs (create/view)
 - `api/delete.php` — delete a code
 - `api/backup.php` — local export/import + cloud backups
 - `api/vault.php` / `api/vault_verify.php` — vault verification + setup
