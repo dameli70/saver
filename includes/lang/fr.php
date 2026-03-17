@@ -555,6 +555,26 @@ return [
     'index.preview.k_unlock' => 'Déverrouillage',
     'index.preview.v_unlock' => 'Blocage UTC + confirmation',
 
+    'index.section_nav_aria' => 'Aller à une section',
+    'index.section_nav_features' => 'Fonctionnalités',
+    'index.section_nav_faq' => 'FAQ',
+
+    'index.chips_aria' => 'Points clés',
+    'index.chip_zk' => 'Chiffrement zero‑knowledge',
+    'index.chip_timegate' => 'Déverrouillage imposé par le serveur (UTC)',
+    'index.chip_reauth' => 'Confirmation Passkey / TOTP',
+
+    'index.admin_open' => 'Console admin',
+    'index.admin_hint' => 'Outils admin : utilisateurs, litiges, audit, forfaits — sans accès au texte en clair.',
+
+    'index.admin_card.title' => 'Privilèges admin',
+    'index.admin_card.sub' => 'Outils opérationnels de gouvernance et conformité — tout en restant zero‑knowledge pour les secrets utilisateurs.',
+    'index.admin_card.li1' => 'Gérer utilisateurs, rôles et limites',
+    'index.admin_card.li2' => 'Examiner les dossiers KYC et le flux de confiance',
+    'index.admin_card.li3' => 'Approuver les forfaits et demandes d’upgrade',
+    'index.admin_card.li4' => 'Journal d’audit, litiges et file de séquestre',
+    'index.admin_card.cta' => 'Ouvrir l’admin',
+
     'index.features.title' => 'Tout ce qu’il faut (sans encombrement)',
     'index.features.sub' => 'Commencez simple, puis évoluez : salles, sauvegardes, notifications, vérification et gouvernance — le tout basé sur le chiffrement zero‑knowledge.',
 

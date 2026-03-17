@@ -463,6 +463,26 @@ return [
     'index.preview.k_unlock' => 'Unlock',
     'index.preview.v_unlock' => 'UTC time gate + confirmation',
 
+    'index.section_nav_aria' => 'Jump to section',
+    'index.section_nav_features' => 'Features',
+    'index.section_nav_faq' => 'FAQ',
+
+    'index.chips_aria' => 'Key highlights',
+    'index.chip_zk' => 'Zero-knowledge encryption',
+    'index.chip_timegate' => 'Server-enforced unlock time (UTC)',
+    'index.chip_reauth' => 'Passkey / TOTP confirmation',
+
+    'index.admin_open' => 'Admin console',
+    'index.admin_hint' => 'Admin tools: users, disputes, audit, packages — without plaintext access.',
+
+    'index.admin_card.title' => 'Admin privileges',
+    'index.admin_card.sub' => 'Operational tools for governance and compliance — still zero-knowledge for user secrets.',
+    'index.admin_card.li1' => 'Manage users, roles, and limits',
+    'index.admin_card.li2' => 'Review KYC submissions and trust flow',
+    'index.admin_card.li3' => 'Approve packages and upgrade requests',
+    'index.admin_card.li4' => 'Audit log, disputes, and escrow queue',
+    'index.admin_card.cta' => 'Open admin',
+
     'index.features.title' => 'Everything you need (without the clutter)',
     'index.features.sub' => 'Start simple, then grow: rooms, backups, notifications, verification, and admin governance — all built around zero-knowledge encryption.',
 

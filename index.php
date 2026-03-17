@@ -47,7 +47,33 @@ body.page-index .kicker{display:inline-flex;align-items:center;gap:10px;color:va
 body.page-index .h1{font-family:var(--display);font-weight:700;letter-spacing:-1.2px;font-size:clamp(30px,5vw,56px);line-height:1.02;margin-bottom:12px;}
 body.page-index .h1 span{background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;background-clip:text;color:transparent;}
 body.page-index .sub{color:var(--muted);font-size:14px;line-height:1.75;max-width:720px;margin-bottom:22px;}
-body.page-index .cta{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px;}
+body.page-index .cta{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;}
+
+body.page-index .section-nav{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:0 0 18px;}
+body.page-index .section-nav a{display:inline-flex;align-items:center;gap:8px;
+  font-family:var(--mono);font-size:10px;letter-spacing:1.6px;text-transform:uppercase;
+  color:var(--muted);text-decoration:none;
+  border:1px solid var(--b1);background:rgb(var(--accent-rgb) / .03);
+  padding:8px 10px;border-radius:var(--radius-pill);
+}
+@media(hover:hover){
+  body.page-index .section-nav a:hover{border-color:var(--b2);background:rgb(var(--accent-rgb) / .06);color:var(--text);}
+}
+body.page-index .section-nav a:focus-visible{outline:2px solid rgb(var(--accent-rgb) / .55);outline-offset:2px;}
+
+body.page-index .landing-chips{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 16px;}
+body.page-index .landing-chips .badge{border-color:rgb(var(--accent-rgb) / .18);background:rgb(var(--accent-rgb) / .04);}
+
+body.page-index .admin-hint{color:var(--muted);font-size:11px;line-height:1.6;margin:0 0 12px;max-width:760px;}
+
+body.page-index .landing-sep{max-width:960px;margin:0 auto;padding:0 18px 18px;}
+body.page-index .landing-sep::before{content:'';display:block;height:1px;
+  background:linear-gradient(90deg, transparent, rgb(var(--accent-rgb) / .22), transparent);
+  opacity:.75;
+}
+
+body.page-index #features,
+body.page-index #faq{scroll-margin-top:92px;}
 
 body.page-index .landing-teaser-grid{display:grid;grid-template-columns:1fr;gap:12px;margin-top:26px;}
 @media(min-width:740px){body.page-index .landing-teaser-grid{grid-template-columns:repeat(3,1fr);} }
@@ -91,8 +117,31 @@ body.page-index .landing-features-sub{color:var(--muted);font-size:12px;line-hei
 body.page-index .landing-features-grid{display:grid;grid-template-columns:1fr;gap:10px;margin-top:14px;}
 @media(min-width:740px){body.page-index .landing-features-grid{grid-template-columns:repeat(3,1fr);} }
 body.page-index .landing-feature-card{border:1px solid var(--b1);background:var(--s1);padding:14px;border-radius:var(--radius-card);}
-body.page-index .landing-feature-card .t{font-family:var(--display);font-size:12px;font-weight:900;margin-bottom:6px;}
+body.page-index .landing-feature-card .t{font-family:var(--display);font-size:12px;font-weight:900;margin-bottom:6px;display:flex;align-items:center;gap:8px;}
+body.page-index .landing-feature-card .t .ico{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;
+  border-radius:6px;border:1px solid rgb(var(--accent-rgb) / .16);
+  background:rgb(var(--accent-rgb) / .04);
+  font-size:12px;line-height:1;color:color-mix(in srgb, var(--accent) 70%, var(--text));
+}
 body.page-index .landing-feature-card .d{font-size:12px;line-height:1.7;color:var(--muted);} 
+
+body.page-index .landing-admin{margin-top:14px;}
+body.page-index .landing-admin-card{border:1px solid rgb(var(--accent-rgb) / .18);
+  background:linear-gradient(135deg, rgb(var(--accent-rgb) / .10), transparent 55%),
+    linear-gradient(180deg, var(--s2), var(--s1));
+  padding:16px;border-radius:var(--radius-card);
+  box-shadow:var(--shadow-card);
+  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+}
+body.page-index .landing-admin-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
+body.page-index .landing-admin-title{font-family:var(--display);font-weight:900;font-size:14px;letter-spacing:-.2px;}
+body.page-index .landing-admin-sub{color:var(--muted);font-size:12px;line-height:1.7;margin-top:6px;max-width:760px;}
+body.page-index .landing-admin-list{margin:10px 0 0 0;padding:0;list-style:none;display:grid;gap:6px;}
+body.page-index .landing-admin-list li{position:relative;padding-left:14px;color:var(--muted);font-size:12px;line-height:1.6;}
+body.page-index .landing-admin-list li::before{content:'';position:absolute;left:0;top:.6em;width:6px;height:6px;border-radius:99px;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  box-shadow:0 0 0 3px rgb(var(--accent-rgb) / .10);
+}
 
 body.page-index .landing-use{max-width:960px;margin:0 auto;padding:0 18px 22px;}
 body.page-index .landing-use h2{font-family:var(--display);font-weight:900;font-size:16px;letter-spacing:1px;margin:0 0 10px;}
@@ -114,6 +163,13 @@ body.page-index .landing-step .d{font-size:12px;line-height:1.7;color:var(--mute
 body.page-index .landing-footer{border-top:1px solid var(--b1);padding:18px;color:var(--muted);font-size:11px;letter-spacing:.5px;text-align:center;}
 body.page-index .landing-footer a{color:var(--text);text-decoration:none;border-bottom:1px solid var(--b2);}
 body.page-index .landing-footer a:hover{border-bottom-color:var(--accent);}
+
+@media(prefers-reduced-motion: reduce){
+  body.page-index .landing-teaser-card,
+  body.page-index .landing-preview-card,
+  body.page-index .landing-feature-card{transition:none !important;}
+  body.page-index .landing-teaser-card:hover{transform:none !important;}
+}
 
 body.page-index .notice{max-width:960px;margin:0 auto;padding:18px 18px 0;}
 body.page-index .notice .box{border:1px solid color-mix(in srgb, var(--orange) 25%, transparent);background:color-mix(in srgb, var(--orange) 6%, transparent);padding:14px 16px;color:var(--muted);font-size:12px;line-height:1.6;border-radius:var(--radius-card);}
@@ -147,12 +203,21 @@ body.page-index .landing-qa p{margin-top:10px;color:var(--muted);font-size:12px;
     <h1 class="h1"><?= t('index.h1') ?></h1>
     <div class="sub"><?= t('index.sub_html', ['app' => htmlspecialchars(APP_NAME, ENT_QUOTES, 'UTF-8')]) ?></div>
 
+    <div class="landing-chips" aria-label="<?php e('index.chips_aria'); ?>">
+      <span class="badge"><?php e('index.chip_zk'); ?></span>
+      <span class="badge"><?php e('index.chip_timegate'); ?></span>
+      <span class="badge"><?php e('index.chip_reauth'); ?></span>
+    </div>
+
     <div class="cta">
       <?php if ($loggedIn && $verified): ?>
         <a class="btn btn-primary" href="dashboard.php"><?php e('index.open_dashboard'); ?></a>
         <a class="btn btn-ghost" href="create_code.php"><?php e('index.create_time_lock'); ?></a>
         <a class="btn btn-ghost" href="rooms.php"><?php e('index.explore_rooms'); ?></a>
         <a class="btn btn-ghost" href="gift_create.php"><?php e('index.send_timed_gift'); ?></a>
+        <?php if ($isAdmin): ?>
+          <a class="btn btn-ghost" href="admin.php"><?php e('index.admin_open'); ?></a>
+        <?php endif; ?>
       <?php elseif ($loggedIn && !$verified): ?>
         <a class="btn btn-primary" href="account.php"><?php e('index.verify_email_continue'); ?></a>
         <a class="btn btn-ghost" href="logout.php"><?php e('index.switch_account'); ?></a>
@@ -163,6 +228,15 @@ body.page-index .landing-qa p{margin-top:10px;color:var(--muted);font-size:12px;
         <a class="btn btn-ghost" href="gift_create.php"><?php e('index.send_timed_gift'); ?></a>
       <?php endif; ?>
     </div>
+
+    <?php if ($loggedIn && $verified && $isAdmin): ?>
+      <div class="admin-hint"><?php e('index.admin_hint'); ?></div>
+    <?php endif; ?>
+
+    <nav class="section-nav" aria-label="<?php e('index.section_nav_aria'); ?>">
+      <a href="#features">✦ <?php e('index.section_nav_features'); ?></a>
+      <a href="#faq">? <?php e('index.section_nav_faq'); ?></a>
+    </nav>
 
     <div class="landing-teaser-grid">
       <div class="landing-teaser-card">
@@ -179,6 +253,8 @@ body.page-index .landing-qa p{margin-top:10px;color:var(--muted);font-size:12px;
       </div>
     </div>
   </div>
+
+  <div class="landing-sep" aria-hidden="true"></div>
 
   <div class="landing-preview">
     <div class="landing-preview-card">
@@ -202,16 +278,34 @@ body.page-index .landing-qa p{margin-top:10px;color:var(--muted);font-size:12px;
     <h2><?php e('index.features.title'); ?></h2>
     <div class="landing-features-sub"><?php e('index.features.sub'); ?></div>
     <div class="landing-features-grid">
-      <div class="landing-feature-card"><div class="t"><?php e('index.features.f1_t'); ?></div><div class="d"><?php e('index.features.f1_d'); ?></div></div>
-      <div class="landing-feature-card"><div class="t"><?php e('index.features.f2_t'); ?></div><div class="d"><?php e('index.features.f2_d'); ?></div></div>
-      <div class="landing-feature-card"><div class="t"><?php e('index.features.f3_t'); ?></div><div class="d"><?php e('index.features.f3_d'); ?></div></div>
-      <div class="landing-feature-card"><div class="t"><?php e('index.features.f4_t'); ?></div><div class="d"><?php e('index.features.f4_d'); ?></div></div>
-      <div class="landing-feature-card"><div class="t"><?php e('index.features.f5_t'); ?></div><div class="d"><?php e('index.features.f5_d'); ?></div></div>
-      <div class="landing-feature-card"><div class="t"><?php e('index.features.f6_t'); ?></div><div class="d"><?php e('index.features.f6_d'); ?></div></div>
-      <div class="landing-feature-card"><div class="t"><?php e('index.features.f7_t'); ?></div><div class="d"><?php e('index.features.f7_d'); ?></div></div>
-      <div class="landing-feature-card"><div class="t"><?php e('index.features.f8_t'); ?></div><div class="d"><?php e('index.features.f8_d'); ?></div></div>
-      <div class="landing-feature-card"><div class="t"><?php e('index.features.f9_t'); ?></div><div class="d"><?php e('index.features.f9_d'); ?></div></div>
+      <div class="landing-feature-card"><div class="t"><span class="ico" aria-hidden="true">⏳</span><?php e('index.features.f1_t'); ?></div><div class="d"><?php e('index.features.f1_d'); ?></div></div>
+      <div class="landing-feature-card"><div class="t"><span class="ico" aria-hidden="true">◎</span><?php e('index.features.f2_t'); ?></div><div class="d"><?php e('index.features.f2_d'); ?></div></div>
+      <div class="landing-feature-card"><div class="t"><span class="ico" aria-hidden="true">⧉</span><?php e('index.features.f3_t'); ?></div><div class="d"><?php e('index.features.f3_d'); ?></div></div>
+      <div class="landing-feature-card"><div class="t"><span class="ico" aria-hidden="true">⤓</span><?php e('index.features.f4_t'); ?></div><div class="d"><?php e('index.features.f4_d'); ?></div></div>
+      <div class="landing-feature-card"><div class="t"><span class="ico" aria-hidden="true">✷</span><?php e('index.features.f5_t'); ?></div><div class="d"><?php e('index.features.f5_d'); ?></div></div>
+      <div class="landing-feature-card"><div class="t"><span class="ico" aria-hidden="true">⛨</span><?php e('index.features.f6_t'); ?></div><div class="d"><?php e('index.features.f6_d'); ?></div></div>
+      <div class="landing-feature-card"><div class="t"><span class="ico" aria-hidden="true">✓</span><?php e('index.features.f7_t'); ?></div><div class="d"><?php e('index.features.f7_d'); ?></div></div>
+      <div class="landing-feature-card"><div class="t"><span class="ico" aria-hidden="true">⬈</span><?php e('index.features.f8_t'); ?></div><div class="d"><?php e('index.features.f8_d'); ?></div></div>
+      <div class="landing-feature-card"><div class="t"><span class="ico" aria-hidden="true">⎈</span><?php e('index.features.f9_t'); ?></div><div class="d"><?php e('index.features.f9_d'); ?></div></div>
     </div>
+
+    <?php if ($loggedIn && $verified && $isAdmin): ?>
+      <div class="landing-admin">
+        <div class="landing-admin-card">
+          <div class="landing-admin-head">
+            <div class="landing-admin-title"><?php e('index.admin_card.title'); ?></div>
+            <a class="btn btn-primary btn-sm" href="admin.php"><?php e('index.admin_card.cta'); ?></a>
+          </div>
+          <div class="landing-admin-sub"><?php e('index.admin_card.sub'); ?></div>
+          <ul class="landing-admin-list">
+            <li><?php e('index.admin_card.li1'); ?></li>
+            <li><?php e('index.admin_card.li2'); ?></li>
+            <li><?php e('index.admin_card.li3'); ?></li>
+            <li><?php e('index.admin_card.li4'); ?></li>
+          </ul>
+        </div>
+      </div>
+    <?php endif; ?>
   </div>
 
   <div class="landing-use">
