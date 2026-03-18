@@ -53,6 +53,10 @@
     requested: tr('rooms.action.requested', 'Requested'),
     in_your_rooms: tr('rooms.action.in_your_rooms', 'In your rooms'),
     already_in_room_title: tr('rooms.action.already_in_room_title', 'You already have a status in this room ({status}).'),
+    locked: tr('rooms.action.locked', 'Locked'),
+    locked_title: tr('rooms.action.locked_title', 'Join requests are closed (lobby locked).'),
+    full: tr('rooms.action.full', 'Full'),
+    full_title: tr('rooms.action.full_title', 'No spots remaining.'),
     join_request_sent: tr('rooms.msg.join_request_sent', 'Join request sent.'),
 
     err_goal_required: tr('rooms.err.goal_required', 'Goal is required.'),
@@ -315,15 +319,20 @@
     const spots = parseInt(String((r && r.spots_remaining) || ''), 10);
     const hasSpots = isNaN(spots) ? true : (spots > 0);
 
+    const lobby = String((r && r.lobby_state) || 'open');
+    const lobbyOpen = (lobby === 'open');
+
     // Discover hierarchy (rooms.php):
     //  0) Rooms you're already in (approved/active/etc)
     //  1) Rooms you've requested (pending)
-    //  2) Joinable rooms (spots available)
-    //  3) Joinable but you're globally restricted
-    //  4) Full rooms
+    //  2) Joinable rooms (spots available + lobby open)
+    //  3) Lobby locked (viewable, but join disabled)
+    //  4) Joinable but you're globally restricted
+    //  5) Full rooms
     if(st && st !== 'declined') return (st === 'pending') ? 1 : 0;
-    if(!hasSpots) return 4;
-    if(myRestrictedUntil) return 3;
+    if(!hasSpots) return 5;
+    if(!lobbyOpen) return 3;
+    if(myRestrictedUntil) return 4;
     return 2;
   }
 
@@ -462,11 +471,25 @@
     join.textContent = STR.join_request;
 
     const myStatus = myRoomStatusById[String(r.id)] || '';
+    const spots = parseInt(String(r.spots_remaining||''), 10);
+    const hasSpots = isNaN(spots) ? true : (spots > 0);
+    const lobby = String(r.lobby_state||'open');
+
     if(myStatus && myStatus !== 'declined'){
       join.className = 'btn btn-ghost btn-sm';
       join.disabled = true;
       join.textContent = (myStatus === 'pending') ? STR.requested : STR.in_your_rooms;
       join.title = tf('rooms.action.already_in_room_title', {status: myStatus}, STR.already_in_room_title.replace('{status}', myStatus));
+    } else if(!hasSpots){
+      join.className = 'btn btn-ghost btn-sm';
+      join.disabled = true;
+      join.textContent = STR.full;
+      join.title = STR.full_title;
+    } else if(lobby !== 'open'){
+      join.className = 'btn btn-ghost btn-sm';
+      join.disabled = true;
+      join.textContent = STR.locked;
+      join.title = STR.locked_title;
     } else if(myRestrictedUntil){
       join.className = 'btn btn-ghost btn-sm';
       join.disabled = true;
@@ -498,6 +521,24 @@
     el.appendChild(meta);
     el.appendChild(actions);
     return el;
+  }
+
+  function prettyRoomStateCombo(r){
+    const roomState = String((r && r.room_state) || '');
+    const lobbyState = String((r && r.lobby_state) || '');
+
+    if(roomState === 'active') return tr('room.state.active', 'Active');
+    if(roomState === 'swap_window') return tr('room.state.swap_window', 'Swap window');
+    if(roomState === 'closed') return tr('room.state.closed', 'Closed');
+    if(roomState === 'cancelled') return tr('room.state.cancelled', 'Cancelled');
+
+    if(lobbyState === 'locked') return tr('room.state.lobby_locked', 'Lobby (locked)');
+    if(lobbyState === 'open') return tr('room.state.lobby_open', 'Lobby (open)');
+
+    const bits = [];
+    if(roomState) bits.push(roomState);
+    if(lobbyState) bits.push(lobbyState);
+    return bits.join(' / ') || '—';
   }
 
   function buildMyRoomCard(r){
@@ -559,7 +600,7 @@
     }
 
     // Meta order by hierarchy: current room state + schedule first.
-    addMetaItem(STR.meta_state, esc(String(r.room_state||'')) + ' / ' + esc(String(r.lobby_state||'')));
+    addMetaItem(STR.meta_state, esc(prettyRoomStateCombo(r)));
     addMetaItem(STR.meta_starts, esc(startLocal) + ' <span class="utc-pill" title="' + esc(STR.stored_enforced_utc) + '">' + esc(startUtc) + '</span>');
     addMetaItem(STR.meta_amount, esc(r.participation_amount));
     addMetaItem(STR.meta_period, esc(periodicityLabel(r.periodicity)));

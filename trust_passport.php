@@ -192,9 +192,18 @@ header("Referrer-Policy: no-referrer");
           const it = document.createElement('div');
           it.className = 'item';
 
+          function parseUtcDate(ts){
+            const s = String(ts||'').trim();
+            if(!s) return null;
+            if(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/.test(s)){
+              return new Date(s.replace(' ', 'T') + 'Z');
+            }
+            return new Date(s);
+          }
+
           const now = Date.now();
-          const startAt = r.start_at ? new Date(r.start_at).getTime() : null;
-          const revealAt = r.reveal_at ? new Date(r.reveal_at).getTime() : null;
+          const startAt = r.start_at ? parseUtcDate(r.start_at).getTime() : null;
+          const revealAt = r.reveal_at ? parseUtcDate(r.reveal_at).getTime() : null;
 
           let cd = '';
           if(r.room_state === 'lobby' && startAt){

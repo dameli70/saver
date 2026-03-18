@@ -1511,6 +1511,10 @@ return [
     'rooms.action.requested' => 'Requested',
     'rooms.action.in_your_rooms' => 'In your rooms',
     'rooms.action.already_in_room_title' => 'You already have a status in this room ({status}).',
+    'rooms.action.locked' => 'Locked',
+    'rooms.action.locked_title' => 'Join requests are closed (lobby locked).',
+    'rooms.action.full' => 'Full',
+    'rooms.action.full_title' => 'No spots remaining.',
 
     'rooms.err.goal_required' => 'Goal is required.',
     'rooms.err.start_required' => 'Start date is required.',

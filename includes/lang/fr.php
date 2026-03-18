@@ -1481,6 +1481,10 @@ return [
     'rooms.action.requested' => 'Demandé',
     'rooms.action.in_your_rooms' => 'Déjà dans vos salles',
     'rooms.action.already_in_room_title' => 'Vous avez déjà un statut dans cette salle ({status}).',
+    'rooms.action.locked' => 'Verrouillée',
+    'rooms.action.locked_title' => 'Les demandes sont fermées (lobby verrouillé).',
+    'rooms.action.full' => 'Complète',
+    'rooms.action.full_title' => 'Aucune place disponible.',
 
     'rooms.err.goal_required' => 'Objectif requis.',
     'rooms.err.start_required' => 'Date de début requise.',

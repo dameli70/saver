@@ -448,6 +448,7 @@ if ($action === 'discover') {
 
     $sql = "SELECT r.id, r.purpose_category, r.goal_text, r.saving_type, r.required_trust_level,
                    r.participation_amount, r.periodicity, r.start_at, r.max_participants,
+                   r.room_state, r.lobby_state,
                    (SELECT COUNT(*) FROM saving_room_participants p WHERE p.room_id = r.id AND p.status IN ('approved','active')) AS approved_count
             FROM saving_rooms r
             WHERE r.visibility = 'public'
@@ -482,6 +483,8 @@ if ($action === 'discover') {
             'participation_amount' => (string)$r['participation_amount'],
             'periodicity' => $r['periodicity'],
             'start_at' => $r['start_at'],
+            'room_state' => $r['room_state'],
+            'lobby_state' => $r['lobby_state'],
             'spots_remaining' => $spots,
             'max_participants' => $max,
         ];
