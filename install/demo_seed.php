@@ -86,6 +86,19 @@ function seedDemoData(PDO $db, int $adminUserId, string $demoPassword = 'DemoPas
     };
 
     // Don't seed if there are already users beyond the admin created by the installer.
+    // (Defensive: in case schema wasn't applied yet.)
+    if (!demoSeedHasTable($db, 'users')) {
+        return [
+            'seeded' => 0,
+            'skipped' => 1,
+            'reason' => 'Missing users table',
+            'demo_password' => $demoPassword,
+            'users' => [],
+            'rooms' => [],
+            'invites' => [],
+        ];
+    }
+
     $st = $db->query('SELECT COUNT(*) FROM users');
     $existing = (int)$fetchColumn($st);
     if ($existing > 1) {
@@ -252,43 +265,271 @@ function seedDemoData(PDO $db, int $adminUserId, string $demoPassword = 'DemoPas
     $insUser = $db->prepare($userSql);
 
     $insTrust = null;
+    $trustCols = [];
+    $trustValsFor = null;
     if ($has('user_trust')) {
-        $insTrust = $db->prepare('INSERT IGNORE INTO user_trust (user_id, trust_level, completed_reveals_count, last_level_change_at) VALUES (?, ?, ?, NOW())');
+        $trustRequired = ['user_id', 'trust_level'];
+        $trustOk = true;
+        foreach ($trustRequired as $c) {
+            if (!$has('user_trust', $c)) { $trustOk = false; break; }
+        }
+
+        if ($trustOk) {
+            $trustCols = $trustRequired;
+            if ($has('user_trust', 'completed_reveals_count')) $trustCols[] = 'completed_reveals_count';
+            if ($has('user_trust', 'last_level_change_at')) $trustCols[] = 'last_level_change_at';
+
+            $trustSql = 'INSERT IGNORE INTO user_trust (' . implode(', ', $trustCols) . ') VALUES (' . implode(', ', array_fill(0, count($trustCols), '?')) . ')';
+            $insTrust = $db->prepare($trustSql);
+
+            $trustValsFor = function(int $userId, int $trustLevel, int $completedRevealsCount) use ($trustCols): array {
+                $vals = [];
+                foreach ($trustCols as $c) {
+                    if ($c === 'user_id') $vals[] = $userId;
+                    else if ($c === 'trust_level') $vals[] = $trustLevel;
+                    else if ($c === 'completed_reveals_count') $vals[] = $completedRevealsCount;
+                    else if ($c === 'last_level_change_at') $vals[] = demoSeedNow('now');
+                    else $vals[] = null;
+                }
+                return $vals;
+            };
+        }
     }
 
     $insPrefs = null;
+    $prefCols = [];
+    $prefValsFor = null;
     if ($has('notification_preferences')) {
-        $insPrefs = $db->prepare('INSERT INTO notification_preferences (user_id, important_json, informational_json, created_at, updated_at) VALUES (?, ?, ?, NOW(), NOW())');
+        $prefRequired = ['user_id'];
+        $prefOk = true;
+        foreach ($prefRequired as $c) {
+            if (!$has('notification_preferences', $c)) { $prefOk = false; break; }
+        }
+
+        if ($prefOk) {
+            $prefCols = ['user_id'];
+            if ($has('notification_preferences', 'important_json')) $prefCols[] = 'important_json';
+            if ($has('notification_preferences', 'informational_json')) $prefCols[] = 'informational_json';
+            if ($has('notification_preferences', 'created_at')) $prefCols[] = 'created_at';
+            if ($has('notification_preferences', 'updated_at')) $prefCols[] = 'updated_at';
+
+            $prefSql = 'INSERT INTO notification_preferences (' . implode(', ', $prefCols) . ') VALUES (' . implode(', ', array_fill(0, count($prefCols), '?')) . ')';
+            $insPrefs = $db->prepare($prefSql);
+
+            $prefValsFor = function(int $userId, ?string $importantJson, ?string $informationalJson) use ($prefCols): array {
+                $vals = [];
+                foreach ($prefCols as $c) {
+                    if ($c === 'user_id') $vals[] = $userId;
+                    else if ($c === 'important_json') $vals[] = $importantJson;
+                    else if ($c === 'informational_json') $vals[] = $informationalJson;
+                    else if ($c === 'created_at') $vals[] = demoSeedNow('now');
+                    else if ($c === 'updated_at') $vals[] = demoSeedNow('now');
+                    else $vals[] = null;
+                }
+                return $vals;
+            };
+        }
     }
 
     $insRestriction = null;
+    $restrictionCols = [];
+    $restrictionValsFor = null;
     if ($has('user_restrictions')) {
-        $insRestriction = $db->prepare('INSERT INTO user_restrictions (user_id, restricted_until, reason, created_at, updated_at) VALUES (?, ?, ?, NOW(), NOW())');
+        $restrictionRequired = ['user_id', 'restricted_until'];
+        $restrictionOk = true;
+        foreach ($restrictionRequired as $c) {
+            if (!$has('user_restrictions', $c)) { $restrictionOk = false; break; }
+        }
+
+        if ($restrictionOk) {
+            $restrictionCols = $restrictionRequired;
+            if ($has('user_restrictions', 'reason')) $restrictionCols[] = 'reason';
+            if ($has('user_restrictions', 'created_at')) $restrictionCols[] = 'created_at';
+            if ($has('user_restrictions', 'updated_at')) $restrictionCols[] = 'updated_at';
+
+            $restrictionSql = 'INSERT INTO user_restrictions (' . implode(', ', $restrictionCols) . ') VALUES (' . implode(', ', array_fill(0, count($restrictionCols), '?')) . ')';
+            $insRestriction = $db->prepare($restrictionSql);
+
+            $restrictionValsFor = function(int $userId, string $restrictedUntil, ?string $reason) use ($restrictionCols): array {
+                $vals = [];
+                foreach ($restrictionCols as $c) {
+                    if ($c === 'user_id') $vals[] = $userId;
+                    else if ($c === 'restricted_until') $vals[] = $restrictedUntil;
+                    else if ($c === 'reason') $vals[] = $reason;
+                    else if ($c === 'created_at') $vals[] = demoSeedNow('now');
+                    else if ($c === 'updated_at') $vals[] = demoSeedNow('now');
+                    else $vals[] = null;
+                }
+                return $vals;
+            };
+        }
     }
 
     $insUserPkg = null;
+    $userPkgCols = [];
+    $userPkgValsFor = null;
     if ($has('user_packages') && $has('packages')) {
-        $insUserPkg = $db->prepare('INSERT INTO user_packages (user_id, package_id, assigned_by_user_id, is_active, assigned_at, updated_at)
-                                    VALUES (?, ?, ?, 1, NOW(), NOW())
-                                    ON DUPLICATE KEY UPDATE package_id=VALUES(package_id), assigned_by_user_id=VALUES(assigned_by_user_id), is_active=1, updated_at=NOW()');
+        $userPkgRequired = ['user_id', 'package_id'];
+        $userPkgOk = true;
+        foreach ($userPkgRequired as $c) {
+            if (!$has('user_packages', $c)) { $userPkgOk = false; break; }
+        }
+
+        if ($userPkgOk) {
+            $userPkgCols = $userPkgRequired;
+            if ($has('user_packages', 'assigned_by_user_id')) $userPkgCols[] = 'assigned_by_user_id';
+            if ($has('user_packages', 'is_active')) $userPkgCols[] = 'is_active';
+            if ($has('user_packages', 'assigned_at')) $userPkgCols[] = 'assigned_at';
+            if ($has('user_packages', 'updated_at')) $userPkgCols[] = 'updated_at';
+
+            $userPkgSql = 'INSERT INTO user_packages (' . implode(', ', $userPkgCols) . ') VALUES (' . implode(', ', array_fill(0, count($userPkgCols), '?')) . ')';
+
+            $userPkgUpd = ['package_id=VALUES(package_id)'];
+            if ($has('user_packages', 'assigned_by_user_id')) $userPkgUpd[] = 'assigned_by_user_id=VALUES(assigned_by_user_id)';
+            if ($has('user_packages', 'is_active')) $userPkgUpd[] = 'is_active=1';
+            if ($has('user_packages', 'updated_at')) $userPkgUpd[] = 'updated_at=NOW()';
+
+            if ($userPkgUpd) {
+                $userPkgSql .= ' ON DUPLICATE KEY UPDATE ' . implode(', ', $userPkgUpd);
+            }
+
+            $insUserPkg = $db->prepare($userPkgSql);
+
+            $userPkgValsFor = function(int $userId, int $packageId, int $assignedByUserId) use ($userPkgCols): array {
+                $vals = [];
+                foreach ($userPkgCols as $c) {
+                    if ($c === 'user_id') $vals[] = $userId;
+                    else if ($c === 'package_id') $vals[] = $packageId;
+                    else if ($c === 'assigned_by_user_id') $vals[] = $assignedByUserId;
+                    else if ($c === 'is_active') $vals[] = 1;
+                    else if ($c === 'assigned_at') $vals[] = demoSeedNow('now');
+                    else if ($c === 'updated_at') $vals[] = demoSeedNow('now');
+                    else $vals[] = null;
+                }
+                return $vals;
+            };
+        }
     }
 
     $insPurchase = null;
+    $purchaseCols = [];
+    $purchaseValsFor = null;
     if ($has('package_purchases') && $has('packages')) {
-        $insPurchase = $db->prepare('INSERT INTO package_purchases (user_id, package_id, status, created_at, decided_at, decided_by_user_id, note)
-                                     VALUES (?, ?, ?, ?, ?, ?, ?)');
+        $purchaseRequired = ['user_id', 'package_id', 'status'];
+        $purchaseOk = true;
+        foreach ($purchaseRequired as $c) {
+            if (!$has('package_purchases', $c)) { $purchaseOk = false; break; }
+        }
+
+        if ($purchaseOk) {
+            $purchaseCols = $purchaseRequired;
+            if ($has('package_purchases', 'created_at')) $purchaseCols[] = 'created_at';
+            if ($has('package_purchases', 'decided_at')) $purchaseCols[] = 'decided_at';
+            if ($has('package_purchases', 'decided_by_user_id')) $purchaseCols[] = 'decided_by_user_id';
+            if ($has('package_purchases', 'note')) $purchaseCols[] = 'note';
+
+            $purchaseSql = 'INSERT INTO package_purchases (' . implode(', ', $purchaseCols) . ') VALUES (' . implode(', ', array_fill(0, count($purchaseCols), '?')) . ')';
+            $insPurchase = $db->prepare($purchaseSql);
+
+            $purchaseValsFor = function(int $userId, int $packageId, string $status, ?string $createdAt, ?string $decidedAt, ?int $decidedByUserId, ?string $note) use ($purchaseCols): array {
+                $vals = [];
+                foreach ($purchaseCols as $c) {
+                    if ($c === 'user_id') $vals[] = $userId;
+                    else if ($c === 'package_id') $vals[] = $packageId;
+                    else if ($c === 'status') $vals[] = $status;
+                    else if ($c === 'created_at') $vals[] = $createdAt;
+                    else if ($c === 'decided_at') $vals[] = $decidedAt;
+                    else if ($c === 'decided_by_user_id') $vals[] = $decidedByUserId;
+                    else if ($c === 'note') $vals[] = $note;
+                    else $vals[] = null;
+                }
+                return $vals;
+            };
+        }
     }
 
     $insKyc = null;
+    $kycCols = [];
+    $kycValsFor = null;
     if ($has('kyc_submissions')) {
-        $insKyc = $db->prepare("INSERT INTO kyc_submissions (user_id, status, admin_note, created_at, submitted_at, decided_at, decided_by_user_id)
-                                VALUES (?, ?, ?, NOW(), ?, ?, ?)
-                                ON DUPLICATE KEY UPDATE status=VALUES(status), admin_note=VALUES(admin_note), submitted_at=VALUES(submitted_at), decided_at=VALUES(decided_at), decided_by_user_id=VALUES(decided_by_user_id), updated_at=NOW()");
+        $kycRequired = ['user_id', 'status'];
+        $kycOk = true;
+        foreach ($kycRequired as $c) {
+            if (!$has('kyc_submissions', $c)) { $kycOk = false; break; }
+        }
+
+        if ($kycOk) {
+            $kycCols = $kycRequired;
+            if ($has('kyc_submissions', 'admin_note')) $kycCols[] = 'admin_note';
+            if ($has('kyc_submissions', 'created_at')) $kycCols[] = 'created_at';
+            if ($has('kyc_submissions', 'submitted_at')) $kycCols[] = 'submitted_at';
+            if ($has('kyc_submissions', 'decided_at')) $kycCols[] = 'decided_at';
+            if ($has('kyc_submissions', 'decided_by_user_id')) $kycCols[] = 'decided_by_user_id';
+
+            $kycSql = 'INSERT INTO kyc_submissions (' . implode(', ', $kycCols) . ') VALUES (' . implode(', ', array_fill(0, count($kycCols), '?')) . ')';
+
+            $kycUpd = ['status=VALUES(status)'];
+            if ($has('kyc_submissions', 'admin_note')) $kycUpd[] = 'admin_note=VALUES(admin_note)';
+            if ($has('kyc_submissions', 'submitted_at')) $kycUpd[] = 'submitted_at=VALUES(submitted_at)';
+            if ($has('kyc_submissions', 'decided_at')) $kycUpd[] = 'decided_at=VALUES(decided_at)';
+            if ($has('kyc_submissions', 'decided_by_user_id')) $kycUpd[] = 'decided_by_user_id=VALUES(decided_by_user_id)';
+            if ($has('kyc_submissions', 'updated_at')) $kycUpd[] = 'updated_at=NOW()';
+
+            $kycSql .= ' ON DUPLICATE KEY UPDATE ' . implode(', ', $kycUpd);
+
+            $insKyc = $db->prepare($kycSql);
+
+            $kycValsFor = function(int $userId, string $status, ?string $adminNote, ?string $submittedAt, ?string $decidedAt, ?int $decidedByUserId) use ($kycCols): array {
+                $vals = [];
+                foreach ($kycCols as $c) {
+                    if ($c === 'user_id') $vals[] = $userId;
+                    else if ($c === 'status') $vals[] = $status;
+                    else if ($c === 'admin_note') $vals[] = $adminNote;
+                    else if ($c === 'created_at') $vals[] = demoSeedNow('now');
+                    else if ($c === 'submitted_at') $vals[] = $submittedAt;
+                    else if ($c === 'decided_at') $vals[] = $decidedAt;
+                    else if ($c === 'decided_by_user_id') $vals[] = $decidedByUserId;
+                    else $vals[] = null;
+                }
+                return $vals;
+            };
+        }
     }
 
     $insNotif = null;
+    $notifCols = [];
+    $notifValsFor = null;
     if ($has('notifications')) {
-        $insNotif = $db->prepare('INSERT INTO notifications (user_id, tier, channel_mask, title, body, data_json, created_at) VALUES (?, ?, ?, ?, ?, ?, NOW())');
+        $notifRequired = ['user_id', 'tier', 'channel_mask', 'title', 'body', 'data_json'];
+        $notifOk = true;
+        foreach ($notifRequired as $c) {
+            if (!$has('notifications', $c)) { $notifOk = false; break; }
+        }
+
+        if ($notifOk) {
+            $notifCols = $notifRequired;
+            if ($has('notifications', 'created_at')) $notifCols[] = 'created_at';
+            if ($has('notifications', 'updated_at')) $notifCols[] = 'updated_at';
+
+            $notifSql = 'INSERT INTO notifications (' . implode(', ', $notifCols) . ') VALUES (' . implode(', ', array_fill(0, count($notifCols), '?')) . ')';
+            $insNotif = $db->prepare($notifSql);
+
+            $notifValsFor = function(int $userId, string $tier, string $channelMask, string $title, string $body, ?string $dataJson) use ($notifCols): array {
+                $vals = [];
+                foreach ($notifCols as $c) {
+                    if ($c === 'user_id') $vals[] = $userId;
+                    else if ($c === 'tier') $vals[] = $tier;
+                    else if ($c === 'channel_mask') $vals[] = $channelMask;
+                    else if ($c === 'title') $vals[] = $title;
+                    else if ($c === 'body') $vals[] = $body;
+                    else if ($c === 'data_json') $vals[] = $dataJson;
+                    else if ($c === 'created_at') $vals[] = demoSeedNow('now');
+                    else if ($c === 'updated_at') $vals[] = demoSeedNow('now');
+                    else $vals[] = null;
+                }
+                return $vals;
+            };
+        }
     }
 
     $createdUsers = [];
@@ -296,8 +537,8 @@ function seedDemoData(PDO $db, int $adminUserId, string $demoPassword = 'DemoPas
     $db->beginTransaction();
 
     // Ensure admin trust row exists for rooms features.
-    if ($insTrust) {
-        $insTrust->execute([(int)$adminUserId, 3, 0]);
+    if ($insTrust && $trustValsFor) {
+        $insTrust->execute($trustValsFor((int)$adminUserId, 3, 0));
     }
 
     foreach ($users as $u) {
@@ -352,38 +593,38 @@ function seedDemoData(PDO $db, int $adminUserId, string $demoPassword = 'DemoPas
             'trust_level' => (int)$u['trust_level'],
         ];
 
-        if ($insTrust) {
-            $insTrust->execute([$userId, (int)$u['trust_level'], 0]);
+        if ($insTrust && $trustValsFor) {
+            $insTrust->execute($trustValsFor($userId, (int)$u['trust_level'], 0));
         }
 
-        if ($insPrefs) {
+        if ($insPrefs && $prefValsFor) {
             $important = json_encode([
                 'email_time_lock_reminders' => 0,
             ], JSON_UNESCAPED_UNICODE);
             $informational = json_encode([
                 'skip_setup' => !empty($u['onboarding_complete']) ? 1 : 0,
             ], JSON_UNESCAPED_UNICODE);
-            $insPrefs->execute([$userId, $important, $informational]);
+            $insPrefs->execute($prefValsFor($userId, $important, $informational));
         }
 
-        if ($insRestriction && !empty($u['restricted'])) {
-            $insRestriction->execute([$userId, demoSeedNow('+10 days'), 'Demo restriction period']);
+        if ($insRestriction && $restrictionValsFor && !empty($u['restricted'])) {
+            $insRestriction->execute($restrictionValsFor($userId, demoSeedNow('+10 days'), 'Demo restriction period'));
         }
 
-        if ($insUserPkg && !empty($u['package_slug']) && isset($pkgId[(string)$u['package_slug']])) {
-            $insUserPkg->execute([$userId, $pkgId[(string)$u['package_slug']], $adminUserId]);
+        if ($insUserPkg && $userPkgValsFor && !empty($u['package_slug']) && isset($pkgId[(string)$u['package_slug']])) {
+            $insUserPkg->execute($userPkgValsFor($userId, $pkgId[(string)$u['package_slug']], $adminUserId));
         }
 
-        if ($insPurchase && $has('package_purchases') && $has('packages')) {
+        if ($insPurchase && $purchaseValsFor) {
             if ($email === 'sena.adjorlolo@example.com' && isset($pkgId['controle_plus'])) {
-                $insPurchase->execute([$userId, $pkgId['controle_plus'], 'pending', demoSeedNow('-1 day'), null, null, 'Demo pending purchase']);
+                $insPurchase->execute($purchaseValsFor($userId, $pkgId['controle_plus'], 'pending', demoSeedNow('-1 day'), null, null, 'Demo pending purchase'));
             }
             if ($email === 'yaovi.tchalla@example.com' && isset($pkgId['control_max'])) {
-                $insPurchase->execute([$userId, $pkgId['control_max'], 'rejected', demoSeedNow('-8 days'), demoSeedNow('-7 days'), $adminUserId, 'Demo rejected purchase']);
+                $insPurchase->execute($purchaseValsFor($userId, $pkgId['control_max'], 'rejected', demoSeedNow('-8 days'), demoSeedNow('-7 days'), $adminUserId, 'Demo rejected purchase'));
             }
         }
 
-        if ($insKyc) {
+        if ($insKyc && $kycValsFor) {
             $st = (string)($u['kyc_status'] ?? 'draft');
             $submittedAt = null;
             $decidedAt = null;
@@ -405,18 +646,18 @@ function seedDemoData(PDO $db, int $adminUserId, string $demoPassword = 'DemoPas
                 $note = 'Rejected (demo)';
             }
 
-            $insKyc->execute([$userId, $st, $note, $submittedAt, $decidedAt, $decidedBy]);
+            $insKyc->execute($kycValsFor($userId, $st, $note, $submittedAt, $decidedAt, $decidedBy));
         }
 
-        if ($insNotif) {
-            $insNotif->execute([
+        if ($insNotif && $notifValsFor) {
+            $insNotif->execute($notifValsFor(
                 $userId,
                 'informational',
                 'inapp',
                 'Welcome (demo)',
                 'This is a demo account created during installation for testing purposes.',
-                json_encode(['demo' => 1], JSON_UNESCAPED_UNICODE),
-            ]);
+                json_encode(['demo' => 1], JSON_UNESCAPED_UNICODE)
+            ));
         }
     }
 
@@ -536,22 +777,75 @@ function seedDemoData(PDO $db, int $adminUserId, string $demoPassword = 'DemoPas
             $idByEmail[(string)$r['email']] = (int)$r['id'];
         }
 
-        $roomCols = [
-            'id', 'maker_user_id', 'purpose_category', 'goal_text', 'saving_type', 'visibility',
-            'required_trust_level', 'min_participants', 'max_participants', 'participation_amount',
-            'periodicity', 'start_at', 'reveal_at', 'lobby_state', 'room_state', 'privacy_mode',
-            'escrow_policy', 'extensions_used',
+        $requiredRoomCols = [
+            'id',
+            'maker_user_id',
+            'saving_type',
+            'visibility',
+            'min_participants',
+            'max_participants',
+            'participation_amount',
+            'periodicity',
+            'start_at',
+            'reveal_at',
+            'lobby_state',
+            'room_state',
         ];
-        $roomSql = 'INSERT INTO saving_rooms (' . implode(', ', $roomCols) . ') VALUES (' . implode(', ', array_fill(0, count($roomCols), '?')) . ')';
-        $insRoom = $db->prepare($roomSql);
 
-        $partColsBase = ['room_id', 'user_id', 'status'];
-        $partCols = $partColsBase;
-        if ($has('saving_room_participants', 'joined_at')) $partCols[] = 'joined_at';
-        if ($has('saving_room_participants', 'approved_at')) $partCols[] = 'approved_at';
-        if ($has('saving_room_participants', 'slot_position')) $partCols[] = 'slot_position';
-        $partSql = 'INSERT INTO saving_room_participants (' . implode(', ', $partCols) . ') VALUES (' . implode(', ', array_fill(0, count($partCols), '?')) . ')';
-        $insPart = $db->prepare($partSql);
+        $canSeedRooms = true;
+        foreach ($requiredRoomCols as $c) {
+            if (!$has('saving_rooms', $c)) { $canSeedRooms = false; break; }
+        }
+
+        if ($canSeedRooms) {
+            $roomCols = [];
+            $roomColsAll = [
+                'id',
+                'maker_user_id',
+                'purpose_category',
+                'goal_text',
+                'saving_type',
+                'visibility',
+                'required_trust_level',
+                'min_participants',
+                'max_participants',
+                'participation_amount',
+                'periodicity',
+                'start_at',
+                'reveal_at',
+                'lobby_state',
+                'room_state',
+                'privacy_mode',
+                'escrow_policy',
+                'extensions_used',
+                'created_at',
+                'updated_at',
+            ];
+
+            foreach ($roomColsAll as $c) {
+                if ($has('saving_rooms', $c)) $roomCols[] = $c;
+            }
+
+            $roomSql = 'INSERT INTO saving_rooms (' . implode(', ', $roomCols) . ') VALUES (' . implode(', ', array_fill(0, count($roomCols), '?')) . ')';
+            $insRoom = $db->prepare($roomSql);
+
+            $roomValsFor = function(array $data) use ($roomCols): array {
+                $vals = [];
+                foreach ($roomCols as $c) {
+                    if (array_key_exists($c, $data)) $vals[] = $data[$c];
+                    else if ($c === 'created_at' || $c === 'updated_at') $vals[] = demoSeedNow('now');
+                    else $vals[] = null;
+                }
+                return $vals;
+            };
+
+            $partColsBase = ['room_id', 'user_id', 'status'];
+            $partCols = $partColsBase;
+            if ($has('saving_room_participants', 'joined_at')) $partCols[] = 'joined_at';
+            if ($has('saving_room_participants', 'approved_at')) $partCols[] = 'approved_at';
+            if ($has('saving_room_participants', 'slot_position')) $partCols[] = 'slot_position';
+            $partSql = 'INSERT INTO saving_room_participants (' . implode(', ', $partCols) . ') VALUES (' . implode(', ', array_fill(0, count($partCols), '?')) . ')';
+            $insPart = $db->prepare($partSql);
 
         $insJoinReq = null;
         if ($has('saving_room_join_requests')) {
@@ -584,26 +878,26 @@ function seedDemoData(PDO $db, int $adminUserId, string $demoPassword = 'DemoPas
         // Room A (public, lobby)
         $roomA = demoSeedGenerateUuid();
         $makerA = $idByEmail['kossi.mensah@example.com'];
-        $insRoom->execute([
-            $roomA,
-            $makerA,
-            'business',
-            'Démarrage d’un petit commerce à Lomé (démo)',
-            'A',
-            'public',
-            1,
-            3,
-            5,
-            '10000.00',
-            'weekly',
-            demoSeedNow('+10 days'),
-            demoSeedNow('+60 days'),
-            'open',
-            'lobby',
-            1,
-            'redistribute',
-            0,
-        ]);
+        $insRoom->execute($roomValsFor([
+            'id' => $roomA,
+            'maker_user_id' => $makerA,
+            'purpose_category' => 'business',
+            'goal_text' => 'Démarrage d’un petit commerce à Lomé (démo)',
+            'saving_type' => 'A',
+            'visibility' => 'public',
+            'required_trust_level' => 1,
+            'min_participants' => 3,
+            'max_participants' => 5,
+            'participation_amount' => '10000.00',
+            'periodicity' => 'weekly',
+            'start_at' => demoSeedNow('+10 days'),
+            'reveal_at' => demoSeedNow('+60 days'),
+            'lobby_state' => 'open',
+            'room_state' => 'lobby',
+            'privacy_mode' => 1,
+            'escrow_policy' => 'redistribute',
+            'extensions_used' => 0,
+        ]));
 
         $participantsA = [
             [$makerA, 'approved'],
@@ -642,26 +936,26 @@ function seedDemoData(PDO $db, int $adminUserId, string $demoPassword = 'DemoPas
         // Room B (public, active Type B)
         $roomB = demoSeedGenerateUuid();
         $makerB = $idByEmail['akossiwa.dossa@example.com'];
-        $insRoom->execute([
-            $roomB,
-            $makerB,
-            'community',
-            'Tontine de quartier (démo)',
-            'B',
-            'public',
-            2,
-            4,
-            6,
-            '5000.00',
-            'weekly',
-            demoSeedNow('-7 days'),
-            demoSeedNow('+45 days'),
-            'locked',
-            'active',
-            0,
-            'redistribute',
-            0,
-        ]);
+        $insRoom->execute($roomValsFor([
+            'id' => $roomB,
+            'maker_user_id' => $makerB,
+            'purpose_category' => 'community',
+            'goal_text' => 'Tontine de quartier (démo)',
+            'saving_type' => 'B',
+            'visibility' => 'public',
+            'required_trust_level' => 2,
+            'min_participants' => 4,
+            'max_participants' => 6,
+            'participation_amount' => '5000.00',
+            'periodicity' => 'weekly',
+            'start_at' => demoSeedNow('-7 days'),
+            'reveal_at' => demoSeedNow('+45 days'),
+            'lobby_state' => 'locked',
+            'room_state' => 'active',
+            'privacy_mode' => 0,
+            'escrow_policy' => 'redistribute',
+            'extensions_used' => 0,
+        ]));
 
         $participantsB = [
             [$makerB, 'active'],
@@ -689,26 +983,26 @@ function seedDemoData(PDO $db, int $adminUserId, string $demoPassword = 'DemoPas
         // Room C (private, lobby)
         $roomC = demoSeedGenerateUuid();
         $makerC = $idByEmail['mawuli.kponton@example.com'];
-        $insRoom->execute([
-            $roomC,
-            $makerC,
-            'education',
-            'Frais de scolarité (démo)',
-            'A',
-            'private',
-            3,
-            2,
-            3,
-            '15000.00',
-            'monthly',
-            demoSeedNow('+20 days'),
-            demoSeedNow('+110 days'),
-            'open',
-            'lobby',
-            1,
-            'refund_minus_fee',
-            0,
-        ]);
+        $insRoom->execute($roomValsFor([
+            'id' => $roomC,
+            'maker_user_id' => $makerC,
+            'purpose_category' => 'education',
+            'goal_text' => 'Frais de scolarité (démo)',
+            'saving_type' => 'A',
+            'visibility' => 'private',
+            'required_trust_level' => 3,
+            'min_participants' => 2,
+            'max_participants' => 3,
+            'participation_amount' => '15000.00',
+            'periodicity' => 'monthly',
+            'start_at' => demoSeedNow('+20 days'),
+            'reveal_at' => demoSeedNow('+110 days'),
+            'lobby_state' => 'open',
+            'room_state' => 'lobby',
+            'privacy_mode' => 1,
+            'escrow_policy' => 'refund_minus_fee',
+            'extensions_used' => 0,
+        ]));
 
         $vals = [];
         foreach ($partCols as $col) {
@@ -744,26 +1038,26 @@ function seedDemoData(PDO $db, int $adminUserId, string $demoPassword = 'DemoPas
         // Room D (closed, to populate trust passport)
         $roomD = demoSeedGenerateUuid();
         $makerD = $makerA;
-        $insRoom->execute([
-            $roomD,
-            $makerD,
-            'emergency',
-            'Caisse urgence (démo)',
-            'A',
-            'unlisted',
-            1,
-            2,
-            4,
-            '3000.00',
-            'weekly',
-            demoSeedNow('-50 days'),
-            demoSeedNow('-5 days'),
-            'locked',
-            'closed',
-            1,
-            'redistribute',
-            0,
-        ]);
+        $insRoom->execute($roomValsFor([
+            'id' => $roomD,
+            'maker_user_id' => $makerD,
+            'purpose_category' => 'emergency',
+            'goal_text' => 'Caisse urgence (démo)',
+            'saving_type' => 'A',
+            'visibility' => 'unlisted',
+            'required_trust_level' => 1,
+            'min_participants' => 2,
+            'max_participants' => 4,
+            'participation_amount' => '3000.00',
+            'periodicity' => 'weekly',
+            'start_at' => demoSeedNow('-50 days'),
+            'reveal_at' => demoSeedNow('-5 days'),
+            'lobby_state' => 'locked',
+            'room_state' => 'closed',
+            'privacy_mode' => 1,
+            'escrow_policy' => 'redistribute',
+            'extensions_used' => 0,
+        ]));
 
         $completed = [
             $makerD,
@@ -793,7 +1087,7 @@ function seedDemoData(PDO $db, int $adminUserId, string $demoPassword = 'DemoPas
                 $insComp->execute([(int)$uid, $roomD, demoSeedNow('-50 days'), demoSeedNow('-5 days'), 45]);
             }
 
-            if ($insTrust) {
+            if ($insTrust && $has('user_trust', 'completed_reveals_count')) {
                 $db->prepare('UPDATE user_trust SET completed_reveals_count = completed_reveals_count + 1 WHERE user_id IN (' . implode(',', array_fill(0, count($completed), '?')) . ')')
                    ->execute(array_values(array_map('intval', $completed)));
             }
@@ -809,26 +1103,26 @@ function seedDemoData(PDO $db, int $adminUserId, string $demoPassword = 'DemoPas
         if ($hasSwapWindowCols && $has('saving_room_slot_swaps')) {
             $roomSwap = demoSeedGenerateUuid();
             $makerSwap = $idByEmail['komla.afi@example.com'];
-            $insRoom->execute([
-                $roomSwap,
-                $makerSwap,
-                'community',
-                'Fenêtre d’échange des positions (démo)',
-                'B',
-                'public',
-                2,
-                4,
-                6,
-                '6000.00',
-                'weekly',
-                demoSeedNow('-2 hours'),
-                demoSeedNow('+40 days'),
-                'locked',
-                'swap_window',
-                0,
-                'redistribute',
-                0,
-            ]);
+            $insRoom->execute($roomValsFor([
+                'id' => $roomSwap,
+                'maker_user_id' => $makerSwap,
+                'purpose_category' => 'community',
+                'goal_text' => 'Fenêtre d’échange des positions (démo)',
+                'saving_type' => 'B',
+                'visibility' => 'public',
+                'required_trust_level' => 2,
+                'min_participants' => 4,
+                'max_participants' => 6,
+                'participation_amount' => '6000.00',
+                'periodicity' => 'weekly',
+                'start_at' => demoSeedNow('-2 hours'),
+                'reveal_at' => demoSeedNow('+40 days'),
+                'lobby_state' => 'locked',
+                'room_state' => 'swap_window',
+                'privacy_mode' => 0,
+                'escrow_policy' => 'redistribute',
+                'extensions_used' => 0,
+            ]));
 
             // Keep the swap window open so request/accept flows can be tested.
             $swapEndsAt = demoSeedNow('+8 hours');
@@ -926,26 +1220,26 @@ function seedDemoData(PDO $db, int $adminUserId, string $demoPassword = 'DemoPas
         if ($has('saving_room_unlock_events') && $has('saving_room_unlock_votes')) {
             $roomUnlockA = demoSeedGenerateUuid();
             $makerU = $makerA;
-            $insRoom->execute([
-                $roomUnlockA,
-                $makerU,
-                'business',
-                'Déverrouillage Type A (votes) (démo)',
-                'A',
-                'public',
-                1,
-                3,
-                5,
-                '8000.00',
-                'weekly',
-                demoSeedNow('-20 days'),
-                demoSeedNow('-1 day'),
-                'locked',
-                'active',
-                1,
-                'redistribute',
-                0,
-            ]);
+            $insRoom->execute($roomValsFor([
+                'id' => $roomUnlockA,
+                'maker_user_id' => $makerU,
+                'purpose_category' => 'business',
+                'goal_text' => 'Déverrouillage Type A (votes) (démo)',
+                'saving_type' => 'A',
+                'visibility' => 'public',
+                'required_trust_level' => 1,
+                'min_participants' => 3,
+                'max_participants' => 5,
+                'participation_amount' => '8000.00',
+                'periodicity' => 'weekly',
+                'start_at' => demoSeedNow('-20 days'),
+                'reveal_at' => demoSeedNow('-1 day'),
+                'lobby_state' => 'locked',
+                'room_state' => 'active',
+                'privacy_mode' => 1,
+                'escrow_policy' => 'redistribute',
+                'extensions_used' => 0,
+            ]));
 
             $participantsU = [
                 [$makerU, 'active'],
@@ -1026,8 +1320,16 @@ function seedDemoData(PDO $db, int $adminUserId, string $demoPassword = 'DemoPas
             $queue = $db->prepare($queueSql);
 
             $winCols = ['room_id','user_id','rotation_index','status'];
+            if ($has('saving_room_rotation_windows', 'delegate_user_id')) $winCols[] = 'delegate_user_id';
+            if ($has('saving_room_rotation_windows', 'delegate_set_at')) $winCols[] = 'delegate_set_at';
+            if ($has('saving_room_rotation_windows', 'approve_opens_at')) $winCols[] = 'approve_opens_at';
+            if ($has('saving_room_rotation_windows', 'approve_due_at')) $winCols[] = 'approve_due_at';
             if ($has('saving_room_rotation_windows', 'revealed_at')) $winCols[] = 'revealed_at';
             if ($has('saving_room_rotation_windows', 'expires_at')) $winCols[] = 'expires_at';
+            if ($has('saving_room_rotation_windows', 'withdrawal_confirmed_at')) $winCols[] = 'withdrawal_confirmed_at';
+            if ($has('saving_room_rotation_windows', 'withdrawal_confirmed_by_user_id')) $winCols[] = 'withdrawal_confirmed_by_user_id';
+            if ($has('saving_room_rotation_windows', 'withdrawal_reference')) $winCols[] = 'withdrawal_reference';
+            if ($has('saving_room_rotation_windows', 'withdrawal_confirmed_role')) $winCols[] = 'withdrawal_confirmed_role';
             if ($has('saving_room_rotation_windows', 'dispute_window_ends_at')) $winCols[] = 'dispute_window_ends_at';
             if ($has('saving_room_rotation_windows', 'created_at')) $winCols[] = 'created_at';
 
@@ -1050,19 +1352,70 @@ function seedDemoData(PDO $db, int $adminUserId, string $demoPassword = 'DemoPas
                 $pos++;
             }
 
+            $delegateUserId = (int)$makerB;
+            $delegateSetAt = demoSeedNow('-90 minutes');
+
+            // Type B "approbation" window (035) + withdrawal confirmation (030).
+            // These columns are optional across installs; values are only inserted when the columns exist.
+            $approveOpensAt = demoSeedNow('-30 minutes');
+            $approveDueAt = demoSeedNow('+6 hours');
+
+            $withdrawConfirmedAt = demoSeedNow('-25 minutes');
+            $withdrawConfirmedByUserId = (int)$makerB;
+            $withdrawReference = 'DEMO-WD-0001';
+            $withdrawConfirmedRole = 'maker';
+
             $vals = [];
             foreach ($winCols as $c) {
                 if ($c === 'room_id') $vals[] = $roomB;
                 else if ($c === 'user_id') $vals[] = $roomBActiveUser;
                 else if ($c === 'rotation_index') $vals[] = $roomBRotationIndex;
                 else if ($c === 'status') $vals[] = 'revealed';
+                else if ($c === 'delegate_user_id') $vals[] = $delegateUserId;
+                else if ($c === 'delegate_set_at') $vals[] = $delegateSetAt;
+                else if ($c === 'approve_opens_at') $vals[] = $approveOpensAt;
+                else if ($c === 'approve_due_at') $vals[] = $approveDueAt;
                 else if ($c === 'revealed_at') $vals[] = demoSeedNow('-3 hours');
                 else if ($c === 'expires_at') $vals[] = demoSeedNow('+60 hours');
+                else if ($c === 'withdrawal_confirmed_at') $vals[] = $withdrawConfirmedAt;
+                else if ($c === 'withdrawal_confirmed_by_user_id') $vals[] = $withdrawConfirmedByUserId;
+                else if ($c === 'withdrawal_reference') $vals[] = $withdrawReference;
+                else if ($c === 'withdrawal_confirmed_role') $vals[] = $withdrawConfirmedRole;
                 else if ($c === 'dispute_window_ends_at') $vals[] = demoSeedNow('+21 hours');
                 else if ($c === 'created_at') $vals[] = demoSeedNow('-7 days');
                 else $vals[] = null;
             }
             $window->execute($vals);
+
+            if ($has('saving_room_activity')) {
+                $act = $db->prepare('INSERT INTO saving_room_activity (room_id, event_type, public_payload_json, created_at) VALUES (?, ?, ?, NOW())');
+                $act->execute([$roomB, 'typeB_delegate_set', json_encode(['rotation_index' => $roomBRotationIndex, 'delegate_user_id' => $delegateUserId, 'demo' => 1], JSON_UNESCAPED_UNICODE)]);
+                $act->execute([$roomB, 'typeB_withdrawal_confirmed', json_encode(['rotation_index' => $roomBRotationIndex, 'withdrawal_reference' => $withdrawReference, 'withdrawal_confirmed_role' => $withdrawConfirmedRole, 'demo' => 1], JSON_UNESCAPED_UNICODE)]);
+            }
+
+            if ($has('saving_room_turn_code_views')) {
+                $viewCols = ['room_id','rotation_index','viewer_user_id','viewer_role'];
+                if ($has('saving_room_turn_code_views', 'viewed_at')) $viewCols[] = 'viewed_at';
+
+                $viewSql = 'INSERT IGNORE INTO saving_room_turn_code_views (' . implode(', ', $viewCols) . ') VALUES (' . implode(', ', array_fill(0, count($viewCols), '?')) . ')';
+                $insView = $db->prepare($viewSql);
+
+                $vals = [];
+                foreach ($viewCols as $c) {
+                    if ($c === 'room_id') $vals[] = $roomB;
+                    else if ($c === 'rotation_index') $vals[] = $roomBRotationIndex;
+                    else if ($c === 'viewer_user_id') $vals[] = $delegateUserId;
+                    else if ($c === 'viewer_role') $vals[] = 'delegate';
+                    else if ($c === 'viewed_at') $vals[] = demoSeedNow('-55 minutes');
+                    else $vals[] = null;
+                }
+                $insView->execute($vals);
+
+                if ($has('saving_room_activity')) {
+                    $act = $db->prepare('INSERT INTO saving_room_activity (room_id, event_type, public_payload_json, created_at) VALUES (?, ?, ?, NOW())');
+                    $act->execute([$roomB, 'typeB_code_accessed', json_encode(['rotation_index' => $roomBRotationIndex, 'viewer_user_id' => $delegateUserId, 'viewer_role' => 'delegate', 'demo' => 1], JSON_UNESCAPED_UNICODE)]);
+                }
+            }
         }
 
         if ($has('saving_room_unlock_votes')) {
@@ -1072,8 +1425,13 @@ function seedDemoData(PDO $db, int $adminUserId, string $demoPassword = 'DemoPas
             $voteSql = 'INSERT IGNORE INTO saving_room_unlock_votes (' . implode(', ', $voteCols) . ') VALUES (' . implode(', ', array_fill(0, count($voteCols), '?')) . ')';
             $insVote = $db->prepare($voteSql);
 
+            $approveCount = 0;
+            $rejectCount = 0;
+
             foreach ($participantsB as $i => $p) {
                 $vote = ($i === 2) ? 'reject' : 'approve';
+                if ($vote === 'approve') $approveCount++; else $rejectCount++;
+
                 $vals = [];
                 foreach ($voteCols as $c) {
                     if ($c === 'room_id') $vals[] = $roomB;
@@ -1087,9 +1445,14 @@ function seedDemoData(PDO $db, int $adminUserId, string $demoPassword = 'DemoPas
                 }
                 $insVote->execute($vals);
             }
+
+            if ($has('saving_room_activity')) {
+                $act = $db->prepare('INSERT INTO saving_room_activity (room_id, event_type, public_payload_json, created_at) VALUES (?, ?, ?, NOW())');
+                $act->execute([$roomB, 'rotation_vote_updated', json_encode(['rotation_index' => $roomBRotationIndex, 'approve_count' => $approveCount, 'reject_count' => $rejectCount, 'required' => 3, 'demo' => 1], JSON_UNESCAPED_UNICODE)]);
+            }
         }
 
-        if ($has('saving_room_disputes') && $has('saving_room_dispute_ack') && $has('saving_room_rotation_windows')) {
+        if ($has('saving_room_disputes')) {
             $dispCols = ['room_id','rotation_index','raised_by_user_id','reason','status','threshold_count_required'];
             if ($has('saving_room_disputes', 'created_at')) $dispCols[] = 'created_at';
             if ($has('saving_room_disputes', 'updated_at')) $dispCols[] = 'updated_at';
@@ -1098,38 +1461,41 @@ function seedDemoData(PDO $db, int $adminUserId, string $demoPassword = 'DemoPas
             $insDisp = $db->prepare($dispSql);
 
             $raiser = (int)$participantsB[2][0];
+            $required = 2;
+
             $dVals = [];
             foreach ($dispCols as $c) {
                 if ($c === 'room_id') $dVals[] = $roomB;
                 else if ($c === 'rotation_index') $dVals[] = $roomBRotationIndex;
                 else if ($c === 'raised_by_user_id') $dVals[] = $raiser;
                 else if ($c === 'reason') $dVals[] = 'Demo dispute (rotation eligibility)';
-                else if ($c === 'status') $dVals[] = 'escalated_admin';
-                else if ($c === 'threshold_count_required') $dVals[] = 2;
+                else if ($c === 'status') $dVals[] = 'open';
+                else if ($c === 'threshold_count_required') $dVals[] = $required;
                 else if ($c === 'created_at') $dVals[] = demoSeedNow('-90 minutes');
-                else if ($c === 'updated_at') $dVals[] = demoSeedNow('-60 minutes');
+                else if ($c === 'updated_at') $dVals[] = null;
                 else $dVals[] = null;
             }
             $insDisp->execute($dVals);
             $disputeId = (int)$db->lastInsertId();
 
-            if ($disputeId > 0) {
+            $ackCount = 0;
+            if ($disputeId > 0 && $has('saving_room_dispute_ack')) {
                 $db->prepare('INSERT IGNORE INTO saving_room_dispute_ack (dispute_id, user_id) VALUES (?, ?)')->execute([$disputeId, $raiser]);
-                $db->prepare('INSERT IGNORE INTO saving_room_dispute_ack (dispute_id, user_id) VALUES (?, ?)')->execute([$disputeId, (int)$participantsB[3][0]]);
+                $ackCount = 1;
+            }
 
-                $db->prepare("UPDATE saving_room_rotation_windows SET status='blocked_dispute' WHERE room_id = ? AND rotation_index = ? AND status IN ('revealed','pending_votes','blocked_dispute')")
-                   ->execute([$roomB, $roomBRotationIndex]);
-
-                if ($has('saving_room_activity')) {
-                    $act = $db->prepare('INSERT INTO saving_room_activity (room_id, event_type, public_payload_json, created_at) VALUES (?, ?, ?, NOW())');
-                    $act->execute([$roomB, 'dispute_raised', json_encode(['dispute_id' => $disputeId, 'rotation_index' => $roomBRotationIndex, 'demo' => 1], JSON_UNESCAPED_UNICODE)]);
-                    $act->execute([$roomB, 'rotation_blocked_dispute', json_encode(['rotation_index' => $roomBRotationIndex, 'demo' => 1], JSON_UNESCAPED_UNICODE)]);
+            if ($disputeId > 0 && $has('saving_room_activity')) {
+                $act = $db->prepare('INSERT INTO saving_room_activity (room_id, event_type, public_payload_json, created_at) VALUES (?, ?, ?, NOW())');
+                $act->execute([$roomB, 'dispute_raised', json_encode(['rotation_index' => $roomBRotationIndex, 'ack_count' => $ackCount, 'required' => $required, 'demo' => 1], JSON_UNESCAPED_UNICODE)]);
+                if ($ackCount > 0) {
+                    $act->execute([$roomB, 'dispute_ack_updated', json_encode(['rotation_index' => $roomBRotationIndex, 'ack_count' => $ackCount, 'required' => $required, 'demo' => 1], JSON_UNESCAPED_UNICODE)]);
                 }
             }
         }
 
         if ($has('saving_room_exit_requests')) {
             $exCols = ['room_id','requested_by_user_id','status'];
+            if ($has('saving_room_exit_requests', 'reason')) $exCols[] = 'reason';
             if ($has('saving_room_exit_requests', 'created_at')) $exCols[] = 'created_at';
 
             $exSql = 'INSERT INTO saving_room_exit_requests (' . implode(', ', $exCols) . ') VALUES (' . implode(', ', array_fill(0, count($exCols), '?')) . ')';
@@ -1140,6 +1506,7 @@ function seedDemoData(PDO $db, int $adminUserId, string $demoPassword = 'DemoPas
                 if ($c === 'room_id') $exVals[] = $roomB;
                 else if ($c === 'requested_by_user_id') $exVals[] = (int)$participantsB[3][0];
                 else if ($c === 'status') $exVals[] = 'open';
+                else if ($c === 'reason') $exVals[] = 'Demo exit request (needs cashflow)';
                 else if ($c === 'created_at') $exVals[] = demoSeedNow('-45 minutes');
                 else $exVals[] = null;
             }
@@ -1154,8 +1521,13 @@ function seedDemoData(PDO $db, int $adminUserId, string $demoPassword = 'DemoPas
                 $voteSql = 'INSERT IGNORE INTO saving_room_unlock_votes (' . implode(', ', $voteCols) . ') VALUES (' . implode(', ', array_fill(0, count($voteCols), '?')) . ')';
                 $insVote = $db->prepare($voteSql);
 
+                $approveCount = 0;
+                $rejectCount = 0;
+
                 foreach ($participantsB as $i => $p) {
                     $vote = ($i === 1) ? 'reject' : 'approve';
+                    if ($vote === 'approve') $approveCount++; else $rejectCount++;
+
                     $vals = [];
                     foreach ($voteCols as $c) {
                         if ($c === 'room_id') $vals[] = $roomB;
@@ -1173,10 +1545,12 @@ function seedDemoData(PDO $db, int $adminUserId, string $demoPassword = 'DemoPas
                 if ($has('saving_room_activity')) {
                     $act = $db->prepare('INSERT INTO saving_room_activity (room_id, event_type, public_payload_json, created_at) VALUES (?, ?, ?, NOW())');
                     $act->execute([$roomB, 'exit_requested', json_encode(['exit_request_id' => $exitReqId, 'demo' => 1], JSON_UNESCAPED_UNICODE)]);
+                    $act->execute([$roomB, 'exit_vote_updated', json_encode(['exit_request_id' => $exitReqId, 'approve_count' => $approveCount, 'reject_count' => $rejectCount, 'required' => 3, 'demo' => 1], JSON_UNESCAPED_UNICODE)]);
                 }
             }
         }
 
+        $roomBCycle1 = 0;
         if ($has('saving_room_contribution_cycles') && $has('saving_room_contributions')) {
             $insCycle = $db->prepare('INSERT IGNORE INTO saving_room_contribution_cycles (room_id, cycle_index, due_at, grace_ends_at, status, created_at)
                                       VALUES (?, ?, ?, ?, ?, NOW())');
@@ -1185,19 +1559,96 @@ function seedDemoData(PDO $db, int $adminUserId, string $demoPassword = 'DemoPas
 
             $cycleIdStmt = $db->prepare('SELECT id FROM saving_room_contribution_cycles WHERE room_id = ? AND cycle_index = ?');
             $cycleIdStmt->execute([$roomB, 1]);
-            $cycle1 = (int)$cycleIdStmt->fetchColumn();
+            $roomBCycle1 = (int)$cycleIdStmt->fetchColumn();
 
-            if ($cycle1 > 0) {
+            if ($roomBCycle1 > 0) {
                 $insContrib = $db->prepare("INSERT INTO saving_room_contributions (room_id, user_id, cycle_id, amount, status, reference, confirmed_at, created_at)
                                             VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
                                             ON DUPLICATE KEY UPDATE amount=VALUES(amount), status=VALUES(status), reference=VALUES(reference), confirmed_at=VALUES(confirmed_at)");
 
                 // Mix of paid / missed
-                $insContrib->execute([$roomB, (int)$makerB, $cycle1, '5000.00', 'paid', 'DEMO-PAID-001', demoSeedNow('-12 hours')]);
-                $insContrib->execute([$roomB, (int)$participantsB[1][0], $cycle1, '5000.00', 'paid_in_grace', 'DEMO-PAID-002', demoSeedNow('-2 hours')]);
-                $insContrib->execute([$roomB, (int)$participantsB[2][0], $cycle1, '5000.00', 'unpaid', null, null]);
-                $insContrib->execute([$roomB, (int)$participantsB[3][0], $cycle1, '5000.00', 'unpaid', null, null]);
-                $insContrib->execute([$roomB, (int)$participantsB[4][0], $cycle1, '5000.00', 'paid', 'DEMO-PAID-003', demoSeedNow('-10 hours')]);
+                $insContrib->execute([$roomB, (int)$makerB, $roomBCycle1, '5000.00', 'paid', 'DEMO-PAID-001', demoSeedNow('-12 hours')]);
+                $insContrib->execute([$roomB, (int)$participantsB[1][0], $roomBCycle1, '5000.00', 'paid_in_grace', 'DEMO-PAID-002', demoSeedNow('-2 hours')]);
+                $insContrib->execute([$roomB, (int)$participantsB[2][0], $roomBCycle1, '5000.00', 'unpaid', null, null]);
+                $insContrib->execute([$roomB, (int)$participantsB[3][0], $roomBCycle1, '5000.00', 'unpaid', null, null]);
+                $insContrib->execute([$roomB, (int)$participantsB[4][0], $roomBCycle1, '5000.00', 'paid', 'DEMO-PAID-003', demoSeedNow('-10 hours')]);
+            }
+        }
+
+        if ($has('saving_room_account_ledger')) {
+            $ledgerCols = ['room_id','entry_seq','entry_type','entry_kind','amount','balance_after','source_type','source_id'];
+            if ($has('saving_room_account_ledger', 'created_by_user_id')) $ledgerCols[] = 'created_by_user_id';
+            if ($has('saving_room_account_ledger', 'created_at')) $ledgerCols[] = 'created_at';
+
+            $ledgerSql = 'INSERT IGNORE INTO saving_room_account_ledger (' . implode(', ', $ledgerCols) . ') VALUES (' . implode(', ', array_fill(0, count($ledgerCols), '?')) . ')';
+            $insLedger = $db->prepare($ledgerSql);
+
+            $entries = [];
+            if ($roomBCycle1 > 0 && $has('saving_room_contributions')) {
+                $st = $db->prepare("SELECT id, user_id, amount, status, confirmed_at, created_at FROM saving_room_contributions WHERE room_id = ? AND cycle_id = ? ORDER BY id ASC");
+                $st->execute([$roomB, $roomBCycle1]);
+                $rows = $st->fetchAll();
+                $st->closeCursor();
+
+                foreach ($rows as $r) {
+                    if (!in_array((string)$r['status'], ['paid', 'paid_in_grace'], true)) continue;
+                    $entries[] = [
+                        'entry_type' => 'credit',
+                        'entry_kind' => 'contribution',
+                        'amount' => (string)$r['amount'],
+                        'source_type' => 'contribution',
+                        'source_id' => (string)$r['id'],
+                        'created_by_user_id' => (int)$r['user_id'],
+                        'created_at' => (string)($r['confirmed_at'] ?: $r['created_at'] ?: demoSeedNow('-6 hours')),
+                    ];
+                }
+            }
+
+            if (!$entries) {
+                $entries[] = [
+                    'entry_type' => 'credit',
+                    'entry_kind' => 'contribution',
+                    'amount' => '20000.00',
+                    'source_type' => 'seed',
+                    'source_id' => 'DEMO-SEED-CREDIT',
+                    'created_by_user_id' => (int)$makerB,
+                    'created_at' => demoSeedNow('-6 hours'),
+                ];
+            }
+
+            $entries[] = [
+                'entry_type' => 'debit',
+                'entry_kind' => 'withdrawal',
+                'amount' => '10000.00',
+                'source_type' => 'withdrawal',
+                'source_id' => 'DEMO-WITHDRAW-ROOMB-1',
+                'created_by_user_id' => $roomBActiveUser,
+                'created_at' => demoSeedNow('-30 minutes'),
+            ];
+
+            $balance = 0.0;
+            $seq = 1;
+            foreach ($entries as $e) {
+                $amt = (float)$e['amount'];
+                if ($e['entry_type'] === 'credit') $balance += $amt;
+                else $balance -= $amt;
+
+                $vals = [];
+                foreach ($ledgerCols as $c) {
+                    if ($c === 'room_id') $vals[] = $roomB;
+                    else if ($c === 'entry_seq') $vals[] = $seq;
+                    else if ($c === 'entry_type') $vals[] = (string)$e['entry_type'];
+                    else if ($c === 'entry_kind') $vals[] = (string)$e['entry_kind'];
+                    else if ($c === 'amount') $vals[] = (string)$e['amount'];
+                    else if ($c === 'balance_after') $vals[] = sprintf('%.2f', $balance);
+                    else if ($c === 'source_type') $vals[] = (string)$e['source_type'];
+                    else if ($c === 'source_id') $vals[] = (string)$e['source_id'];
+                    else if ($c === 'created_by_user_id') $vals[] = (int)$e['created_by_user_id'];
+                    else if ($c === 'created_at') $vals[] = (string)$e['created_at'];
+                    else $vals[] = null;
+                }
+                $insLedger->execute($vals);
+                $seq++;
             }
         }
 
@@ -1255,6 +1706,7 @@ function seedDemoData(PDO $db, int $adminUserId, string $demoPassword = 'DemoPas
         if (!empty($roomSwap)) $roomsOut[] = ['id' => $roomSwap, 'visibility' => 'public', 'saving_type' => 'B'];
         if (!empty($roomUnlockA)) $roomsOut[] = ['id' => $roomUnlockA, 'visibility' => 'public', 'saving_type' => 'A'];
         $out['rooms'] = $roomsOut;
+        }
     }
 
     $db->commit();
