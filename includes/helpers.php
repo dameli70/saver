@@ -20,6 +20,43 @@ require_once __DIR__ . '/smtp.php';
 require_once __DIR__ . '/i18n.php';
 
 // ── Session ──────────────────────────────────────────────────
+function isHttpsRequest(): bool {
+    if (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') return true;
+
+    $scheme = strtolower((string)($_SERVER['REQUEST_SCHEME'] ?? ''));
+    if ($scheme === 'https') return true;
+
+    $xfp = (string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '');
+    if ($xfp !== '') {
+        $xfp = strtolower(trim(explode(',', $xfp)[0]));
+        if ($xfp === 'https') return true;
+    }
+
+    $xfs = strtolower((string)($_SERVER['HTTP_X_FORWARDED_SSL'] ?? ''));
+    if ($xfs === 'on') return true;
+
+    return false;
+}
+
+function appSessionCookiePath(): string {
+    if (function_exists('getAppBasePath')) {
+        $base = (string)getAppBasePath();
+        return ($base !== '') ? $base : '/';
+    }
+
+    $dir = rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? '/'), '/');
+    $dir = preg_replace('#/(api|install)$#', '', $dir);
+    if ($dir === '' || $dir === '/' || $dir === '.') return '/';
+    return $dir;
+}
+
+function appSessionName(): string {
+    // Avoid collisions with other PHP apps on the same domain (default PHPSESSID).
+    // Include the base path so multiple installs on one domain don't conflict.
+    $path = appSessionCookiePath();
+    return 'controle_sess_' . substr(hash('sha256', $path), 0, 12);
+}
+
 function startSecureSession(): void {
     if (session_status() !== PHP_SESSION_NONE) {
         if (function_exists('i18nBootstrap')) {
@@ -28,14 +65,24 @@ function startSecureSession(): void {
         return;
     }
 
+    // Use a stable, app-specific session cookie name (prevents collisions across multiple apps).
+    session_name(appSessionName());
+
     $sent = false;
     try { $sent = headers_sent(); } catch (Throwable) { $sent = false; }
 
-    // Only mutate session ini settings if headers are still modifiable.
+    // Session settings must be applied before session_start().
     if (!$sent) {
+        $cookiePath = appSessionCookiePath();
+
         ini_set('session.cookie_httponly', 1);
-        ini_set('session.cookie_secure', (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 1 : 0);
-        ini_set('session.cookie_samesite', 'Strict');
+        ini_set('session.cookie_secure', isHttpsRequest() ? 1 : 0);
+
+        // Lax prevents losing the session after cross-site top-level navigations
+        // (e.g., email verification link -> verify.php -> dashboard.php).
+        ini_set('session.cookie_samesite', 'Lax');
+        ini_set('session.cookie_path', $cookiePath);
+
         ini_set('session.use_strict_mode', 1);
         ini_set('session.gc_maxlifetime', 3600);
     }
