@@ -3226,7 +3226,7 @@ if ($action === 'typeB_exit_request_create') {
 
     $reqId = (int)$db->lastInsertId();
 
-    activityLog($roomId, 'exit_requested', ['exit_request_id' => $;
+    activityLog($roomId, 'exit_requested', ['exit_request_id' => $reqId]);
 
     $makerId = (int)$room['maker_user_id'];
     if ($makerId > 0) {
@@ -4304,7 +4304,8 @@ if ($action === 'confirm_contribution_with_proof') {
     if (!empty($f['error'])) jsonResponse(['error' => 'Upload failed'], 400);
 
     $size = (int)($f['size'] ?? 0);
-    if ($size <= 0 || $size > 5_000_000) jsonResponse(['error' => 'File too large (max 5MB)'], 400);
+    // Avoid numeric separators for compatibility with older PHP versions (<7.4).
+    if ($size <= 0 || $size > 5000000) jsonResponse(['error' => 'File too large (max 5MB)'], 400);
 
     $tmp = (string)($f['tmp_name'] ?? '');
     if ($tmp === '' || !is_uploaded_file($tmp)) jsonResponse(['error' => 'Invalid upload'], 400);
