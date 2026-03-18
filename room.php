@@ -71,6 +71,16 @@ header("Referrer-Policy: no-referrer");
       <div class="card-title"><?php e('room.overview_title'); ?></div>
       <div id="room-overview" class="k"><?php e('common.loading'); ?></div>
 
+      <?php if ($isAdmin): ?>
+      <details id="admin-panel" style="margin-top:12px;">
+        <summary style="cursor:pointer;user-select:none;"><?php e('nav.admin'); ?></summary>
+        <div id="admin-panel-body" style="margin-top:10px;"></div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">
+          <a class="btn btn-ghost btn-sm" href="admin.php"><?php e('nav.admin'); ?></a>
+        </div>
+      </details>
+      <?php endif; ?>
+
       <div id="contrib-block" style="display:none; margin-top:12px;">
         <div class="hr"></div>
         <div class="card-title" style="margin-bottom:10px;"><?php e('room.contribution_title'); ?></div>
@@ -255,6 +265,9 @@ header("Referrer-Policy: no-referrer");
         <div class="hr"></div>
         <div class="card-title" style="margin-bottom:10px;"><?php e('room.swap.title'); ?></div>
         <div class="p" style="margin-bottom:10px;"><?php e('room.swap.sub'); ?></div>
+        <div id="swap-admin-hint" class="small" style="display:none;margin-top:-6px;margin-bottom:10px;">
+          <?php e('nav.admin'); ?>: you can review slots and swap requests, but swap actions are disabled unless you are a participant.
+        </div>
 
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
           <div>
@@ -963,6 +976,52 @@ function startRoomCountdown(){
   roomTicker = setInterval(updateRoomCountdown, 1000);
 }
 
+function renderAdminPanel(r){
+  const wrap = document.getElementById('admin-panel');
+  const body = document.getElementById('admin-panel-body');
+  if(!wrap || !body) return;
+
+  if(!IS_ADMIN){
+    wrap.style.display='none';
+    return;
+  }
+
+  const rows = [];
+  rows.push(['Room ID', ROOM_ID]);
+  rows.push(['room_state', r ? r.room_state : null]);
+  rows.push(['saving_type', r ? r.saving_type : null]);
+  rows.push(['visibility', r ? r.visibility : null]);
+  rows.push(['lobby_state', r ? r.lobby_state : null]);
+  rows.push(['my_status', r ? (r.my_status||'none') : null]);
+  rows.push(['is_maker', (r && r.is_maker) ? '1' : '0']);
+
+  if(r){
+    rows.push(['approved_count', r.approved_count]);
+    rows.push(['min_participants', r.min_participants]);
+    rows.push(['max_participants', r.max_participants]);
+    rows.push(['required_trust_level', r.required_trust_level]);
+    rows.push(['periodicity', r.periodicity]);
+    rows.push(['participation_amount', r.participation_amount]);
+    rows.push(['start_at', r.start_at]);
+    rows.push(['reveal_at', r.reveal_at]);
+
+    if(r.swap_window){
+      rows.push(['swap_window.is_open', r.swap_window.is_open]);
+      rows.push(['swap_window.closes_at', r.swap_window.closes_at]);
+    }
+
+    const slots = Array.isArray(r.slots) ? r.slots : [];
+    const swaps = Array.isArray(r.slot_swaps) ? r.slot_swaps : [];
+    rows.push(['slots', String(slots.length)]);
+    rows.push(['slot_swaps', String(swaps.length)]);
+  }
+
+  body.innerHTML = '<div style="font-size:12px;line-height:1.7;">' + rows.map(([k,v]) => {
+    const vv = (v === null || typeof v === 'undefined' || v === '') ? '—' : String(v);
+    return '<div><span class="k">' + esc(k) + ':</span> ' + esc(vv) + '</div>';
+  }).join('') + '</div>';
+}
+
 function renderRoom(){
   const r = roomCache;
   if(!r) return;
@@ -999,6 +1058,8 @@ function renderRoom(){
       <div><span class="k">${esc(tr('room.ov.your_status', null, 'Your status'))}:</span> ${esc(r.my_status||'none')}</div>
     </div>
   `;
+
+  renderAdminPanel(r);
 
   updateRoomCountdown();
   startRoomCountdown();
@@ -1187,14 +1248,14 @@ function renderRoom(){
           wdWrap.style.display = canSee ? 'block' : 'none';
 
           if(canSee){
-            const hasBal = (r.account_balance != null);
+            const hasBal = !(r.account_balance === null || typeof r.account_balance === 'undefined' || String(r.account_balance) === '');
             const bal = hasBal ? String(r.account_balance) : '—';
             const req = (r.required_withdrawal_amount != null) ? String(r.required_withdrawal_amount) : '';
 
-            const balNum = parseFloat(bal);
+            const balNum = hasBal ? parseFloat(bal) : NaN;
             const reqNum = parseFloat(req);
             const hasReq = (!isNaN(reqNum) && reqNum > 0);
-            const insufficient = (hasBal && hasReq && !isNaN(balNum) && balNum + 0.00001 < reqNum);
+            const insufficient = (hasReq && hasBal && !isNaN(balNum) && balNum + 0.00001 < reqNum);
 
             if(cur.withdrawal_confirmed_at){
               const by = cur.withdrawal_confirmed_by_name ? (' · ' + String(cur.withdrawal_confirmed_by_name)) : '';
@@ -1404,14 +1465,26 @@ function swapStatusText(status){
   return status ? String(status) : '';
 }
 
+function isSwapParticipant(r){
+  return !!(r && (r.my_status === 'approved' || r.my_status === 'active'));
+}
+
+
+
 function renderSwapWindow(r){
   const block = document.getElementById('swap-block');
   if(!block) return;
 
   const inSwap = (r.room_state === 'swap_window');
-  const show = (r.saving_type === 'B' && (inSwap || r.room_state === 'active') && (r.my_status === 'approved' || r.my_status === 'active'));
+  const participant = isSwapParticipant(r);
+
+  // Admins can always review swap state + requests for Type B rooms during swap_window/active.
+  const show = (r.saving_type === 'B' && (inSwap || r.room_state === 'active') && (participant || IS_ADMIN));
   block.style.display = show ? 'block' : 'none';
   if(!show) return;
+
+  const adminHint = document.getElementById('swap-admin-hint');
+  if(adminHint) adminHint.style.display = (IS_ADMIN && !participant) ? 'block' : 'none';
 
   const swapWindow = r.swap_window || {};
   const isOpen = inSwap && !!swapWindow.is_open;
@@ -1456,14 +1529,14 @@ function renderSwapWindow(r){
     if(slotsEmpty) slotsEmpty.style.display = 'block';
   }
 
-  // Request form (only if window is open)
+  // Request form (only if window is open + viewer is a participant)
   const form = document.getElementById('swap-request-form');
   const sel = document.getElementById('swap-to-user');
   const btn = document.getElementById('swap-request-btn');
 
-  if(form) form.style.display = isOpen ? 'block' : 'none';
+  if(form) form.style.display = (isOpen && participant) ? 'block' : 'none';
 
-  if(isOpen && sel){
+  if(isOpen && participant && sel){
     const opts = slots.filter(x => x && (x.user_id|0) !== (CURRENT_USER_ID|0));
     sel.innerHTML = '<option value="0">' + esc(tr('room.swap.select_placeholder', null, 'Select a participant')) + '</option>';
     opts.forEach(x => {
@@ -1493,13 +1566,14 @@ function renderSwapWindow(r){
       const st = String(s.status||'');
 
       let actions = '';
+      const canAct = (isOpen && participant);
       // Only allow swap actions while the swap window is open; backend also enforces this.
-      if(isOpen && st === 'pending' && (s.to_user_id|0) === (CURRENT_USER_ID|0)){
+      if(canAct && st === 'pending' && (s.to_user_id|0) === (CURRENT_USER_ID|0)){
         actions = `
           <button class="btn btn-blue btn-sm" onclick="respondSwap(${s.id}, 'accept')">${esc(tr('room.swap.btn_accept', null, 'Accept'))}</button>
           <button class="btn btn-red btn-sm" onclick="respondSwap(${s.id}, 'decline')">${esc(tr('room.swap.btn_decline', null, 'Decline'))}</button>
         `;
-      } else if(isOpen && st === 'pending' && (s.from_user_id|0) === (CURRENT_USER_ID|0)){
+      } else if(canAct && st === 'pending' && (s.from_user_id|0) === (CURRENT_USER_ID|0)){
         actions = `<button class="btn btn-ghost btn-sm" onclick="cancelSwap(${s.id})">${esc(STR.cancel)}</button>`;
       }
 
@@ -1518,11 +1592,23 @@ function renderSwapWindow(r){
   }
 }
 
+function canUseSwapActions(){
+  return isSwapParticipant(roomCache);
+}
+
 async function requestSwap(){
   document.getElementById('swap-msg').className='msg';
 
   const r = roomCache;
   if(!r) return;
+
+  if(!canUseSwapActions()){
+    const msg = IS_ADMIN
+      ? 'Admin view only — swap actions are disabled unless you are a participant.'
+      : 'Swap actions are available to participants only.';
+    setMsg('swap-msg', msg, false);
+    return;
+  }
 
   const sel = document.getElementById('swap-to-user');
   const to_user_id = sel ? parseInt(sel.value||'0', 10) : 0;
@@ -1559,6 +1645,14 @@ async function requestSwap(){
 async function respondSwap(swapId, decision){
   document.getElementById('swap-msg').className='msg';
 
+  if(!canUseSwapActions()){
+    const msg = IS_ADMIN
+      ? 'Admin view only — swap actions are disabled unless you are a participant.'
+      : 'Swap actions are available to participants only.';
+    setMsg('swap-msg', msg, false);
+    return;
+  }
+
   try{
     const res = await postStrong('/api/rooms.php', {action:'respond_swap', swap_id: swapId, decision});
     if(!res.success) throw new Error(res.error||STR.failed);
@@ -1579,6 +1673,14 @@ async function respondSwap(swapId, decision){
 
 async function cancelSwap(swapId){
   document.getElementById('swap-msg').className='msg';
+
+  if(!canUseSwapActions()){
+    const msg = IS_ADMIN
+      ? 'Admin view only — swap actions are disabled unless you are a participant.'
+      : 'Swap actions are available to participants only.';
+    setMsg('swap-msg', msg, false);
+    return;
+  }
 
   try{
     const res = await postStrong('/api/rooms.php', {action:'cancel_swap', swap_id: swapId});
