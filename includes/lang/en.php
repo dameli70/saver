@@ -1127,8 +1127,15 @@ return [
 
     'room.contribution.no_active_cycle' => 'No active cycle.',
     'room.contribution.confirmed' => 'Contribution confirmed.',
+    'room.contribution.proof_label' => 'Proof (screenshot)',
+    'room.contribution.proof_sub' => 'PNG/JPG/WebP up to 5MB. Duplicate screenshots are ignored.',
+    'room.contribution.proof_required' => 'Proof screenshot required.',
 
     'room.rotation.consensus_you_required' => '{approvals}/{required} required (you: {vote} · eligible {eligible})',
+    'room.rotation.position_fmt' => 'Position {n}',
+    'room.rotation.approval_opens_fmt' => 'Approval opens {ts}',
+    'room.rotation.approval_closed_fmt' => 'Approval window closed {ts}',
+    'room.rotation.approval_due_in_fmt' => 'Approval due {ts} (in {h}h {m}m)',
     'room.rotation.blocked_dispute' => 'Blocked (dispute)',
     'room.rotation.blocked_debt' => 'Blocked (unpaid contribution)',
     'room.rotation.pending_votes' => 'Pending votes',
@@ -1150,6 +1157,8 @@ return [
     // Swap window (Type B)
     'room.swap.title' => 'Swap window (Type B)',
     'room.swap.sub' => 'Request to swap your payout slot with another participant during this window.',
+    'room.swap.final_positions_title' => 'Final positions',
+    'room.swap.final_positions_sub' => 'The payout order for this room.',
     'room.swap.status' => 'Status',
     'room.swap.closes' => 'Closes',
     'room.swap.open' => 'Open',
@@ -1301,6 +1310,9 @@ return [
     'room.rotation.withdrawal_confirm_btn' => 'Confirm withdrawn',
     'room.rotation.withdrawal_not_confirmed' => 'Not confirmed yet.',
     'room.rotation.withdrawal_confirmed_fmt' => 'Confirmed {ts}',
+    'room.rotation.withdrawal_balance_fmt' => 'Balance {bal} / Required {req}',
+    'room.rotation.withdrawal_balance_only_fmt' => 'Balance {bal}',
+    'room.rotation.withdrawal_blocked_balance' => 'Blocked (insufficient balance)',
     'room.rotation.withdrawal_unconfirmed' => 'Unconfirmed',
     'room.rotation.withdrawal_reference_prompt' => 'Optional reference / note (leave blank if none):',
 

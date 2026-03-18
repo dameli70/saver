@@ -9,6 +9,7 @@ requireInstalledForApi();
 
 require_once __DIR__ . '/../includes/helpers.php';
 require_once __DIR__ . '/../includes/packages.php';
+require_once __DIR__ . '/../includes/media_crypto.php';
 header('Content-Type: application/json');
 startSecureSession();
 
@@ -96,6 +97,56 @@ function notifyOnceApi(int $userId, string $eventKey, string $tier, string $titl
 
     $db->prepare('INSERT INTO notifications (user_id, tier, channel_mask, title, body, data_json) VALUES (?, ?, ?, ?, ?, ?)')
        ->execute([(int)$userId, $tier, $channelMask, $title, $body, $data ? json_encode($data, JSON_UNESCAPED_UNICODE) : null]);
+}
+
+// ── Room account ledger (derived balance) ───────────────────
+function roomLedgerGetBalance(PDO $db, string $roomId): float {
+    if (!dbHasTable('saving_room_account_ledger')) return 0.0;
+    $stmt = $db->prepare('SELECT balance_after FROM saving_room_account_ledger WHERE room_id = ? ORDER BY entry_seq DESC LIMIT 1');
+    $stmt->execute([$roomId]);
+    $v = $stmt->fetchColumn();
+    return ($v === false || $v === null) ? 0.0 : (float)$v;
+}
+
+function roomLedgerInsert(PDO $db, string $roomId, string $entryType, string $entryKind, string $amount, string $sourceType, string $sourceId, ?int $createdByUserId = null): bool {
+    if (!dbHasTable('saving_room_account_ledger')) return false;
+    if (!in_array($entryType, ['credit','debit'], true)) throw new InvalidArgumentException('Invalid entryType');
+    if (!in_array($entryKind, ['contribution','withdrawal'], true)) throw new InvalidArgumentException('Invalid entryKind');
+
+    // Fast idempotency check.
+    $chk = $db->prepare('SELECT 1 FROM saving_room_account_ledger WHERE room_id = ? AND source_type = ? AND source_id = ? LIMIT 1');
+    $chk->execute([$roomId, $sourceType, $sourceId]);
+    if ($chk->fetchColumn()) return false;
+
+    // Lock last row to allocate entry_seq deterministically.
+    $last = $db->prepare('SELECT entry_seq, balance_after FROM saving_room_account_ledger WHERE room_id = ? ORDER BY entry_seq DESC LIMIT 1 FOR UPDATE');
+    $last->execute([$roomId]);
+    $row = $last->fetch();
+
+    $prevSeq = $row ? (int)$row['entry_seq'] : 0;
+    $prevBal = $row ? (float)$row['balance_after'] : 0.0;
+
+    $amt = (float)$amount;
+    $newBal = ($entryType === 'credit') ? ($prevBal + $amt) : ($prevBal - $amt);
+    $nextSeq = $prevSeq + 1;
+
+    $ins = $db->prepare("INSERT IGNORE INTO saving_room_account_ledger
+        (room_id, entry_seq, entry_type, entry_kind, amount, balance_after, source_type, source_id, created_by_user_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+
+    $ins->execute([
+        $roomId,
+        $nextSeq,
+        $entryType,
+        $entryKind,
+        $amount,
+        number_format($newBal, 2, '.', ''),
+        $sourceType,
+        $sourceId,
+        $createdByUserId,
+    ]);
+
+    return ($ins->rowCount() > 0);
 }
 
 function requireRoomMaker(string $roomId, int $userId): void {
@@ -242,6 +293,10 @@ function roomExistsAndJoinable(string $roomId): array {
     $db = getDB();
 
     $cols = "id, maker_user_id, room_state, lobby_state, visibility, required_trust_level, max_participants, min_participants, start_at, reveal_at, periodicity, participation_amount, saving_type, goal_text, purpose_category, privacy_mode, escrow_policy, extensions_used";
+
+    if (dbHasColumn('saving_rooms', 'platform_controlled')) {
+        $cols .= ", platform_controlled";
+    }
 
     foreach (['swap_window_opens_at','swap_window_closes_at','swap_window_starts_at','swap_window_ends_at','swap_window_start_at','swap_window_end_at'] as $c) {
         if (dbHasColumn('saving_rooms', $c)) {
@@ -898,21 +953,22 @@ if ($action === 'room_detail') {
 
     $rotation = null;
     $rotationHistory = null;
+
     if ($room['saving_type'] === 'B' && (in_array($myStatus, ['active','approved'], true) || isAdmin($userId) || ((int)$room['maker_user_id'] === $userId))) {
-        $sel = "w.id, w.user_id, w.rotation_index, w.status, w.revealed_at, w.expires_at, w.dispute_window_ends_at,
-                {$uNameExpr} AS turn_user_name";
+        // Current window
+        $sel = "w.id, w.user_id, w.rotation_index, w.status, w.revealed_at, w.expires_at";
+        $sel .= dbHasColumn('saving_room_rotation_windows', 'approve_opens_at')
+            ? ", w.approve_opens_at, w.approve_due_at"
+            : ", NULL AS approve_opens_at, NULL AS approve_due_at";
+        $sel .= ", w.dispute_window_ends_at, {$uNameExpr} AS turn_user_name";
 
-        if (dbHasColumn('saving_room_rotation_windows', 'delegate_user_id')) {
-            $sel .= ", w.delegate_user_id";
-        } else {
-            $sel .= ", NULL AS delegate_user_id";
-        }
+        $sel .= dbHasColumn('saving_room_rotation_windows', 'delegate_user_id')
+            ? ", w.delegate_user_id"
+            : ", NULL AS delegate_user_id";
 
-        if (dbHasColumn('saving_room_rotation_windows', 'withdrawal_confirmed_at')) {
-            $sel .= ", w.withdrawal_confirmed_at, w.withdrawal_confirmed_by_user_id, w.withdrawal_reference, w.withdrawal_confirmed_role";
-        } else {
-            $sel .= ", NULL AS withdrawal_confirmed_at, NULL AS withdrawal_confirmed_by_user_id, NULL AS withdrawal_reference, NULL AS withdrawal_confirmed_role";
-        }
+        $sel .= dbHasColumn('saving_room_rotation_windows', 'withdrawal_confirmed_at')
+            ? ", w.withdrawal_confirmed_at, w.withdrawal_confirmed_by_user_id, w.withdrawal_reference, w.withdrawal_confirmed_role"
+            : ", NULL AS withdrawal_confirmed_at, NULL AS withdrawal_confirmed_by_user_id, NULL AS withdrawal_reference, NULL AS withdrawal_confirmed_role";
 
         $win = $db->prepare("SELECT {$sel}
                              FROM saving_room_rotation_windows w
@@ -931,45 +987,145 @@ if ($action === 'room_detail') {
             if (!empty($w['delegate_user_id'])) {
                 $d = $db->prepare("SELECT {$uNameExpr} AS name FROM users u WHERE u.id = ? LIMIT 1");
                 $d->execute([(int)$w['delegate_user_id']]);
-                $delegateName = $d->fetchColumn();
+                $delegateName = $d->fetchColumn() ?: null;
             }
 
             if (!empty($w['withdrawal_confirmed_by_user_id'])) {
                 $c = $db->prepare("SELECT {$uNameExpr} AS name FROM users u WHERE u.id = ? LIMIT 1");
                 $c->execute([(int)$w['withdrawal_confirmed_by_user_id']]);
-                $withdrawByName = $c->fetchColumn();
+                $withdrawByName = $c->fetchColumn() ?: null;
             }
+
+            $rotationIndex = (int)$w['rotation_index'];
+            $turnUserId = (int)$w['user_id'];
+            $makerId = (int)$room['maker_user_id'];
 
             $eligibleStmt = $db->prepare("SELECT COUNT(*) FROM saving_room_participants WHERE room_id = ? AND status = 'active'");
             $eligibleStmt->execute([$roomId]);
-            $eligible = (int)$eligibleStmt->fetchColumn();
+            $eligibleActive = (int)$eligibleStmt->fetchColumn();
 
-            $rotationIndex = (int)$w['rotation_index'];
-            $required = (int)ceil(max(0, $eligible - 1) * 0.5);
+            // Eligible voters exclude the maker and the current turn user.
+            $eligibleVoters = $eligibleActive;
+            if ($makerId > 0) $eligibleVoters--;
+            if ($turnUserId > 0 && $turnUserId !== $makerId) $eligibleVoters--;
+            $eligibleVoters = max(0, $eligibleVoters);
+
+            $required = (int)ceil($eligibleVoters * 0.5);
 
             $approvalsStmt = $db->prepare("SELECT COUNT(*) FROM saving_room_unlock_votes
-                                   WHERE room_id = ?
-                                     AND scope = 'typeB_turn_unlock'
-                                     AND target_rotation_index = ?
-                                     AND vote = 'approve'
-                                     AND user_id <> ?");
-            $approvalsStmt->execute([$roomId, $rotationIndex, (int)$room['maker_user_id']]);
-            $approvals = (int)$approvalsStmt->fetchColumn();
+                                           WHERE room_id = ?
+                                             AND scope = 'typeB_turn_unlock'
+                                             AND target_rotation_index = ?
+                                             AND vote = 'approve'
+                                             AND user_id <> ?
+                                             AND user_id <> ?");
+            $approvalsStmt->execute([$roomId, $rotationIndex, $makerId, $turnUserId]);
+            $approvalsRaw = (int)$approvalsStmt->fetchColumn();
+
+            $rejectsStmt = $db->prepare("SELECT COUNT(*) FROM saving_room_unlock_votes
+                                         WHERE room_id = ?
+                                           AND scope = 'typeB_turn_unlock'
+                                           AND target_rotation_index = ?
+                                           AND vote = 'reject'
+                                           AND user_id <> ?
+                                           AND user_id <> ?");
+            $rejectsStmt->execute([$roomId, $rotationIndex, $makerId, $turnUserId]);
+            $rejects = (int)$rejectsStmt->fetchColumn();
 
             $myVoteStmt = $db->prepare("SELECT vote FROM saving_room_unlock_votes
                                         WHERE room_id = ? AND user_id = ?
                                           AND scope='typeB_turn_unlock'
                                           AND target_rotation_index = ?");
-            $myVoteStmt->execute([$roomId, $userId, (int)$w['rotation_index']]);
+            $myVoteStmt->execute([$roomId, $userId, $rotationIndex]);
             $myVote = $myVoteStmt->fetchColumn();
 
             $makerVoteStmt = $db->prepare("SELECT vote FROM saving_room_unlock_votes
                                            WHERE room_id = ? AND user_id = ?
                                              AND scope='typeB_turn_unlock'
                                              AND target_rotation_index = ?");
-            $makerVoteStmt->execute([$roomId, (int)$room['maker_user_id'], (int)$w['rotation_index']]);
+            $makerVoteStmt->execute([$roomId, $makerId, $rotationIndex]);
             $makerVote = $makerVoteStmt->fetchColumn();
 
+            $opensAt = (string)($w['approve_opens_at'] ?? '');
+            $dueAt = (string)($w['approve_due_at'] ?? '');
+            $nowTs = time();
+
+            $isOpen = true;
+            if ($opensAt !== '') {
+                $oTs = strtotime($opensAt);
+                $isOpen = $oTs ? ($nowTs >= $oTs) : true;
+            }
+
+            $isClosed = false;
+            $secondsRemaining = null;
+            if ($dueAt !== '') {
+                $dTs = strtotime($dueAt);
+                if ($dTs) {
+                    $isClosed = ($nowTs >= $dTs);
+                    if (!$isClosed) $secondsRemaining = max(0, $dTs - $nowTs);
+                }
+            }
+
+            $approvalsEffective = $approvalsRaw;
+            if ($isClosed) {
+                // Missed votes count as approvals after due.
+                $approvalsEffective = max(0, $eligibleVoters - $rejects);
+            }
+
+            $confirmed = !empty($w['withdrawal_confirmed_at']);
+            $expTs = !empty($w['expires_at']) ? strtotime((string)$w['expires_at']) : null;
+            $isExpired = ($expTs && $nowTs >= $expTs);
+
+            // Reveal permission (turn user always; maker after 12h; delegate always; admin always)
+            $canRevealCode = false;
+            $revealRole = null;
+
+            $isTurnUser = ($turnUserId === $userId);
+            $isDelegate = (!empty($w['delegate_user_id']) && (int)$w['delegate_user_id'] === $userId);
+            $isAdminUser = isAdmin($userId);
+            $isMakerUser = ($makerId === $userId);
+
+            $makerAccessOk = false;
+            if (!empty($w['revealed_at'])) {
+                try {
+                    $dt = new DateTimeImmutable((string)$w['revealed_at'], new DateTimeZone('UTC'));
+                    $g = $dt->modify('+12 hours')->getTimestamp();
+                    $makerAccessOk = ($nowTs >= $g);
+                } catch (Exception) {
+                    $makerAccessOk = false;
+                }
+            }
+
+            if ((string)$w['status'] === 'revealed' && ($myStatus === 'active' || $isAdminUser) && !$confirmed && !$isExpired) {
+                if ($isTurnUser) {
+                    $canRevealCode = true;
+                    $revealRole = 'turn_user';
+                } else if ($isDelegate) {
+                    $canRevealCode = true;
+                    $revealRole = 'delegate';
+                } else if ($isAdminUser) {
+                    $canRevealCode = true;
+                    $revealRole = 'admin';
+                } else if ($isMakerUser && $makerAccessOk) {
+                    $canRevealCode = true;
+                    $revealRole = 'maker';
+                }
+            }
+
+            $canConfirmWithdrawal = false;
+            if ((string)$w['status'] === 'revealed' && !$confirmed && !$isExpired) {
+                if ($isTurnUser) {
+                    $canConfirmWithdrawal = true;
+                } else if ($isDelegate) {
+                    $canConfirmWithdrawal = true;
+                } else if ($isMakerUser && $makerAccessOk) {
+                    $canConfirmWithdrawal = true;
+                } else if ($isAdminUser && $makerAccessOk) {
+                    $canConfirmWithdrawal = true;
+                }
+            }
+
+            // Dispute info (latest open)
             $dispute = null;
             $disp = $db->prepare("SELECT d.id, d.status, d.reason, d.threshold_count_required, d.created_at, d.updated_at,
                                          {$uNameExpr} AS raised_by_name
@@ -1004,188 +1160,121 @@ if ($action === 'room_detail') {
                 ];
             }
 
-            $isTurnUser = ((int)$w['user_id'] === $userId);
-            $isDelegate = (!empty($w['delegate_user_id']) && (int)$w['delegate_user_id'] === $userId);
-
-            $graceEndsAt = null;
-            if (!empty($w['revealed_at'])) {
-                try {
-                    $dt = new DateTimeImmutable((string)$w['revealed_at'], new DateTimeZone('UTC'));
-                    $graceEndsAt = $dt->modify('+12 hours')->format('Y-m-d H:i:s');
-                } catch (Exception) {
-                    $graceEndsAt = null;
-                }
-            }
-
-            $nowTs = time();
-            $expTs = !empty($w['expires_at']) ? strtotime((string)$w['expires_at']) : null;
-            $isExpired = ($expTs && $nowTs >= $expTs);
-
-            $confirmed = !empty($w['withdrawal_confirmed_at']);
-
-            $isAdminUser = isAdmin($userId);
-            $isMakerUser = ((int)$room['maker_user_id'] === $userId);
-
-            $makerAccessOk = false;
-            if ($graceEndsAt) {
-                $g = strtotime($graceEndsAt);
-                $makerAccessOk = $g ? ($nowTs >= $g) : false;
-            }
-
-            $canRevealCode = false;
-            $revealRole = null;
-            if ((string)$w['status'] === 'revealed' && ($myStatus === 'active' || $isAdminUser) && !$confirmed && !$isExpired) {
-                if ($isTurnUser) {
-                    $canRevealCode = true;
-                    $revealRole = 'turn_user';
-                } else if ($isDelegate) {
-                    $canRevealCode = true;
-                    $revealRole = 'delegate';
-                } else if (($isMakerUser || $isAdminUser) && $makerAccessOk) {
-                    $canRevealCode = true;
-                    $revealRole = $isAdminUser ? 'admin' : 'maker';
-                }
-            }
-
-            $canSetDelegate = ((string)$w['status'] === 'revealed' && $myStatus === 'active' && $isTurnUser && !$confirmed && !$isExpired);
-            if ($canSetDelegate && $graceEndsAt) {
-                $g = strtotime($graceEndsAt);
-                if (!$g || $nowTs >= $g) $canSetDelegate = false;
-            }
-
-            $canConfirmWithdrawal = ((string)$w['status'] === 'revealed' && ($myStatus === 'active' || $isAdminUser) && !$confirmed && !$isExpired);
-            if ($canConfirmWithdrawal) {
-                if ($isTurnUser || $isDelegate) {
-                    // ok
-                } else if (($isMakerUser || $isAdminUser) && $makerAccessOk) {
-                    // ok
-                } else {
-                    $canConfirmWithdrawal = false;
-                }
-            }
-
             $rotation = [
                 'current' => [
-                    'rotation_index' => (int)$w['rotation_index'],
+                    'rotation_index' => $rotationIndex,
                     'status' => $w['status'],
+                    'turn_user_id' => $turnUserId,
+                    'turn_user_name' => $w['turn_user_name'],
                     'revealed_at' => $w['revealed_at'],
                     'expires_at' => $w['expires_at'],
-                    'grace_ends_at' => $graceEndsAt,
-                    'dispute_window_ends_at' => $w['dispute_window_ends_at'],
-                    'turn_user_id' => (int)$w['user_id'],
-                    'turn_user_name' => $w['turn_user_name'],
-                    'is_turn_user' => $isTurnUser ? 1 : 0,
+                    'approve_opens_at' => $opensAt !== '' ? $opensAt : null,
+                    'approve_due_at' => $dueAt !== '' ? $dueAt : null,
+                    'grace_ends_at' => (!empty($w['revealed_at']) ? (new DateTimeImmutable((string)$w['revealed_at'], new DateTimeZone('UTC')))->modify('+12 hours')->format('Y-m-d H:i:s') : null),
                     'delegate_user_id' => !empty($w['delegate_user_id']) ? (int)$w['delegate_user_id'] : null,
                     'delegate_name' => $delegateName,
-                    'is_delegate' => $isDelegate ? 1 : 0,
+                    'can_set_delegate' => (dbHasColumn('saving_room_rotation_windows', 'delegate_user_id') && (string)$w['status'] === 'revealed' && $isTurnUser && !$confirmed && !$isExpired && (!empty($w['revealed_at']) ? ($nowTs < (new DateTimeImmutable((string)$w['revealed_at'], new DateTimeZone('UTC')))->modify('+12 hours')->getTimestamp()) : false)) ? 1 : 0,
                     'can_reveal_code' => $canRevealCode ? 1 : 0,
                     'reveal_role' => $revealRole,
-                    'can_set_delegate' => $canSetDelegate ? 1 : 0,
+                    'withdrawal_confirmed_at' => $w['withdrawal_confirmed_at'],
+                    'withdrawal_reference' => $w['withdrawal_reference'],
+                    'withdrawal_confirmed_role' => $w['withdrawal_confirmed_role'],
+                    'withdrawal_confirmed_by_name' => $withdrawByName,
                     'can_confirm_withdrawal' => $canConfirmWithdrawal ? 1 : 0,
-                    'withdrawal' => (
-                        dbHasColumn('saving_room_rotation_windows', 'withdrawal_confirmed_at')
-                        ? [
-                            'confirmed_at' => $w['withdrawal_confirmed_at'],
-                            'confirmed_by_name' => $withdrawByName,
-                            'confirmed_role' => $w['withdrawal_confirmed_role'],
-                            'reference' => $w['withdrawal_reference'],
-                        ]
-                        : null
-                    ),
                 ],
                 'votes' => [
-                    'approvals' => $approvals,
+                    'approvals' => $approvalsEffective,
+                    'approvals_raw' => $approvalsRaw,
+                    'rejects' => $rejects,
                     'required' => $required,
-                    'eligible' => $eligible,
+                    'eligible' => $eligibleVoters,
+                    'is_open' => $isOpen ? 1 : 0,
+                    'is_closed' => $isClosed ? 1 : 0,
+                    'seconds_remaining' => $secondsRemaining,
+                    'opens_at' => $opensAt !== '' ? $opensAt : null,
+                    'due_at' => $dueAt !== '' ? $dueAt : null,
                 ],
                 'my_vote' => $myVote ?: null,
                 'maker_vote' => $makerVote ?: null,
                 'dispute' => $dispute,
             ];
+        }
 
-            if (dbHasTable('saving_room_turn_code_views')) {
-                $cvStmt = $db->prepare("SELECT v.viewer_role, v.viewed_at, {$uNameExpr} AS viewer_name
-                                        FROM saving_room_turn_code_views v
-                                        JOIN users u ON u.id = v.viewer_user_id
-                                        WHERE v.room_id = ? AND v.rotation_index = ?
-                                        ORDER BY v.viewed_at DESC
-                                        LIMIT 10");
-                $cvStmt->execute([$roomId, $rotationIndex]);
-                $rotation['current']['code_views'] = $cvStmt->fetchAll();
+        // Rotation history
+        $hSel = "w.rotation_index, w.user_id, w.status, w.revealed_at, w.expires_at, {$uNameExpr} AS turn_user_name";
+        $hSel .= dbHasColumn('saving_room_rotation_windows', 'delegate_user_id') ? ", w.delegate_user_id" : ", NULL AS delegate_user_id";
+        $hSel .= dbHasColumn('saving_room_rotation_windows', 'withdrawal_confirmed_at')
+            ? ", w.withdrawal_confirmed_at, w.withdrawal_reference, w.withdrawal_confirmed_role, w.withdrawal_confirmed_by_user_id"
+            : ", NULL AS withdrawal_confirmed_at, NULL AS withdrawal_reference, NULL AS withdrawal_confirmed_role, NULL AS withdrawal_confirmed_by_user_id";
+
+        $cvLast = '';
+        if (dbHasTable('saving_room_turn_code_views')) {
+            $cvLast = ",
+                (SELECT MAX(v2.viewed_at) FROM saving_room_turn_code_views v2 WHERE v2.room_id = w.room_id AND v2.rotation_index = w.rotation_index) AS code_last_viewed_at,
+                (SELECT v3.viewer_role FROM saving_room_turn_code_views v3 WHERE v3.room_id = w.room_id AND v3.rotation_index = w.rotation_index ORDER BY v3.viewed_at DESC LIMIT 1) AS code_last_viewed_role,
+                (SELECT v4.viewer_user_id FROM saving_room_turn_code_views v4 WHERE v4.room_id = w.room_id AND v4.rotation_index = w.rotation_index ORDER BY v4.viewed_at DESC LIMIT 1) AS code_last_viewed_by_user_id";
+        } else {
+            $cvLast = ", NULL AS code_last_viewed_at, NULL AS code_last_viewed_role, NULL AS code_last_viewed_by_user_id";
+        }
+
+        $histStmt = $db->prepare("SELECT {$hSel}{$cvLast}
+                                  FROM saving_room_rotation_windows w
+                                  JOIN users u ON u.id = w.user_id
+                                  WHERE w.room_id = ?
+                                  ORDER BY w.rotation_index DESC
+                                  LIMIT 30");
+        $histStmt->execute([$roomId]);
+        $rawHist = $histStmt->fetchAll();
+
+        $rotationHistory = [];
+        foreach ($rawHist as $hr) {
+            $delegateName2 = null;
+            if (!empty($hr['delegate_user_id'])) {
+                $dn = $db->prepare("SELECT {$uNameExpr} AS name FROM users u WHERE u.id = ? LIMIT 1");
+                $dn->execute([(int)$hr['delegate_user_id']]);
+                $delegateName2 = $dn->fetchColumn() ?: null;
             }
 
-            // Rotation history (recent windows)
-            $hSel = "w.rotation_index, w.status, w.revealed_at, w.expires_at, {$uNameExpr} AS turn_user_name";
-            $hSel .= dbHasColumn('saving_room_rotation_windows', 'delegate_user_id') ? ", w.delegate_user_id" : ", NULL AS delegate_user_id";
-            $hSel .= dbHasColumn('saving_room_rotation_windows', 'withdrawal_confirmed_at')
-                ? ", w.withdrawal_confirmed_at, w.withdrawal_reference, w.withdrawal_confirmed_role, w.withdrawal_confirmed_by_user_id"
-                : ", NULL AS withdrawal_confirmed_at, NULL AS withdrawal_reference, NULL AS withdrawal_confirmed_role, NULL AS withdrawal_confirmed_by_user_id";
-
-            $cvLast = '';
-            if (dbHasTable('saving_room_turn_code_views')) {
-                $cvLast = ",
-                    (SELECT MAX(v2.viewed_at) FROM saving_room_turn_code_views v2 WHERE v2.room_id = w.room_id AND v2.rotation_index = w.rotation_index) AS code_last_viewed_at,
-                    (SELECT v3.viewer_role FROM saving_room_turn_code_views v3 WHERE v3.room_id = w.room_id AND v3.rotation_index = w.rotation_index ORDER BY v3.viewed_at DESC LIMIT 1) AS code_last_viewed_role,
-                    (SELECT v4.viewer_user_id FROM saving_room_turn_code_views v4 WHERE v4.room_id = w.room_id AND v4.rotation_index = w.rotation_index ORDER BY v4.viewed_at DESC LIMIT 1) AS code_last_viewed_by_user_id";
-            } else {
-                $cvLast = ", NULL AS code_last_viewed_at, NULL AS code_last_viewed_role, NULL AS code_last_viewed_by_user_id";
+            $confirmedByName2 = null;
+            if (!empty($hr['withdrawal_confirmed_by_user_id'])) {
+                $cn = $db->prepare("SELECT {$uNameExpr} AS name FROM users u WHERE u.id = ? LIMIT 1");
+                $cn->execute([(int)$hr['withdrawal_confirmed_by_user_id']]);
+                $confirmedByName2 = $cn->fetchColumn() ?: null;
             }
 
-            $histStmt = $db->prepare("SELECT {$hSel}{$cvLast}
-                                      FROM saving_room_rotation_windows w
-                                      JOIN users u ON u.id = w.user_id
-                                      WHERE w.room_id = ?
-                                      ORDER BY w.rotation_index DESC
-                                      LIMIT 30");
-            $histStmt->execute([$roomId]);
-            $rawHist = $histStmt->fetchAll();
-
-            $rotationHistory = [];
-            foreach ($rawHist as $hr) {
-                $delegateName2 = null;
-                if (!empty($hr['delegate_user_id'])) {
-                    $dn = $db->prepare("SELECT {$uNameExpr} AS name FROM users u WHERE u.id = ? LIMIT 1");
-                    $dn->execute([(int)$hr['delegate_user_id']]);
-                    $delegateName2 = $dn->fetchColumn() ?: null;
-                }
-
-                $confirmedByName2 = null;
-                if (!empty($hr['withdrawal_confirmed_by_user_id'])) {
-                    $cn = $db->prepare("SELECT {$uNameExpr} AS name FROM users u WHERE u.id = ? LIMIT 1");
-                    $cn->execute([(int)$hr['withdrawal_confirmed_by_user_id']]);
-                    $confirmedByName2 = $cn->fetchColumn() ?: null;
-                }
-
-                $lastViewedByName = null;
-                if (!empty($hr['code_last_viewed_by_user_id'])) {
-                    $vn = $db->prepare("SELECT {$uNameExpr} AS name FROM users u WHERE u.id = ? LIMIT 1");
-                    $vn->execute([(int)$hr['code_last_viewed_by_user_id']]);
-                    $lastViewedByName = $vn->fetchColumn() ?: null;
-                }
-
-                $rotationHistory[] = [
-                    'rotation_index' => (int)$hr['rotation_index'],
-                    'status' => $hr['status'],
-                    'turn_user_name' => $hr['turn_user_name'],
-                    'revealed_at' => $hr['revealed_at'],
-                    'expires_at' => $hr['expires_at'],
-                    'delegate_name' => $delegateName2,
-                    'code_last_viewed_at' => $hr['code_last_viewed_at'],
-                    'code_last_viewed_role' => $hr['code_last_viewed_role'],
-                    'code_last_viewed_by_name' => $lastViewedByName,
-                    'withdrawal_confirmed_at' => $hr['withdrawal_confirmed_at'],
-                    'withdrawal_reference' => $hr['withdrawal_reference'],
-                    'withdrawal_confirmed_role' => $hr['withdrawal_confirmed_role'],
-                    'withdrawal_confirmed_by_name' => $confirmedByName2,
-                ];
+            $lastViewedByName = null;
+            if (!empty($hr['code_last_viewed_by_user_id'])) {
+                $vn = $db->prepare("SELECT {$uNameExpr} AS name FROM users u WHERE u.id = ? LIMIT 1");
+                $vn->execute([(int)$hr['code_last_viewed_by_user_id']]);
+                $lastViewedByName = $vn->fetchColumn() ?: null;
             }
+
+            $rotationHistory[] = [
+                'rotation_index' => (int)$hr['rotation_index'],
+                'status' => $hr['status'],
+                'turn_user_name' => $hr['turn_user_name'],
+                'revealed_at' => $hr['revealed_at'],
+                'expires_at' => $hr['expires_at'],
+                'delegate_name' => $delegateName2,
+                'code_last_viewed_at' => $hr['code_last_viewed_at'],
+                'code_last_viewed_role' => $hr['code_last_viewed_role'],
+                'code_last_viewed_by_name' => $lastViewedByName,
+                'withdrawal_confirmed_at' => $hr['withdrawal_confirmed_at'],
+                'withdrawal_reference' => $hr['withdrawal_reference'],
+                'withdrawal_confirmed_role' => $hr['withdrawal_confirmed_role'],
+                'withdrawal_confirmed_by_name' => $confirmedByName2,
+            ];
         }
     }
 
     $exitRequest = null;
     if ($room['saving_type'] === 'B' && $room['room_state'] === 'active' && $myStatus === 'active') {
-        $er = $db->prepare("SELECT er.id, er.requested_by_user_id, er.status, er.created_at,
-                                   {$uNameExpr} AS requested_by_name
+        $erSel = "er.id, er.requested_by_user_id, er.status, er.created_at";
+        $erSel .= dbHasColumn('saving_room_exit_requests', 'reason') ? ", er.reason" : ", '' AS reason";
+        $erSel .= dbHasColumn('saving_room_exit_requests', 'replacement_maker_user_id') ? ", er.replacement_maker_user_id" : ", NULL AS replacement_maker_user_id";
+        $erSel .= ", {$uNameExpr} AS requested_by_name";
+
+        $er = $db->prepare("SELECT {$erSel}
                             FROM saving_room_exit_requests er
                             JOIN users u ON u.id = er.requested_by_user_id
                             WHERE er.room_id = ? AND er.status = 'open'
@@ -1233,6 +1322,8 @@ if ($action === 'room_detail') {
                 'id' => (int)$req['id'],
                 'status' => $req['status'],
                 'requested_by_name' => $req['requested_by_name'],
+                'reason' => $req['reason'] ?? '',
+                'replacement_maker_user_id' => !empty($req['replacement_maker_user_id']) ? (int)$req['replacement_maker_user_id'] : null,
                 'is_requester' => ($requesterId === $userId) ? 1 : 0,
                 'created_at' => $req['created_at'],
                 'votes' => [
@@ -1260,6 +1351,24 @@ if ($action === 'room_detail') {
         $settlements = $st->fetchAll();
     }
 
+    // Derived account balance (from proofs + withdrawals)
+    $accountBalance = null;
+    if (dbHasTable('saving_room_account_ledger')) {
+        $b = $db->prepare('SELECT balance_after FROM saving_room_account_ledger WHERE room_id = ? ORDER BY entry_seq DESC LIMIT 1');
+        $b->execute([$roomId]);
+        $bal = $b->fetchColumn();
+        if ($bal !== false && $bal !== null) $accountBalance = (string)$bal;
+    }
+
+    $requiredWithdrawalAmount = null;
+    if ($room['saving_type'] === 'B' && $room['room_state'] === 'active') {
+        $activeCountStmt = $db->prepare("SELECT COUNT(*) FROM saving_room_participants WHERE room_id = ? AND status = 'active'");
+        $activeCountStmt->execute([$roomId]);
+        $activeCount = (int)$activeCountStmt->fetchColumn();
+
+        $requiredWithdrawalAmount = number_format(((float)$room['participation_amount']) * max(0, $activeCount), 2, '.', '');
+    }
+
     jsonResponse([
         'success' => true,
         'room' => [
@@ -1284,7 +1393,10 @@ if ($action === 'room_detail') {
             'spots_remaining' => max(0, (int)$room['max_participants'] - $approvedCount),
             'maker_user_id' => (int)$room['maker_user_id'],
             'is_maker' => ((int)$room['maker_user_id'] === $userId) ? 1 : 0,
+            'platform_controlled' => isset($room['platform_controlled']) ? (int)$room['platform_controlled'] : 0,
             'my_status' => $myStatus ?: null,
+            'account_balance' => $accountBalance,
+            'required_withdrawal_amount' => $requiredWithdrawalAmount,
             'underfill' => $underfill ? [
                 'status' => $underfill['status'],
                 'decision_deadline_at' => $underfill['decision_deadline_at'],
@@ -2906,7 +3018,14 @@ if ($action === 'typeB_vote') {
     $st = (string)$mem->fetchColumn();
     if ($st !== 'active') jsonResponse(['error' => 'Not an active participant'], 403);
 
-    $winStmt = $db->prepare("SELECT rotation_index, status
+    $wSel = "rotation_index, status, user_id";
+    if (dbHasColumn('saving_room_rotation_windows', 'approve_opens_at')) {
+        $wSel .= ", approve_opens_at, approve_due_at";
+    } else {
+        $wSel .= ", NULL AS approve_opens_at, NULL AS approve_due_at";
+    }
+
+    $winStmt = $db->prepare("SELECT {$wSel}
                              FROM saving_room_rotation_windows
                              WHERE room_id = ?
                                AND status IN ('pending_votes','revealed','blocked_dispute','blocked_debt')
@@ -2917,8 +3036,32 @@ if ($action === 'typeB_vote') {
     if (!$w) jsonResponse(['error' => 'Rotation window not initialized'], 500);
 
     $rotationIndex = (int)$w['rotation_index'];
+    $turnUserId = (int)$w['user_id'];
+
     if ($w['status'] !== 'pending_votes') {
         jsonResponse(['error' => 'Voting is closed for the current rotation window'], 403);
+    }
+
+    // Turn user cannot vote on their own turn.
+    if ($turnUserId === $userId) {
+        jsonResponse(['error' => 'Turn user cannot vote on their own turn'], 403);
+    }
+
+    $nowTs = time();
+    $opensAt = (string)($w['approve_opens_at'] ?? '');
+    $dueAt = (string)($w['approve_due_at'] ?? '');
+
+    if ($opensAt !== '') {
+        $oTs = strtotime($opensAt);
+        if ($oTs && $nowTs < $oTs) {
+            jsonResponse(['error' => 'Approval window has not opened yet'], 403);
+        }
+    }
+    if ($dueAt !== '') {
+        $dTs = strtotime($dueAt);
+        if ($dTs && $nowTs >= $dTs) {
+            jsonResponse(['error' => 'Approval window is closed'], 403);
+        }
     }
 
     $existingVoteStmt = $db->prepare("SELECT vote
@@ -2962,31 +3105,52 @@ if ($action === 'typeB_vote') {
 
     $eligibleStmt = $db->prepare("SELECT COUNT(*) FROM saving_room_participants WHERE room_id = ? AND status = 'active'");
     $eligibleStmt->execute([$roomId]);
-    $eligible = (int)$eligibleStmt->fetchColumn();
-    $required = (int)ceil(max(0, $eligible - 1) * 0.5);
+    $eligibleActive = (int)$eligibleStmt->fetchColumn();
+
+    $makerId = (int)$room['maker_user_id'];
+
+    $eligibleVoters = $eligibleActive;
+    if ($makerId > 0) $eligibleVoters--;
+    if ($turnUserId > 0 && $turnUserId !== $makerId) $eligibleVoters--;
+    $eligibleVoters = max(0, $eligibleVoters);
+
+    $required = (int)ceil($eligibleVoters * 0.5);
 
     $approvalsStmt = $db->prepare("SELECT COUNT(*) FROM saving_room_unlock_votes
                                    WHERE room_id = ?
                                      AND scope = 'typeB_turn_unlock'
                                      AND target_rotation_index = ?
                                      AND vote = 'approve'
+                                     AND user_id <> ?
                                      AND user_id <> ?");
-    $approvalsStmt->execute([$roomId, $rotationIndex, (int)$room['maker_user_id']]);
+    $approvalsStmt->execute([$roomId, $rotationIndex, $makerId, $turnUserId]);
     $approvals = (int)$approvalsStmt->fetchColumn();
+
+    $rejectsStmt = $db->prepare("SELECT COUNT(*) FROM saving_room_unlock_votes
+                                 WHERE room_id = ?
+                                   AND scope = 'typeB_turn_unlock'
+                                   AND target_rotation_index = ?
+                                   AND vote = 'reject'
+                                   AND user_id <> ?
+                                   AND user_id <> ?");
+    $rejectsStmt->execute([$roomId, $rotationIndex, $makerId, $turnUserId]);
+    $rejects = (int)$rejectsStmt->fetchColumn();
 
     $makerVoteStmt = $db->prepare("SELECT vote FROM saving_room_unlock_votes
                                    WHERE room_id = ? AND user_id = ?
                                      AND scope='typeB_turn_unlock'
                                      AND target_rotation_index = ?");
-    $makerVoteStmt->execute([$roomId, (int)$room['maker_user_id'], $rotationIndex]);
+    $makerVoteStmt->execute([$roomId, $makerId, $rotationIndex]);
     $makerVote = $makerVoteStmt->fetchColumn();
 
     activityLog($roomId, 'rotation_vote_updated', [
         'rotation_index' => $rotationIndex,
         'approvals' => $approvals,
+        'rejects' => $rejects,
         'required' => $required,
-        'eligible' => $eligible,
+        'eligible' => $eligibleVoters,
         'maker_vote' => $makerVote ?: null,
+        'approve_due_at' => $dueAt !== '' ? $dueAt : null,
     ]);
 
     auditLog('room_typeB_vote');
@@ -3020,21 +3184,49 @@ if ($action === 'typeB_exit_request_create') {
     $st = (string)$mem->fetchColumn();
     if ($st !== 'active') jsonResponse(['error' => 'Not an active participant'], 403);
 
-    if ((int)$room['maker_user_id'] === $userId) {
-        jsonResponse(['error' => 'Room maker cannot request exit'], 403);
+    $reason = trim((string)($body['reason'] ?? ''));
+    if ($reason === '') jsonResponse(['error' => 'Reason is required'], 400);
+
+    $replacementMakerId = null;
+    $isMakerRequester = ((int)$room['maker_user_id'] === $userId);
+
+    if ($isMakerRequester && dbHasColumn('saving_room_exit_requests', 'replacement_maker_user_id')) {
+        $replacementMakerId = (int)($body['replacement_maker_user_id'] ?? 0);
+        if ($replacementMakerId <= 0) {
+            // Explicitly allow platform controlled rooms.
+            $replacementMakerId = null;
+        } else {
+            // Replacement must be an active participant.
+            $chk = $db->prepare("SELECT 1 FROM saving_room_participants WHERE room_id = ? AND user_id = ? AND status='active' LIMIT 1");
+            $chk->execute([$roomId, $replacementMakerId]);
+            if (!(bool)$chk->fetchColumn()) {
+                jsonResponse(['error' => 'Replacement maker must be an active participant'], 400);
+            }
+        }
     }
 
     $ex = $db->prepare("SELECT id FROM saving_room_exit_requests WHERE room_id = ? AND status = 'open' LIMIT 1");
     $ex->execute([$roomId]);
     if ($ex->fetchColumn()) jsonResponse(['error' => 'An exit request is already open'], 409);
 
-    $db->prepare("INSERT INTO saving_room_exit_requests (room_id, requested_by_user_id, status)
-                  VALUES (?, ?, 'open')")
-       ->execute([$roomId, $userId]);
+    $cols = ['room_id','requested_by_user_id','status'];
+    $vals = [$roomId, $userId, 'open'];
+
+    if (dbHasColumn('saving_room_exit_requests', 'reason')) {
+        $cols[] = 'reason';
+        $vals[] = $reason;
+    }
+    if (dbHasColumn('saving_room_exit_requests', 'replacement_maker_user_id')) {
+        $cols[] = 'replacement_maker_user_id';
+        $vals[] = $replacementMakerId;
+    }
+
+    $sql = 'INSERT INTO saving_room_exit_requests (' . implode(',', $cols) . ') VALUES (' . implode(',', array_fill(0, count($cols), '?')) . ')';
+    $db->prepare($sql)->execute($vals);
 
     $reqId = (int)$db->lastInsertId();
 
-    activityLog($roomId, 'exit_requested', ['exit_request_id' => $reqId]);
+    activityLog($roomId, 'exit_requested', ['exit_request_id' => $;
 
     $makerId = (int)$room['maker_user_id'];
     if ($makerId > 0) {
@@ -3098,7 +3290,10 @@ if ($action === 'typeB_exit_request_vote') {
     if ($room['saving_type'] !== 'B') jsonResponse(['error' => 'Not a Type B room'], 400);
     if ($room['room_state'] !== 'active') jsonResponse(['error' => 'Room is not active'], 403);
 
-    $reqStmt = $db->prepare("SELECT id, requested_by_user_id, status FROM saving_room_exit_requests WHERE id = ? AND room_id = ? LIMIT 1");
+    $reqSel = "id, requested_by_user_id, status";
+    $reqSel .= dbHasColumn('saving_room_exit_requests', 'replacement_maker_user_id') ? ", replacement_maker_user_id" : ", NULL AS replacement_maker_user_id";
+
+    $reqStmt = $db->prepare("SELECT {$reqSel} FROM saving_room_exit_requests WHERE id = ? AND room_id = ? LIMIT 1");
     $reqStmt->execute([$reqId, $roomId]);
     $req = $reqStmt->fetch();
     if (!$req) jsonResponse(['error' => 'Exit request not found'], 404);
@@ -3221,6 +3416,33 @@ if ($action === 'typeB_exit_request_vote') {
         // Record settlement ledger: refund minus 20% platform fee.
         recordRoomSettlement($db, $roomId, $requesterId, 'refund_minus_fee', 0.20, 'exit_request');
 
+        // If the requester is the maker, transfer maker responsibility.
+        $effectiveMakerId = $makerId;
+        $platformControlled = 0;
+        if ($requesterId === $makerId) {
+            $effectiveMakerId = 0;
+            $platformControlled = 0;
+
+            $rep = !empty($req['replacement_maker_user_id']) ? (int)$req['replacement_maker_user_id'] : 0;
+            if ($rep > 0 && $rep !== $requesterId) {
+                $effectiveMakerId = $rep;
+            } else {
+                $platformControlled = 1;
+                $adm = $db->query("SELECT id FROM users WHERE is_admin = 1 ORDER BY id ASC LIMIT 1")->fetchColumn();
+                $effectiveMakerId = $adm ? (int)$adm : $makerId;
+            }
+
+            $set = 'maker_user_id = ?';
+            $params = [$effectiveMakerId];
+            if (dbHasColumn('saving_rooms', 'platform_controlled')) {
+                $set .= ', platform_controlled = ?';
+                $params[] = $platformControlled;
+            }
+            $params[] = $roomId;
+            $db->prepare("UPDATE saving_rooms SET {$set}, updated_at=NOW() WHERE id = ?")
+               ->execute($params);
+        }
+
         activityLog($roomId, 'exit_approved', ['exit_request_id' => $reqId]);
 
         $db->commit();
@@ -3236,9 +3458,29 @@ if ($action === 'typeB_exit_request_vote') {
             (string)$reqId
         );
 
-        if ($makerId > 0) {
+        $notifyMakerId = $makerId;
+        if ($requesterId === $makerId) {
+            $notifyMakerId = $effectiveMakerId;
+        }
+
+        if ($platformControlled) {
+            $admins = $db->query("SELECT id FROM users WHERE is_admin = 1")->fetchAll();
+            foreach ($admins as $a) {
+                $aid = (int)$a['id'];
+                notifyOnceApi(
+                    $aid,
+                    'typeB_room_platform_controlled',
+                    'important',
+                    'Room maker exited (platform-controlled)',
+                    'The room maker exited. The room is now platform-controlled and requires admin oversight.',
+                    ['room_id' => $roomId, 'exit_request_id' => $reqId],
+                    'room',
+                    $roomId
+                );
+            }
+        } else if ($notifyMakerId > 0 && $notifyMakerId !== $requesterId) {
             notifyOnceApi(
-                $makerId,
+                $notifyMakerId,
                 'typeB_exit_approved_maker',
                 'important',
                 'Exit request approved',
@@ -3253,7 +3495,7 @@ if ($action === 'typeB_exit_request_vote') {
         $parts->execute([$roomId]);
         foreach ($parts->fetchAll() as $p) {
             $uid = (int)$p['user_id'];
-            if ($uid === $makerId) continue;
+            if ($uid === $notifyMakerId) continue;
             if ($uid === $requesterId) continue;
 
             notifyOnceApi(
@@ -3441,7 +3683,7 @@ if ($action === 'typeB_confirm_withdrawal') {
 
     $db = getDB();
 
-    $roomStmt = $db->prepare('SELECT saving_type, room_state, maker_user_id FROM saving_rooms WHERE id = ?');
+    $roomStmt = $db->prepare('SELECT saving_type, room_state, maker_user_id, participation_amount FROM saving_rooms WHERE id = ?');
     $roomStmt->execute([$roomId]);
     $room = $roomStmt->fetch();
     if (!$room) jsonResponse(['error' => 'Room not found'], 404);
@@ -3475,6 +3717,25 @@ if ($action === 'typeB_confirm_withdrawal') {
     $expTs = !empty($w['expires_at']) ? strtotime((string)$w['expires_at']) : null;
     if ($expTs && time() >= $expTs) jsonResponse(['error' => 'Unlock window has expired'], 403);
 
+    // Withdrawal confirmation requires the derived room balance to be sufficient.
+    $activeCountStmt = $db->prepare("SELECT COUNT(*) FROM saving_room_participants WHERE room_id = ? AND status = 'active'");
+    $activeCountStmt->execute([$roomId]);
+    $activeCount = (int)$activeCountStmt->fetchColumn();
+
+    $requiredWithdrawalAmount = number_format(((float)$room['participation_amount']) * max(0, $activeCount), 2, '.', '');
+
+    if (dbHasTable('saving_room_account_ledger')) {
+        $bal = roomLedgerGetBalance($db, $roomId);
+        if ($bal + 0.00001 < (float)$requiredWithdrawalAmount) {
+            jsonResponse([
+                'error' => 'Insufficient room balance to confirm withdrawal',
+                'error_code' => 'insufficient_balance',
+                'balance' => number_format($bal, 2, '.', ''),
+                'required_withdrawal_amount' => $requiredWithdrawalAmount,
+            ], 409);
+        }
+    }
+
     try {
         $revDt = new DateTimeImmutable((string)$w['revealed_at'], new DateTimeZone('UTC'));
     } catch (Exception) {
@@ -3499,7 +3760,7 @@ if ($action === 'typeB_confirm_withdrawal') {
         jsonResponse(['error' => 'Not authorized to confirm withdrawal'], 403);
     }
 
-    $sets = ["withdrawal_confirmed_at = NOW()", "expires_at = NOW()"];
+    $sets = ["withdrawal_confirmed_at = NOW()", "expires_at = NOW()"]; // end window
     $params = [];
 
     if (dbHasColumn('saving_room_rotation_windows', 'withdrawal_confirmed_by_user_id')) {
@@ -3519,8 +3780,28 @@ if ($action === 'typeB_confirm_withdrawal') {
 
     $params[] = (int)$w['id'];
 
+    $db->beginTransaction();
+
     $sql = "UPDATE saving_room_rotation_windows SET " . implode(', ', $sets) . " WHERE id = ? AND withdrawal_confirmed_at IS NULL";
-    $db->prepare($sql)->execute($params);
+    $st = $db->prepare($sql);
+    $st->execute($params);
+
+    // Another request may have confirmed between our read and write.
+    if ($st->rowCount() < 1) {
+        $db->rollBack();
+        jsonResponse(['success' => true, 'already_confirmed' => 1]);
+    }
+
+    // Ledger debit (derived from confirmed withdrawals).
+    if (dbHasTable('saving_room_account_ledger')) {
+        $ok = roomLedgerInsert($db, $roomId, 'debit', 'withdrawal', $requiredWithdrawalAmount, 'withdrawal', (string)$w['id'], $userId);
+        if (!$ok) {
+            $db->rollBack();
+            jsonResponse(['error' => 'Failed to record ledger debit'], 500);
+        }
+    }
+
+    $db->commit();
 
     activityLog($roomId, 'typeB_withdrawal_confirmed', [
         'rotation_index' => (int)$w['rotation_index'],
@@ -3557,7 +3838,7 @@ if ($action === 'typeB_reveal') {
     $pStatus = (string)$mem->fetchColumn();
     if ($pStatus !== 'active' && !isAdmin($userId)) jsonResponse(['error' => 'Not an active participant'], 403);
 
-    $sel = "user_id, rotation_index, status, revealed_at, expires_at";
+    $sel = "id, user_id, rotation_index, status, revealed_at, expires_at";
     $sel .= dbHasColumn('saving_room_rotation_windows', 'delegate_user_id') ? ", delegate_user_id" : ", NULL AS delegate_user_id";
     $sel .= dbHasColumn('saving_room_rotation_windows', 'withdrawal_confirmed_at') ? ", withdrawal_confirmed_at" : ", NULL AS withdrawal_confirmed_at";
 
@@ -3571,7 +3852,9 @@ if ($action === 'typeB_reveal') {
     $w = $winStmt->fetch();
     if (!$w) jsonResponse(['error' => 'No revealed rotation window'], 403);
 
-    if (!empty($w['withdrawal_confirmed_at'])) jsonResponse(['error' => 'Withdrawal already confirmed'], 403);
+    if (!empty($w['withdrawal_confirmed_at'])) {
+        jsonResponse(['error' => 'Withdrawal already confirmed'], 409);
+    }
 
     $expTs = !empty($w['expires_at']) ? strtotime((string)$w['expires_at']) : null;
     if ($expTs && time() >= $expTs) jsonResponse(['error' => 'Unlock window has expired'], 403);
@@ -3883,6 +4166,7 @@ if ($action === 'typeB_ack_dispute') {
     $db->commit();
 
     if ($escalated) {
+        // Notify admins
         $admins = $db->query("SELECT id FROM users WHERE is_admin = 1")->fetchAll();
         foreach ($admins as $a) {
             $aid = (int)$a['id'];
@@ -3898,6 +4182,7 @@ if ($action === 'typeB_ack_dispute') {
             );
         }
 
+        // Notify maker
         $makerId = (int)$room['maker_user_id'];
         if ($makerId > 0) {
             notifyOnceApi(
@@ -3988,6 +4273,146 @@ if ($action === 'confirm_contribution') {
 
     auditLog('room_contribution_confirm');
     jsonResponse(['success' => true]);
+}
+
+// ── CONTRIBUTION: CONFIRM WITH PROOF (multipart/form-data)
+// POST /api/rooms.php?action=confirm_contribution_with_proof
+if ($action === 'confirm_contribution_with_proof') {
+    requireLogin();
+    requireVerifiedEmail();
+    requireCsrf();
+
+    if (!dbHasTable('saving_room_contribution_proofs')) {
+        jsonResponse(['error' => 'Contribution proofs are unavailable. Apply database migrations.'], 409);
+    }
+
+    $userId = (int)getCurrentUserId();
+    $roomId = (string)($_POST['room_id'] ?? '');
+    $cycleId = (int)($_POST['cycle_id'] ?? 0);
+    $amount = (string)($_POST['amount'] ?? '');
+    $reference = trim((string)($_POST['reference'] ?? ''));
+
+    if ($roomId === '' || strlen($roomId) !== 36) jsonResponse(['error' => 'Invalid room_id'], 400);
+    if ($cycleId <= 0) jsonResponse(['error' => 'cycle_id required'], 400);
+    if (!is_numeric($amount) || (float)$amount <= 0) jsonResponse(['error' => 'Invalid amount'], 400);
+
+    if (empty($_FILES['proof']) || !is_array($_FILES['proof'])) {
+        jsonResponse(['error' => 'proof file required'], 400);
+    }
+
+    $f = $_FILES['proof'];
+    if (!empty($f['error'])) jsonResponse(['error' => 'Upload failed'], 400);
+
+    $size = (int)($f['size'] ?? 0);
+    if ($size <= 0 || $size > 5_000_000) jsonResponse(['error' => 'File too large (max 5MB)'], 400);
+
+    $tmp = (string)($f['tmp_name'] ?? '');
+    if ($tmp === '' || !is_uploaded_file($tmp)) jsonResponse(['error' => 'Invalid upload'], 400);
+
+    $raw = file_get_contents($tmp);
+    if ($raw === false || $raw === '') jsonResponse(['error' => 'Could not read upload'], 400);
+
+    $contentType = (string)($f['type'] ?? '');
+    $allowed = ['image/png','image/jpeg','image/jpg','image/webp'];
+    if ($contentType === '' || !in_array(strtolower($contentType), $allowed, true)) {
+        jsonResponse(['error' => 'Unsupported file type'], 400);
+    }
+
+    $shaBin = hash('sha256', $raw, true);
+
+    $db = getDB();
+
+    $roomStmt = $db->prepare('SELECT room_state, privacy_mode, participation_amount FROM saving_rooms WHERE id = ?');
+    $roomStmt->execute([$roomId]);
+    $room = $roomStmt->fetch();
+    if (!$room) jsonResponse(['error' => 'Room not found'], 404);
+    if ($room['room_state'] !== 'active') jsonResponse(['error' => 'Room is not active'], 403);
+
+    $requiredAmount = (float)$room['participation_amount'];
+    $givenAmount = (float)$amount;
+    if (abs($requiredAmount - $givenAmount) > 0.00001) {
+        jsonResponse([
+            'error' => 'Contribution amount must match the room participation amount.',
+            'required_amount' => (string)$room['participation_amount'],
+        ], 400);
+    }
+
+    $mem = $db->prepare("SELECT status FROM saving_room_participants WHERE room_id = ? AND user_id = ?");
+    $mem->execute([$roomId, $userId]);
+    $myStatus = (string)$mem->fetchColumn();
+    if (!in_array($myStatus, ['active'], true)) jsonResponse(['error' => 'Not an active participant'], 403);
+
+    $cy = $db->prepare('SELECT id, status, due_at, grace_ends_at FROM saving_room_contribution_cycles WHERE id = ? AND room_id = ?');
+    $cy->execute([$cycleId, $roomId]);
+    $cycle = $cy->fetch();
+    if (!$cycle) jsonResponse(['error' => 'Cycle not found'], 404);
+    if ($cycle['status'] === 'closed') jsonResponse(['error' => 'Cycle is closed'], 403);
+
+    $dueTs = strtotime((string)$cycle['due_at']);
+    $inGrace = ($dueTs && time() > $dueTs);
+    $status = $inGrace ? 'paid_in_grace' : 'paid';
+
+    $db->beginTransaction();
+
+    $db->prepare("INSERT INTO saving_room_contributions (room_id, user_id, cycle_id, amount, status, reference, confirmed_at)
+                  VALUES (?, ?, ?, ?, ?, ?, NOW())
+                  ON DUPLICATE KEY UPDATE amount=VALUES(amount), status=VALUES(status), reference=VALUES(reference), confirmed_at=NOW()")
+       ->execute([$roomId, $userId, $cycleId, $amount, $status, $reference]);
+
+    $cidStmt = $db->prepare('SELECT id FROM saving_room_contributions WHERE room_id = ? AND cycle_id = ? AND user_id = ? LIMIT 1');
+    $cidStmt->execute([$roomId, $cycleId, $userId]);
+    $contributionId = (int)$cidStmt->fetchColumn();
+    if ($contributionId <= 0) {
+        $db->rollBack();
+        jsonResponse(['error' => 'Failed to resolve contribution_id'], 500);
+    }
+
+    // Dedup proof by (contribution_id, sha256)
+    $dup = $db->prepare('SELECT id, reference_snapshot FROM saving_room_contribution_proofs WHERE contribution_id = ? AND user_id = ? AND sha256 = ? LIMIT 1');
+    $dup->execute([$contributionId, $userId, $shaBin]);
+    $existing = $dup->fetch();
+
+    $referenceSnapshot = null;
+    if ($existing) {
+        $referenceSnapshot = $existing['reference_snapshot'] ?? null;
+    } else {
+        $enc = mediaEncryptBytes($raw);
+        $referenceSnapshot = bin2hex(random_bytes(12));
+
+        $db->prepare('INSERT INTO saving_room_contribution_proofs
+            (room_id, contribution_id, user_id, reference_snapshot, original_filename, content_type, size_bytes, sha256, enc_cipher, iv, tag)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+           ->execute([
+               $roomId,
+               $contributionId,
+               $userId,
+               $referenceSnapshot,
+               substr((string)($f['name'] ?? ''), 0, 255) ?: null,
+               strtolower($contentType),
+               $size,
+               $shaBin,
+               $enc['cipher'],
+               $enc['iv'],
+               $enc['tag'],
+           ]);
+    }
+
+    // Ledger credit (derived from proofs + contributions)
+    roomLedgerInsert($db, $roomId, 'credit', 'contribution', $amount, 'contribution', (string)$contributionId, $userId);
+
+    // Activity feed: show ✓ Contributed; show amount only if privacy mode is disabled.
+    $payload = ['cycle_id' => $cycleId];
+    if (empty($room['privacy_mode'])) {
+        $payload['amount'] = $amount;
+    }
+
+    $db->prepare('INSERT INTO saving_room_activity (room_id, event_type, public_payload_json) VALUES (?, ?, ?)')
+       ->execute([$roomId, 'contribution_confirmed', json_encode($payload, JSON_UNESCAPED_UNICODE)]);
+
+    $db->commit();
+
+    auditLog('room_contribution_confirm');
+    jsonResponse(['success' => true, 'reference_snapshot' => $referenceSnapshot]);
 }
 
 jsonResponse(['error' => 'Unknown action'], 400);

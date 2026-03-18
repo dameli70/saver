@@ -472,6 +472,7 @@ CREATE TABLE IF NOT EXISTS user_restrictions (
 CREATE TABLE IF NOT EXISTS saving_rooms (
     id                    CHAR(36) PRIMARY KEY,
     maker_user_id         INT UNSIGNED NOT NULL,
+    platform_controlled   TINYINT(1) NOT NULL DEFAULT 0,
 
     purpose_category      ENUM('education','travel','business','emergency','community','other') NOT NULL DEFAULT 'other',
     goal_text             VARCHAR(500) NOT NULL,
@@ -621,6 +622,65 @@ CREATE TABLE IF NOT EXISTS saving_room_contributions (
 ) ENGINE=InnoDB;
 
 -- ───────────────────────────────────────────────────────────
+-- Contribution proofs (encrypted screenshots)
+-- ───────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS saving_room_contribution_proofs (
+    id                 BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    room_id            CHAR(36) NOT NULL,
+    contribution_id    INT UNSIGNED NOT NULL,
+    user_id            INT UNSIGNED NOT NULL,
+
+    reference_snapshot VARCHAR(120) NULL,
+
+    original_filename  VARCHAR(255) NULL,
+    content_type       VARCHAR(100) NOT NULL,
+    size_bytes         INT UNSIGNED NOT NULL,
+    sha256             VARBINARY(32) NOT NULL,
+
+    enc_cipher         LONGBLOB NOT NULL,
+    iv                 VARBINARY(16) NOT NULL,
+    tag                VARBINARY(16) NOT NULL,
+
+    created_at         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    INDEX idx_room (room_id),
+    INDEX idx_contribution (contribution_id),
+    INDEX idx_user (user_id),
+
+    FOREIGN KEY (room_id) REFERENCES saving_rooms(id) ON DELETE CASCADE,
+    FOREIGN KEY (contribution_id) REFERENCES saving_room_contributions(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+-- ───────────────────────────────────────────────────────────
+-- Room account ledger (derived balance)
+-- ───────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS saving_room_account_ledger (
+    id                 BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    room_id            CHAR(36) NOT NULL,
+    entry_seq          BIGINT UNSIGNED NOT NULL,
+
+    entry_type         ENUM('credit','debit') NOT NULL,
+    entry_kind         ENUM('contribution','withdrawal') NOT NULL,
+
+    amount             DECIMAL(14,2) NOT NULL,
+    balance_after      DECIMAL(14,2) NOT NULL,
+
+    source_type        VARCHAR(32) NOT NULL,
+    source_id          VARCHAR(64) NOT NULL,
+
+    created_by_user_id INT UNSIGNED NULL,
+    created_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+    UNIQUE KEY uniq_room_seq (room_id, entry_seq),
+    UNIQUE KEY uniq_source (room_id, source_type, source_id),
+    INDEX idx_room_time (room_id, created_at),
+
+    FOREIGN KEY (room_id) REFERENCES saving_rooms(id) ON DELETE CASCADE,
+    FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+-- ───────────────────────────────────────────────────────────
 -- Platform destination accounts (admin-controlled)
 -- ───────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS platform_destination_accounts (
@@ -704,6 +764,9 @@ CREATE TABLE IF NOT EXISTS saving_room_rotation_windows (
     delegate_set_at        DATETIME NULL,
     rotation_index         INT UNSIGNED NOT NULL,
 
+    approve_opens_at        DATETIME NULL,
+    approve_due_at          DATETIME NULL,
+
     status                 ENUM('pending_votes','revealed','expired','blocked_dispute','blocked_debt') NOT NULL DEFAULT 'pending_votes',
     revealed_at            DATETIME NULL,
     expires_at             DATETIME NULL,
@@ -720,6 +783,7 @@ CREATE TABLE IF NOT EXISTS saving_room_rotation_windows (
     UNIQUE KEY uniq_room_rotation (room_id, rotation_index),
     INDEX idx_room_status (room_id, status),
     INDEX idx_delegate (delegate_user_id),
+    INDEX idx_approve_due (approve_due_at),
     INDEX idx_withdraw_confirm (withdrawal_confirmed_at),
 
     FOREIGN KEY (room_id) REFERENCES saving_rooms(id) ON DELETE CASCADE,
@@ -788,13 +852,13 @@ CREATE TABLE IF NOT EXISTS saving_room_slot_swaps (
     FOREIGN KEY (to_user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
--- ───────────────────────────────────────────────────────────
--- Exit requests (Type B)
--- ───────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS saving_room_exit_requests (
     id                   INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     room_id              CHAR(36) NOT NULL,
     requested_by_user_id INT UNSIGNED NOT NULL,
+
+    reason               VARCHAR(500) NOT NULL DEFAULT '',
+    replacement_maker_user_id INT UNSIGNED NULL,
 
     status               ENUM('open','approved','declined','cancelled') NOT NULL DEFAULT 'open',
 
@@ -804,10 +868,12 @@ CREATE TABLE IF NOT EXISTS saving_room_exit_requests (
 
     INDEX idx_room_status (room_id, status),
     INDEX idx_room_time (room_id, created_at),
+    INDEX idx_replacement_maker (replacement_maker_user_id),
 
     FOREIGN KEY (room_id) REFERENCES saving_rooms(id) ON DELETE CASCADE,
     FOREIGN KEY (requested_by_user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (resolved_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+    FOREIGN KEY (resolved_by_user_id) REFERENCES users(id) ON DELETE SET NULL,
+    FOREIGN KEY (replacement_maker_user_id) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
 -- ───────────────────────────────────────────────────────────
