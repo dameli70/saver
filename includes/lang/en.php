@@ -75,22 +75,9 @@ return [
     'packages.codes' => 'codes',
     'packages.usage_badge' => 'Usage',
     'packages.active_codes' => 'Active codes',
-    'packages.active_rooms' => 'Active rooms',
-    'packages.active_wallet_locks' => 'Active wallet locks',
-    'packages.max_active_codes' => 'Max active codes',
-    'packages.max_active_rooms' => 'Max active rooms',
-    'packages.max_active_wallet_locks' => 'Max active wallet locks',
-    'packages.fast_support' => 'Fast support',
-    'packages.purchase' => 'Request upgrade',
-    'packages.purchase_hint' => 'An admin will review and approve your request.',
-    'packages.pending_created' => 'Upgrade request sent. We will review it shortly.',
-    'packages.pending_already' => 'You already have a pending upgrade request for this plan.',
-
-    // Package limits (pre-check banners)
-    'package_limit.title' => 'Package limit reached',
-    'package_limit.codes_reached_fmt' => 'Active codes limit reached ({cur}/{limit}).',
-    'package_limit.wallet_reached_fmt' => 'Active wallet locks limit reached ({cur}/{limit}).',
-    'package_limit.rooms_reached_fmt' => 'Active rooms limit reached ({cur}/{limit}).',
+    'packages.active_rooms' => 'Joined rooms',
+    'packages.max_active_rooms' => 'Max joined rooms',
+    'package_limit.rooms_reached_fmt' => 'Joined rooms limit reached ({cur}/{limit}).',
     'package_limit.upgrade_note' => 'To create more, upgrade your package (or wait until one becomes inactive).',
     'package_limit.upgrade_btn' => 'View packages',
     'package_limit.toast' => 'Package limit reached. Open Packages to upgrade.',
@@ -1087,6 +1074,7 @@ return [
     'room.activity.amount' => 'Amount {amount}',
     'room.activity.two_missed_contributions' => 'Two missed contributions',
     'room.activity.policy' => 'Policy: {policy}',
+    'room.activity.fee_rate_fmt' => 'Fee {pct}%',
     'room.activity.approved' => 'Approved {a}/{b}',
     'room.activity.decision_by' => 'Decision by {ts}',
     'room.activity.start_date_extended' => 'Start date extended',
@@ -1104,7 +1092,7 @@ return [
 
     'room.confirm.unlisted_revoke' => 'Revoke the current unlisted link?',
     'room.confirm.invite_revoke' => 'Revoke this invite?',
-    'room.confirm.exit_request' => 'Request to exit this room? This requires approvals and will record a refund-minus-fee settlement.',
+    'room.confirm.exit_request' => 'Request to exit this room? This requires approvals and will record a refund minus a 20% platform fee.',
     'room.confirm.exit_cancel' => 'Cancel your exit request?',
     'room.confirm.room_cancel' => 'Cancel this room?',
 
@@ -1353,6 +1341,10 @@ return [
     'room.escrow_th_refund' => 'Refund',
     'room.escrow_th_status' => 'Status',
     'room.escrow_th_created' => 'Created',
+
+    'room.escrow.reason.two_missed_contributions' => 'Two missed contributions',
+    'room.escrow.reason.exit_request' => 'Exit request',
+    'room.escrow.reason.room_cancelled_underfilled' => 'Room cancelled (underfilled)',
 
     'room.unlisted_title' => 'Unlisted invite link (maker)',
     'room.unlisted_sub' => 'Unlisted rooms are not shown on discovery. Share a link to allow others to view and request to join (until the start date).',

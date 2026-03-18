@@ -1228,13 +1228,18 @@ async function loadEscrowSettlements(){
       const roomShort = (s.goal_text||'').slice(0,40) + ((s.goal_text||'').length>40?'…':'');
       const canProcess = (s.status === 'recorded');
 
+      const reason = s.reason ? String(s.reason) : '';
+      const fr = parseFloat(String(s.fee_rate||''));
+      const pct = (!isNaN(fr)) ? Math.round(fr * 100) : null;
+      const feeLabel = String(s.platform_fee_amount||'0.00') + ((pct !== null) ? (' (' + pct + '%)') : '');
+
       tr.innerHTML = `
         <td>${s.id}</td>
         <td title="${esc(s.goal_text||'')}">${esc(roomShort)}<div class="k" style="font-size:10px;">${esc(s.room_id)}</div></td>
         <td>${esc(s.removed_user_email||('User ' + s.removed_user_id))}</td>
-        <td>${esc(s.policy)}</td>
+        <td title="${esc(reason)}">${esc(s.policy)}${reason ? ('<div class="k" style="font-size:10px;">' + esc(reason) + '</div>') : ''}</td>
         <td>${esc(s.total_contributed||'0.00')}</td>
-        <td>${esc(s.platform_fee_amount||'0.00')}</td>
+        <td title="${esc(reason)}">${esc(feeLabel)}</td>
         <td>${esc(s.policy==='refund_minus_fee' ? (s.refund_amount||'0.00') : '—')}</td>
         <td>${esc(s.status||'')}</td>
         <td>${fmt(s.created_at)}</td>

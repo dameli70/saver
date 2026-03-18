@@ -910,8 +910,27 @@ function formatActivityExtra(eventType, payload){
   }
 
   if(eventType === 'escrow_settlement_recorded'){
-    if(payload.policy) return tr('room.activity.policy', {policy: String(payload.policy)}, 'Policy: ' + String(payload.policy));
-    return '';
+    const bits = [];
+
+    if(payload.policy){
+      let pol = String(payload.policy);
+      if(pol === 'refund_minus_fee') pol = tr('rooms.escrow.refund_minus_fee', null, 'Return minus platform fee');
+      else if(pol === 'redistribute') pol = tr('rooms.escrow.redistribute', null, 'Proportional redistribution');
+      bits.push(tr('room.activity.policy', {policy: pol}, 'Policy: ' + pol));
+    }
+
+    const fr = parseFloat(String(payload.fee_rate||''));
+    if(!isNaN(fr)){
+      const pct = Math.round(fr * 100);
+      bits.push(tr('room.activity.fee_rate_fmt', {pct}, 'Fee ' + pct + '%'));
+    }
+
+    if(payload.reason){
+      const r = String(payload.reason);
+      bits.push(tr('room.activity.reason', {reason: r}, 'Reason: ' + r));
+    }
+
+    return bits.join(' · ');
   }
 
   if(eventType === 'underfilled_alerted'){
@@ -2437,14 +2456,31 @@ function renderEscrowSettlements(rows){
   rows.forEach(r => {
     const tr=document.createElement('tr');
 
+    const policy = String(r.policy||'');
+    const reason = String(r.reason||'');
+
+    let policyLabel = policy;
+    if(policy === 'refund_minus_fee') policyLabel = tr('rooms.escrow.refund_minus_fee', null, 'Return minus platform fee');
+    else if(policy === 'redistribute') policyLabel = tr('rooms.escrow.redistribute', null, 'Proportional redistribution');
+
+    let reasonLabel = '';
+    if(reason === 'two_missed_contributions') reasonLabel = tr('room.escrow.reason.two_missed_contributions', null, 'Two missed contributions');
+    else if(reason === 'exit_request') reasonLabel = tr('room.escrow.reason.exit_request', null, 'Exit request');
+    else if(reason === 'room_cancelled_underfilled') reasonLabel = tr('room.escrow.reason.room_cancelled_underfilled', null, 'Room cancelled (underfilled)');
+    else if(reason) reasonLabel = reason;
+
     const fee = (r.platform_fee_amount || '0.00');
-    const refund = (r.policy === 'refund_minus_fee') ? (r.refund_amount || '0.00') : '—';
+    const refund = (policy === 'refund_minus_fee') ? (r.refund_amount || '0.00') : '—';
+
+    const fr = parseFloat(String(r.fee_rate||''));
+    const pct = (!isNaN(fr)) ? Math.round(fr * 100) : null;
+    const feeLabel = fee + ((pct !== null) ? (' (' + pct + '%)') : '');
 
     tr.innerHTML = `
       <td>${esc(r.removed_user_name||('User #' + r.removed_user_id))}</td>
-      <td>${esc(r.policy)}</td>
+      <td title="${esc(reasonLabel)}">${esc(policyLabel)}${reasonLabel ? ('<div class="k" style="font-size:10px;">' + esc(reasonLabel) + '</div>') : ''}</td>
       <td>${esc(r.total_contributed||'0.00')}</td>
-      <td>${esc(fee)}</td>
+      <td title="${esc(reasonLabel)}">${esc(feeLabel)}</td>
       <td>${esc(refund)}</td>
       <td>${esc(r.status||'')}</td>
       <td>${esc(fmt(r.created_at))}</td>

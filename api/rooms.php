@@ -1352,7 +1352,12 @@ if ($action === 'room_detail') {
 
     $settlements = [];
     if ($isMaker) {
-        $st = $db->prepare("SELECT s.removed_user_id, {$uNameExpr} AS removed_user_name, s.policy, s.total_contributed, s.platform_fee_amount, s.refund_amount, s.redistribution_json, s.status, s.created_at
+        $sel = "s.removed_user_id, {$uNameExpr} AS removed_user_name, s.policy";
+        $sel .= dbHasColumn('saving_room_escrow_settlements', 'reason') ? ", s.reason" : ", NULL AS reason";
+        $sel .= dbHasColumn('saving_room_escrow_settlements', 'fee_rate') ? ", s.fee_rate" : ", NULL AS fee_rate";
+        $sel .= ", s.total_contributed, s.platform_fee_amount, s.refund_amount, s.redistribution_json, s.status, s.created_at";
+
+        $st = $db->prepare("SELECT {$sel}
                             FROM saving_room_escrow_settlements s
                             JOIN users u ON u.id = s.removed_user_id
                             WHERE s.room_id = ?

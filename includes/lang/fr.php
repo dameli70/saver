@@ -75,22 +75,9 @@ return [
     'packages.codes' => 'codes',
     'packages.usage_badge' => 'Utilisation',
     'packages.active_codes' => 'Codes actifs',
-    'packages.active_rooms' => 'Rooms actives',
-    'packages.active_wallet_locks' => 'Verrous wallet actifs',
-    'packages.max_active_codes' => 'Max codes actifs',
-    'packages.max_active_rooms' => 'Max rooms actives',
-    'packages.max_active_wallet_locks' => 'Max verrous wallet actifs',
-    'packages.fast_support' => 'Support rapide',
-    'packages.purchase' => 'Demander un upgrade',
-    'packages.purchase_hint' => 'Un admin examinera et approuvera votre demande.',
-    'packages.pending_created' => 'Demande envoyée. Nous la traiterons bientôt.',
-    'packages.pending_already' => 'Vous avez déjà une demande en attente pour ce forfait.',
-
-    // Limites de forfait (bannières de pré-vérification)
-    'package_limit.title' => 'Limite de forfait atteinte',
-    'package_limit.codes_reached_fmt' => 'Limite de codes actifs atteinte ({cur}/{limit}).',
-    'package_limit.wallet_reached_fmt' => 'Limite de verrous wallet actifs atteinte ({cur}/{limit}).',
-    'package_limit.rooms_reached_fmt' => 'Limite de rooms actives atteinte ({cur}/{limit}).',
+    'packages.active_rooms' => 'Rooms rejointes',
+    'packages.max_active_rooms' => 'Max rooms rejointes',
+    'package_limit.rooms_reached_fmt' => 'Limite de rooms rejointes atteinte ({cur}/{limit}).',
     'package_limit.upgrade_note' => 'Pour en créer plus, demandez un upgrade de forfait (ou attendez qu’un élément devienne inactif).',
     'package_limit.upgrade_btn' => 'Voir les forfaits',
     'package_limit.toast' => 'Limite de forfait atteinte. Ouvrez Forfaits pour demander un upgrade.',
@@ -880,6 +867,7 @@ return [
     'room.activity.amount' => 'Montant {amount}',
     'room.activity.two_missed_contributions' => 'Deux contributions manquées',
     'room.activity.policy' => 'Politique : {policy}',
+    'room.activity.fee_rate_fmt' => 'Frais {pct}%',
     'room.activity.approved' => 'Approuvés {a}/{b}',
     'room.activity.decision_by' => 'Décision avant {ts}',
     'room.activity.start_date_extended' => 'Date de début reportée',
@@ -897,7 +885,7 @@ return [
 
     'room.confirm.unlisted_revoke' => 'Révoquer le lien non listé actuel ?',
     'room.confirm.invite_revoke' => 'Révoquer cette invitation ?',
-    'room.confirm.exit_request' => 'Demander à sortir de cette salle ? Cela nécessite des approbations et enregistrera un remboursement moins frais.',
+    'room.confirm.exit_request' => 'Demander à sortir de cette salle ? Cela nécessite des approbations et enregistrera un remboursement moins 20 % de frais de plateforme.',
     'room.confirm.exit_cancel' => 'Annuler votre demande de sortie ?',
     'room.confirm.room_cancel' => 'Annuler cette salle ?',
 
@@ -1146,6 +1134,10 @@ return [
     'room.escrow_th_refund' => 'Remboursement',
     'room.escrow_th_status' => 'Statut',
     'room.escrow_th_created' => 'Créé',
+
+    'room.escrow.reason.two_missed_contributions' => 'Deux contributions manquées',
+    'room.escrow.reason.exit_request' => 'Demande de sortie',
+    'room.escrow.reason.room_cancelled_underfilled' => 'Salle annulée (incomplète)',
 
     'room.unlisted_title' => 'Lien d’invitation non listé (créateur)',
     'room.unlisted_sub' => 'Les salles non listées n’apparaissent pas dans la découverte. Partagez un lien pour permettre de voir et demander à rejoindre (jusqu’à la date de début).',
