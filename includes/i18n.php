@@ -31,7 +31,21 @@ function i18nSetLang(string $lang): void {
     // Persist language in a non-HttpOnly cookie so JS can read document language choice if needed.
     $path = i18nAppBasePath();
     // Cookie path should be the app base path (or '/' for root installs).
-    $cookiePath = ($path !== '' ? ($path . '/') : '/');
+    // Avoid a trailing slash so the cookie also matches the bare base path (e.g., '/app').
+    $cookiePath = ($path !== '' ? $path : '/');
+
+    // Clear legacy cookie paths from older versions (which used a trailing slash).
+    $legacyPath = ($path !== '' ? ($path . '/') : '/');
+    if ($legacyPath !== $cookiePath) {
+        setcookie('lang', '', [
+            'expires' => time() - 3600,
+            'path' => $legacyPath,
+            'secure' => i18nIsHttps(),
+            'httponly' => false,
+            'samesite' => 'Lax',
+        ]);
+    }
+
     setcookie('lang', $lang, [
         'expires' => time() + (86400 * 365),
         'path' => $cookiePath,

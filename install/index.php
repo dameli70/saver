@@ -59,11 +59,43 @@ function createInitialAdmin(PDO $pdo, string $email, string $loginPwd): void {
         ->execute([$email, $loginHash, $vaultVerifier, $vaultVerifierSalt]);
 }
 
+function isHttpsRequestInstaller(): bool {
+    if (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') return true;
+
+    $scheme = strtolower((string)($_SERVER['REQUEST_SCHEME'] ?? ''));
+    if ($scheme === 'https') return true;
+
+    $xfp = (string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '');
+    if ($xfp !== '') {
+        $xfp = strtolower(trim(explode(',', $xfp)[0]));
+        if ($xfp === 'https') return true;
+    }
+
+    $xfs = strtolower((string)($_SERVER['HTTP_X_FORWARDED_SSL'] ?? ''));
+    if ($xfs === 'on') return true;
+
+    return false;
+}
+
+function installerSessionCookiePath(): string {
+    $base = (string)getAppBasePath();
+    return ($base !== '') ? $base : '/';
+}
+
+function installerSessionName(): string {
+    $path = installerSessionCookiePath();
+    return 'controle_sess_' . substr(hash('sha256', $path), 0, 12);
+}
+
 function startInstallerSession(): void {
     if (session_status() === PHP_SESSION_NONE) {
+        $cookiePath = installerSessionCookiePath();
+        session_name(installerSessionName());
+
         ini_set('session.cookie_httponly', 1);
-        ini_set('session.cookie_secure', (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 1 : 0);
+        ini_set('session.cookie_secure', isHttpsRequestInstaller() ? 1 : 0);
         ini_set('session.cookie_samesite', 'Strict');
+        ini_set('session.cookie_path', $cookiePath);
         ini_set('session.use_strict_mode', 1);
         session_start();
     }
