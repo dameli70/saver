@@ -428,9 +428,21 @@ function initTypeBRotation(PDO $db, string $roomId): void {
     $firstUser = (int)$firstStmt->fetchColumn();
     if ($firstUser < 1) return;
 
-    $db->prepare("INSERT IGNORE INTO saving_room_rotation_windows (room_id, user_id, rotation_index, status)
-                  VALUES (?, ?, 1, 'pending_votes')")
-       ->execute([$roomId, $firstUser]);
+    $cols = ['room_id','user_id','rotation_index','status'];
+    $vals = [$roomId, $firstUser, 1, 'pending_votes'];
+
+    $now = new DateTimeImmutable('now', new DateTimeZone('UTC'));
+    if (hasColumn($db, 'saving_room_rotation_windows', 'approve_opens_at')) {
+        $cols[] = 'approve_opens_at';
+        $vals[] = $now->format('Y-m-d H:i:s');
+    }
+    if (hasColumn($db, 'saving_room_rotation_windows', 'approve_due_at')) {
+        $cols[] = 'approve_due_at';
+        $vals[] = $now->modify('+24 hours')->format('Y-m-d H:i:s');
+    }
+
+    $sql = 'INSERT IGNORE INTO saving_room_rotation_windows (' . implode(',', $cols) . ') VALUES (' . implode(',', array_fill(0, count($cols), '?')) . ')';
+    $db->prepare($sql)->execute($vals);
 
     $db->prepare("UPDATE saving_room_rotation_queue SET status='active_window' WHERE room_id = ? AND user_id = ?")
        ->execute([$roomId, $firstUser]);
@@ -1157,7 +1169,14 @@ foreach ($typeBRooms as $r) {
     initTypeBRotation($db, (string)$r['id']);
 }
 
-$pendingWins = $db->query("SELECT w.id, w.room_id, w.user_id, w.rotation_index, r.maker_user_id
+$sel = "w.id, w.room_id, w.user_id, w.rotation_index, r.maker_user_id";
+if (hasColumn($db, 'saving_room_rotation_windows', 'approve_opens_at')) {
+    $sel .= ", w.approve_opens_at, w.approve_due_at";
+} else {
+    $sel .= ", NULL AS approve_opens_at, NULL AS approve_due_at";
+}
+
+$pendingWins = $db->query("SELECT {$sel}
                            FROM saving_room_rotation_windows w
                            JOIN saving_rooms r ON r.id = w.room_id
                            WHERE r.saving_type='B'
@@ -1172,20 +1191,55 @@ foreach ($pendingWins as $w) {
     $turnUserId = (int)$w['user_id'];
     $makerId = (int)$w['maker_user_id'];
 
+    $opensAt = (string)($w['approve_opens_at'] ?? '');
+    $dueAt = (string)($w['approve_due_at'] ?? '');
+
+    $nowTs = time();
+    if ($opensAt !== '') {
+        $openTs = strtotime($opensAt);
+        if ($openTs && $nowTs < $openTs) {
+            // Approvals not open yet.
+            continue;
+        }
+    }
+
     $eligibleStmt = $db->prepare("SELECT COUNT(*) FROM saving_room_participants WHERE room_id = ? AND status = 'active'");
     $eligibleStmt->execute([$roomId]);
-    $eligible = (int)$eligibleStmt->fetchColumn();
+    $eligibleActive = (int)$eligibleStmt->fetchColumn();
 
-    $required = (int)ceil(max(0, $eligible - 1) * 0.5);
+    // Eligible voters exclude the maker and the turn user.
+    $eligibleVoters = $eligibleActive;
+    if ($makerId > 0) $eligibleVoters--;
+    if ($turnUserId > 0 && $turnUserId !== $makerId) $eligibleVoters--;
+    $eligibleVoters = max(0, $eligibleVoters);
+
+    $required = (int)ceil($eligibleVoters * 0.5);
 
     $approvalsStmt = $db->prepare("SELECT COUNT(*) FROM saving_room_unlock_votes
                                    WHERE room_id = ?
                                      AND scope = 'typeB_turn_unlock'
                                      AND target_rotation_index = ?
                                      AND vote = 'approve'
+                                     AND user_id <> ?
                                      AND user_id <> ?");
-    $approvalsStmt->execute([$roomId, $rotationIndex, $makerId]);
+    $approvalsStmt->execute([$roomId, $rotationIndex, $makerId, $turnUserId]);
     $approvals = (int)$approvalsStmt->fetchColumn();
+
+    $rejectsStmt = $db->prepare("SELECT COUNT(*) FROM saving_room_unlock_votes
+                                 WHERE room_id = ?
+                                   AND scope = 'typeB_turn_unlock'
+                                   AND target_rotation_index = ?
+                                   AND vote = 'reject'
+                                   AND user_id <> ?
+                                   AND user_id <> ?");
+    $rejectsStmt->execute([$roomId, $rotationIndex, $makerId, $turnUserId]);
+    $rejects = (int)$rejectsStmt->fetchColumn();
+
+    $duePassed = false;
+    if ($dueAt !== '') {
+        $dueTs = strtotime($dueAt);
+        $duePassed = ($dueTs && $nowTs >= $dueTs);
+    }
 
     $makerVoteStmt = $db->prepare("SELECT vote FROM saving_room_unlock_votes
                                    WHERE room_id = ?
@@ -1196,7 +1250,16 @@ foreach ($pendingWins as $w) {
     $makerVote = (string)$makerVoteStmt->fetchColumn();
 
     if ($makerVote !== 'approve') continue;
-    if ($required > 0 && $approvals < $required) continue;
+
+    if ($required > 0) {
+        if ($duePassed) {
+            // Missed votes count as approvals after the due time.
+            $effectiveApprovals = max(0, $eligibleVoters - $rejects);
+            if ($effectiveApprovals < $required) continue;
+        } else {
+            if ($approvals < $required) continue;
+        }
+    }
 
     // Block rotation reveal if the turn user has past-due unpaid contributions in this room.
     $debt = $db->prepare("SELECT COUNT(*)
@@ -1388,9 +1451,21 @@ foreach ($expiredWins as $w) {
     }
 
     if ($nextUserId !== null) {
-        $db->prepare("INSERT IGNORE INTO saving_room_rotation_windows (room_id, user_id, rotation_index, status)
-                      VALUES (?, ?, ?, 'pending_votes')")
-           ->execute([$roomId, (int)$nextUserId, $nextIndex]);
+        $cols = ['room_id','user_id','rotation_index','status'];
+        $vals = [$roomId, (int)$nextUserId, $nextIndex, 'pending_votes'];
+
+        $now = new DateTimeImmutable('now', new DateTimeZone('UTC'));
+        if (hasColumn($db, 'saving_room_rotation_windows', 'approve_opens_at')) {
+            $cols[] = 'approve_opens_at';
+            $vals[] = $now->format('Y-m-d H:i:s');
+        }
+        if (hasColumn($db, 'saving_room_rotation_windows', 'approve_due_at')) {
+            $cols[] = 'approve_due_at';
+            $vals[] = $now->modify('+24 hours')->format('Y-m-d H:i:s');
+        }
+
+        $sql = 'INSERT IGNORE INTO saving_room_rotation_windows (' . implode(',', $cols) . ') VALUES (' . implode(',', array_fill(0, count($cols), '?')) . ')';
+        $db->prepare($sql)->execute($vals);
 
         $db->prepare("UPDATE saving_room_rotation_queue SET status='active_window' WHERE room_id = ? AND user_id = ?")
            ->execute([$roomId, (int)$nextUserId]);

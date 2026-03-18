@@ -920,8 +920,15 @@ return [
 
     'room.contribution.no_active_cycle' => 'Aucun cycle actif.',
     'room.contribution.confirmed' => 'Contribution confirmée.',
+    'room.contribution.proof_label' => 'Preuve (capture)',
+    'room.contribution.proof_sub' => 'PNG/JPG/WebP jusqu’à 5 Mo. Les doublons sont ignorés.',
+    'room.contribution.proof_required' => 'Capture de preuve requise.',
 
     'room.rotation.consensus_you_required' => '{approvals}/{required} requis (vous : {vote} · éligibles {eligible})',
+    'room.rotation.position_fmt' => 'Position {n}',
+    'room.rotation.approval_opens_fmt' => 'Approbation ouvre {ts}',
+    'room.rotation.approval_closed_fmt' => 'Fenêtre d’approbation fermée {ts}',
+    'room.rotation.approval_due_in_fmt' => 'Décision {ts} (dans {h}h {m}m)',
     'room.rotation.blocked_dispute' => 'Bloqué (litige)',
     'room.rotation.blocked_debt' => 'Bloqué (contribution impayée)',
     'room.rotation.pending_votes' => 'Votes en attente',
@@ -943,6 +950,8 @@ return [
     // Fenêtre d’échange (Type B)
     'room.swap.title' => 'Fenêtre d’échange (Type B)',
     'room.swap.sub' => 'Pendant cette fenêtre, vous pouvez demander à échanger votre position de paiement avec un autre participant.',
+    'room.swap.final_positions_title' => 'Positions finales',
+    'room.swap.final_positions_sub' => 'L’ordre de paiement pour cette chambre.',
     'room.swap.status' => 'Statut',
     'room.swap.closes' => 'Se termine',
     'room.swap.open' => 'Ouverte',
@@ -1094,6 +1103,9 @@ return [
     'room.rotation.withdrawal_confirm_btn' => 'Confirmer le retrait',
     'room.rotation.withdrawal_not_confirmed' => 'Pas encore confirmé.',
     'room.rotation.withdrawal_confirmed_fmt' => 'Confirmé {ts}',
+    'room.rotation.withdrawal_balance_fmt' => 'Solde {bal} / Requis {req}',
+    'room.rotation.withdrawal_balance_only_fmt' => 'Solde {bal}',
+    'room.rotation.withdrawal_blocked_balance' => 'Bloqué (solde insuffisant)',
     'room.rotation.withdrawal_unconfirmed' => 'Non confirmé',
     'room.rotation.withdrawal_reference_prompt' => 'Référence / note optionnelle (laisser vide si aucune) :',
 

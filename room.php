@@ -71,6 +71,16 @@ header("Referrer-Policy: no-referrer");
       <div class="card-title"><?php e('room.overview_title'); ?></div>
       <div id="room-overview" class="room-ov"><?php e('common.loading'); ?></div>
 
+      <?php if ($isAdmin): ?>
+      <details id="admin-panel" style="margin-top:12px;">
+        <summary style="cursor:pointer;user-select:none;"><?php e('nav.admin'); ?></summary>
+        <div id="admin-panel-body" style="margin-top:10px;"></div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">
+          <a class="btn btn-ghost btn-sm" href="admin.php"><?php e('nav.admin'); ?></a>
+        </div>
+      </details>
+      <?php endif; ?>
+
       <div id="contrib-block" style="display:none; margin-top:12px;">
         <div class="hr"></div>
         <div class="card-title" style="margin-bottom:10px;"><?php e('room.contribution_title'); ?></div>
@@ -95,6 +105,11 @@ header("Referrer-Policy: no-referrer");
           <div>
             <div class="k"><?php e('room.contribution.reference_optional'); ?></div>
             <input id="contrib-ref" class="ls-input" style="margin-top:6px;" placeholder="<?= htmlspecialchars(t('room.contribution.reference_placeholder'), ENT_QUOTES, 'UTF-8') ?>">
+          </div>
+          <div>
+            <div class="k"><?php e('room.contribution.proof_label'); ?></div>
+            <input id="contrib-proof" type="file" accept="image/png,image/jpeg,image/webp" class="ls-input" style="margin-top:6px;">
+            <div class="small" style="margin-top:6px;"><?php e('room.contribution.proof_sub'); ?></div>
           </div>
         </div>
 
@@ -250,6 +265,9 @@ header("Referrer-Policy: no-referrer");
         <div class="hr"></div>
         <div class="card-title" style="margin-bottom:10px;"><?php e('room.swap.title'); ?></div>
         <div class="p" style="margin-bottom:10px;"><?php e('room.swap.sub'); ?></div>
+        <div id="swap-admin-hint" class="small" style="display:none;margin-top:-6px;margin-bottom:10px;">
+          <?php e('nav.admin'); ?>: you can review slots and swap requests, but swap actions are disabled unless you are a participant.
+        </div>
 
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
           <div>
@@ -505,6 +523,7 @@ const STR = {
 
   no_active_cycle: tr('room.contribution.no_active_cycle', null, 'No active cycle.'),
   contribution_confirmed: tr('room.contribution.confirmed', null, 'Contribution confirmed.'),
+  proof_required: tr('room.contribution.proof_required', null, 'Proof screenshot required.'),
 
   feed_failed: tr('room.feed.failed_to_load_activity', null, 'Failed to load activity'),
 
@@ -1047,6 +1066,52 @@ function startRoomCountdown(){
   roomTicker = setInterval(updateRoomCountdown, 1000);
 }
 
+function renderAdminPanel(r){
+  const wrap = document.getElementById('admin-panel');
+  const body = document.getElementById('admin-panel-body');
+  if(!wrap || !body) return;
+
+  if(!IS_ADMIN){
+    wrap.style.display='none';
+    return;
+  }
+
+  const rows = [];
+  rows.push(['Room ID', ROOM_ID]);
+  rows.push(['room_state', r ? r.room_state : null]);
+  rows.push(['saving_type', r ? r.saving_type : null]);
+  rows.push(['visibility', r ? r.visibility : null]);
+  rows.push(['lobby_state', r ? r.lobby_state : null]);
+  rows.push(['my_status', r ? (r.my_status||'none') : null]);
+  rows.push(['is_maker', (r && r.is_maker) ? '1' : '0']);
+
+  if(r){
+    rows.push(['approved_count', r.approved_count]);
+    rows.push(['min_participants', r.min_participants]);
+    rows.push(['max_participants', r.max_participants]);
+    rows.push(['required_trust_level', r.required_trust_level]);
+    rows.push(['periodicity', r.periodicity]);
+    rows.push(['participation_amount', r.participation_amount]);
+    rows.push(['start_at', r.start_at]);
+    rows.push(['reveal_at', r.reveal_at]);
+
+    if(r.swap_window){
+      rows.push(['swap_window.is_open', r.swap_window.is_open]);
+      rows.push(['swap_window.closes_at', r.swap_window.closes_at]);
+    }
+
+    const slots = Array.isArray(r.slots) ? r.slots : [];
+    const swaps = Array.isArray(r.slot_swaps) ? r.slot_swaps : [];
+    rows.push(['slots', String(slots.length)]);
+    rows.push(['slot_swaps', String(swaps.length)]);
+  }
+
+  body.innerHTML = '<div style="font-size:12px;line-height:1.7;">' + rows.map(([k,v]) => {
+    const vv = (v === null || typeof v === 'undefined' || v === '') ? '—' : String(v);
+    return '<div><span class="k">' + esc(k) + ':</span> ' + esc(vv) + '</div>';
+  }).join('') + '</div>';
+}
+
 function renderRoom(){
   const r = roomCache;
   if(!r) return;
@@ -1135,6 +1200,8 @@ function renderRoom(){
     </div>
   `;
 
+  renderAdminPanel(r);
+
   updateRoomCountdown();
   startRoomCountdown();
 
@@ -1208,7 +1275,14 @@ function renderRoom(){
 
       if(cur){
         const turnUser = cur.turn_user_name || tr('common.user', null, 'user');
-        document.getElementById('typeb-turn').textContent = `#${cur.rotation_index} · ${turnUser}`;
+        const slots = Array.isArray(r.slots) ? r.slots : [];
+        const slotRow = slots.find(x => x && ((x.user_id|0) === (cur.turn_user_id|0)));
+        const posTxt = slotRow && slotRow.position
+          ? (' · ' + tr('room.rotation.position_fmt', {n: String(slotRow.position)}, 'Position ' + String(slotRow.position)))
+          : '';
+
+        document.getElementById('typeb-turn').textContent = `#${cur.rotation_index} · ${turnUser}${posTxt}`;
+
         document.getElementById('typeb-consensus').textContent = tr('room.rotation.consensus_you_required', {
           approvals,
           required,
@@ -1236,13 +1310,38 @@ function renderRoom(){
 
         const approveBtn = document.getElementById('typeb-vote-approve');
         const rejectBtn = document.getElementById('typeb-vote-reject');
+
         const voteCast = (myVote === 'approve' || myVote === 'reject');
-        const votingOpen = (r.room_state === 'active' && r.my_status === 'active' && cur.status === 'pending_votes');
-        const canVoteNow = votingOpen && !voteCast;
+        const votesMeta = (r.rotation && r.rotation.votes) ? r.rotation.votes : {};
+        const isOpen = (votesMeta.is_open === 1);
+        const isClosed = (votesMeta.is_closed === 1);
+        const isTurnUser = (cur.turn_user_id|0) === (CURRENT_USER_ID|0);
+        const isMaker = (r.is_maker === 1);
+
+        const canVoteRole = (!isMaker && !isTurnUser);
+        const votingWindow = (r.room_state === 'active' && r.my_status === 'active' && cur.status === 'pending_votes');
+        const canVoteNow = votingWindow && canVoteRole && isOpen && !isClosed && !voteCast;
+
         if(approveBtn) approveBtn.disabled = !canVoteNow;
         if(rejectBtn) rejectBtn.disabled = !canVoteNow;
 
-        const canRevealB = (r.room_state === 'active' && r.my_status === 'active' && cur.status === 'revealed' && (cur.can_reveal_code === 1));
+        // Approval window status text
+        if(cur.status === 'pending_votes'){
+          if(!isOpen && votesMeta.opens_at){
+            document.getElementById('typeb-window').textContent = tr('room.rotation.approval_opens_fmt', {ts: fmt(votesMeta.opens_at)}, 'Approval opens ' + fmt(votesMeta.opens_at));
+          } else if(isClosed && votesMeta.due_at){
+            document.getElementById('typeb-window').textContent = tr('room.rotation.approval_closed_fmt', {ts: fmt(votesMeta.due_at)}, 'Approval window closed ' + fmt(votesMeta.due_at));
+          } else if(votesMeta.due_at && typeof votesMeta.seconds_remaining === 'number'){
+            const s = Math.max(0, votesMeta.seconds_remaining|0);
+            const h = Math.floor(s/3600);
+            const m = Math.floor((s%3600)/60);
+            document.getElementById('typeb-window').textContent = tr('room.rotation.approval_due_in_fmt', {ts: fmt(votesMeta.due_at), h, m}, `Approval due ${fmt(votesMeta.due_at)} (in ${h}h ${m}m)`);
+          } else {
+            document.getElementById('typeb-window').textContent = tr('room.rotation.pending_votes', null, 'Pending votes');
+          }
+        }
+
+        const canRevealB = (r.room_state === 'active' && (r.my_status === 'active' || IS_ADMIN) && cur.status === 'revealed' && (cur.can_reveal_code === 1));
         document.getElementById('typeb-reveal-btn').style.display = canRevealB ? 'inline-flex' : 'none';
 
         // Delegate UI
@@ -1290,16 +1389,30 @@ function renderRoom(){
           wdWrap.style.display = canSee ? 'block' : 'none';
 
           if(canSee){
-            const w = cur.withdrawal;
-            if(w && w.confirmed_at){
-              const by = w.confirmed_by_name ? (' · ' + String(w.confirmed_by_name)) : '';
-              const role = w.confirmed_role ? (' · ' + String(w.confirmed_role)) : '';
-              meta.textContent = tr('room.rotation.withdrawal_confirmed_fmt', {ts: fmt(w.confirmed_at)}, `Confirmed ${fmt(w.confirmed_at)}`) + role + by;
+            const hasBal = !(r.account_balance === null || typeof r.account_balance === 'undefined' || String(r.account_balance) === '');
+            const bal = hasBal ? String(r.account_balance) : '—';
+            const req = (r.required_withdrawal_amount != null) ? String(r.required_withdrawal_amount) : '';
+
+            const balNum = hasBal ? parseFloat(bal) : NaN;
+            const reqNum = parseFloat(req);
+            const hasReq = (!isNaN(reqNum) && reqNum > 0);
+            const insufficient = (hasReq && hasBal && !isNaN(balNum) && balNum + 0.00001 < reqNum);
+
+            if(cur.withdrawal_confirmed_at){
+              const by = cur.withdrawal_confirmed_by_name ? (' · ' + String(cur.withdrawal_confirmed_by_name)) : '';
+              const role = cur.withdrawal_confirmed_role ? (' · ' + String(cur.withdrawal_confirmed_role)) : '';
+              const ref = cur.withdrawal_reference ? (' · ' + String(cur.withdrawal_reference)) : '';
+              meta.textContent = tr('room.rotation.withdrawal_confirmed_fmt', {ts: fmt(cur.withdrawal_confirmed_at)}, `Confirmed ${fmt(cur.withdrawal_confirmed_at)}`) + role + by + ref;
             } else {
-              meta.textContent = tr('room.rotation.withdrawal_not_confirmed', null, 'Not confirmed yet.');
+              const base = tr('room.rotation.withdrawal_not_confirmed', null, 'Not confirmed yet.');
+              const balLine = hasReq
+                ? tr('room.rotation.withdrawal_balance_fmt', {bal, req}, `Balance ${bal} / Required ${req}`)
+                : tr('room.rotation.withdrawal_balance_only_fmt', {bal}, `Balance ${bal}`);
+              const warn = insufficient ? (' · ' + tr('room.rotation.withdrawal_blocked_balance', null, 'Blocked (insufficient balance)')) : '';
+              meta.textContent = base + ' · ' + balLine + warn;
             }
 
-            const canConfirm = (cur.can_confirm_withdrawal === 1);
+            const canConfirm = (cur.can_confirm_withdrawal === 1) && !insufficient && !cur.withdrawal_confirmed_at;
             if(btn) btn.style.display = canConfirm ? 'inline-flex' : 'none';
           }
         }
@@ -1493,16 +1606,39 @@ function swapStatusText(status){
   return status ? String(status) : '';
 }
 
+function isSwapParticipant(r){
+  return !!(r && (r.my_status === 'approved' || r.my_status === 'active'));
+}
+
+
+
 function renderSwapWindow(r){
   const block = document.getElementById('swap-block');
   if(!block) return;
 
-  const show = (r.saving_type === 'B' && r.room_state === 'swap_window' && (r.my_status === 'approved' || r.my_status === 'active'));
+  const inSwap = (r.room_state === 'swap_window');
+  const participant = isSwapParticipant(r);
+
+  // Admins can always review swap state + requests for Type B rooms during swap_window/active.
+  const show = (r.saving_type === 'B' && (inSwap || r.room_state === 'active') && (participant || IS_ADMIN));
   block.style.display = show ? 'block' : 'none';
   if(!show) return;
 
+  const adminHint = document.getElementById('swap-admin-hint');
+  if(adminHint) adminHint.style.display = (IS_ADMIN && !participant) ? 'block' : 'none';
+
   const swapWindow = r.swap_window || {};
-  const isOpen = !!swapWindow.is_open;
+  const isOpen = inSwap && !!swapWindow.is_open;
+
+  // Title/subtitle can change depending on whether swap window is active.
+  const titleEl = block.querySelector('.card-title');
+  const subEl = block.querySelector('.p');
+  if(titleEl) titleEl.textContent = inSwap
+    ? tr('room.swap.title', null, 'Swap window (Type B)')
+    : tr('room.swap.final_positions_title', null, 'Final positions');
+  if(subEl) subEl.textContent = inSwap
+    ? tr('room.swap.sub', null, 'Request to swap your payout slot with another participant during this window.')
+    : tr('room.swap.final_positions_sub', null, 'The payout order for this room.');
 
   const statusEl = document.getElementById('swap-status');
   const closesEl = document.getElementById('swap-closes');
@@ -1534,14 +1670,14 @@ function renderSwapWindow(r){
     if(slotsEmpty) slotsEmpty.style.display = 'block';
   }
 
-  // Request form (only if window is open)
+  // Request form (only if window is open + viewer is a participant)
   const form = document.getElementById('swap-request-form');
   const sel = document.getElementById('swap-to-user');
   const btn = document.getElementById('swap-request-btn');
 
-  if(form) form.style.display = isOpen ? 'block' : 'none';
+  if(form) form.style.display = (isOpen && participant) ? 'block' : 'none';
 
-  if(isOpen && sel){
+  if(isOpen && participant && sel){
     const opts = slots.filter(x => x && (x.user_id|0) !== (CURRENT_USER_ID|0));
     sel.innerHTML = '<option value="0">' + esc(tr('room.swap.select_placeholder', null, 'Select a participant')) + '</option>';
     opts.forEach(x => {
@@ -1571,13 +1707,14 @@ function renderSwapWindow(r){
       const st = String(s.status||'');
 
       let actions = '';
+      const canAct = (isOpen && participant);
       // Only allow swap actions while the swap window is open; backend also enforces this.
-      if(isOpen && st === 'pending' && (s.to_user_id|0) === (CURRENT_USER_ID|0)){
+      if(canAct && st === 'pending' && (s.to_user_id|0) === (CURRENT_USER_ID|0)){
         actions = `
           <button class="btn btn-blue btn-sm" onclick="respondSwap(${s.id}, 'accept')">${esc(tr('room.swap.btn_accept', null, 'Accept'))}</button>
           <button class="btn btn-red btn-sm" onclick="respondSwap(${s.id}, 'decline')">${esc(tr('room.swap.btn_decline', null, 'Decline'))}</button>
         `;
-      } else if(isOpen && st === 'pending' && (s.from_user_id|0) === (CURRENT_USER_ID|0)){
+      } else if(canAct && st === 'pending' && (s.from_user_id|0) === (CURRENT_USER_ID|0)){
         actions = `<button class="btn btn-ghost btn-sm" onclick="cancelSwap(${s.id})">${esc(STR.cancel)}</button>`;
       }
 
@@ -1596,11 +1733,23 @@ function renderSwapWindow(r){
   }
 }
 
+function canUseSwapActions(){
+  return isSwapParticipant(roomCache);
+}
+
 async function requestSwap(){
   document.getElementById('swap-msg').className='msg';
 
   const r = roomCache;
   if(!r) return;
+
+  if(!canUseSwapActions()){
+    const msg = IS_ADMIN
+      ? 'Admin view only — swap actions are disabled unless you are a participant.'
+      : 'Swap actions are available to participants only.';
+    setMsg('swap-msg', msg, false);
+    return;
+  }
 
   const sel = document.getElementById('swap-to-user');
   const to_user_id = sel ? parseInt(sel.value||'0', 10) : 0;
@@ -1637,6 +1786,14 @@ async function requestSwap(){
 async function respondSwap(swapId, decision){
   document.getElementById('swap-msg').className='msg';
 
+  if(!canUseSwapActions()){
+    const msg = IS_ADMIN
+      ? 'Admin view only — swap actions are disabled unless you are a participant.'
+      : 'Swap actions are available to participants only.';
+    setMsg('swap-msg', msg, false);
+    return;
+  }
+
   try{
     const res = await postStrong('/api/rooms.php', {action:'respond_swap', swap_id: swapId, decision});
     if(!res.success) throw new Error(res.error||STR.failed);
@@ -1657,6 +1814,14 @@ async function respondSwap(swapId, decision){
 
 async function cancelSwap(swapId){
   document.getElementById('swap-msg').className='msg';
+
+  if(!canUseSwapActions()){
+    const msg = IS_ADMIN
+      ? 'Admin view only — swap actions are disabled unless you are a participant.'
+      : 'Swap actions are available to participants only.';
+    setMsg('swap-msg', msg, false);
+    return;
+  }
 
   try{
     const res = await postStrong('/api/rooms.php', {action:'cancel_swap', swap_id: swapId});
@@ -1929,11 +2094,34 @@ async function confirmContribution(){
 
   const amount = (document.getElementById('contrib-amt')||{}).value || '';
   const reference = (document.getElementById('contrib-ref')||{}).value || '';
+  const proofInput = document.getElementById('contrib-proof');
+  const file = proofInput && proofInput.files ? proofInput.files[0] : null;
+
+  if(!file){
+    setMsg('contrib-msg', STR.proof_required, false);
+    return;
+  }
 
   try{
-    const res = await postStrong('/api/rooms.php', {action:'confirm_contribution', room_id: ROOM_ID, cycle_id: r.active_cycle.id, amount, reference});
-    if(!res.success) throw new Error(res.error||STR.failed);
+    const fd = new FormData();
+    fd.append('csrf_token', CSRF);
+    fd.append('room_id', ROOM_ID);
+    fd.append('cycle_id', String(r.active_cycle.id));
+    fd.append('amount', String(amount||''));
+    fd.append('reference', String(reference||''));
+    fd.append('proof', file);
+
+    const resp = await fetch('/api/rooms.php?action=confirm_contribution_with_proof', {
+      method: 'POST',
+      credentials: 'same-origin',
+      body: fd,
+    });
+    const res = await resp.json().catch(()=>null);
+    if(!res || !res.success) throw new Error((res && res.error) ? res.error : STR.failed);
+
     setMsg('contrib-msg', STR.contribution_confirmed, true);
+    if(proofInput) proofInput.value='';
+    await loadRoom();
     await pollFeed();
   }catch(e){
     setMsg('contrib-msg', e.message||STR.failed, false);
