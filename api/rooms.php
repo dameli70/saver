@@ -4,13 +4,57 @@
 //  Joint saving rooms (creation + discovery + join requests)
 // ============================================================
 
+// Avoid emitting HTML warnings/notices in API responses (breaks JSON parsing on the client).
+@ini_set('display_errors', '0');
+@ini_set('html_errors', '0');
+
 require_once __DIR__ . '/../includes/install_guard.php';
 requireInstalledForApi();
 
 require_once __DIR__ . '/../includes/helpers.php';
 require_once __DIR__ . '/../includes/packages.php';
 require_once __DIR__ . '/../includes/media_crypto.php';
-header('Content-Type: application/json');
+
+set_exception_handler(function (Throwable $e): void {
+    $out = ['error' => 'Server error'];
+    if (defined('APP_ENV') && APP_ENV === 'development') {
+        $out['detail'] = $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine();
+    }
+
+    if (!headers_sent()) {
+        http_response_code(500);
+        header('Content-Type: application/json; charset=utf-8');
+        header('Cache-Control: no-store, no-cache, must-revalidate');
+        header('Pragma: no-cache');
+    }
+
+    echo json_encode($out, JSON_UNESCAPED_UNICODE);
+    exit;
+});
+
+register_shutdown_function(function (): void {
+    $e = error_get_last();
+    if (!$e) return;
+
+    $t = (int)($e['type'] ?? 0);
+    if (!in_array($t, [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true)) return;
+
+    $out = ['error' => 'Server error'];
+    if (defined('APP_ENV') && APP_ENV === 'development') {
+        $out['detail'] = (string)($e['message'] ?? '') . ' @ ' . (string)($e['file'] ?? '') . ':' . (string)($e['line'] ?? '');
+    }
+
+    if (!headers_sent()) {
+        http_response_code(500);
+        header('Content-Type: application/json; charset=utf-8');
+        header('Cache-Control: no-store, no-cache, must-revalidate');
+        header('Pragma: no-cache');
+    }
+
+    echo json_encode($out, JSON_UNESCAPED_UNICODE);
+});
+
+header('Content-Type: application/json; charset=utf-8');
 startSecureSession();
 
 $body = json_decode(file_get_contents('php://input'), true);
@@ -18,13 +62,18 @@ if (!is_array($body)) $body = [];
 $action = $body['action'] ?? ($_GET['action'] ?? '');
 
 function ensureUserTrustRowRooms(int $userId): void {
+    if (!dbHasTable('user_trust')) return;
+
     $db = getDB();
     $db->prepare('INSERT IGNORE INTO user_trust (user_id, trust_level, completed_reveals_count) VALUES (?, 1, 0)')
        ->execute([(int)$userId]);
 }
 
 function getUserTrustLevel(int $userId): int {
+    if (!dbHasTable('user_trust')) return 1;
+
     ensureUserTrustRowRooms($userId);
+
     $db = getDB();
     $stmt = $db->prepare('SELECT trust_level FROM user_trust WHERE user_id = ?');
     $stmt->execute([(int)$userId]);
@@ -33,6 +82,8 @@ function getUserTrustLevel(int $userId): int {
 }
 
 function userRestrictedUntil(int $userId): ?string {
+    if (!dbHasTable('user_restrictions')) return null;
+
     $db = getDB();
     $stmt = $db->prepare('SELECT restricted_until FROM user_restrictions WHERE user_id = ? AND restricted_until > NOW()');
     $stmt->execute([(int)$userId]);
