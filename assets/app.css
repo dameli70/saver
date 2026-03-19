@@ -504,6 +504,23 @@ a.btn:visited{color:inherit;}
 }
 .btn:active{transform:scale(.98);}
 
+/* Disabled buttons (we use both native disabled and aria-disabled for tooltip-able disables) */
+.btn:disabled,
+.btn.is-disabled,
+.btn[aria-disabled="true"]{
+  opacity:.45;
+  cursor:not-allowed;
+  filter:saturate(0) brightness(.95);
+}
+.btn.is-disabled:hover,
+.btn[aria-disabled="true"]:hover{
+  transform:none;
+}
+.btn.is-disabled:active,
+.btn[aria-disabled="true"]:active{
+  transform:none;
+}
+
 /* Action icons inside buttons (non-nav) */
 .btn .btn-ico{display:inline-flex;align-items:center;justify-content:center;
   width:18px;height:18px;flex:0 0 18px;
