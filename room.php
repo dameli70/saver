@@ -1782,7 +1782,8 @@ function computeNextStep(r){
           tr('room.next.contribution_due_body_fmt', {cycle: cycLabel, ts: deadline}, '{cycle} is due by {ts}. Upload your proof to confirm your contribution.')
         );
         addAction({text: tr('room.contribution.upload_btn', null, 'Upload proof'), type:'primary', onClick:'contribUploadNow'});
-        addAction({text: tr('room.contribution.open_proofs_btn', null, 'Open My proofs'), type:'ghost', href:'rooms_proofs.php?room_id=' + encodeURIComponent(ROOM_ID;
+        addAction({text: tr('room.contribution.open_proofs_btn', null, 'Open My proofs'), type:'ghost', href:'rooms_proofs.php?room_id=' + encodeURIComponent(ROOM_ID)});
+        return step;
       }
 
       if(String(contrib.status||'') === 'paid' || String(contrib.status||'') === 'paid_in_grace'){
