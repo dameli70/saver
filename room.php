@@ -887,6 +887,9 @@ function formatActivityExtra(eventType, payload){
   if(eventType === 'typeB_withdrawal_confirmed'){
     const bits = [];
     if(payload.rotation_index) bits.push(tr('room.activity.turn', {n: String(payload.rotation_index)}, 'Turn #' + String(payload.rotation_index)));
+    if(payload.turn_user_name) bits.push(tr('room.activity.collected_by_fmt', {name: String(payload.turn_user_name)}, 'Collected by ' + String(payload.turn_user_name)));
+    if(payload.amount) bits.push(tr('room.activity.amount', {amount: String(payload.amount)}, 'Amount ' + String(payload.amount)));
+    if(payload.balance_after) bits.push(tr('room.activity.room_balance_fmt', {bal: String(payload.balance_after)}, 'Balance ' + String(payload.balance_after)));
     if(payload.role) bits.push(tr('room.activity.role', {role: String(payload.role)}, 'role ' + String(payload.role)));
     return bits.join(' · ');
   }
@@ -901,6 +904,7 @@ function formatActivityExtra(eventType, payload){
     const bits = [];
     if(payload.cycle_id) bits.push(tr('room.activity.cycle_id', {id: String(payload.cycle_id)}, 'Cycle ' + String(payload.cycle_id)));
     if(payload.amount) bits.push(tr('room.activity.amount', {amount: String(payload.amount)}, 'Amount ' + String(payload.amount)));
+    if(payload.room_balance) bits.push(tr('room.activity.room_balance_fmt', {bal: String(payload.room_balance)}, 'Balance ' + String(payload.room_balance)));
     return bits.join(' · ');
   }
 
@@ -1908,7 +1912,10 @@ async function pollFeed(){
     if(!r.success) throw new Error(r.error||STR.failed);
 
     const events = r.events || [];
-    events.forEach(addFeedItem);
+    events.forEach(ev => {
+      addFeedItem(ev);
+      maybeScheduleRoomRefreshForEvent(ev);
+    });
     if(events.length){
       lastEventId = events[events.length-1].id;
     }
@@ -2675,6 +2682,45 @@ async function reviewJoin(requestId, decision){
   }
 }
 
+let roomRefreshTimer = null;
+
+function maybeScheduleRoomRefreshForEvent(ev){
+  const t = (ev && ev.event_type) ? String(ev.event_type) : '';
+  if(!t) return;
+
+  if(t === 'contribution_confirmed' ||
+     t === 'typeB_withdrawal_confirmed' ||
+     t === 'typeB_turn_revealed' ||
+     t === 'typeB_turn_advanced' ||
+     t === 'typeB_turn_expired' ||
+     t === 'room_started' ||
+     t === 'swap_window_started' ||
+     t === 'swap_window_ended'){
+    scheduleRoomRefresh();
+  }
+}
+
+function scheduleRoomRefresh(){
+  if(roomRefreshTimer) return;
+  roomRefreshTimer = setTimeout(async ()=>{
+    roomRefreshTimer = null;
+    await refreshRoomSilent();
+  }, 900);
+}
+
+async function refreshRoomSilent(){
+  try{
+    const res = await get('/api/rooms.php?action=room_detail&room_id=' + encodeURIComponent(ROOM_ID) + inviteParam());
+    if(!res.success) return;
+    roomCache = res.room;
+    roomCache.escrow_settlements = res.escrow_settlements || [];
+    roomCache.participants = res.participants || [];
+    renderRoom();
+  }catch{
+    // ignore
+  }
+}
+
 let feedPollTimer = null;
 let feedEs = null;
 
@@ -2707,6 +2753,7 @@ function startSseFeed(){
       const data = JSON.parse(ev.data);
       addFeedItem(data);
       lastEventId = data.id;
+      maybeScheduleRoomRefreshForEvent(data);
     }catch{
       // ignore parse errors
     }

@@ -3867,11 +3867,24 @@ if ($action === 'typeB_confirm_withdrawal') {
         }
     }
 
+    $balanceAfter = null;
+    if (dbHasTable('saving_room_account_ledger')) {
+        $balanceAfter = number_format(roomLedgerGetBalance($db, $roomId), 2, '.', '');
+    }
+
+    $uNameExpr = sqlRoomUserDisplayNameExpr('u', 'id');
+    $turnNameStmt = $db->prepare("SELECT {$uNameExpr} AS name FROM users u WHERE u.id = ? LIMIT 1");
+    $turnNameStmt->execute([(int)$w['user_id']]);
+    $turnUserName = $turnNameStmt->fetchColumn() ?: null;
+
     $db->commit();
 
     activityLog($roomId, 'typeB_withdrawal_confirmed', [
         'rotation_index' => (int)$w['rotation_index'],
         'role' => $role,
+        'turn_user_name' => $turnUserName,
+        'amount' => $requiredWithdrawalAmount,
+        'balance_after' => $balanceAfter,
     ]);
 
     auditLog('room_typeB_withdrawal_confirm');
@@ -4781,6 +4794,10 @@ if ($action === 'confirm_contribution_with_proof') {
     $payload = ['cycle_id' => $cycleId];
     if (empty($room['privacy_mode'])) {
         $payload['amount'] = $amount;
+    }
+
+    if (dbHasTable('saving_room_account_ledger')) {
+        $payload['room_balance'] = number_format(roomLedgerGetBalance($db, $roomId), 2, '.', '');
     }
 
     $db->prepare('INSERT INTO saving_room_activity (room_id, event_type, public_payload_json) VALUES (?, ?, ?)')

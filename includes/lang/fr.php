@@ -882,6 +882,8 @@ return [
     'room.activity.cycle_num' => 'Cycle n°{n}',
     'room.activity.cycle_id' => 'Cycle {id}',
     'room.activity.amount' => 'Montant {amount}',
+    'room.activity.room_balance_fmt' => 'Solde {bal}',
+    'room.activity.collected_by_fmt' => 'Collecté par {name}',
     'room.activity.two_missed_contributions' => 'Deux contributions manquées',
     'room.activity.policy' => 'Politique : {policy}',
     'room.activity.fee_rate_fmt' => 'Frais {pct}%',
