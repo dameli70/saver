@@ -1417,44 +1417,39 @@ function renderRoom(){
         const isTurnUser = (cur.turn_user_id|0) === (CURRENT_USER_ID|0);
         const isMaker = (r.is_maker === 1);
 
-        // Keep vote buttons visible but disabled-with-tooltip whenever voting isn't needed/allowed.
-        let voteDisabledReason = '';
-        const eligible = (votesMeta && typeof votesMeta.eligible === 'number') ? (votesMeta.eligible|0) : null;
-        const required = (votesMeta && typeof votesMeta.required === 'number') ? (votesMeta.required|0) : null;
-
-        if(r.room_state !== 'active'){
-          voteDisabledReason = tr('room.rotation.vote_disabled_not_active', null, 'Voting is available only while the room is active.');
-        } else if(r.my_status !== 'active'){
-          voteDisabledReason = tr('room.rotation.vote_disabled_not_participant', null, 'Only active participants can vote.');
-        } else if(cur.status !== 'pending_votes'){
-          if(cur.status === 'blocked_dispute') voteDisabledReason = tr('room.rotation.blocked_dispute', null, 'Blocked (dispute)');
-          else if(cur.status === 'blocked_debt') voteDisabledReason = tr('room.rotation.blocked_debt', null, 'Blocked (unpaid contribution)');
-          else voteDisabledReason = tr('room.rotation.vote_disabled_not_pending', null, 'Voting is not required right now.');
-        } else if(isMaker || isTurnUser) {
-          voteDisabledReason = tr('room.rotation.vote_disabled_role', null, 'Your vote is not required for this turn.');
-        } else if((eligible !== null && eligible <= 0) || (required !== null && required <= 0)){
-          voteDisabledReason = tr('room.rotation.vote_disabled_no_votes_required', null, 'No participant votes are required for this turn.');
-        } else if(voteCast){
-          voteDisabledReason = tr('room.vote.disabled_already_voted_fmt', {vote: String(myVote)}, `Vote already cast (you: ${myVote}).`);
-        } else if(!isOpen && votesMeta.opens_at){
-          voteDisabledReason = tr('room.rotation.vote_disabled_opens_fmt', {ts: fmt(votesMeta.opens_at)}, 'Voting opens ' + fmt(votesMeta.opens_at));
-        } else if(isClosed){
-
-          voteDisabledReason = tr('room.rotation.vote_disabled_closed', null, 'Voting window is closed.');
-        }
-
-        const canVoteRole = (!isMaker && !isTurnUser);
+        const canVoteRole = (!isTurnUser);
         const votingWindow = (r.room_state === 'active' && r.my_status === 'active' && cur.status === 'pending_votes');
 
-        const eligibleToVote = votingWindow && canVoteRole && isOpen && !isClosed && !voteCast;
-        if(!voteDisabledReason && !eligibleToVote){
-          voteDisabledReason = tr('room.rotation.vote_disabled_unavailable', null, 'Voting is unavailable.');
+        const eligibleCount = (votesMeta && typeof votesMeta.eligible === 'number') ? (votesMeta.eligible|0) : 0;
+        const requiredCount = (votesMeta && typeof votesMeta.required === 'number') ? (votesMeta.required|0) : 0;
+
+        // Hide vote buttons entirely unless the room is active and this user can vote on this turn.
+        // Maker vote is required even when participant votes are not.
+        const showVoteButtons = (votingWindow && canVoteRole && (isMaker || (eligibleCount > 0 && requiredCount > 0)));
+
+        if(approveBtn) approveBtn.style.display = showVoteButtons ? 'inline-flex' : 'none';
+        if(rejectBtn) rejectBtn.style.display = showVoteButtons ? 'inline-flex' : 'none';
+
+        if(!showVoteButtons){
+          setBtnDisabled(approveBtn, '');
+          setBtnDisabled(rejectBtn, '');
+        } else {
+          let voteDisabledReason = '';
+
+          if(voteCast){
+            voteDisabledReason = tr('room.vote.disabled_already_voted_fmt', {vote: String(myVote)}, `Vote already cast (you: ${myVote}).`);
+          } else if(!isOpen && votesMeta.opens_at){
+            voteDisabledReason = tr('room.rotation.vote_disabled_opens_fmt', {ts: fmt(votesMeta.opens_at)}, 'Voting opens ' + fmt(votesMeta.opens_at));
+          } else if(isClosed){
+            voteDisabledReason = tr('room.rotation.vote_disabled_closed', null, 'Voting window is closed.');
+          } else if(!isOpen){
+            voteDisabledReason = tr('room.rotation.vote_disabled_unavailable', null, 'Voting is unavailable.');
+          }
+
+          const canVoteNow = (isOpen && !isClosed && !voteCast && !voteDisabledReason);
+          setBtnDisabled(approveBtn, canVoteNow ? '' : voteDisabledReason);
+          setBtnDisabled(rejectBtn, canVoteNow ? '' : voteDisabledReason);
         }
-
-        const canVoteNow = eligibleToVote && !voteDisabledReason;
-
-        setBtnDisabled(approveBtn, canVoteNow ? '' : voteDisabledReason);
-        setBtnDisabled(rejectBtn, canVoteNow ? '' : voteDisabledReason);
 
         // Approval window status text
         if(cur.status === 'pending_votes'){
@@ -1653,6 +1648,13 @@ function renderRoom(){
         if(reqEl) reqEl.textContent = '—';
         document.getElementById('typeb-window').textContent = '—';
         document.getElementById('typeb-maker').textContent = '—';
+        const approveBtn = document.getElementById('typeb-vote-approve');
+        const rejectBtn = document.getElementById('typeb-vote-reject');
+        if(approveBtn) approveBtn.style.display = 'none';
+        if(rejectBtn) rejectBtn.style.display = 'none';
+        setBtnDisabled(approveBtn, '');
+        setBtnDisabled(rejectBtn, '');
+
         document.getElementById('typeb-reveal-btn').style.display = 'none';
         const delWrap = document.getElementById('typeb-delegate-wrap');
         if(delWrap) delWrap.style.display = 'none';
