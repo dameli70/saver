@@ -207,6 +207,16 @@ function getRoomSwapWindowInfo(array $room): array {
         $closes = (string)$room['start_at'];
     }
 
+    // Swap windows are defined to close no later than the room start date.
+    // Some legacy installs stored swap_window_ends_at after start_at; clamp for UI + gating.
+    if ($closes !== null && !empty($room['start_at'])) {
+        $cTs = strtotime($closes);
+        $sTs = strtotime((string)$room['start_at']);
+        if ($cTs && $sTs && $cTs > $sTs) {
+            $closes = (string)$room['start_at'];
+        }
+    }
+
     $now = time();
     $openOk = true;
     $closeOk = true;

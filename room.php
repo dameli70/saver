@@ -1083,14 +1083,28 @@ function roomCountdownText(r){
   if(!r) return '';
 
   const now = Date.now();
-  const start = parseUtcDate(r.start_at);
+
+  const swapClosesAt = (r && r.swap_window && r.swap_window.closes_at) ? parseUtcDate(r.swap_window.closes_at) : null;
+  const effStartAt = (String(r.room_state||'') === 'swap_window' && swapClosesAt && !isNaN(swapClosesAt.getTime()))
+    ? swapClosesAt
+    : parseUtcDate(r.start_at);
+
+  const start = effStartAt;
   const reveal = parseUtcDate(r.reveal_at);
-  const nextTurn = (r && r.active_cycle && r.active_cycle.due_at) ? parseUtcDate(r.active_cycle.due_at) : null;
+
+  const nextTurn = (r && r.active_cycle && r.active_cycle.due_at)
+    ? parseUtcDate(r.active_cycle.due_at)
+    : (String(r.room_state||'') === 'swap_window' ? swapClosesAt : null);
 
   function fmtDelta(ms){
     const s = Math.max(0, Math.floor(ms/1000));
     if(window.LS && LS.fmtCountdown) return LS.fmtCountdown(s);
     return String(s) + 's';
+  }
+
+  if(String(r.room_state||'') === 'swap_window' && nextTurn && !isNaN(nextTurn.getTime()) && now < nextTurn.getTime()){
+    const delta = fmtDelta(nextTurn.getTime() - now);
+    return tr('room.countdown.swap_closes_in', {delta}, 'Swap closes in ' + delta);
   }
 
   if(start && !isNaN(start.getTime()) && now < start.getTime()){
@@ -1177,8 +1191,11 @@ function renderRoom(){
   const r = roomCache;
   if(!r) return;
 
-  const startLocal = fmt(r.start_at);
-  const startUtc = fmtUtc(r.start_at);
+  const effStartAt = (String(r.room_state||'') === 'swap_window' && r.swap_window && r.swap_window.closes_at)
+    ? r.swap_window.closes_at
+    : r.start_at;
+
+  const startLocal = fmt(effStartAt);
   const revealLocal = fmt(r.reveal_at);
   const revealUtc = fmtUtc(r.reveal_at);
 

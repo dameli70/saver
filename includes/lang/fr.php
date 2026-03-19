@@ -1238,6 +1238,7 @@ return [
     'room.countdown.starts_in' => 'Démarre dans {delta}',
     'room.countdown.reveals_in' => 'Révélation dans {delta}',
     'room.countdown.next_turn_in' => 'Prochain tour dans {delta}',
+    'room.countdown.swap_closes_in' => 'Échange se termine dans {delta}',
     'room.countdown.eligible' => 'Révélation possible (serveur)',
 
     // Sauvegardes

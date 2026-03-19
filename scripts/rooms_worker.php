@@ -551,10 +551,11 @@ foreach ($roomsToLock as $r) {
 }
 
 // ───────────────────────────────────────────────────────────
-//  2) Enter swap window at scheduled start
+//  2) Enter swap window (24h before scheduled start)
 // ───────────────────────────────────────────────────────────
 if ($supportsSwapWindow) {
-    $roomsToSwap = $db->query("SELECT id, saving_type FROM saving_rooms WHERE room_state='lobby' AND start_at <= NOW() LIMIT 500")->fetchAll();
+    // Start the swap window 24 hours before start_at, and close it exactly at start_at.
+    $roomsToSwap = $db->query("SELECT id, saving_type FROM saving_rooms WHERE room_state='lobby' AND start_at > NOW() AND start_at <= (NOW() + INTERVAL 24 HOUR) LIMIT 500")->fetchAll();
 
     foreach ($roomsToSwap as $r) {
         $roomId = (string)$r['id'];
@@ -563,7 +564,7 @@ if ($supportsSwapWindow) {
         $db->beginTransaction();
 
         $upd = $db->prepare("UPDATE saving_rooms
-                             SET room_state='swap_window', lobby_state='locked', swap_window_ends_at = DATE_ADD(start_at, INTERVAL 24 HOUR), updated_at=NOW()
+                             SET room_state='swap_window', lobby_state='locked', swap_window_ends_at = start_at, updated_at=NOW()
                              WHERE id = ? AND room_state='lobby'");
         $upd->execute([$roomId]);
 
@@ -593,6 +594,64 @@ if ($supportsSwapWindow) {
         $db->commit();
 
         logLine("Swap window started: {$roomId}");
+    }
+
+    // Rooms that reached start_at without entering swap_window (cron downtime or late creation)
+    // should start immediately.
+    $lateRooms = $db->query("SELECT id, saving_type, participation_amount FROM saving_rooms WHERE room_state='lobby' AND start_at <= NOW() LIMIT 500")->fetchAll();
+    foreach ($lateRooms as $r) {
+        $roomId = (string)$r['id'];
+        $savingType = (string)($r['saving_type'] ?? '');
+
+        $db->beginTransaction();
+
+        $upd = $db->prepare("UPDATE saving_rooms SET room_state='active', lobby_state='locked', updated_at=NOW() WHERE id = ? AND room_state='lobby'");
+        $upd->execute([$roomId]);
+
+        if ($upd->rowCount() < 1) {
+            $db->rollBack();
+            continue;
+        }
+
+        // Promote approved participants to active
+        $db->prepare("UPDATE saving_room_participants SET status='active' WHERE room_id = ? AND status='approved'")
+           ->execute([$roomId]);
+
+        if ($savingType === 'B') {
+            syncRotationQueueToParticipants($db, $roomId, ['active']);
+        }
+
+        rotateRoomDestinationUnlockCode($db, $roomId, 'room_started');
+
+        $dueAt = (new DateTimeImmutable('now'))->modify('+24 hours')->format('Y-m-d H:i:s');
+        $graceEndsAt = (new DateTimeImmutable($dueAt))->modify('+48 hours')->format('Y-m-d H:i:s');
+
+        $db->prepare("INSERT IGNORE INTO saving_room_contribution_cycles (room_id, cycle_index, due_at, grace_ends_at, status)
+                      VALUES (?, 1, ?, ?, 'open')")
+           ->execute([$roomId, $dueAt, $graceEndsAt]);
+
+        $cycleIdStmt = $db->prepare("SELECT id FROM saving_room_contribution_cycles WHERE room_id = ? AND cycle_index = 1");
+        $cycleIdStmt->execute([$roomId]);
+        $cycleId = (int)$cycleIdStmt->fetchColumn();
+
+        if ($cycleId > 0) {
+            $parts = $db->prepare("SELECT user_id FROM saving_room_participants WHERE room_id = ? AND status = 'active'");
+            $parts->execute([$roomId]);
+            $amount = (string)$r['participation_amount'];
+            foreach ($parts->fetchAll() as $p) {
+                ensureContributionRow($db, $roomId, (int)$p['user_id'], $cycleId, $amount);
+            }
+        }
+
+        activityLog($db, $roomId, 'room_started', []);
+
+        if ($savingType === 'B') {
+            initTypeBRotation($db, $roomId);
+        }
+
+        $db->commit();
+
+        logLine("Room started (swap window missed): {$roomId}");
     }
 
     // During swap window, free slots for participants who retract (status=exited_prestart).
@@ -651,8 +710,11 @@ if ($supportsSwapWindow) {
     $swapEnded = $db->query("SELECT id, saving_type, participation_amount
                              FROM saving_rooms
                              WHERE room_state='swap_window'
-                               AND swap_window_ends_at IS NOT NULL
-                               AND swap_window_ends_at <= NOW()
+                               AND start_at <= NOW()
+                             LIMIT 500")->fetchAll();
+swap_window_ends_at <= NOW())
+                                 OR start_at <= NOW()
+                               )
                              LIMIT 500")->fetchAll();
 
     foreach ($swapEnded as $r) {
@@ -661,7 +723,7 @@ if ($supportsSwapWindow) {
 
         $db->beginTransaction();
 
-        $upd = $db->prepare("UPDATE saving_rooms SET room_state='active', updated_at=NOW() WHERE id = ? AND room_state='swap_window'");
+        $upd = $db->prepare("UPDATE saving_rooms SET room_state='active', swap_window_ends_at = start_at, updated_at=NOW() WHEREdow'");
         $upd->execute([$roomId]);
 
         if ($upd->rowCount() < 1) {

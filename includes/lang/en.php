@@ -1445,6 +1445,7 @@ return [
     'room.countdown.starts_in' => 'Starts in {delta}',
     'room.countdown.reveals_in' => 'Reveals in {delta}',
     'room.countdown.next_turn_in' => 'Next turn in {delta}',
+    'room.countdown.swap_closes_in' => 'Swap closes in {delta}',
     'room.countdown.eligible' => 'Reveal eligible (server-enforced)',
 
     // Rooms
