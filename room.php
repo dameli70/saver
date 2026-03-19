@@ -130,8 +130,8 @@ header("Referrer-Policy: no-referrer");
         </div>
 
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
-          <button class="btn btn-blue btn-sm" onclick="unlockVote('approve')"><?php e('room.unlock.btn_approve'); ?></button>
-          <button class="btn btn-red btn-sm" onclick="unlockVote('reject')"><?php e('room.unlock.btn_reject'); ?></button>
+          <button class="btn btn-blue btn-sm" id="unlock-vote-approve" onclick="unlockVote('approve')"><?php e('room.unlock.btn_approve'); ?></button>
+          <button class="btn btn-red btn-sm" id="unlock-vote-reject" onclick="unlockVote('reject')"><?php e('room.unlock.btn_reject'); ?></button>
           <button class="btn btn-primary btn-sm" id="unlock-reveal-btn" onclick="unlockReveal()" style="display:none;"><?php e('room.unlock.btn_reveal_code'); ?></button>
         </div>
 
@@ -703,13 +703,32 @@ async function postStrong(url, body){
 
 function esc(s){
   if(window.LS && LS.esc) return LS.esc(s);
-  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-function setMsg(id, text, ok){
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').repla</old_code><new_code>function setMsg(id, text, ok){
   const el=document.getElementById(id);
   if(!el) return;
   el.className = 'msg ' + (ok ? 'msg-ok' : 'msg-err') + ' show';
   el.textContent = text;
+}
+
+function setBtnDisabled(btn, reason){
+  if(!btn) return;
+
+  // Keep the element interactive so the browser can show the tooltip.
+  // We enforce the disable in JS handlers using data-disabledReason.
+  btn.disabled = false;
+
+  const r = String(reason||'').trim();
+  if(r){
+    btn.classList.add('is-disabled');
+    btn.setAttribute('aria-disabled','true');
+    btn.title = r;
+    btn.dataset.disabledReason = r;
+  } else {
+    btn.classList.remove('is-disabled');
+    btn.removeAttribute('aria-disabled');
+    btn.title = '';
+    delete btn.dataset.disabledReason;
+  }
 }
 function parseUtcDate(ts){
   if(window.LS && LS.parseUtc) return LS.parseUtc(ts);
@@ -1063,6 +1082,7 @@ function roomCountdownText(r){
   const now = Date.now();
   const start = parseUtcDate(r.start_at);
   const reveal = parseUtcDate(r.reveal_at);
+  const nextTurn = (r && r.active_cycle && r.active_cycle.due_at) ? parseUtcDate(r.active_cycle.due_at) : null;
 
   function fmtDelta(ms){
     const s = Math.max(0, Math.floor(ms/1000));
@@ -1073,6 +1093,15 @@ function roomCountdownText(r){
   if(start && !isNaN(start.getTime()) && now < start.getTime()){
     const delta = fmtDelta(start.getTime() - now);
     return tr('room.countdown.starts_in', {delta}, 'Starts in ' + delta);
+  }
+
+  if(String(r.saving_type||'') === 'B'){
+    if(nextTurn && !isNaN(nextTurn.getTime()) && now < nextTurn.getTime()){
+      const delta = fmtDelta(nextTurn.getTime() - now);
+      return tr('room.countdown.next_turn_in', {delta}, 'Next turn in ' + delta);
+    }
+
+    return tr('room.state.active', null, 'Active');
   }
 
   if(reveal && !isNaN(reveal.getTime()) && now < reveal.getTime()){
@@ -1198,13 +1227,27 @@ function renderRoom(){
   items.push({k: tr('room.ov.start_date', null, 'Start date'), v: esc(startLocal||'—')});
 
   if(r.saving_type === 'B'){
-    const cur = (r.rotation && r.rotation.current) ? r.rotation.current : null;
-    if(r.room_state === 'active' && cur){
-      const turnUser = cur.turn_user_name || tr('common.user', null, 'user');
-      items.push({k: tr('room.rotation.current_turn', null, 'Current turn'), v: esc(`#${cur.rotation_index} · ${turnUser}`)});
-    } else {
-      items.push({k: tr('room.ov.reveal_date', null, 'Reveal date'), v: esc(revealLocal||'—')});
+    // Type B rooms do not use a user-facing "reveal date". Show next turn date + expected withdrawal instead.
+    const nextTurn = (r.room_state === 'active' && r.active_cycle && r.active_cycle.due_at)
+      ? fmt(r.active_cycle.due_at)
+      : (startLocal||'—');
+
+    items.push({k: tr('room.ov.next_turn_date', null, 'Next turn date'), v: esc(nextTurn||'—')});
+
+    let expected = (r.required_withdrawal_amount != null && String(r.required_withdrawal_amount) !== '')
+      ? String(r.required_withdrawal_amount)
+      : '';
+
+    if(!expected){
+      const amt = parseFloat(String(r.participation_amount||''));
+      const n = parseInt(String(r.approved_count||'0'), 10);
+      if(!isNaN(amt) && !isNaN(n) && n > 0){
+        expected = (amt * n).toFixed(2);
+      }
     }
+
+    items.push({k: tr('room.ov.expected_withdrawal_amount', null, 'Expected withdrawal'), v: esc(expected||'—')});
+
   } else {
     items.push({k: tr('room.ov.reveal_date', null, 'Reveal date'), v: esc(revealLocal||'—')});
   }
@@ -1271,6 +1314,19 @@ function renderRoom(){
       const myVote = (r.unlock && r.unlock.my_vote) ? r.unlock.my_vote : 'none';
 
       document.getElementById('unlock-consensus').textContent = tr('room.unlock.consensus_you', {approvals, eligible, vote: myVote}, `${approvals}/${eligible} (you: ${myVote})`);
+
+      const approveBtn = document.getElementById('unlock-vote-approve');
+      const rejectBtn = document.getElementById('unlock-vote-reject');
+
+      let voteDisabledReason = '';
+      if(r.room_state !== 'lobby' && r.room_state !== 'active'){
+        voteDisabledReason = tr('room.vote.disabled_unavailable', null, 'Voting is unavailable.');
+      } else if(myVote !== 'none'){
+        voteDisabledReason = tr('room.vote.disabled_already_voted_fmt', {vote: String(myVote)}, `Vote already cast (you: ${myVote}).`);
+      }
+
+      setBtnDisabled(approveBtn, voteDisabledReason);
+      setBtnDisabled(rejectBtn, voteDisabledReason);
 
       const ev = r.unlock ? r.unlock.event : null;
       if(ev && ev.status === 'revealed'){
@@ -1358,12 +1414,44 @@ function renderRoom(){
         const isTurnUser = (cur.turn_user_id|0) === (CURRENT_USER_ID|0);
         const isMaker = (r.is_maker === 1);
 
+        // Keep vote buttons visible but disabled-with-tooltip whenever voting isn't needed/allowed.
+        let voteDisabledReason = '';
+        const eligible = (votesMeta && typeof votesMeta.eligible === 'number') ? (votesMeta.eligible|0) : null;
+        const required = (votesMeta && typeof votesMeta.required === 'number') ? (votesMeta.required|0) : null;
+
+        if(r.room_state !== 'active'){
+          voteDisabledReason = tr('room.rotation.vote_disabled_not_active', null, 'Voting is available only while the room is active.');
+        } else if(r.my_status !== 'active'){
+          voteDisabledReason = tr('room.rotation.vote_disabled_not_participant', null, 'Only active participants can vote.');
+        } else if(cur.status !== 'pending_votes'){
+          if(cur.status === 'blocked_dispute') voteDisabledReason = tr('room.rotation.blocked_dispute', null, 'Blocked (dispute)');
+          else if(cur.status === 'blocked_debt') voteDisabledReason = tr('room.rotation.blocked_debt', null, 'Blocked (unpaid contribution)');
+          else voteDisabledReason = tr('room.rotation.vote_disabled_not_pending', null, 'Voting is not required right now.');
+        } else if(isMaker || isTurnUser) {
+          voteDisabledReason = tr('room.rotation.vote_disabled_role', null, 'Your vote is not required for this turn.');
+        } else if((eligible !== null && eligible <= 0) || (required !== null && required <= 0)){
+          voteDisabledReason = tr('room.rotation.vote_disabled_no_votes_required', null, 'No participant votes are required for this turn.');
+        } else if(voteCast){
+          voteDisabledReason = tr('room.vote.disabled_already_voted_fmt', {vote: String(myVote)}, `Vote already cast (you: ${myVote}).`);
+        } else if(!isOpen && votesMeta.opens_at){
+          voteDisabledReason = tr('room.rotation.vote_disabled_opens_fmt', {ts: fmt(votesMeta.opens_at)}, 'Voting opens ' + fmt(votesMeta.opens_at));
+        } else if(isClosed){
+
+          voteDisabledReason = tr('room.rotation.vote_disabled_closed', null, 'Voting window is closed.');
+        }
+
         const canVoteRole = (!isMaker && !isTurnUser);
         const votingWindow = (r.room_state === 'active' && r.my_status === 'active' && cur.status === 'pending_votes');
-        const canVoteNow = votingWindow && canVoteRole && isOpen && !isClosed && !voteCast;
 
-        if(approveBtn) approveBtn.disabled = !canVoteNow;
-        if(rejectBtn) rejectBtn.disabled = !canVoteNow;
+        const eligibleToVote = votingWindow && canVoteRole && isOpen && !isClosed && !voteCast;
+        if(!voteDisabledReason && !eligibleToVote){
+          voteDisabledReason = tr('room.rotation.vote_disabled_unavailable', null, 'Voting is unavailable.');
+        }
+
+        const canVoteNow = eligibleToVote && !voteDisabledReason;
+
+        setBtnDisabled(approveBtn, canVoteNow ? '' : voteDisabledReason);
+        setBtnDisabled(rejectBtn, canVoteNow ? '' : voteDisabledReason);
 
         // Approval window status text
         if(cur.status === 'pending_votes'){
@@ -2140,6 +2228,14 @@ async function revokeInvite(inviteId){
 
 
 async function unlockVote(vote){
+  const btn = document.getElementById(vote === 'approve' ? 'unlock-vote-approve' : 'unlock-vote-reject');
+  if(btn && btn.dataset && btn.dataset.disabledReason){
+    setMsg('unlock-msg', btn.dataset.disabledReason, false);
+    return;
+  }
+
+  if(btn) btn.disabled = true;
+
   try{
     const res = await postStrong('/api/rooms.php', {action:'typeA_vote', room_id: ROOM_ID, vote});
     if(!res.success) throw new Error(res.error||STR.failed);
@@ -2147,6 +2243,9 @@ async function unlockVote(vote){
     await loadRoom();
   }catch(e){
     setMsg('unlock-msg', e.message||STR.failed, false);
+    await loadRoom();
+  }finally{
+    if(btn) btn.disabled = false;
   }
 }
 
@@ -2183,6 +2282,12 @@ async function unlockReveal(){
 async function typeBVote(vote){
   const a = document.getElementById('typeb-vote-approve');
   const b = document.getElementById('typeb-vote-reject');
+  const btn = (vote === 'approve') ? a : b;
+
+  if(btn && btn.dataset && btn.dataset.disabledReason){
+    setMsg('typeb-msg', btn.dataset.disabledReason, false);
+    return;
+  }
 
   if(a) a.disabled = true;
   if(b) b.disabled = true;
@@ -2195,6 +2300,9 @@ async function typeBVote(vote){
   }catch(e){
     setMsg('typeb-msg', e.message||STR.failed, false);
     await loadRoom();
+  }finally{
+    if(a) a.disabled = false;
+    if(b) b.disabled = false;
   }
 }
 

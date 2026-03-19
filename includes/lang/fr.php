@@ -918,6 +918,18 @@ return [
 
     'room.vote_saved' => 'Vote enregistré.',
 
+    'room.vote.disabled_already_voted_fmt' => 'Vote déjà enregistré (vous : {vote}).',
+    'room.vote.disabled_unavailable' => 'Vote indisponible.',
+
+    'room.rotation.vote_disabled_not_active' => 'Le vote est disponible uniquement lorsque la salle est active.',
+    'room.rotation.vote_disabled_not_participant' => 'Seuls les participants actifs peuvent voter.',
+    'room.rotation.vote_disabled_not_pending' => 'Le vote n’est pas requis pour le moment.',
+    'room.rotation.vote_disabled_role' => 'Votre vote n’est pas requis pour ce tour.',
+    'room.rotation.vote_disabled_no_votes_required' => 'Aucun vote des participants n’est requis pour ce tour.',
+    'room.rotation.vote_disabled_opens_fmt' => 'Le vote ouvre {ts}.',
+    'room.rotation.vote_disabled_closed' => 'La fenêtre de vote est fermée.',
+    'room.rotation.vote_disabled_unavailable' => 'Vote indisponible.',
+
     'room.invitation.no_active' => 'Aucune invitation active.',
     'room.invitation.accepted' => 'Invitation acceptée.',
     'room.invitation.declined' => 'Invitation refusée.',
@@ -1199,6 +1211,8 @@ return [
     'room.ov.start_date' => 'Date de début',
     'room.ov.period' => 'Période',
     'room.ov.reveal_date' => 'Date de révélation',
+    'room.ov.next_turn_date' => 'Date du prochain tour',
+    'room.ov.expected_withdrawal_amount' => 'Retrait attendu',
     'room.ov.countdown' => 'Compte à rebours',
     'room.ov.your_status' => 'Votre statut',
 
@@ -1223,6 +1237,7 @@ return [
 
     'room.countdown.starts_in' => 'Démarre dans {delta}',
     'room.countdown.reveals_in' => 'Révélation dans {delta}',
+    'room.countdown.next_turn_in' => 'Prochain tour dans {delta}',
     'room.countdown.eligible' => 'Révélation possible (serveur)',
 
     // Sauvegardes
