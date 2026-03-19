@@ -1423,6 +1423,69 @@ return [
     'room.ov.countdown' => 'Countdown',
     'room.ov.your_status' => 'Your status',
 
+    'room.next_title' => 'What happens next?',
+    'room.next.invited_title' => 'Invitation pending',
+    'room.next.invited_body' => 'You have been invited to this room. Accept to join or decline if you’re not participating.',
+    'room.next.cta.review_invite' => 'Review invitation',
+
+    'room.next.join_title' => 'Join this room',
+    'room.next.join_body' => 'Send a join request. The maker will approve or decline.',
+
+    'room.next.pending_title' => 'Waiting for approval',
+    'room.next.pending_body' => 'Your join request is pending. You’ll be able to participate once approved.',
+
+    'room.next.approved_prestart_title' => 'Approved',
+    'room.next.approved_prestart_body_fmt' => 'You are approved. The room will start at {ts}.',
+
+    'room.next.waiting_min_title' => 'Waiting for participants',
+    'room.next.waiting_min_body_fmt' => 'Waiting for minimum participants ({n}/{min}).',
+
+    'room.next.swap_title' => 'Swap window open',
+    'room.next.swap_body_fmt' => 'Swap window is open until {ts}. You can request a position swap.',
+    'room.next.cta.open_swap' => 'Open swap',
+
+    'room.next.exit_vote_title' => 'Exit vote pending',
+    'room.next.exit_vote_body_fmt' => 'Vote on the exit request from {name}.',
+    'room.next.cta.open_exit' => 'Open exit request',
+
+    'room.next.dispute_ack_title' => 'Dispute open',
+    'room.next.dispute_ack_body_fmt' => 'A dispute is open. Acknowledge before {ts}.',
+    'room.next.cta.open_dispute' => 'Open dispute',
+
+    'room.next.cycle_fmt' => 'Cycle #{n}',
+    'room.next.contribution_due_title' => 'Contribution due',
+    'room.next.contribution_due_body_fmt' => '{cycle} is due by {ts}. Upload your proof to confirm your contribution.',
+    'room.next.contribution_done_title' => 'Contribution recorded',
+    'room.next.contribution_done_body_fmt' => '{cycle} is recorded. Next due date is {ts}.',
+    'room.next.contribution_missed_title' => 'Contribution missed',
+    'room.next.contribution_missed_body_fmt' => '{cycle} was missed (grace ended {ts}). Contact the maker if you believe this is incorrect.',
+
+    'room.next.unlock_vote_title' => 'Unlock vote needed',
+    'room.next.unlock_vote_body_fmt' => 'Cast your vote to unlock ({a}/{b} approvals).',
+    'room.next.cta.open_unlock' => 'Open unlock',
+    'room.next.unlock_revealed_title' => 'Unlock code available',
+    'room.next.unlock_revealed_body_fmt' => 'The unlock code has been revealed. It expires at {ts}.',
+
+    'room.next.turn_vote_title' => 'Turn vote needed',
+    'room.next.turn_vote_body_fmt' => 'Vote on turn #{n} for {name}.',
+    'room.next.cta.open_turn' => 'Open turn',
+
+    'room.next.withdraw_confirm_title' => 'Confirm withdrawal',
+    'room.next.withdraw_confirm_body' => 'After collecting the funds, confirm the withdrawal to advance the room.',
+    'room.next.cta.open_withdrawal' => 'Open withdrawal',
+
+    'room.next.reveal_code_title' => 'Reveal code',
+    'room.next.reveal_code_body_fmt' => 'Reveal the destination code for turn #{n}.',
+
+    'room.next.active_title' => 'No action needed',
+    'room.next.active_body' => 'You are up to date. Keep an eye on the countdown and activity feed.',
+
+    'room.next.closed_title' => 'Room finished',
+    'room.next.closed_body' => 'This room is no longer active.',
+
+    'room.next.default_title' => 'Next step',
+    'room.next.default_body' => 'Review the room status and wait for the next window.',
+
     'room.state.active' => 'Active',
     'room.state.swap_window' => 'Swap window',
     'room.state.lobby_open' => 'Lobby (open)',
@@ -1579,6 +1642,13 @@ return [
     'rooms.meta.spots_remaining' => 'Spots remaining',
     'rooms.meta.starts' => 'Starts',
     'rooms.meta.state' => 'State',
+    'rooms.meta.next' => 'Next',
+
+    'rooms.next.awaiting_approval' => 'Awaiting approval',
+    'rooms.next.up_to_date' => 'Up to date',
+    'rooms.next.proof_due_fmt' => 'Proof due {ts}',
+    'rooms.next.proof_grace_due_fmt' => 'Proof due (grace) {ts}',
+    'rooms.next.proof_missed_fmt' => 'Proof missed {ts}',
 
     'rooms.action.request_join' => 'Request to join',
     'rooms.action.restricted' => 'Restricted',

@@ -72,6 +72,13 @@ header("Referrer-Policy: no-referrer");
       <div class="card-title"><?php e('room.overview_title'); ?></div>
       <div id="room-overview" class="room-ov"><?php e('common.loading'); ?></div>
 
+      <div id="next-wrap" style="margin-top:12px;display:none;">
+        <div class="hr"></div>
+        <div class="card-title" style="margin-bottom:10px;"><?php e('room.next_title'); ?></div>
+        <div id="next-panel" class="next-panel"></div>
+        <div id="next-actions" class="next-actions"></div>
+      </div>
+
       <?php if ($isAdmin): ?>
       <details id="admin-panel" style="margin-top:12px;">
         <summary style="cursor:pointer;user-select:none;"><?php e('nav.admin'); ?></summary>
@@ -1225,6 +1232,299 @@ function renderAdminPanel(r){
   }).join('') + '</div>';
 }
 
+function scrollToBlock(id){
+  const el = document.getElementById(id);
+  if(!el) return;
+  try{
+    el.scrollIntoView({behavior:'smooth', block:'start'});
+  }catch(e){
+    el.scrollIntoView(true);
+  }
+}
+
+function computeNextStep(r){
+  const now = Date.now();
+
+  const step = {kind:'info', title:'', body:'', actions:[]};
+  function set(kind, title, body){
+    step.kind = kind;
+    step.title = title;
+    step.body = body;
+    return step;
+  }
+  function addAction(a){ step.actions.push(a); }
+
+  const myStatus = String(r.my_status||'');
+  const roomState = String(r.room_state||'');
+  const lobbyState = String(r.lobby_state||'');
+  const savingType = String(r.saving_type||'');
+
+  if(!myStatus && r.my_invite && roomState === 'lobby' && lobbyState === 'open'){
+    set('warn',
+      tr('room.next.invited_title', null, 'Invitation pending'),
+      tr('room.next.invited_body', null, 'You have been invited to this room. Accept to join or decline if you’re not participating.')
+    );
+    addAction({text: tr('room.next.cta.review_invite', null, 'Review invitation'), type:'primary', scroll:'invite-block'});
+    return step;
+  }
+
+  const canJoin = (!myStatus || myStatus === 'declined') && roomState === 'lobby' && lobbyState === 'open' && r.visibility !== 'private';
+  if(canJoin){
+    set('info',
+      tr('room.next.join_title', null, 'Join this room'),
+      tr('room.next.join_body', null, 'Send a join request. The maker will approve or decline.')
+    );
+    addAction({text: tr('room.action.request_join', null, 'Request to join'), type:'primary', onClick:'requestJoin'});
+    return step;
+  }
+
+  if(myStatus === 'pending'){
+    set('info',
+      tr('room.next.pending_title', null, 'Waiting for approval'),
+      tr('room.next.pending_body', null, 'Your join request is pending. You’ll be able to participate once approved.')
+    );
+    return step;
+  }
+
+  if(myStatus === 'approved' && roomState === 'lobby' && savingType === 'A'){
+    set('info',
+      tr('room.next.approved_prestart_title', null, 'Approved'),
+      tr('room.next.approved_prestart_body_fmt', {ts: fmt(r.start_at)}, 'You are approved. The room will start at {ts}.')
+    );
+    return step;
+  }
+
+  if(savingType === 'B' && roomState === 'lobby' && myStatus){
+    const cnt = (r.approved_count != null) ? (r.approved_count|0) : 0;
+    const min = (r.min_participants != null) ? (r.min_participants|0) : 0;
+    if(min > 0 && cnt < min){
+      set('info',
+        tr('room.next.waiting_min_title', null, 'Waiting for participants'),
+        tr('room.next.waiting_min_body_fmt', {n: cnt, min}, `Waiting for minimum participants (${cnt}/${min}).`)
+      );
+      return step;
+    }
+  }
+
+  if(roomState === 'swap_window'){
+    const closes = (r.swap_window && r.swap_window.closes_at) ? fmt(r.swap_window.closes_at) : '—';
+    set('warn',
+      tr('room.next.swap_title', null, 'Swap window open'),
+      tr('room.next.swap_body_fmt', {ts: closes}, 'Swap window is open until {ts}. You can request a position swap.')
+    );
+    if(myStatus === 'approved' || myStatus === 'active'){
+      addAction({text: tr('room.next.cta.open_swap', null, 'Open swap'), type:'primary', scroll:'swap-block'});
+    }
+    return step;
+  }
+
+  if(roomState === 'active' && myStatus === 'active'){
+    // Exit request vote is time-sensitive.
+    if(savingType === 'B' && r.exit_request && String(r.exit_request.status||'') === 'open'){
+      const er = r.exit_request;
+      if(!er.is_requester && !er.my_vote){
+        set('warn',
+          tr('room.next.exit_vote_title', null, 'Exit vote pending'),
+          tr('room.next.exit_vote_body_fmt', {name: String(er.requested_by_name||'')}, 'Vote on the exit request from {name}.')
+        );
+        addAction({text: tr('room.next.cta.open_exit', null, 'Open exit request'), type:'primary', scroll:'exit-block'});
+        return step;
+      }
+    }
+
+    // Dispute acknowledgement (Type B)
+    if(savingType === 'B'){
+      const cur = (r.rotation && r.rotation.current) ? r.rotation.current : null;
+      const dispute = (r.rotation && r.rotation.dispute) ? r.rotation.dispute : null;
+      if(cur && dispute && !dispute.my_ack && cur.dispute_window_ends_at){
+        const ends = parseUtcDate(cur.dispute_window_ends_at);
+        if(ends && !isNaN(ends.getTime()) && now < ends.getTime()){
+          set('warn',
+            tr('room.next.dispute_ack_title', null, 'Dispute open'),
+            tr('room.next.dispute_ack_body_fmt', {ts: fmt(cur.dispute_window_ends_at)}, 'A dispute is open. Acknowledge before {ts}.')
+          );
+          addAction({text: tr('room.next.cta.open_dispute', null, 'Open dispute'), type:'primary', scroll:'typeb-dispute-wrap'});
+          return step;
+        }
+      }
+    }
+
+    // Contribution (all types)
+    if(r.active_cycle){
+      const cyc = r.active_cycle;
+      const contrib = r.my_active_cycle_contribution || null;
+      const dueAt = fmt(cyc.due_at);
+      const graceAt = cyc.grace_ends_at ? fmt(cyc.grace_ends_at) : '';
+      const deadline = (String(cyc.status||'') === 'grace' && graceAt) ? graceAt : dueAt;
+
+      const cycLabel = tr('room.next.cycle_fmt', {n: String(cyc.cycle_index)}, 'Cycle #' + String(cyc.cycle_index));
+
+      if(!contrib || String(contrib.status||'') === 'unpaid'){
+        set('warn',
+          tr('room.next.contribution_due_title', null, 'Contribution due'),
+          tr('room.next.contribution_due_body_fmt', {cycle: cycLabel, ts: deadline}, '{cycle} is due by {ts}. Upload your proof to confirm your contribution.')
+        );
+        addAction({text: tr('room.contribution.open_proofs_btn', null, 'Open My proofs'), type:'primary', href:'rooms_proofs.php?room_id=' + encodeURIComponent(ROOM_ID)});
+        return step;
+      }
+
+      if(String(contrib.status||'') === 'paid' || String(contrib.status||'') === 'paid_in_grace'){
+        set('ok',
+          tr('room.next.contribution_done_title', null, 'Contribution recorded'),
+          tr('room.next.contribution_done_body_fmt', {cycle: cycLabel, ts: dueAt}, '{cycle} is recorded. Next due date is {ts}.')
+        );
+        addAction({text: tr('room.contribution.open_proofs_btn', null, 'Open My proofs'), type:'ghost', href:'rooms_proofs.php?room_id=' + encodeURIComponent(ROOM_ID)});
+        return step;
+      }
+
+      if(String(contrib.status||'') === 'missed'){
+        const by = graceAt || dueAt;
+        set('err',
+          tr('room.next.contribution_missed_title', null, 'Contribution missed'),
+          tr('room.next.contribution_missed_body_fmt', {cycle: cycLabel, ts: by}, '{cycle} was missed (grace ended {ts}). Contact the maker if you believe this is incorrect.')
+        );
+        addAction({text: tr('room.contribution.open_proofs_btn', null, 'Open My proofs'), type:'ghost', href:'rooms_proofs.php?room_id=' + encodeURIComponent(ROOM_ID)});
+        return step;
+      }
+    }
+
+    // Type A unlock vote/reveal
+    if(savingType === 'A' && r.unlock){
+      const approvals = (r.unlock.votes && typeof r.unlock.votes.approvals !== 'undefined') ? (r.unlock.votes.approvals|0) : 0;
+      const eligible = (r.unlock.votes && typeof r.unlock.votes.eligible !== 'undefined') ? (r.unlock.votes.eligible|0) : 0;
+      const myVote = r.unlock.my_vote ? String(r.unlock.my_vote) : 'none';
+      const ev = r.unlock.event;
+
+      if(eligible > 0 && approvals < eligible && myVote === 'none'){
+        set('warn',
+          tr('room.next.unlock_vote_title', null, 'Unlock vote needed'),
+          tr('room.next.unlock_vote_body_fmt', {a: approvals, b: eligible}, 'Cast your vote to unlock ({a}/{b} approvals).')
+        );
+        addAction({text: tr('room.next.cta.open_unlock', null, 'Open unlock'), type:'primary', scroll:'unlock-block'});
+        return step;
+      }
+
+      if(ev && ev.status === 'revealed'){
+        set('info',
+          tr('room.next.unlock_revealed_title', null, 'Unlock code available'),
+          tr('room.next.unlock_revealed_body_fmt', {ts: fmt(ev.expires_at)}, 'The unlock code has been revealed. It expires at {ts}.')
+        );
+        addAction({text: tr('room.next.cta.open_unlock', null, 'Open unlock'), type:'primary', scroll:'unlock-block'});
+        return step;
+      }
+    }
+
+    // Type B vote/reveal/withdrawal
+    if(savingType === 'B' && r.rotation && r.rotation.current){
+      const cur = r.rotation.current;
+      const votesMeta = r.rotation.votes || {};
+      const myVote = r.rotation.my_vote ? String(r.rotation.my_vote) : 'none';
+      const isTurnUser = (cur.turn_user_id|0) === (CURRENT_USER_ID|0);
+      const isOpen = (votesMeta.is_open === 1);
+      const isClosed = (votesMeta.is_closed === 1);
+      const eligibleCount = (typeof votesMeta.eligible === 'number') ? (votesMeta.eligible|0) : 0;
+      const requiredCount = (typeof votesMeta.required === 'number') ? (votesMeta.required|0) : 0;
+      const voteCast = (myVote === 'approve' || myVote === 'reject');
+
+      if(cur.status === 'pending_votes' && !isTurnUser && isOpen && !isClosed && !voteCast && eligibleCount > 0 && requiredCount > 0){
+        set('warn',
+          tr('room.next.turn_vote_title', null, 'Turn vote needed'),
+          tr('room.next.turn_vote_body_fmt', {n: cur.rotation_index, name: String(cur.turn_user_name||'')}, 'Vote on turn #{n} for {name}.')
+        );
+        addAction({text: tr('room.next.cta.open_turn', null, 'Open turn'), type:'primary', scroll:'typeb-block'});
+        return step;
+      }
+
+      if(cur.status === 'revealed' && cur.can_confirm_withdrawal === 1 && !cur.withdrawal_confirmed_at){
+        set('warn',
+          tr('room.next.withdraw_confirm_title', null, 'Confirm withdrawal'),
+          tr('room.next.withdraw_confirm_body', null, 'After collecting the funds, confirm the withdrawal to advance the room.')
+        );
+        addAction({text: tr('room.next.cta.open_withdrawal', null, 'Open withdrawal'), type:'primary', scroll:'typeb-withdraw-wrap'});
+        return step;
+      }
+
+      if(cur.status === 'revealed' && cur.can_reveal_code === 1){
+        set('info',
+          tr('room.next.reveal_code_title', null, 'Reveal code'),
+          tr('room.next.reveal_code_body_fmt', {n: cur.rotation_index}, 'Reveal the destination code for turn #{n}.')
+        );
+        addAction({text: tr('room.next.cta.open_turn', null, 'Open turn'), type:'primary', scroll:'typeb-block'});
+        return step;
+      }
+    }
+
+    set('info',
+      tr('room.next.active_title', null, 'No action needed'),
+      tr('room.next.active_body', null, 'You are up to date. Keep an eye on the countdown and activity feed.')
+    );
+    return step;
+  }
+
+  if(roomState === 'closed' || roomState === 'cancelled'){
+    set('info',
+      tr('room.next.closed_title', null, 'Room finished'),
+      tr('room.next.closed_body', null, 'This room is no longer active.')
+    );
+    return step;
+  }
+
+  set('info',
+    tr('room.next.default_title', null, 'Next step'),
+    tr('room.next.default_body', null, 'Review the room status and wait for the next window.')
+  );
+  return step;
+}
+
+function renderNextPanel(r){
+  const wrap = document.getElementById('next-wrap');
+  const panel = document.getElementById('next-panel');
+  const actionsEl = document.getElementById('next-actions');
+  if(!wrap || !panel || !actionsEl) return;
+
+  wrap.style.display = 'block';
+
+  const step = computeNextStep(r);
+  const kind = String(step.kind||'info');
+
+  panel.className = 'next-panel kind-' + kind;
+  panel.innerHTML = '<div class="next-title">' + esc(step.title||'') + '</div>'
+    + '<div>' + esc(step.body||'') + '</div>';
+
+  actionsEl.innerHTML = '';
+  (step.actions||[]).forEach(a => {
+    const hasHref = !!a.href;
+    const el = document.createElement(hasHref ? 'a' : 'button');
+
+    const t = String(a.type||'ghost');
+    el.className = 'btn btn-' + t + ' btn-sm';
+
+    if(hasHref){
+      el.href = String(a.href);
+    } else {
+      el.type = 'button';
+    }
+
+    el.textContent = String(a.text||'');
+
+    el.addEventListener('click', (ev) => {
+      if(a.scroll){
+        ev.preventDefault();
+        scrollToBlock(String(a.scroll));
+        return;
+      }
+
+      if(a.onClick){
+        ev.preventDefault();
+        const fn = window[String(a.onClick)];
+        if(typeof fn === 'function') fn();
+      }
+    });
+
+    actionsEl.appendChild(el);
+  });
+}
+
 function renderRoom(){
   const r = roomCache;
   if(!r) return;
@@ -1339,6 +1639,7 @@ function renderRoom(){
     </div>
   `;
 
+  renderNextPanel(r);
   renderAdminPanel(r);
 
   updateRoomCountdown();

@@ -16,3 +16,21 @@
 
 .room-ov-item{min-width:0;display:flex;flex-direction:column;gap:4px;}
 .room-ov-foot{border-top:1px solid var(--b1);padding-top:12px;display:flex;flex-direction:column;gap:4px;}
+
+/* "What happens next" */
+.next-panel{border:1px solid var(--b1);
+  background:linear-gradient(180deg, var(--ls-surface-2), var(--ls-surface-1));
+  border-radius:var(--radius-card);
+  padding:12px 14px;
+  font-size:12px;
+  line-height:1.6;
+}
+.next-panel.kind-info{border-color:rgba(120,170,255,.22);background:rgba(120,170,255,.07);}
+.next-panel.kind-warn{border-color:rgba(255,176,32,.26);background:rgba(255,176,32,.08);}
+.next-panel.kind-ok{border-color:rgba(50,213,131,.22);background:rgba(50,213,131,.08);}
+.next-panel.kind-err{border-color:rgba(255,77,109,.25);background:rgba(255,77,109,.08);}
+
+.next-panel .next-title{font-family:var(--display);font-weight:700;letter-spacing:-.2px;font-size:13px;margin-bottom:6px;}
+.next-panel .next-sub{color:var(--muted);font-size:11px;}
+
+.next-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;}

@@ -42,6 +42,13 @@
     meta_spots_remaining: tr('rooms.meta.spots_remaining', 'Spots remaining'),
     meta_starts: tr('rooms.meta.starts', 'Starts'),
     meta_state: tr('rooms.meta.state', 'State'),
+    meta_next: tr('rooms.meta.next', 'Next'),
+
+    next_awaiting_approval: tr('rooms.next.awaiting_approval', 'Awaiting approval'),
+    next_up_to_date: tr('rooms.next.up_to_date', 'Up to date'),
+    next_proof_due_fmt: tr('rooms.next.proof_due_fmt', 'Proof due {ts}'),
+    next_proof_grace_due_fmt: tr('rooms.next.proof_grace_due_fmt', 'Proof due (grace) {ts}'),
+    next_proof_missed_fmt: tr('rooms.next.proof_missed_fmt', 'Proof missed {ts}'),
 
     periodicity_weekly: tr('rooms.periodicity.weekly', 'Weekly'),
     periodicity_biweekly: tr('rooms.periodicity.biweekly', 'Bi-weekly'),
@@ -555,9 +562,7 @@
 
   function buildMyRoomCard(r){
     const el = document.createElement('div');
-    el.className = 'room room-card';
-    el.dataset.roomId = String(r.id || '');
-    el.dataset.myStatus = String(r.my_status || '');
+    el.className = 'room';
 
     // ── Header
     const head = document.createElement('div');
@@ -565,31 +570,29 @@
 
     const title = document.createElement('div');
     title.className = 'room-title';
-
-    const goal = document.createElement('div');
-    goal.className = 'room-goal';
-    goal.textContent = r.goal || '';
-
-    title.appendChild(goal);
+    title.textContent = String(r.goal || '');
 
     const badges = document.createElement('div');
     badges.className = 'room-badges';
 
-    const badge = document.createElement('div');
-    badge.className = 'badge';
-    badge.textContent = tf('rooms.badge.status_type', {status: String((r.my_status||'').toUpperCase()), type: r.saving_type}, `${String((r.my_status||'').toUpperCase())} · TYPE ${r.saving_type}`);
+    badges.innerHTML = '';
+    badges.appendChild(makeStatusBadge(r));
+    badges.appendChild(makeTypeBadge(r));
 
-    badges.appendChild(badge);
+    if(r.visibility && r.visibility !== 'public'){
+      badges.appendChild(makeBadge(prettyVisibility(r.visibility)));
+    }
+
+    if(r.is_maker){
+      badges.appendChild(makeBadge('maker'));
+    }
 
     head.appendChild(title);
     head.appendChild(badges);
 
     // ── Meta
-    const startLocal = fmtLocal(r.start_at);
-    const startUtc = fmtUtc(r.start_at);
-
     const meta = document.createElement('div');
-    meta.className = 'room-meta meta';
+    meta.className = 'room-meta';
 
     const grid = document.createElement('div');
     grid.className = 'meta-grid';
@@ -611,8 +614,38 @@
       grid.appendChild(item);
     }
 
-    // Meta order by hierarchy: current room state + schedule first.
+    function nextHint(){
+      const myStatus = String(r.my_status||'');
+      const roomState = String(r.room_state||'');
+
+      if(myStatus === 'pending') return STR.next_awaiting_approval;
+
+      if(roomState === 'active' && myStatus === 'active' && r.active_cycle_due_at){
+        const cycStatus = String(r.active_cycle_status||'');
+        const due = fmtLocal(r.active_cycle_due_at);
+        const grace = r.active_cycle_grace_ends_at ? fmtLocal(r.active_cycle_grace_ends_at) : '';
+        const deadline = (cycStatus === 'grace' && grace) ? grace : due;
+
+        const st = String(r.my_active_cycle_contribution_status||'');
+        if(!st || st === 'unpaid'){
+          return (cycStatus === 'grace')
+            ? tf('rooms.next.proof_grace_due_fmt', {ts: deadline}, 'Proof due (grace) ' + deadline)
+            : tf('rooms.next.proof_due_fmt', {ts: deadline}, 'Proof due ' + deadline);
+        }
+        if(st === 'missed'){
+          return tf('rooms.next.proof_missed_fmt', {ts: deadline}, 'Proof missed ' + deadline);
+        }
+        return STR.next_up_to_date;
+      }
+
+      return '';
+    }
+
+    const nextTxt = nextHint();
+
+    // Meta order by hierarchy: current room state + next required action first.
     addMetaItem(STR.meta_state, esc(prettyRoomStateCombo(r)));
+    if(nextTxt) addMetaItem(STR.meta_next, esc(nextTxt));
     addMetaItem(STR.meta_starts, esc(startLocal) + ' <span class="utc-pill" title="' + esc(STR.stored_enforced_utc) + '">' + esc(startUtc) + '</span>');
     addMetaItem(STR.meta_amount, esc(r.participation_amount));
     addMetaItem(STR.meta_period, esc(periodicityLabel(r.periodicity)));
