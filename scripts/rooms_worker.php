@@ -464,6 +464,8 @@ function recordEscrowSettlement(PDO $db, string $roomId, int $removedUserId, str
     $refund = 0.00;
     $redistribution = null;
 
+    $feeRateToStore = ($policy === 'refund_minus_fee') ? $feeRate : 0.00;
+
     if ($policy === 'refund_minus_fee') {
         $fee = round($total * $feeRate, 2);
         $refund = round($total - $fee, 2);
@@ -522,7 +524,7 @@ function recordEscrowSettlement(PDO $db, string $roomId, int $removedUserId, str
            (int)$removedUserId,
            $policy,
            $reason,
-           number_format($feeRate, 4, '.', ''),
+           number_format($feeRateToStore, 4, '.', ''),
            number_format($total, 2, '.', ''),
            number_format($fee, 2, '.', ''),
            number_format($refund, 2, '.', ''),
@@ -886,10 +888,11 @@ foreach ($cycles as $c) {
             $db->prepare("UPDATE saving_room_participants SET status='removed', removed_at=NOW(), removal_reason='two_missed_contributions' WHERE room_id = ? AND user_id = ?")
                ->execute([$roomId, $uid]);
 
-            recordEscrowSettlement($db, $roomId, $uid, $policy);
+            $feeRate = ($policy === 'refund_minus_fee') ? 0.10 : 0.00;
+            recordEscrowSettlement($db, $roomId, $uid, $policy, 'two_missed_contributions', $feeRate);
 
             activityLog($db, $roomId, 'participant_removed', ['reason' => 'two_missed_contributions']);
-            activityLog($db, $roomId, 'escrow_settlement_recorded', ['policy' => $policy]);
+            activityLog($db, $roomId, 'escrow_settlement_recorded', ['policy' => $policy, 'reason' => 'two_missed_contributions', 'fee_rate' => $feeRate]);
 
             notifyOnce(
                 $db,

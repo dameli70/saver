@@ -53,6 +53,7 @@ header("Referrer-Policy: no-referrer");
       </div>
       <div class="page-actions">
         <a class="btn btn-ghost btn-sm" href="rooms.php"><?php e('rooms.discover_title'); ?></a>
+        <a class="btn btn-ghost btn-sm" href="rooms_proofs.php"><?php e('rooms.proofs_nav'); ?></a>
         <a class="btn btn-primary btn-sm" href="rooms_create.php"><?php e('common.create'); ?></a>
       </div>
     </div>

@@ -62,6 +62,7 @@ header("Referrer-Policy: no-referrer");
         <div class="page-sub" id="room-sub"><?php e('common.loading'); ?></div>
       </div>
       <div class="page-actions">
+        <a class="btn btn-ghost btn-sm" href="room_proofs.php?id=<?= htmlspecialchars($roomId, ENT_QUOTES, 'UTF-8') ?>"><?php e('room.nav.proofs'); ?></a>
         <a class="btn btn-ghost btn-sm" href="rooms.php"><?php e('nav.rooms'); ?></a>
       </div>
     </div>
@@ -100,21 +101,14 @@ header("Referrer-Policy: no-referrer");
         <div style="margin-top:12px;display:grid;grid-template-columns:1fr;gap:10px;">
           <div>
             <div class="k"><?php e('room.contribution.amount'); ?></div>
-            <input id="contrib-amt" class="ls-input" style="margin-top:6px;" placeholder="<?= htmlspecialchars(t('room.contribution.amount_placeholder'), ENT_QUOTES, 'UTF-8') ?>">
-          </div>
-          <div>
-            <div class="k"><?php e('room.contribution.reference_optional'); ?></div>
-            <input id="contrib-ref" class="ls-input" style="margin-top:6px;" placeholder="<?= htmlspecialchars(t('room.contribution.reference_placeholder'), ENT_QUOTES, 'UTF-8') ?>">
-          </div>
-          <div>
-            <div class="k"><?php e('room.contribution.proof_label'); ?></div>
-            <input id="contrib-proof" type="file" accept="image/png,image/jpeg,image/webp" class="ls-input" style="margin-top:6px;">
-            <div class="small" style="margin-top:6px;"><?php e('room.contribution.proof_sub'); ?></div>
+            <div class="v" id="contrib-amount">—</div>
           </div>
         </div>
 
+        <div class="p" style="margin-top:10px;"><?php e('room.contribution.proofs_redirect_note'); ?></div>
+
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
-          <button class="btn btn-primary btn-sm" onclick="confirmContribution()"><?php e('room.contribution.btn_confirm'); ?></button>
+          <a class="btn btn-primary btn-sm" id="contrib-open-proofs" href="rooms_proofs.php?room_id=<?= htmlspecialchars($roomId, ENT_QUOTES, 'UTF-8') ?>"><?php e('room.contribution.open_proofs_btn'); ?></a>
         </div>
         <div id="contrib-msg" class="msg"></div>
       </div>
@@ -163,6 +157,17 @@ header("Referrer-Policy: no-referrer");
           <div>
             <div class="k"><?php e('room.rotation.consensus'); ?></div>
             <div class="v" id="typeb-consensus">—</div>
+          </div>
+        </div>
+
+        <div class="two-col" style="margin-top:12px;">
+          <div>
+            <div class="k"><?php e('room.rotation.room_balance'); ?></div>
+            <div class="v" id="typeb-balance">—</div>
+          </div>
+          <div>
+            <div class="k"><?php e('room.rotation.required_amount'); ?></div>
+            <div class="v" id="typeb-required">—</div>
           </div>
         </div>
 
@@ -229,6 +234,7 @@ header("Referrer-Policy: no-referrer");
                   <th><?php e('room.rotation.history_th_turn'); ?></th>
                   <th><?php e('room.rotation.history_th_turn_user'); ?></th>
                   <th><?php e('room.rotation.history_th_code'); ?></th>
+                  <th><?php e('room.rotation.history_th_collected'); ?></th>
                   <th><?php e('room.rotation.history_th_withdrawal'); ?></th>
                 </tr>
               </thead>
@@ -881,6 +887,9 @@ function formatActivityExtra(eventType, payload){
   if(eventType === 'typeB_withdrawal_confirmed'){
     const bits = [];
     if(payload.rotation_index) bits.push(tr('room.activity.turn', {n: String(payload.rotation_index)}, 'Turn #' + String(payload.rotation_index)));
+    if(payload.turn_user_name) bits.push(tr('room.activity.collected_by_fmt', {name: String(payload.turn_user_name)}, 'Collected by ' + String(payload.turn_user_name)));
+    if(payload.amount) bits.push(tr('room.activity.amount', {amount: String(payload.amount)}, 'Amount ' + String(payload.amount)));
+    if(payload.balance_after) bits.push(tr('room.activity.room_balance_fmt', {bal: String(payload.balance_after)}, 'Balance ' + String(payload.balance_after)));
     if(payload.role) bits.push(tr('room.activity.role', {role: String(payload.role)}, 'role ' + String(payload.role)));
     return bits.join(' · ');
   }
@@ -895,6 +904,7 @@ function formatActivityExtra(eventType, payload){
     const bits = [];
     if(payload.cycle_id) bits.push(tr('room.activity.cycle_id', {id: String(payload.cycle_id)}, 'Cycle ' + String(payload.cycle_id)));
     if(payload.amount) bits.push(tr('room.activity.amount', {amount: String(payload.amount)}, 'Amount ' + String(payload.amount)));
+    if(payload.room_balance) bits.push(tr('room.activity.room_balance_fmt', {bal: String(payload.room_balance)}, 'Balance ' + String(payload.room_balance)));
     return bits.join(' · ');
   }
 
@@ -910,8 +920,27 @@ function formatActivityExtra(eventType, payload){
   }
 
   if(eventType === 'escrow_settlement_recorded'){
-    if(payload.policy) return tr('room.activity.policy', {policy: String(payload.policy)}, 'Policy: ' + String(payload.policy));
-    return '';
+    const bits = [];
+
+    if(payload.policy){
+      let pol = String(payload.policy);
+      if(pol === 'refund_minus_fee') pol = tr('rooms.escrow.refund_minus_fee', null, 'Return minus platform fee');
+      else if(pol === 'redistribute') pol = tr('rooms.escrow.redistribute', null, 'Proportional redistribution');
+      bits.push(tr('room.activity.policy', {policy: pol}, 'Policy: ' + pol));
+    }
+
+    const fr = parseFloat(String(payload.fee_rate||''));
+    if(!isNaN(fr)){
+      const pct = Math.round(fr * 100);
+      bits.push(tr('room.activity.fee_rate_fmt', {pct}, 'Fee ' + pct + '%'));
+    }
+
+    if(payload.reason){
+      const r = String(payload.reason);
+      bits.push(tr('room.activity.reason', {reason: r}, 'Reason: ' + r));
+    }
+
+    return bits.join(' · ');
   }
 
   if(eventType === 'underfilled_alerted'){
@@ -1223,9 +1252,9 @@ function renderRoom(){
     if(canContrib){
       document.getElementById('contrib-cycle').textContent = `#${r.active_cycle.cycle_index} (${r.active_cycle.status})`;
       document.getElementById('contrib-due').textContent = fmt(r.active_cycle.due_at);
-      const amt = document.getElementById('contrib-amt');
-      if(amt && !amt.value){
-        amt.value = String(r.participation_amount||'');
+      const amt = document.getElementById('contrib-amount');
+      if(amt){
+        amt.textContent = String(r.participation_amount||'—');
       }
     }
   }
@@ -1307,6 +1336,17 @@ function renderRoom(){
         }
 
         document.getElementById('typeb-maker').textContent = makerVote;
+
+        // Room balance / required amount (updates as proofs are submitted and withdrawals are confirmed)
+        const balEl = document.getElementById('typeb-balance');
+        const reqEl = document.getElementById('typeb-required');
+        if(balEl || reqEl){
+          const hasBal = !(r.account_balance === null || typeof r.account_balance === 'undefined' || String(r.account_balance) === '');
+          const bal = hasBal ? String(r.account_balance) : '—';
+          const req = (r.required_withdrawal_amount != null && String(r.required_withdrawal_amount) !== '') ? String(r.required_withdrawal_amount) : '—';
+          if(balEl) balEl.textContent = bal;
+          if(reqEl) reqEl.textContent = req;
+        }
 
         const approveBtn = document.getElementById('typeb-vote-approve');
         const rejectBtn = document.getElementById('typeb-vote-reject');
@@ -1445,10 +1485,15 @@ function renderRoom(){
                 wdTxt = tr('room.rotation.withdrawal_unconfirmed', null, 'Unconfirmed');
               }
 
+              const collectedTxt = (x.collected_amount != null && String(x.collected_amount) !== '')
+                ? String(x.collected_amount)
+                : '—';
+
               trEl.innerHTML = `
                 <td>#${esc(String(x.rotation_index||''))}</td>
                 <td>${esc(String(x.turn_user_name||''))}${x.delegate_name ? ('<div class="small">' + esc(tr('room.rotation.delegate_short_fmt', {name: String(x.delegate_name)}, 'delegate: ' + String(x.delegate_name))) + '</div>') : ''}</td>
                 <td>${esc(codeTxt)}</td>
+                <td>${esc(collectedTxt)}</td>
                 <td>${esc(wdTxt)}</td>
               `;
               tbody.appendChild(trEl);
@@ -1511,6 +1556,10 @@ function renderRoom(){
       } else {
         document.getElementById('typeb-turn').textContent = '—';
         document.getElementById('typeb-consensus').textContent = '—';
+        const balEl = document.getElementById('typeb-balance');
+        const reqEl = document.getElementById('typeb-required');
+        if(balEl) balEl.textContent = '—';
+        if(reqEl) reqEl.textContent = '—';
         document.getElementById('typeb-window').textContent = '—';
         document.getElementById('typeb-maker').textContent = '—';
         document.getElementById('typeb-reveal-btn').style.display = 'none';
@@ -1863,7 +1912,10 @@ async function pollFeed(){
     if(!r.success) throw new Error(r.error||STR.failed);
 
     const events = r.events || [];
-    events.forEach(addFeedItem);
+    events.forEach(ev => {
+      addFeedItem(ev);
+      maybeScheduleRoomRefreshForEvent(ev);
+    });
     if(events.length){
       lastEventId = events[events.length-1].id;
     }
@@ -2085,48 +2137,7 @@ async function revokeInvite(inviteId){
   }
 }
 
-async function confirmContribution(){
-  const r = roomCache;
-  if(!r || !r.active_cycle){
-    setMsg('contrib-msg', STR.no_active_cycle, false);
-    return;
-  }
 
-  const amount = (document.getElementById('contrib-amt')||{}).value || '';
-  const reference = (document.getElementById('contrib-ref')||{}).value || '';
-  const proofInput = document.getElementById('contrib-proof');
-  const file = proofInput && proofInput.files ? proofInput.files[0] : null;
-
-  if(!file){
-    setMsg('contrib-msg', STR.proof_required, false);
-    return;
-  }
-
-  try{
-    const fd = new FormData();
-    fd.append('csrf_token', CSRF);
-    fd.append('room_id', ROOM_ID);
-    fd.append('cycle_id', String(r.active_cycle.id));
-    fd.append('amount', String(amount||''));
-    fd.append('reference', String(reference||''));
-    fd.append('proof', file);
-
-    const resp = await fetch('/api/rooms.php?action=confirm_contribution_with_proof', {
-      method: 'POST',
-      credentials: 'same-origin',
-      body: fd,
-    });
-    const res = await resp.json().catch(()=>null);
-    if(!res || !res.success) throw new Error((res && res.error) ? res.error : STR.failed);
-
-    setMsg('contrib-msg', STR.contribution_confirmed, true);
-    if(proofInput) proofInput.value='';
-    await loadRoom();
-    await pollFeed();
-  }catch(e){
-    setMsg('contrib-msg', e.message||STR.failed, false);
-  }
-}
 
 async function unlockVote(vote){
   try{
@@ -2437,14 +2448,31 @@ function renderEscrowSettlements(rows){
   rows.forEach(r => {
     const tr=document.createElement('tr');
 
+    const policy = String(r.policy||'');
+    const reason = String(r.reason||'');
+
+    let policyLabel = policy;
+    if(policy === 'refund_minus_fee') policyLabel = tr('rooms.escrow.refund_minus_fee', null, 'Return minus platform fee');
+    else if(policy === 'redistribute') policyLabel = tr('rooms.escrow.redistribute', null, 'Proportional redistribution');
+
+    let reasonLabel = '';
+    if(reason === 'two_missed_contributions') reasonLabel = tr('room.escrow.reason.two_missed_contributions', null, 'Two missed contributions');
+    else if(reason === 'exit_request') reasonLabel = tr('room.escrow.reason.exit_request', null, 'Exit request');
+    else if(reason === 'room_cancelled_underfilled') reasonLabel = tr('room.escrow.reason.room_cancelled_underfilled', null, 'Room cancelled (underfilled)');
+    else if(reason) reasonLabel = reason;
+
     const fee = (r.platform_fee_amount || '0.00');
-    const refund = (r.policy === 'refund_minus_fee') ? (r.refund_amount || '0.00') : '—';
+    const refund = (policy === 'refund_minus_fee') ? (r.refund_amount || '0.00') : '—';
+
+    const fr = parseFloat(String(r.fee_rate||''));
+    const pct = (!isNaN(fr)) ? Math.round(fr * 100) : null;
+    const feeLabel = fee + ((pct !== null) ? (' (' + pct + '%)') : '');
 
     tr.innerHTML = `
       <td>${esc(r.removed_user_name||('User #' + r.removed_user_id))}</td>
-      <td>${esc(r.policy)}</td>
+      <td title="${esc(reasonLabel)}">${esc(policyLabel)}${reasonLabel ? ('<div class="k" style="font-size:10px;">' + esc(reasonLabel) + '</div>') : ''}</td>
       <td>${esc(r.total_contributed||'0.00')}</td>
-      <td>${esc(fee)}</td>
+      <td title="${esc(reasonLabel)}">${esc(feeLabel)}</td>
       <td>${esc(refund)}</td>
       <td>${esc(r.status||'')}</td>
       <td>${esc(fmt(r.created_at))}</td>
@@ -2654,6 +2682,45 @@ async function reviewJoin(requestId, decision){
   }
 }
 
+let roomRefreshTimer = null;
+
+function maybeScheduleRoomRefreshForEvent(ev){
+  const t = (ev && ev.event_type) ? String(ev.event_type) : '';
+  if(!t) return;
+
+  if(t === 'contribution_confirmed' ||
+     t === 'typeB_withdrawal_confirmed' ||
+     t === 'typeB_turn_revealed' ||
+     t === 'typeB_turn_advanced' ||
+     t === 'typeB_turn_expired' ||
+     t === 'room_started' ||
+     t === 'swap_window_started' ||
+     t === 'swap_window_ended'){
+    scheduleRoomRefresh();
+  }
+}
+
+function scheduleRoomRefresh(){
+  if(roomRefreshTimer) return;
+  roomRefreshTimer = setTimeout(async ()=>{
+    roomRefreshTimer = null;
+    await refreshRoomSilent();
+  }, 900);
+}
+
+async function refreshRoomSilent(){
+  try{
+    const res = await get('/api/rooms.php?action=room_detail&room_id=' + encodeURIComponent(ROOM_ID) + inviteParam());
+    if(!res.success) return;
+    roomCache = res.room;
+    roomCache.escrow_settlements = res.escrow_settlements || [];
+    roomCache.participants = res.participants || [];
+    renderRoom();
+  }catch{
+    // ignore
+  }
+}
+
 let feedPollTimer = null;
 let feedEs = null;
 
@@ -2686,6 +2753,7 @@ function startSseFeed(){
       const data = JSON.parse(ev.data);
       addFeedItem(data);
       lastEventId = data.id;
+      maybeScheduleRoomRefreshForEvent(data);
     }catch{
       // ignore parse errors
     }
