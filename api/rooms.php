@@ -2495,7 +2495,6 @@ if ($action === 'unlisted_invite_create') {
     $hash = hashInviteToken($token);
 
     $expiresAt = ((string)($room['saving_type'] ?? '') === 'B') ? null : (string)$room['start_at'];
-'];
 
     $db = getDB();
     $db->beginTransaction();
