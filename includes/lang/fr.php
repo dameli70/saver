@@ -1077,15 +1077,27 @@ return [
     'room.feed.typeB_turn_voided' => 'Tour annulé (sans confirmation)',
 
     'room.contribution_title' => 'Contribution',
-    'room.contribution_sub' => 'Téléversez votre preuve pour le cycle actif depuis la page Mes preuves.',
+    'room.contribution_sub' => 'Téléversez une preuve (capture) pour confirmer votre contribution.',
     'room.contribution.cycle' => 'Cycle',
     'room.contribution.due' => 'Échéance',
     'room.contribution.amount' => 'Montant',
+    'room.contribution.status' => 'Statut',
+    'room.contribution.confirmed_at' => 'Confirmé',
+    'room.contribution.reminders_note' => 'Rappels : 24 h avant l’échéance, puis un rappel à l’ouverture de la période de grâce.',
     'room.contribution.amount_placeholder' => 'ex. 50.00',
     'room.contribution.reference_optional' => 'Référence (optionnel)',
     'room.contribution.reference_placeholder' => 'ex. id de transaction',
+    'room.contribution.upload_btn' => 'Téléverser la preuve',
+    'room.contribution.uploading' => 'Téléversement…',
+    'room.contribution.unavailable' => 'Le téléversement de preuve est indisponible pour le moment.',
+    'room.contribution.up_to_date' => 'À jour pour ce cycle.',
+    'room.contribution.overdue' => 'En retard.',
+    'room.contribution.status_unpaid' => 'Non payé',
+    'room.contribution.status_paid' => 'Payé',
+    'room.contribution.status_paid_in_grace' => 'Payé (grâce)',
+    'room.contribution.status_missed' => 'Manqué',
     'room.contribution.btn_confirm' => 'Confirmer la contribution',
-    'room.contribution.proofs_redirect_note' => 'La soumission des preuves a été déplacée vers la page Mes preuves pour alléger les salles et faciliter les téléversements.',
+    'room.contribution.proofs_redirect_note' => 'Vous pouvez aussi gérer les preuves de toutes vos salles depuis la page Mes preuves.',
     'room.contribution.open_proofs_btn' => 'Ouvrir Mes preuves',
 
     'room.unlock_type_a_title' => 'Déverrouillage (Type A)',
@@ -1201,6 +1213,7 @@ return [
     'room.requests_th_actions' => 'Actions',
 
     'room.ov.subtitle_html' => 'Type {type} · Niveau {level} · {periodicity} · Débute <b>{start_local}</b> <span class="utc-pill" title="{utc_title}">{start_utc}</span>',
+    'room.ov.subtitle_created_html' => 'Type {type} · Niveau {level} · {periodicity} · Créé <b>{start_local}</b> <span class="utc-pill" title="{utc_title}">{start_utc}</span>',
     'room.ov.purpose' => 'Objectif',
     'room.ov.visibility' => 'Visibilité',
     'room.ov.participation_amount' => 'Montant de participation',
@@ -1215,6 +1228,87 @@ return [
     'room.ov.expected_withdrawal_amount' => 'Retrait attendu',
     'room.ov.countdown' => 'Compte à rebours',
     'room.ov.your_status' => 'Votre statut',
+
+    'room.timeline_title' => 'Chronologie',
+    'room.timeline.next_deadline' => 'Prochaine échéance',
+    'room.timeline.lobby' => 'Lobby',
+    'room.timeline.swap' => 'Échange',
+    'room.timeline.saving' => 'Épargne',
+    'room.timeline.unlock' => 'Déblocage',
+    'room.timeline.turn' => 'Tour',
+    'room.timeline.turn_fmt' => 'Tour n°{n}',
+    'room.timeline.done' => 'Terminé',
+    'room.timeline.created_fmt' => 'Créé {ts}',
+    'room.timeline.starts_fmt' => 'Débute {ts}',
+    'room.timeline.closes_fmt' => 'Se termine {ts}',
+    'room.timeline.due_fmt' => 'Échéance {ts}',
+    'room.timeline.reveals_fmt' => 'Révélation {ts}',
+    'room.timeline.vote_due_fmt' => 'Vote avant {ts}',
+    'room.timeline.expires_fmt' => 'Expire {ts}',
+    'room.timeline.ends_fmt' => 'Se termine {ts}',
+
+    'room.next_title' => 'Que se passe-t-il ensuite ?',
+    'room.next.invited_title' => 'Invitation en attente',
+    'room.next.invited_body' => 'Vous avez été invité à cette salle. Acceptez pour rejoindre ou refusez si vous ne participez pas.',
+    'room.next.cta.review_invite' => 'Voir l’invitation',
+
+    'room.next.join_title' => 'Rejoindre cette salle',
+    'room.next.join_body' => 'Envoyez une demande d’adhésion. Le créateur l’approuvera ou la refusera.',
+
+    'room.next.pending_title' => 'En attente d’approbation',
+    'room.next.pending_body' => 'Votre demande est en attente. Vous pourrez participer une fois approuvée.',
+
+    'room.next.approved_prestart_title' => 'Approuvé',
+    'room.next.approved_prestart_body_fmt' => 'Vous êtes approuvé. La salle démarrera à {ts}.',
+
+    'room.next.waiting_min_title' => 'En attente de participants',
+    'room.next.waiting_min_body_fmt' => 'En attente du minimum de participants ({n}/{min}).',
+
+    'room.next.swap_title' => 'Fenêtre d’échange ouverte',
+    'room.next.swap_body_fmt' => 'La fenêtre d’échange est ouverte jusqu’à {ts}. Vous pouvez demander un échange de position.',
+    'room.next.cta.open_swap' => 'Ouvrir l’échange',
+
+    'room.next.exit_vote_title' => 'Vote de sortie en attente',
+    'room.next.exit_vote_body_fmt' => 'Votez sur la demande de sortie de {name}.',
+    'room.next.cta.open_exit' => 'Ouvrir la demande de sortie',
+
+    'room.next.dispute_ack_title' => 'Litige ouvert',
+    'room.next.dispute_ack_body_fmt' => 'Un litige est ouvert. Accusez réception avant {ts}.',
+    'room.next.cta.open_dispute' => 'Ouvrir le litige',
+
+    'room.next.cycle_fmt' => 'Cycle n°{n}',
+    'room.next.contribution_due_title' => 'Contribution à fournir',
+    'room.next.contribution_due_body_fmt' => '{cycle} doit être soumis avant {ts}. Téléversez votre preuve pour confirmer votre contribution.',
+    'room.next.contribution_done_title' => 'Contribution enregistrée',
+    'room.next.contribution_done_body_fmt' => '{cycle} est enregistrée. Prochaine échéance : {ts}.',
+    'room.next.contribution_missed_title' => 'Contribution manquée',
+    'room.next.contribution_missed_body_fmt' => '{cycle} a été manqué (grâce terminée {ts}). Contactez le créateur si vous pensez que c’est incorrect.',
+
+    'room.next.unlock_vote_title' => 'Vote de déverrouillage requis',
+    'room.next.unlock_vote_body_fmt' => 'Votez pour déverrouiller ({a}/{b} approbations).',
+    'room.next.cta.open_unlock' => 'Ouvrir le déverrouillage',
+    'room.next.unlock_revealed_title' => 'Code de déverrouillage disponible',
+    'room.next.unlock_revealed_body_fmt' => 'Le code a été révélé. Il expire à {ts}.',
+
+    'room.next.turn_vote_title' => 'Vote du tour requis',
+    'room.next.turn_vote_body_fmt' => 'Votez sur le tour n°{n} pour {name}.',
+    'room.next.cta.open_turn' => 'Ouvrir le tour',
+
+    'room.next.withdraw_confirm_title' => 'Confirmer le retrait',
+    'room.next.withdraw_confirm_body' => 'Après avoir collecté les fonds, confirmez le retrait pour faire avancer la salle.',
+    'room.next.cta.open_withdrawal' => 'Ouvrir le retrait',
+
+    'room.next.reveal_code_title' => 'Révéler le code',
+    'room.next.reveal_code_body_fmt' => 'Révélez le code de destination pour le tour n°{n}.',
+
+    'room.next.active_title' => 'Aucune action requise',
+    'room.next.active_body' => 'Vous êtes à jour. Surveillez le compte à rebours et le fil d’activité.',
+
+    'room.next.closed_title' => 'Salle terminée',
+    'room.next.closed_body' => 'Cette salle n’est plus active.',
+
+    'room.next.default_title' => 'Prochaine étape',
+    'room.next.default_body' => 'Consultez le statut de la salle et attendez la prochaine fenêtre.',
 
     'room.state.active' => 'Actif',
     'room.state.swap_window' => 'Fenêtre d’échange',
@@ -1241,6 +1335,8 @@ return [
     'room.countdown.waiting_min' => 'En attente du minimum de participants',
     'room.countdown.waiting_min_fmt' => 'En attente du minimum de participants ({n}/{min})',
     'room.countdown.swap_closes_in' => 'Échange se termine dans {delta}',
+    'room.countdown.contribution_due_in' => 'Contribution à fournir dans {delta}',
+    'room.countdown.contribution_grace_ends_in' => 'La grâce se termine dans {delta}',
     'room.countdown.eligible' => 'Révélation possible (serveur)',
 
     // Sauvegardes
@@ -1437,6 +1533,21 @@ return [
     'rooms.my_rooms_sub' => 'Salles que vous avez créées ou rejointes — actives, en attente ou terminées.',
     'rooms.proofs_nav' => 'Mes preuves',
     'rooms.discover_title' => 'Découvrir des salles',
+
+    'rooms.filters.title' => 'Filtres',
+    'rooms.filters.search' => 'Recherche',
+    'rooms.filters.search_placeholder' => 'Rechercher un objectif…',
+    'rooms.filters.saving_type' => 'Type',
+    'rooms.filters.periodicity' => 'Période',
+    'rooms.filters.any' => 'Tous',
+    'rooms.filters.min_amount' => 'Montant min',
+    'rooms.filters.max_amount' => 'Montant max',
+    'rooms.filters.start_after' => 'Débute après',
+    'rooms.filters.start_before' => 'Débute avant',
+    'rooms.filters.only_open' => 'Rejoignables uniquement',
+    'rooms.filters.only_spots' => 'Places disponibles',
+    'rooms.filters.clear' => 'Réinitialiser',
+
     'rooms.create_title' => 'Créer une salle',
     'rooms.create_sub' => 'Définissez l’objectif, les règles et les dates. Une fois la salle démarrée, les règles sont figées.',
 
@@ -1478,6 +1589,8 @@ return [
     'rooms.proofs.prompt_reference' => 'Référence / note optionnelle (laissez vide si aucune) :',
     'rooms.proofs.file_required' => 'Sélectionnez une image de preuve.',
     'rooms.proofs.file_too_large' => 'Fichier trop volumineux (max 5 Mo).',
+    'rooms.proofs.due_in_fmt' => 'Échéance dans {delta}',
+    'rooms.proofs.grace_ends_in_fmt' => 'Fin de la grâce dans {delta}',
 
     'rooms.field.purpose' => 'Catégorie',
     'rooms.field.goal' => 'Objectif',
@@ -1549,6 +1662,13 @@ return [
     'rooms.meta.spots_remaining' => 'Places restantes',
     'rooms.meta.starts' => 'Débute',
     'rooms.meta.state' => 'État',
+    'rooms.meta.next' => 'Prochain',
+
+    'rooms.next.awaiting_approval' => 'En attente d’approbation',
+    'rooms.next.up_to_date' => 'À jour',
+    'rooms.next.proof_due_fmt' => 'Preuve avant {ts}',
+    'rooms.next.proof_grace_due_fmt' => 'Preuve (grâce) avant {ts}',
+    'rooms.next.proof_missed_fmt' => 'Preuve manquée {ts}',
 
     'rooms.action.request_join' => 'Demander à rejoindre',
     'rooms.action.restricted' => 'Restreint',

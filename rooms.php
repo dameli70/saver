@@ -61,6 +61,69 @@ header("Referrer-Policy: no-referrer");
     <div id="eligibility" style="color:var(--muted);font-size:12px;line-height:1.6;margin:-8px 0 18px 0;"></div>
 
   <div class="card" style="margin-bottom:14px;">
+    <div class="card-title"><?php e('rooms.filters.title'); ?></div>
+    <div class="filters-grid">
+      <div class="field" style="margin:0;">
+        <label><?php e('rooms.filters.search'); ?></label>
+        <input type="text" id="rooms-q" placeholder="<?= htmlspecialchars(t('rooms.filters.search_placeholder'), ENT_QUOTES, 'UTF-8') ?>" autocomplete="off" spellcheck="false">
+      </div>
+
+      <div class="field" style="margin:0;">
+        <label><?php e('rooms.filters.saving_type'); ?></label>
+        <select id="rooms-type">
+          <option value=""><?php e('rooms.filters.any'); ?></option>
+          <option value="A"><?php e('rooms.saving_type.a'); ?></option>
+          <option value="B"><?php e('rooms.saving_type.b'); ?></option>
+        </select>
+      </div>
+
+      <div class="field" style="margin:0;">
+        <label><?php e('rooms.filters.periodicity'); ?></label>
+        <select id="rooms-per">
+          <option value=""><?php e('rooms.filters.any'); ?></option>
+          <option value="weekly"><?php e('rooms.periodicity.weekly'); ?></option>
+          <option value="biweekly"><?php e('rooms.periodicity.biweekly'); ?></option>
+          <option value="monthly"><?php e('rooms.periodicity.monthly'); ?></option>
+        </select>
+      </div>
+
+      <div class="field" style="margin:0;">
+        <label><?php e('rooms.filters.min_amount'); ?></label>
+        <input type="number" id="rooms-min" step="0.01" min="0" placeholder="0">
+      </div>
+
+      <div class="field" style="margin:0;">
+        <label><?php e('rooms.filters.max_amount'); ?></label>
+        <input type="number" id="rooms-max" step="0.01" min="0" placeholder="0">
+      </div>
+
+      <div class="field" style="margin:0;">
+        <label><?php e('rooms.filters.start_after'); ?></label>
+        <input type="date" id="rooms-start-after">
+      </div>
+
+      <div class="field" style="margin:0;">
+        <label><?php e('rooms.filters.start_before'); ?></label>
+        <input type="date" id="rooms-start-before">
+      </div>
+
+      <div class="filters-actions">
+        <label class="check" style="margin:0;">
+          <input type="checkbox" id="rooms-only-open">
+          <span><?php e('rooms.filters.only_open'); ?></span>
+        </label>
+
+        <label class="check" style="margin:0;">
+          <input type="checkbox" id="rooms-only-spots">
+          <span><?php e('rooms.filters.only_spots'); ?></span>
+        </label>
+
+        <button class="btn btn-ghost btn-sm" type="button" id="rooms-clear"><?php e('rooms.filters.clear'); ?></button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:14px;">
     <div class="card-title"><?php e('rooms.categories'); ?></div>
     <div class="cat-row" id="cat-row"></div>
   </div>

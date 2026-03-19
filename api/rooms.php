@@ -513,6 +513,17 @@ if ($action === 'discover') {
         jsonResponse(['error' => 'Invalid category'], 400);
     }
 
+    $q = trim((string)($_GET['q'] ?? ''));
+    if (strlen($q) > 120) $q = substr($q, 0, 120);
+    $savingType = trim((string)($_GET['saving_type'] ?? ''));
+    $periodicity = trim((string)($_GET['periodicity'] ?? ''));
+    $minAmountRaw = trim((string)($_GET['min_amount'] ?? ''));
+    $maxAmountRaw = trim((string)($_GET['max_amount'] ?? ''));
+    $startAfterRaw = trim((string)($_GET['start_after'] ?? ''));
+    $startBeforeRaw = trim((string)($_GET['start_before'] ?? ''));
+    $onlyOpen = ((string)($_GET['only_open'] ?? '') === '1');
+    $onlySpots = ((string)($_GET['only_spots'] ?? '') === '1');
+
     $db = getDB();
 
     $sql = "SELECT r.id, r.purpose_category, r.goal_text, r.saving_type, r.required_trust_level,
@@ -530,6 +541,74 @@ if ($action === 'discover') {
     if ($category !== '') {
         $sql .= " AND r.purpose_category = ?";
         $params[] = $category;
+    }
+
+    if ($q !== '') {
+        $like = '%' . addcslashes($q, "\\%_") . '%';
+        $sql .= " AND r.goal_text LIKE ?";
+        $params[] = $like;
+    }
+
+    if ($savingType !== '' && in_array($savingType, ['A','B'], true)) {
+        $sql .= " AND r.saving_type = ?";
+        $params[] = $savingType;
+    }
+
+    if ($periodicity !== '' && in_array($periodicity, ['weekly','biweekly','monthly'], true)) {
+        $sql .= " AND r.periodicity = ?";
+        $params[] = $periodicity;
+    }
+
+    if ($minAmountRaw !== '' && is_numeric($minAmountRaw)) {
+        $minAmt = (float)$minAmountRaw;
+        if ($minAmt >= 0) {
+            $sql .= " AND r.participation_amount >= ?";
+            $params[] = $minAmt;
+        }
+    }
+
+    if ($maxAmountRaw !== '' && is_numeric($maxAmountRaw)) {
+        $maxAmt = (float)$maxAmountRaw;
+        if ($maxAmt >= 0) {
+            $sql .= " AND r.participation_amount <= ?";
+            $params[] = $maxAmt;
+        }
+    }
+
+    $parseDate = function(string $s, bool $endOfDay): ?string {
+        $v = trim($s);
+        if ($v === '') return null;
+
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $v)) {
+            return $v . ($endOfDay ? ' 23:59:59' : ' 00:00:00');
+        }
+
+        if (preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/', $v)) {
+            // Normalize to full seconds for SQL.
+            return preg_match('/:\d{2}$/', $v) ? $v : ($v . ':00');
+        }
+
+        return null;
+    };
+
+    $startAfter = $parseDate($startAfterRaw, false);
+    if ($startAfter) {
+        $sql .= " AND r.start_at >= ?";
+        $params[] = $startAfter;
+    }
+
+    $startBefore = $parseDate($startBeforeRaw, true);
+    if ($startBefore) {
+        $sql .= " AND r.start_at <= ?";
+        $params[] = $startBefore;
+    }
+
+    if ($onlyOpen) {
+        $sql .= " AND r.lobby_state = 'open'";
+    }
+
+    if ($onlySpots) {
+        $sql .= " HAVING approved_count < r.max_participants";
     }
 
     $sql .= " ORDER BY r.start_at ASC LIMIT 200";
@@ -668,17 +747,48 @@ if ($action === 'my_rooms') {
     $userId = (int)getCurrentUserId();
     $db = getDB();
 
-    $stmt = $db->prepare("SELECT r.id, r.goal_text, r.saving_type, r.visibility, r.room_state, r.lobby_state,
-                                 r.required_trust_level, r.participation_amount, r.periodicity, r.start_at, r.reveal_at,
-                                 r.max_participants, r.min_participants, r.maker_user_id,
-                                 p.status AS my_status,
-                                 (SELECT COUNT(*) FROM saving_room_participants p2 WHERE p2.room_id = r.id AND p2.status IN ('approved','active')) AS approved_count
-                          FROM saving_room_participants p
-                          JOIN saving_rooms r ON r.id = p.room_id
-                          WHERE p.user_id = ?
-                            AND p.status IN ('pending','approved','active','removed','completed','exited_prestart','exited_poststart')
-                          ORDER BY r.start_at ASC
-                          LIMIT 200");
+    $sel = "r.id, r.goal_text, r.saving_type, r.visibility, r.room_state, r.lobby_state,
+                   r.required_trust_level, r.participation_amount, r.periodicity, r.start_at, r.reveal_at,
+                   r.max_participants, r.min_participants, r.maker_user_id,
+                   p.status AS my_status,
+                   (SELECT COUNT(*) FROM saving_room_participants p2 WHERE p2.room_id = r.id AND p2.status IN ('approved','active')) AS approved_count";
+
+    $join = '';
+
+    if (dbHasTable('saving_room_contribution_cycles')) {
+        $sel .= ", ac.cycle_index AS active_cycle_index, ac.due_at AS active_cycle_due_at,
+                   ac.grace_ends_at AS active_cycle_grace_ends_at, ac.status AS active_cycle_status";
+
+        $join .= " LEFT JOIN saving_room_contribution_cycles ac
+                   ON ac.id = (SELECT id
+                               FROM saving_room_contribution_cycles c
+                               WHERE c.room_id = r.id
+                                 AND c.status IN ('open','grace')
+                               ORDER BY c.cycle_index ASC
+                               LIMIT 1)";
+
+        if (dbHasTable('saving_room_contributions')) {
+            $sel .= ", mc.status AS my_active_cycle_contribution_status";
+            $join .= " LEFT JOIN saving_room_contributions mc
+                       ON mc.cycle_id = ac.id AND mc.user_id = p.user_id";
+        } else {
+            $sel .= ", NULL AS my_active_cycle_contribution_status";
+        }
+    } else {
+        $sel .= ", NULL AS active_cycle_index, NULL AS active_cycle_due_at, NULL AS active_cycle_grace_ends_at,
+                   NULL AS active_cycle_status, NULL AS my_active_cycle_contribution_status";
+    }
+
+    $sql = "SELECT {$sel}
+            FROM saving_room_participants p
+            JOIN saving_rooms r ON r.id = p.room_id
+            {$join}
+            WHERE p.user_id = ?
+              AND p.status IN ('pending','approved','active','removed','completed','exited_prestart','exited_poststart')
+            ORDER BY r.start_at ASC
+            LIMIT 200";
+
+    $stmt = $db->prepare($sql);
     $stmt->execute([$userId]);
     $rows = $stmt->fetchAll();
 
@@ -701,6 +811,13 @@ if ($action === 'my_rooms') {
             'spots_remaining' => max(0, $max - $approved),
             'my_status' => $r['my_status'],
             'is_maker' => ((int)$r['maker_user_id'] === $userId) ? 1 : 0,
+
+            // Next-action helpers (for My Rooms UX)
+            'active_cycle_index' => ($r['active_cycle_index'] !== null) ? (int)$r['active_cycle_index'] : null,
+            'active_cycle_due_at' => $r['active_cycle_due_at'] ?? null,
+            'active_cycle_grace_ends_at' => $r['active_cycle_grace_ends_at'] ?? null,
+            'active_cycle_status' => $r['active_cycle_status'] ?? null,
+            'my_active_cycle_contribution_status' => $r['my_active_cycle_contribution_status'] ?? null,
         ];
     }
 
@@ -832,6 +949,26 @@ if ($action === 'room_detail') {
                                     LIMIT 1");
     $activeCycleStmt->execute([$roomId]);
     $activeCycle = $activeCycleStmt->fetch();
+
+    $myActiveCycleContribution = null;
+    if ($activeCycle && dbHasTable('saving_room_contributions')) {
+        $mc = $db->prepare("SELECT id, amount, status, reference, confirmed_at, created_at
+                            FROM saving_room_contributions
+                            WHERE cycle_id = ? AND user_id = ?
+                            LIMIT 1");
+        $mc->execute([(int)$activeCycle['id'], $userId]);
+        $mcr = $mc->fetch();
+        if ($mcr) {
+            $myActiveCycleContribution = [
+                'id' => (int)$mcr['id'],
+                'amount' => (string)$mcr['amount'],
+                'status' => $mcr['status'],
+                'reference' => $mcr['reference'],
+                'confirmed_at' => $mcr['confirmed_at'],
+                'created_at' => $mcr['created_at'],
+            ];
+        }
+    }
 
     $destinationAccount = null;
     $canSeeDest = (((int)$room['maker_user_id'] === $userId) || isAdmin($userId) || in_array((string)$myStatus, ['approved','active'], true));
@@ -1507,6 +1644,7 @@ if ($action === 'room_detail') {
                 'grace_ends_at' => $activeCycle['grace_ends_at'],
                 'status' => $activeCycle['status'],
             ] : null,
+            'my_active_cycle_contribution' => $myActiveCycleContribution,
             'destination_account' => $destinationAccount,
             'swap_window' => $swapWindow,
             'slots' => $slots,

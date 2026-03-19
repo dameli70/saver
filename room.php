@@ -72,6 +72,19 @@ header("Referrer-Policy: no-referrer");
       <div class="card-title"><?php e('room.overview_title'); ?></div>
       <div id="room-overview" class="room-ov"><?php e('common.loading'); ?></div>
 
+      <div id="timeline-wrap" style="margin-top:12px;display:none;">
+        <div class="hr"></div>
+        <div class="card-title" style="margin-bottom:10px;"><?php e('room.timeline_title'); ?></div>
+        <div id="room-timeline" class="room-timeline"></div>
+      </div>
+
+      <div id="next-wrap" style="margin-top:12px;display:none;">
+        <div class="hr"></div>
+        <div class="card-title" style="margin-bottom:10px;"><?php e('room.next_title'); ?></div>
+        <div id="next-panel" class="next-panel"></div>
+        <div id="next-actions" class="next-actions"></div>
+      </div>
+
       <?php if ($isAdmin): ?>
       <details id="admin-panel" style="margin-top:12px;">
         <summary style="cursor:pointer;user-select:none;"><?php e('nav.admin'); ?></summary>
@@ -105,11 +118,32 @@ header("Referrer-Policy: no-referrer");
           </div>
         </div>
 
+        <div style="margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div>
+            <div class="k"><?php e('room.contribution.status'); ?></div>
+            <div class="v" id="contrib-status">—</div>
+          </div>
+          <div>
+            <div class="k"><?php e('room.contribution.confirmed_at'); ?></div>
+            <div class="v" id="contrib-confirmed-at">—</div>
+          </div>
+        </div>
+
+        <div class="small" id="contrib-countdown" style="margin-top:10px;"></div>
+
         <div class="p" style="margin-top:10px;"><?php e('room.contribution.proofs_redirect_note'); ?></div>
 
+        <input type="file" id="contrib-proof-file" style="display:none;" accept="image/png,image/jpeg,image/webp">
+
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
-          <a class="btn btn-primary btn-sm" id="contrib-open-proofs" href="rooms_proofs.php?room_id=<?= htmlspecialchars($roomId, ENT_QUOTES, 'UTF-8') ?>"><?php e('room.contribution.open_proofs_btn'); ?></a>
+          <button class="btn btn-blue btn-sm" id="contrib-upload-btn" type="button" onclick="contribUploadStart()"><?php e('room.contribution.upload_btn'); ?></button>
+          <a class="btn btn-ghost btn-sm" id="contrib-open-proofs" href="rooms_proofs.php?room_id=<?= htmlspecialchars($roomId, ENT_QUOTES, 'UTF-8') ?>"><?php e('room.contribution.open_proofs_btn'); ?></a>
         </div>
+
+        <div class="small" style="margin-top:10px;">
+          <?php e('room.contribution.reminders_note'); ?>
+        </div>
+
         <div id="contrib-msg" class="msg"></div>
       </div>
 
@@ -841,6 +875,14 @@ function prettyMyStatus(st){
   if(s === 'exited_poststart') return tr('room.status.exited_poststart', null, 'Exited');
   return s;
 }
+function prettyContributionStatus(st){
+  const s = String(st||'');
+  if(!s || s === 'unpaid') return tr('room.contribution.status_unpaid', null, 'Unpaid');
+  if(s === 'paid') return tr('room.contribution.status_paid', null, 'Paid');
+  if(s === 'paid_in_grace') return tr('room.contribution.status_paid_in_grace', null, 'Paid (grace)');
+  if(s === 'missed') return tr('room.contribution.status_missed', null, 'Missed');
+  return s;
+}
 function myStatusBadgeClass(st){
   const s = String(st||'');
   if(s === 'active' || s === 'approved') return 'ok';
@@ -1097,6 +1139,13 @@ let roomCache = null;
 let lastEventId = 0;
 let unlockClearTimer = null;
 let roomTicker = null;
+let timelineStage = '';
+
+function fmtDeltaMs(ms){
+  const s = Math.max(0, Math.floor(ms/1000));
+  if(window.LS && LS.fmtCountdown) return LS.fmtCountdown(s);
+  return String(s) + 's';
+}
 
 function roomCountdownText(r){
   if(!r) return '';
@@ -1111,19 +1160,31 @@ function roomCountdownText(r){
   const start = effStartAt;
   const reveal = parseUtcDate(r.reveal_at);
 
-  const nextTurn = (r && r.active_cycle && r.active_cycle.due_at)
-    ? parseUtcDate(r.active_cycle.due_at)
-    : (String(r.room_state||'') === 'swap_window' ? swapClosesAt : null);
+  const cyc = (r && r.active_cycle) ? r.active_cycle : null;
+  const contrib = (r && r.my_active_cycle_contribution) ? r.my_active_cycle_contribution : null;
+  const contribStatus = contrib && contrib.status ? String(contrib.status) : 'unpaid';
 
-  function fmtDelta(ms){
-    const s = Math.max(0, Math.floor(ms/1000));
-    if(window.LS && LS.fmtCountdown) return LS.fmtCountdown(s);
-    return String(s) + 's';
-  }
+  const dueAt = (cyc && cyc.due_at) ? parseUtcDate(cyc.due_at) : null;
+  const graceEndsAt = (cyc && cyc.grace_ends_at) ? parseUtcDate(cyc.grace_ends_at) : null;
+  const inGrace = cyc && String(cyc.status||'') === 'grace';
+  const deadline = (inGrace && graceEndsAt && !isNaN(graceEndsAt.getTime())) ? graceEndsAt : dueAt;
+
+  const nextTurn = dueAt ? dueAt : (String(r.room_state||'') === 'swap_window' ? swapClosesAt : null);
 
   if(String(r.room_state||'') === 'swap_window' && nextTurn && !isNaN(nextTurn.getTime()) && now < nextTurn.getTime()){
-    const delta = fmtDelta(nextTurn.getTime() - now);
+    const delta = fmtDeltaMs(nextTurn.getTime() - now);
     return tr('room.countdown.swap_closes_in', {delta}, 'Swap closes in ' + delta);
+  }
+
+  // If you have an unpaid contribution, show that as the countdown.
+  if(String(r.room_state||'') === 'active' && String(r.my_status||'') === 'active' && cyc && deadline && !isNaN(deadline.getTime()) && now < deadline.getTime()){
+    if(contribStatus !== 'paid' && contribStatus !== 'paid_in_grace'){
+      const delta = fmtDeltaMs(deadline.getTime() - now);
+      if(inGrace){
+        return tr('room.countdown.contribution_grace_ends_in', {delta}, 'Grace ends in ' + delta);
+      }
+      return tr('room.countdown.contribution_due_in', {delta}, 'Contribution due in ' + delta);
+    }
   }
 
   if(String(r.saving_type||'') === 'B'){
@@ -1143,7 +1204,7 @@ function roomCountdownText(r){
     }
 
     if(nextTurn && !isNaN(nextTurn.getTime()) && now < nextTurn.getTime()){
-      const delta = fmtDelta(nextTurn.getTime() - now);
+      const delta = fmtDeltaMs(nextTurn.getTime() - now);
       return tr('room.countdown.next_turn_in', {delta}, 'Next turn in ' + delta);
     }
 
@@ -1155,23 +1216,233 @@ function roomCountdownText(r){
   }
 
   if(start && !isNaN(start.getTime()) && now < start.getTime()){
-    const delta = fmtDelta(start.getTime() - now);
+    const delta = fmtDeltaMs(start.getTime() - now);
     return tr('room.countdown.starts_in', {delta}, 'Starts in ' + delta);
   }
 
   if(reveal && !isNaN(reveal.getTime()) && now < reveal.getTime()){
-    const delta = fmtDelta(reveal.getTime() - now);
+    const delta = fmtDeltaMs(reveal.getTime() - now);
     return tr('room.countdown.reveals_in', {delta}, 'Reveals in ' + delta);
   }
 
   return tr('room.countdown.eligible', null, 'Reveal eligible (server-enforced)');
 }
 
+function currentTimelineStage(r){
+  if(!r) return '';
+
+  const t = String(r.saving_type||'');
+  const rs = String(r.room_state||'');
+
+  if(rs === 'closed' || rs === 'cancelled') return 'done';
+  if(rs === 'swap_window') return 'swap';
+  if(rs === 'lobby') return 'lobby';
+
+  if(t === 'A'){
+    const ev = (r.unlock && r.unlock.event) ? r.unlock.event : null;
+    if(ev && String(ev.status||'') === 'revealed') return 'unlock';
+
+    const reveal = parseUtcDate(r.reveal_at);
+    if(reveal && !isNaN(reveal.getTime()) && Date.now() >= reveal.getTime()) return 'unlock_vote';
+
+    if(rs === 'active') return 'saving';
+    return 'lobby';
+  }
+
+  if(t === 'B'){
+    if(rs === 'active'){
+      const cur = (r.rotation && r.rotation.current) ? r.rotation.current : null;
+      const st = cur ? String(cur.status||'') : '';
+      if(st === 'pending_votes') return 'turn_vote';
+      if(st === 'revealed') return 'turn_withdraw';
+      if(st === 'blocked_dispute' || st === 'blocked_debt') return 'blocked';
+      return 'saving';
+    }
+    return rs;
+  }
+
+  return rs;
+}
+
+function timelineActiveStepId(r){
+  const st = currentTimelineStage(r);
+  if(st === 'swap') return 'swap';
+  if(st === 'saving') return 'saving';
+  if(st === 'unlock_vote' || st === 'unlock') return 'unlock';
+  if(st === 'turn_vote' || st === 'turn_withdraw' || st === 'blocked') return 'turn';
+  if(st === 'done') return 'done';
+  return 'lobby';
+}
+
+function buildTimelineSteps(r){
+  const steps = [];
+
+  const t = String(r.saving_type||'');
+  const rs = String(r.room_state||'');
+
+  const hasSwap = !!(r.swap_window && r.swap_window.closes_at);
+  const swapCloses = hasSwap ? String(r.swap_window.closes_at) : '';
+
+  const effStartAt = (t === 'B' && swapCloses) ? swapCloses
+    : ((rs === 'swap_window' && swapCloses) ? swapCloses : String(r.start_at||''));
+
+  const activeDue = (r.active_cycle && r.active_cycle.due_at) ? String(r.active_cycle.due_at) : '';
+
+  const lobbyMetaKey = (t === 'B' && rs === 'lobby' && !swapCloses)
+    ? 'room.timeline.created_fmt'
+    : 'room.timeline.starts_fmt';
+
+  const lobbyMetaFallback = (t === 'B' && rs === 'lobby' && !swapCloses)
+    ? `Created ${fmt(effStartAt)}`
+    : `Starts ${fmt(effStartAt)}`;
+
+  steps.push({
+    id:'lobby',
+    label: tr('room.timeline.lobby', null, 'Lobby'),
+    meta: effStartAt ? tr(lobbyMetaKey, {ts: fmt(effStartAt)}, lobbyMetaFallback) : '',
+    scroll: 'room-overview',
+  });
+
+  if(hasSwap){
+    steps.push({
+      id:'swap',
+      label: tr('room.timeline.swap', null, 'Swap'),
+      meta: tr('room.timeline.closes_fmt', {ts: fmt(swapCloses)}, `Closes ${fmt(swapCloses)}`),
+      scroll: 'swap-block',
+    });
+  }
+
+  steps.push({
+    id:'saving',
+    label: tr('room.timeline.saving', null, 'Saving'),
+    meta: activeDue ? tr('room.timeline.due_fmt', {ts: fmt(activeDue)}, `Due ${fmt(activeDue)}`) : (effStartAt ? fmt(effStartAt) : ''),
+    scroll: 'contrib-block',
+  });
+
+  if(t === 'A'){
+    const revealAt = String(r.reveal_at||'');
+
+    let unlockMeta = '';
+    const ev = (r.unlock && r.unlock.event) ? r.unlock.event : null;
+    if(ev && String(ev.status||'') === 'revealed' && ev.expires_at){
+      unlockMeta = tr('room.timeline.expires_fmt', {ts: fmt(ev.expires_at)}, `Expires ${fmt(ev.expires_at)}`);
+    } else if(revealAt){
+      unlockMeta = tr('room.timeline.reveals_fmt', {ts: fmt(revealAt)}, `Reveals ${fmt(revealAt)}`);
+    }
+
+    steps.push({
+      id:'unlock',
+      label: tr('room.timeline.unlock', null, 'Unlock'),
+      meta: unlockMeta,
+      scroll: 'unlock-block',
+    });
+
+  } else if(t === 'B'){
+    const cur = (r.rotation && r.rotation.current) ? r.rotation.current : null;
+    const n = cur && cur.rotation_index ? String(cur.rotation_index) : '';
+
+    let meta = '';
+    if(cur){
+      const st = String(cur.status||'');
+      if(st === 'pending_votes' && cur.approve_due_at){
+        meta = tr('room.timeline.vote_due_fmt', {ts: fmt(cur.approve_due_at)}, `Vote due ${fmt(cur.approve_due_at)}`);
+      } else if(st === 'revealed' && cur.expires_at){
+        meta = tr('room.timeline.expires_fmt', {ts: fmt(cur.expires_at)}, `Expires ${fmt(cur.expires_at)}`);
+      } else if((st === 'blocked_dispute' || st === 'blocked_debt') && cur.dispute_window_ends_at){
+        meta = tr('room.timeline.ends_fmt', {ts: fmt(cur.dispute_window_ends_at)}, `Ends ${fmt(cur.dispute_window_ends_at)}`);
+      }
+    }
+
+    steps.push({
+      id:'turn',
+      label: n ? tr('room.timeline.turn_fmt', {n}, `Turn #${n}`) : tr('room.timeline.turn', null, 'Turn'),
+      meta,
+      scroll: 'typeb-block',
+    });
+  }
+
+  steps.push({
+    id:'done',
+    label: tr('room.timeline.done', null, 'Done'),
+    meta: (rs === 'cancelled') ? tr('room.state.cancelled', null, 'Cancelled') : ((rs === 'closed') ? tr('room.state.closed', null, 'Closed') : ''),
+    scroll: '',
+  });
+
+  return steps;
+}
+
+function renderRoomTimeline(r){
+  const wrap = document.getElementById('timeline-wrap');
+  const el = document.getElementById('room-timeline');
+  if(!wrap || !el || !r) return;
+
+  wrap.style.display = 'block';
+
+  const steps = buildTimelineSteps(r);
+  const activeId = timelineActiveStepId(r);
+  const activeIdx = Math.max(0, steps.findIndex(s => s.id === activeId));
+
+  el.innerHTML = '';
+
+  const head = document.createElement('div');
+  head.className = 'room-tl-head';
+
+  const cd = document.createElement('div');
+  cd.id = 'room-tl-countdown';
+  cd.className = 'room-tl-countdown';
+  cd.textContent = roomCountdownText(r);
+
+  const left = document.createElement('div');
+  left.className = 'k';
+  left.textContent = tr('room.timeline.next_deadline', null, 'Next deadline');
+
+  head.appendChild(left);
+  head.appendChild(cd);
+  el.appendChild(head);
+
+  const stepsWrap = document.createElement('div');
+  stepsWrap.className = 'room-tl-steps';
+
+  steps.forEach((s, idx) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'room-tl-step ' + (idx < activeIdx ? 'is-done' : (idx === activeIdx ? 'is-current' : 'is-upcoming'));
+    b.dataset.scroll = s.scroll ? String(s.scroll) : '';
+
+    b.innerHTML = '<span class="tl-dot"></span>'
+      + '<div class="tl-title">' + esc(s.label) + '</div>'
+      + (s.meta ? ('<div class="tl-meta">' + esc(s.meta) + '</div>') : '');
+
+    b.addEventListener('click', () => {
+      const target = String(b.dataset.scroll||'').trim();
+      if(target) scrollToBlock(target);
+    });
+
+    stepsWrap.appendChild(b);
+  });
+
+  el.appendChild(stepsWrap);
+}
+
 function updateRoomCountdown(){
   const r = roomCache;
+  if(!r) return;
+
+  const txt = roomCountdownText(r);
+
   const el = document.getElementById('room-countdown');
-  if(!el || !r) return;
-  el.textContent = roomCountdownText(r);
+  if(el) el.textContent = txt;
+
+  const tl = document.getElementById('room-tl-countdown');
+  if(tl) tl.textContent = txt;
+
+  updateContribCountdown();
+
+  const st = currentTimelineStage(r);
+  if(st && st !== timelineStage){
+    timelineStage = st;
+    renderRoomTimeline(r);
+  }
 }
 
 function startRoomCountdown(){
@@ -1225,13 +1496,461 @@ function renderAdminPanel(r){
   }).join('') + '</div>';
 }
 
+function scrollToBlock(id){
+  const el = document.getElementById(id);
+  if(!el) return;
+  try{
+    el.scrollIntoView({behavior:'smooth', block:'start'});
+  }catch(e){
+    el.scrollIntoView(true);
+  }
+}
+
+let contribUploading = false;
+
+function updateContribCountdown(){
+  const el = document.getElementById('contrib-countdown');
+  if(!el) return;
+
+  const r = roomCache;
+  if(!r || String(r.room_state||'') !== 'active' || String(r.my_status||'') !== 'active' || !r.active_cycle){
+    el.textContent = '';
+    return;
+  }
+
+  const cyc = r.active_cycle;
+  const mc = r.my_active_cycle_contribution || null;
+  const st = (mc && mc.status) ? String(mc.status) : 'unpaid';
+
+  if(st === 'paid' || st === 'paid_in_grace'){
+    el.textContent = tr('room.contribution.up_to_date', null, 'Up to date for this cycle.');
+    return;
+  }
+
+  const inGrace = (String(cyc.status||'') === 'grace');
+  const dueAt = cyc.due_at ? parseUtcDate(cyc.due_at) : null;
+  const graceEndsAt = cyc.grace_ends_at ? parseUtcDate(cyc.grace_ends_at) : null;
+  const deadline = (inGrace && graceEndsAt && !isNaN(graceEndsAt.getTime())) ? graceEndsAt : dueAt;
+
+  if(!deadline || isNaN(deadline.getTime())){
+    el.textContent = '';
+    return;
+  }
+
+  const now = Date.now();
+  if(now >= deadline.getTime()){
+    el.textContent = tr('room.contribution.overdue', null, 'Overdue.');
+    return;
+  }
+
+  const delta = fmtDeltaMs(deadline.getTime() - now);
+  if(inGrace){
+    el.textContent = tr('room.countdown.contribution_grace_ends_in', {delta}, 'Grace ends in ' + delta);
+  } else {
+    el.textContent = tr('room.countdown.contribution_due_in', {delta}, 'Contribution due in ' + delta);
+  }
+}
+
+function contribUploadNow(){
+  scrollToBlock('contrib-block');
+  setTimeout(() => {
+    contribUploadStart();
+  }, 250);
+}
+
+function contribUploadStart(){
+  const msg = document.getElementById('contrib-msg');
+  if(msg) msg.className = 'msg';
+
+  const r = roomCache;
+  if(!r || String(r.room_state||'') !== 'active' || String(r.my_status||'') !== 'active' || !r.active_cycle){
+    setMsg('contrib-msg', tr('room.contribution.unavailable', null, 'Contribution upload is unavailable right now.'), false);
+    return;
+  }
+
+  const input = document.getElementById('contrib-proof-file');
+  if(!input){
+    setMsg('contrib-msg', STR.failed, false);
+    return;
+  }
+
+  input.click();
+}
+
+async function contribUploadFile(file){
+  const r = roomCache;
+  if(!r || !r.active_cycle) throw new Error(STR.failed);
+
+  const btn = document.getElementById('contrib-upload-btn');
+  if(contribUploading) return;
+  contribUploading = true;
+
+  const oldTxt = btn ? btn.textContent : '';
+
+  try{
+    if(btn){
+      btn.disabled = true;
+      btn.textContent = tr('room.contribution.uploading', null, 'Uploading…');
+    }
+
+    const ref = (window.LS && typeof window.LS.prompt === 'function')
+      ? await window.LS.prompt({
+          title: tr('room.contribution.reference_optional', null, 'Reference (optional)'),
+          message: tr('rooms.proofs.prompt_reference', null, 'Optional reference / note (leave blank if none):'),
+          placeholder: tr('room.contribution.reference_placeholder', null, 'e.g. bank tx id'),
+        })
+      : '';
+
+    const reference = (ref === null || typeof ref === 'undefined') ? '' : String(ref||'');
+
+    const fd = new FormData();
+    fd.append('csrf_token', (typeof CSRF === 'string' ? CSRF : ''));
+    fd.append('room_id', ROOM_ID);
+    fd.append('cycle_id', String(r.active_cycle.id||''));
+    fd.append('amount', String(r.participation_amount||''));
+    fd.append('reference', reference);
+    fd.append('proof', file);
+
+    const resp = await fetch('/api/rooms.php?action=confirm_contribution_with_proof', {
+      method: 'POST',
+      credentials: 'same-origin',
+      body: fd,
+    });
+
+    const res = await resp.json().catch(()=>null);
+    if(!res || !res.success) throw new Error((res && res.error) ? res.error : STR.failed);
+
+    setMsg('contrib-msg', tr('rooms.proofs.upload_ok', null, 'Uploaded.'), true);
+    await loadRoom();
+    await pollFeed();
+
+  }catch(e){
+    setMsg('contrib-msg', (e && e.message) ? e.message : STR.failed, false);
+
+  } finally {
+    contribUploading = false;
+
+    if(btn){
+      btn.disabled = false;
+      btn.textContent = oldTxt || tr('room.contribution.upload_btn', null, 'Upload proof');
+    }
+
+    const input = document.getElementById('contrib-proof-file');
+    if(input) input.value = '';
+  }
+}
+
+function initContribUpload(){
+  const input = document.getElementById('contrib-proof-file');
+  if(!input || input.dataset.bound === '1') return;
+  input.dataset.bound = '1';
+
+  input.addEventListener('change', async () => {
+    const file = input.files && input.files[0] ? input.files[0] : null;
+    if(!file) return;
+
+    if(file.size > 5000000){
+      setMsg('contrib-msg', tr('rooms.proofs.file_too_large', null, 'File too large (max 5MB).'), false);
+      input.value = '';
+      return;
+    }
+
+    await contribUploadFile(file);
+  });
+}
+
+function computeNextStep(r){
+  const now = Date.now();
+
+  const step = {kind:'info', title:'', body:'', actions:[]};
+  function set(kind, title, body){
+    step.kind = kind;
+    step.title = title;
+    step.body = body;
+    return step;
+  }
+  function addAction(a){ step.actions.push(a); }
+
+  const myStatus = String(r.my_status||'');
+  const roomState = String(r.room_state||'');
+  const lobbyState = String(r.lobby_state||'');
+  const savingType = String(r.saving_type||'');
+
+  if(!myStatus && r.my_invite && roomState === 'lobby' && lobbyState === 'open'){
+    set('warn',
+      tr('room.next.invited_title', null, 'Invitation pending'),
+      tr('room.next.invited_body', null, 'You have been invited to this room. Accept to join or decline if you’re not participating.')
+    );
+    addAction({text: tr('room.next.cta.review_invite', null, 'Review invitation'), type:'primary', scroll:'invite-block'});
+    return step;
+  }
+
+  const canJoin = (!myStatus || myStatus === 'declined') && roomState === 'lobby' && lobbyState === 'open' && r.visibility !== 'private';
+  if(canJoin){
+    set('info',
+      tr('room.next.join_title', null, 'Join this room'),
+      tr('room.next.join_body', null, 'Send a join request. The maker will approve or decline.')
+    );
+    addAction({text: tr('room.action.request_join', null, 'Request to join'), type:'primary', onClick:'requestJoin'});
+    return step;
+  }
+
+  if(myStatus === 'pending'){
+    set('info',
+      tr('room.next.pending_title', null, 'Waiting for approval'),
+      tr('room.next.pending_body', null, 'Your join request is pending. You’ll be able to participate once approved.')
+    );
+    return step;
+  }
+
+  if(myStatus === 'approved' && roomState === 'lobby' && savingType === 'A'){
+    set('info',
+      tr('room.next.approved_prestart_title', null, 'Approved'),
+      tr('room.next.approved_prestart_body_fmt', {ts: fmt(r.start_at)}, 'You are approved. The room will start at {ts}.')
+    );
+    return step;
+  }
+
+  if(savingType === 'B' && roomState === 'lobby' && myStatus){
+    const cnt = (r.approved_count != null) ? (r.approved_count|0) : 0;
+    const min = (r.min_participants != null) ? (r.min_participants|0) : 0;
+    if(min > 0 && cnt < min){
+      set('info',
+        tr('room.next.waiting_min_title', null, 'Waiting for participants'),
+        tr('room.next.waiting_min_body_fmt', {n: cnt, min}, `Waiting for minimum participants (${cnt}/${min}).`)
+      );
+      return step;
+    }
+  }
+
+  if(roomState === 'swap_window'){
+    const closes = (r.swap_window && r.swap_window.closes_at) ? fmt(r.swap_window.closes_at) : '—';
+    set('warn',
+      tr('room.next.swap_title', null, 'Swap window open'),
+      tr('room.next.swap_body_fmt', {ts: closes}, 'Swap window is open until {ts}. You can request a position swap.')
+    );
+    if(myStatus === 'approved' || myStatus === 'active'){
+      addAction({text: tr('room.next.cta.open_swap', null, 'Open swap'), type:'primary', scroll:'swap-block'});
+    }
+    return step;
+  }
+
+  if(roomState === 'active' && myStatus === 'active'){
+    // Exit request vote is time-sensitive.
+    if(savingType === 'B' && r.exit_request && String(r.exit_request.status||'') === 'open'){
+      const er = r.exit_request;
+      if(!er.is_requester && !er.my_vote){
+        set('warn',
+          tr('room.next.exit_vote_title', null, 'Exit vote pending'),
+          tr('room.next.exit_vote_body_fmt', {name: String(er.requested_by_name||'')}, 'Vote on the exit request from {name}.')
+        );
+        addAction({text: tr('room.next.cta.open_exit', null, 'Open exit request'), type:'primary', scroll:'exit-block'});
+        return step;
+      }
+    }
+
+    // Dispute acknowledgement (Type B)
+    if(savingType === 'B'){
+      const cur = (r.rotation && r.rotation.current) ? r.rotation.current : null;
+      const dispute = (r.rotation && r.rotation.dispute) ? r.rotation.dispute : null;
+      if(cur && dispute && !dispute.my_ack && cur.dispute_window_ends_at){
+        const ends = parseUtcDate(cur.dispute_window_ends_at);
+        if(ends && !isNaN(ends.getTime()) && now < ends.getTime()){
+          set('warn',
+            tr('room.next.dispute_ack_title', null, 'Dispute open'),
+            tr('room.next.dispute_ack_body_fmt', {ts: fmt(cur.dispute_window_ends_at)}, 'A dispute is open. Acknowledge before {ts}.')
+          );
+          addAction({text: tr('room.next.cta.open_dispute', null, 'Open dispute'), type:'primary', scroll:'typeb-dispute-wrap'});
+          return step;
+        }
+      }
+    }
+
+    // Contribution (all types)
+    if(r.active_cycle){
+      const cyc = r.active_cycle;
+      const contrib = r.my_active_cycle_contribution || null;
+      const dueAt = fmt(cyc.due_at);
+      const graceAt = cyc.grace_ends_at ? fmt(cyc.grace_ends_at) : '';
+      const deadline = (String(cyc.status||'') === 'grace' && graceAt) ? graceAt : dueAt;
+
+      const cycLabel = tr('room.next.cycle_fmt', {n: String(cyc.cycle_index)}, 'Cycle #' + String(cyc.cycle_index));
+
+      if(!contrib || String(contrib.status||'') === 'unpaid'){
+        set('warn',
+          tr('room.next.contribution_due_title', null, 'Contribution due'),
+          tr('room.next.contribution_due_body_fmt', {cycle: cycLabel, ts: deadline}, '{cycle} is due by {ts}. Upload your proof to confirm your contribution.')
+        );
+        addAction({text: tr('room.contribution.upload_btn', null, 'Upload proof'), type:'primary', onClick:'contribUploadNow'});
+        addAction({text: tr('room.contribution.open_proofs_btn', null, 'Open My proofs'), type:'ghost', href:'rooms_proofs.php?room_id=' + encodeURIComponent(ROOM_ID;
+      }
+
+      if(String(contrib.status||'') === 'paid' || String(contrib.status||'') === 'paid_in_grace'){
+        set('ok',
+          tr('room.next.contribution_done_title', null, 'Contribution recorded'),
+          tr('room.next.contribution_done_body_fmt', {cycle: cycLabel, ts: dueAt}, '{cycle} is recorded. Next due date is {ts}.')
+        );
+        addAction({text: tr('room.contribution.open_proofs_btn', null, 'Open My proofs'), type:'ghost', href:'rooms_proofs.php?room_id=' + encodeURIComponent(ROOM_ID)});
+        return step;
+      }
+
+      if(String(contrib.status||'') === 'missed'){
+        const by = graceAt || dueAt;
+        set('err',
+          tr('room.next.contribution_missed_title', null, 'Contribution missed'),
+          tr('room.next.contribution_missed_body_fmt', {cycle: cycLabel, ts: by}, '{cycle} was missed (grace ended {ts}). Contact the maker if you believe this is incorrect.')
+        );
+        addAction({text: tr('room.contribution.open_proofs_btn', null, 'Open My proofs'), type:'ghost', href:'rooms_proofs.php?room_id=' + encodeURIComponent(ROOM_ID)});
+        return step;
+      }
+    }
+
+    // Type A unlock vote/reveal
+    if(savingType === 'A' && r.unlock){
+      const approvals = (r.unlock.votes && typeof r.unlock.votes.approvals !== 'undefined') ? (r.unlock.votes.approvals|0) : 0;
+      const eligible = (r.unlock.votes && typeof r.unlock.votes.eligible !== 'undefined') ? (r.unlock.votes.eligible|0) : 0;
+      const myVote = r.unlock.my_vote ? String(r.unlock.my_vote) : 'none';
+      const ev = r.unlock.event;
+
+      if(eligible > 0 && approvals < eligible && myVote === 'none'){
+        set('warn',
+          tr('room.next.unlock_vote_title', null, 'Unlock vote needed'),
+          tr('room.next.unlock_vote_body_fmt', {a: approvals, b: eligible}, 'Cast your vote to unlock ({a}/{b} approvals).')
+        );
+        addAction({text: tr('room.next.cta.open_unlock', null, 'Open unlock'), type:'primary', scroll:'unlock-block'});
+        return step;
+      }
+
+      if(ev && ev.status === 'revealed'){
+        set('info',
+          tr('room.next.unlock_revealed_title', null, 'Unlock code available'),
+          tr('room.next.unlock_revealed_body_fmt', {ts: fmt(ev.expires_at)}, 'The unlock code has been revealed. It expires at {ts}.')
+        );
+        addAction({text: tr('room.next.cta.open_unlock', null, 'Open unlock'), type:'primary', scroll:'unlock-block'});
+        return step;
+      }
+    }
+
+    // Type B vote/reveal/withdrawal
+    if(savingType === 'B' && r.rotation && r.rotation.current){
+      const cur = r.rotation.current;
+      const votesMeta = r.rotation.votes || {};
+      const myVote = r.rotation.my_vote ? String(r.rotation.my_vote) : 'none';
+      const isTurnUser = (cur.turn_user_id|0) === (CURRENT_USER_ID|0);
+      const isOpen = (votesMeta.is_open === 1);
+      const isClosed = (votesMeta.is_closed === 1);
+      const eligibleCount = (typeof votesMeta.eligible === 'number') ? (votesMeta.eligible|0) : 0;
+      const requiredCount = (typeof votesMeta.required === 'number') ? (votesMeta.required|0) : 0;
+      const voteCast = (myVote === 'approve' || myVote === 'reject');
+
+      if(cur.status === 'pending_votes' && !isTurnUser && isOpen && !isClosed && !voteCast && eligibleCount > 0 && requiredCount > 0){
+        set('warn',
+          tr('room.next.turn_vote_title', null, 'Turn vote needed'),
+          tr('room.next.turn_vote_body_fmt', {n: cur.rotation_index, name: String(cur.turn_user_name||'')}, 'Vote on turn #{n} for {name}.')
+        );
+        addAction({text: tr('room.next.cta.open_turn', null, 'Open turn'), type:'primary', scroll:'typeb-block'});
+        return step;
+      }
+
+      if(cur.status === 'revealed' && cur.can_confirm_withdrawal === 1 && !cur.withdrawal_confirmed_at){
+        set('warn',
+          tr('room.next.withdraw_confirm_title', null, 'Confirm withdrawal'),
+          tr('room.next.withdraw_confirm_body', null, 'After collecting the funds, confirm the withdrawal to advance the room.')
+        );
+        addAction({text: tr('room.next.cta.open_withdrawal', null, 'Open withdrawal'), type:'primary', scroll:'typeb-withdraw-wrap'});
+        return step;
+      }
+
+      if(cur.status === 'revealed' && cur.can_reveal_code === 1){
+        set('info',
+          tr('room.next.reveal_code_title', null, 'Reveal code'),
+          tr('room.next.reveal_code_body_fmt', {n: cur.rotation_index}, 'Reveal the destination code for turn #{n}.')
+        );
+        addAction({text: tr('room.next.cta.open_turn', null, 'Open turn'), type:'primary', scroll:'typeb-block'});
+        return step;
+      }
+    }
+
+    set('info',
+      tr('room.next.active_title', null, 'No action needed'),
+      tr('room.next.active_body', null, 'You are up to date. Keep an eye on the countdown and activity feed.')
+    );
+    return step;
+  }
+
+  if(roomState === 'closed' || roomState === 'cancelled'){
+    set('info',
+      tr('room.next.closed_title', null, 'Room finished'),
+      tr('room.next.closed_body', null, 'This room is no longer active.')
+    );
+    return step;
+  }
+
+  set('info',
+    tr('room.next.default_title', null, 'Next step'),
+    tr('room.next.default_body', null, 'Review the room status and wait for the next window.')
+  );
+  return step;
+}
+
+function renderNextPanel(r){
+  const wrap = document.getElementById('next-wrap');
+  const panel = document.getElementById('next-panel');
+  const actionsEl = document.getElementById('next-actions');
+  if(!wrap || !panel || !actionsEl) return;
+
+  wrap.style.display = 'block';
+
+  const step = computeNextStep(r);
+  const kind = String(step.kind||'info');
+
+  panel.className = 'next-panel kind-' + kind;
+  panel.innerHTML = '<div class="next-title">' + esc(step.title||'') + '</div>'
+    + '<div>' + esc(step.body||'') + '</div>';
+
+  actionsEl.innerHTML = '';
+  (step.actions||[]).forEach(a => {
+    const hasHref = !!a.href;
+    const el = document.createElement(hasHref ? 'a' : 'button');
+
+    const t = String(a.type||'ghost');
+    el.className = 'btn btn-' + t + ' btn-sm';
+
+    if(hasHref){
+      el.href = String(a.href);
+    } else {
+      el.type = 'button';
+    }
+
+    el.textContent = String(a.text||'');
+
+    el.addEventListener('click', (ev) => {
+      if(a.scroll){
+        ev.preventDefault();
+        scrollToBlock(String(a.scroll));
+        return;
+      }
+
+      if(a.onClick){
+        ev.preventDefault();
+        const fn = window[String(a.onClick)];
+        if(typeof fn === 'function') fn();
+      }
+    });
+
+    actionsEl.appendChild(el);
+  });
+}
+
 function renderRoom(){
   const r = roomCache;
   if(!r) return;
 
-  const effStartAt = (String(r.room_state||'') === 'swap_window' && r.swap_window && r.swap_window.closes_at)
-    ? r.swap_window.closes_at
-    : r.start_at;
+  const swapClosesAt = (r.swap_window && r.swap_window.closes_at) ? String(r.swap_window.closes_at) : '';
+
+  const effStartAt = (String(r.saving_type||'') === 'B' && swapClosesAt)
+    ? swapClosesAt
+    : ((String(r.room_state||'') === 'swap_window' && swapClosesAt) ? swapClosesAt : r.start_at);
 
   const startLocal = fmt(effStartAt);
   const startUtc = fmtUtc(effStartAt);
@@ -1243,7 +1962,11 @@ function renderRoom(){
   document.getElementById('room-title').textContent = r.goal_text || tr('page.room', null, 'Room');
 
   const periodicityLabel = prettyPeriodicity(r.periodicity) || String(r.periodicity||'');
-  document.getElementById('room-sub').innerHTML = tr('room.ov.subtitle_html', {
+  const subtitleKey = (String(r.saving_type||'') === 'B' && String(r.room_state||'') === 'lobby' && !swapClosesAt)
+    ? 'room.ov.subtitle_created_html'
+    : 'room.ov.subtitle_html';
+
+  document.getElementById('room-sub').innerHTML = tr(subtitleKey, {
     type: esc(r.saving_type),
     level: esc(r.required_trust_level),
     periodicity: esc(periodicityLabel),
@@ -1339,6 +2062,10 @@ function renderRoom(){
     </div>
   `;
 
+  timelineStage = currentTimelineStage(r);
+  renderRoomTimeline(r);
+
+  renderNextPanel(r);
   renderAdminPanel(r);
 
   updateRoomCountdown();
@@ -1362,10 +2089,25 @@ function renderRoom(){
     if(canContrib){
       document.getElementById('contrib-cycle').textContent = `#${r.active_cycle.cycle_index} (${r.active_cycle.status})`;
       document.getElementById('contrib-due').textContent = fmt(r.active_cycle.due_at);
+
       const amt = document.getElementById('contrib-amount');
       if(amt){
         amt.textContent = String(r.participation_amount||'—');
       }
+
+      const mc = r.my_active_cycle_contribution || null;
+      const st = (mc && mc.status) ? String(mc.status) : 'unpaid';
+
+      const stEl = document.getElementById('contrib-status');
+      if(stEl) stEl.textContent = prettyContributionStatus(st);
+
+      const confEl = document.getElementById('contrib-confirmed-at');
+      if(confEl) confEl.textContent = (mc && mc.confirmed_at) ? fmt(mc.confirmed_at) : '—';
+
+      const msg = document.getElementById('contrib-msg');
+      if(msg) msg.className = 'msg';
+
+      updateContribCountdown();
     }
   }
 
@@ -2948,9 +3690,22 @@ function startSseFeed(){
   };
 }
 
+function handleInitialHash(){
+  const id = String((window.location && window.location.hash) ? window.location.hash : '').replace(/^#/, '').trim();
+  if(!id) return;
+
+  // Wait for the first render (blocks may be hidden until room data loads).
+  setTimeout(() => {
+    scrollToBlock(id);
+  }, 350);
+}
+
+initContribUpload();
+
 loadRoom().then(async ()=>{
   await pollFeed();
   startSseFeed();
+  handleInitialHash();
 });
 </script>
 </div>

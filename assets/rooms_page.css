@@ -88,6 +88,14 @@
 .actions,.room-actions{display:flex;gap:10px;flex-wrap:wrap;}
 @media(max-width:420px){.actions .btn,.room-actions .btn{flex:1 1 100%;}}
 
+.filters-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px 12px;align-items:end;}
+@media(max-width:920px){.filters-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
+@media(max-width:520px){.filters-grid{grid-template-columns:1fr;}}
+
+.filters-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap;grid-column:1/-1;padding-top:4px;}
+.filters-actions .check{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:12px;line-height:1.4;}
+.filters-actions input[type="checkbox"]{width:16px;height:16px;}
+
 .cat-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
 .cat-btn{padding:10px 12px;min-height:38px;font-size:10px;}
 .cat-btn.sel{border-color:rgb(var(--accent-rgb) / .55);color:var(--text);
