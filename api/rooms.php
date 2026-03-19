@@ -1212,7 +1212,7 @@ if ($action === 'room_detail') {
         }
 
         // Rotation history
-        $hSel = "w.rotation_index, w.user_id, w.status, w.revealed_at, w.expires_at, {$uNameExpr} AS turn_user_name";
+        $hSel = "w.id AS window_id, w.rotation_index, w.user_id, w.status, w.revealed_at, w.expires_at, {$uNameExpr} AS turn_user_name";
         $hSel .= dbHasColumn('saving_room_rotation_windows', 'delegate_user_id') ? ", w.delegate_user_id" : ", NULL AS delegate_user_id";
         $hSel .= dbHasColumn('saving_room_rotation_windows', 'withdrawal_confirmed_at')
             ? ", w.withdrawal_confirmed_at, w.withdrawal_reference, w.withdrawal_confirmed_role, w.withdrawal_confirmed_by_user_id"
@@ -1228,9 +1228,20 @@ if ($action === 'room_detail') {
             $cvLast = ", NULL AS code_last_viewed_at, NULL AS code_last_viewed_role, NULL AS code_last_viewed_by_user_id";
         }
 
-        $histStmt = $db->prepare("SELECT {$hSel}{$cvLast}
+        $ledgerSel = ", NULL AS collected_amount, NULL AS balance_after_withdrawal";
+        $ledgerJoin = '';
+        if (dbHasTable('saving_room_account_ledger')) {
+            $ledgerSel = ", l.amount AS collected_amount, l.balance_after AS balance_after_withdrawal";
+            $ledgerJoin = "LEFT JOIN saving_room_account_ledger l
+                             ON l.room_id = w.room_id
+                            AND l.source_type = 'withdrawal'
+                            AND l.source_id = CAST(w.id AS CHAR)";
+        }
+
+        $histStmt = $db->prepare("SELECT {$hSel}{$cvLast}{$ledgerSel}
                                   FROM saving_room_rotation_windows w
                                   JOIN users u ON u.id = w.user_id
+                                  {$ledgerJoin}
                                   WHERE w.room_id = ?
                                   ORDER BY w.rotation_index DESC
                                   LIMIT 30");
@@ -1261,6 +1272,7 @@ if ($action === 'room_detail') {
             }
 
             $rotationHistory[] = [
+                'window_id' => (int)$hr['window_id'],
                 'rotation_index' => (int)$hr['rotation_index'],
                 'status' => $hr['status'],
                 'turn_user_name' => $hr['turn_user_name'],
@@ -1274,6 +1286,8 @@ if ($action === 'room_detail') {
                 'withdrawal_reference' => $hr['withdrawal_reference'],
                 'withdrawal_confirmed_role' => $hr['withdrawal_confirmed_role'],
                 'withdrawal_confirmed_by_name' => $confirmedByName2,
+                'collected_amount' => ($hr['collected_amount'] !== null) ? (string)$hr['collected_amount'] : null,
+                'balance_after_withdrawal' => ($hr['balance_after_withdrawal'] !== null) ? (string)$hr['balance_after_withdrawal'] : null,
             ];
         }
     }
@@ -1373,7 +1387,7 @@ if ($action === 'room_detail') {
         $b = $db->prepare('SELECT balance_after FROM saving_room_account_ledger WHERE room_id = ? ORDER BY entry_seq DESC LIMIT 1');
         $b->execute([$roomId]);
         $bal = $b->fetchColumn();
-        if ($bal !== false && $bal !== null) $accountBalance = (string)$bal;
+        $accountBalance = ($bal === false || $bal === null) ? '0.00' : (string)$bal;
     }
 
     $requiredWithdrawalAmount = null;
@@ -4253,6 +4267,93 @@ if ($action === 'typeB_ack_dispute') {
     auditLog('room_typeB_dispute_ack');
 
     jsonResponse(['success' => true, 'ack_count' => $ackCount]);
+}
+
+// ── CONTRIBUTION PROOFS (list; participants can view all)
+if ($action === 'contribution_proofs') {
+    requireLogin();
+    requireVerifiedEmail();
+
+    if (!dbHasTable('saving_room_contribution_proofs')) {
+        jsonResponse(['error' => 'Contribution proofs are unavailable. Apply database migrations.'], 409);
+    }
+
+    $userId = (int)getCurrentUserId();
+    $roomId = (string)($_GET['room_id'] ?? '');
+    $beforeId = (int)($_GET['before_id'] ?? 0);
+    $limit = (int)($_GET['limit'] ?? 80);
+    $limit = max(1, min(200, $limit));
+
+    if ($roomId === '' || strlen($roomId) !== 36) jsonResponse(['error' => 'Invalid room_id'], 400);
+
+    $db = getDB();
+
+    $roomStmt = $db->prepare('SELECT id, maker_user_id FROM saving_rooms WHERE id = ?');
+    $roomStmt->execute([$roomId]);
+    $room = $roomStmt->fetch();
+    if (!$room) jsonResponse(['error' => 'Room not found'], 404);
+
+    $makerId = (int)($room['maker_user_id'] ?? 0);
+
+    $myStmt = $db->prepare('SELECT status FROM saving_room_participants WHERE room_id = ? AND user_id = ?');
+    $myStmt->execute([$roomId, $userId]);
+    $myStatus = (string)($myStmt->fetchColumn() ?: '');
+
+    $isAllowed = isAdmin($userId) || ($makerId === $userId) || in_array($myStatus, ['approved','active','completed'], true);
+    if (!$isAllowed) jsonResponse(['error' => 'Not an eligible participant'], 403);
+
+    $uNameExpr = sqlRoomUserDisplayNameExpr('u', 'id');
+
+    $where = "p.room_id = ?";
+    $params = [$roomId];
+    if ($beforeId > 0) {
+        $where .= " AND p.id < ?";
+        $params[] = $beforeId;
+    }
+
+    $sql = "SELECT
+                p.id AS proof_id,
+                p.user_id,
+                {$uNameExpr} AS display_name,
+                p.original_filename,
+                p.content_type,
+                p.size_bytes,
+                p.reference_snapshot,
+                p.created_at AS proof_created_at,
+
+                c.id AS contribution_id,
+                c.amount,
+                c.status,
+                c.reference,
+                c.confirmed_at,
+
+                cy.id AS cycle_id,
+                cy.cycle_index,
+                cy.due_at
+            FROM saving_room_contribution_proofs p
+            JOIN saving_room_contributions c ON c.id = p.contribution_id
+            JOIN saving_room_contribution_cycles cy ON cy.id = c.cycle_id
+            JOIN users u ON u.id = p.user_id
+            WHERE {$where}
+            ORDER BY p.id DESC
+            LIMIT {$limit}";
+
+    $st = $db->prepare($sql);
+    $st->execute($params);
+
+    $rows = $st->fetchAll();
+    $nextBeforeId = null;
+    if ($rows) {
+        $last = end($rows);
+        $nextBeforeId = (int)($last['proof_id'] ?? 0);
+        if ($nextBeforeId <= 0) $nextBeforeId = null;
+    }
+
+    jsonResponse([
+        'success' => true,
+        'proofs' => $rows,
+        'next_before_id' => $nextBeforeId,
+    ]);
 }
 
 // ── CONTRIBUTION: CONFIRM (server-side acknowledgement)

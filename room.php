@@ -62,6 +62,7 @@ header("Referrer-Policy: no-referrer");
         <div class="page-sub" id="room-sub"><?php e('common.loading'); ?></div>
       </div>
       <div class="page-actions">
+        <a class="btn btn-ghost btn-sm" href="room_proofs.php?id=<?= htmlspecialchars($roomId, ENT_QUOTES, 'UTF-8') ?>"><?php e('room.nav.proofs'); ?></a>
         <a class="btn btn-ghost btn-sm" href="rooms.php"><?php e('nav.rooms'); ?></a>
       </div>
     </div>
@@ -168,6 +169,17 @@ header("Referrer-Policy: no-referrer");
 
         <div class="two-col" style="margin-top:12px;">
           <div>
+            <div class="k"><?php e('room.rotation.room_balance'); ?></div>
+            <div class="v" id="typeb-balance">—</div>
+          </div>
+          <div>
+            <div class="k"><?php e('room.rotation.required_amount'); ?></div>
+            <div class="v" id="typeb-required">—</div>
+          </div>
+        </div>
+
+        <div class="two-col" style="margin-top:12px;">
+          <div>
             <div class="k"><?php e('room.rotation.window'); ?></div>
             <div class="v" id="typeb-window">—</div>
           </div>
@@ -229,6 +241,7 @@ header("Referrer-Policy: no-referrer");
                   <th><?php e('room.rotation.history_th_turn'); ?></th>
                   <th><?php e('room.rotation.history_th_turn_user'); ?></th>
                   <th><?php e('room.rotation.history_th_code'); ?></th>
+                  <th><?php e('room.rotation.history_th_collected'); ?></th>
                   <th><?php e('room.rotation.history_th_withdrawal'); ?></th>
                 </tr>
               </thead>
@@ -1327,6 +1340,17 @@ function renderRoom(){
 
         document.getElementById('typeb-maker').textContent = makerVote;
 
+        // Room balance / required amount (updates as proofs are submitted and withdrawals are confirmed)
+        const balEl = document.getElementById('typeb-balance');
+        const reqEl = document.getElementById('typeb-required');
+        if(balEl || reqEl){
+          const hasBal = !(r.account_balance === null || typeof r.account_balance === 'undefined' || String(r.account_balance) === '');
+          const bal = hasBal ? String(r.account_balance) : '—';
+          const req = (r.required_withdrawal_amount != null && String(r.required_withdrawal_amount) !== '') ? String(r.required_withdrawal_amount) : '—';
+          if(balEl) balEl.textContent = bal;
+          if(reqEl) reqEl.textContent = req;
+        }
+
         const approveBtn = document.getElementById('typeb-vote-approve');
         const rejectBtn = document.getElementById('typeb-vote-reject');
 
@@ -1464,10 +1488,15 @@ function renderRoom(){
                 wdTxt = tr('room.rotation.withdrawal_unconfirmed', null, 'Unconfirmed');
               }
 
+              const collectedTxt = (x.collected_amount != null && String(x.collected_amount) !== '')
+                ? String(x.collected_amount)
+                : '—';
+
               trEl.innerHTML = `
                 <td>#${esc(String(x.rotation_index||''))}</td>
                 <td>${esc(String(x.turn_user_name||''))}${x.delegate_name ? ('<div class="small">' + esc(tr('room.rotation.delegate_short_fmt', {name: String(x.delegate_name)}, 'delegate: ' + String(x.delegate_name))) + '</div>') : ''}</td>
                 <td>${esc(codeTxt)}</td>
+                <td>${esc(collectedTxt)}</td>
                 <td>${esc(wdTxt)}</td>
               `;
               tbody.appendChild(trEl);
@@ -1530,6 +1559,10 @@ function renderRoom(){
       } else {
         document.getElementById('typeb-turn').textContent = '—';
         document.getElementById('typeb-consensus').textContent = '—';
+        const balEl = document.getElementById('typeb-balance');
+        const reqEl = document.getElementById('typeb-required');
+        if(balEl) balEl.textContent = '—';
+        if(reqEl) reqEl.textContent = '—';
         document.getElementById('typeb-window').textContent = '—';
         document.getElementById('typeb-maker').textContent = '—';
         document.getElementById('typeb-reveal-btn').style.display = 'none';

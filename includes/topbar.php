@@ -72,7 +72,7 @@ $topbarActive = function(string $href) use ($topbarCurPage): bool {
     }
 
     if ($base === 'rooms.php') {
-        return $topbarCurPage === 'rooms.php' || $topbarCurPage === 'room.php' || str_starts_with($topbarCurPage, 'rooms_');
+        return $topbarCurPage === 'rooms.php' || $topbarCurPage === 'room.php' || $topbarCurPage === 'room_proofs.php' || str_starts_with($topbarCurPage, 'rooms_');
     }
 
     return $base !== '' && $base === $topbarCurPage;
