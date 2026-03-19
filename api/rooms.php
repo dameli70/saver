@@ -4269,6 +4269,229 @@ if ($action === 'typeB_ack_dispute') {
     jsonResponse(['success' => true, 'ack_count' => $ackCount]);
 }
 
+// ── MY CONTRIBUTION PROOF TASKS (upcoming / overdue / missed)
+if ($action === 'my_proof_tasks') {
+    requireLogin();
+    requireVerifiedEmail();
+
+    if (!dbHasTable('saving_room_contribution_proofs')) {
+        jsonResponse(['error' => 'Contribution proofs are unavailable. Apply database migrations.'], 409);
+    }
+
+    $userId = (int)getCurrentUserId();
+
+    $filterRoomId = (string)($_GET['room_id'] ?? '');
+    if ($filterRoomId !== '' && strlen($filterRoomId) !== 36) {
+        jsonResponse(['error' => 'Invalid room_id'], 400);
+    }
+
+    $db = getDB();
+
+    // Upcoming + overdue (grace)
+    $params = [$userId];
+    $where = "p.user_id = ?
+              AND p.status = 'active'
+              AND r.room_state = 'active'
+              AND cy.status IN ('open','grace')
+              AND cy.due_at <= (NOW() + INTERVAL 21 DAY)";
+
+    if ($filterRoomId !== '') {
+        $where .= ' AND r.id = ?';
+        $params[] = $filterRoomId;
+    }
+
+    $sql = "SELECT
+                r.id AS room_id,
+                r.goal_text,
+                r.saving_type,
+                r.participation_amount,
+
+                cy.id AS cycle_id,
+                cy.cycle_index,
+                cy.due_at,
+                cy.grace_ends_at,
+                cy.status AS cycle_status,
+
+                c.status AS contribution_status,
+                c.confirmed_at
+            FROM saving_room_participants p
+            JOIN saving_rooms r ON r.id = p.room_id
+            JOIN saving_room_contribution_cycles cy ON cy.room_id = r.id
+            LEFT JOIN saving_room_contributions c
+                   ON c.cycle_id = cy.id
+                  AND c.user_id = p.user_id
+            WHERE {$where}
+            ORDER BY cy.due_at ASC
+            LIMIT 500";
+
+    $st = $db->prepare($sql);
+    $st->execute($params);
+    $rows = $st->fetchAll();
+
+    $upcoming = [];
+    $overdue = [];
+
+    $nowTs = time();
+
+    foreach ($rows as $r) {
+        $cst = (string)($r['contribution_status'] ?? '');
+        if (in_array($cst, ['paid','paid_in_grace'], true)) continue;
+
+        $dueTs = strtotime((string)($r['due_at'] ?? ''));
+        $graceTs = strtotime((string)($r['grace_ends_at'] ?? ''));
+
+        $out = [
+            'room_id' => (string)$r['room_id'],
+            'goal_text' => (string)$r['goal_text'],
+            'saving_type' => (string)$r['saving_type'],
+            'cycle_id' => (int)$r['cycle_id'],
+            'cycle_index' => (int)$r['cycle_index'],
+            'due_at' => (string)$r['due_at'],
+            'grace_ends_at' => (string)$r['grace_ends_at'],
+            'amount' => (string)$r['participation_amount'],
+            'contribution_status' => ($cst !== '' ? $cst : null),
+        ];
+
+        if ($dueTs && $dueTs > $nowTs) {
+            $upcoming[] = $out;
+        } else if ($graceTs && $graceTs > $nowTs) {
+            $overdue[] = $out;
+        }
+    }
+
+    // Missed (closed cycles)
+    $mParams = [$userId];
+    $mWhere = "c.user_id = ? AND c.status = 'missed'";
+    if ($filterRoomId !== '') {
+        $mWhere .= ' AND c.room_id = ?';
+        $mParams[] = $filterRoomId;
+    }
+
+    $mSql = "SELECT
+                r.id AS room_id,
+                r.goal_text,
+                r.saving_type,
+
+                cy.id AS cycle_id,
+                cy.cycle_index,
+                cy.due_at,
+                cy.grace_ends_at,
+                cy.status AS cycle_status,
+
+                c.amount,
+                c.status AS contribution_status,
+                c.confirmed_at
+            FROM saving_room_contributions c
+            JOIN saving_room_contribution_cycles cy ON cy.id = c.cycle_id
+            JOIN saving_rooms r ON r.id = c.room_id
+            WHERE {$mWhere}
+            ORDER BY cy.due_at DESC
+            LIMIT 200";
+
+    $mSt = $db->prepare($mSql);
+    $mSt->execute($mParams);
+    $mRows = $mSt->fetchAll();
+
+    $missed = [];
+    foreach ($mRows as $r) {
+        $missed[] = [
+            'room_id' => (string)$r['room_id'],
+            'goal_text' => (string)$r['goal_text'],
+            'saving_type' => (string)$r['saving_type'],
+            'cycle_id' => (int)$r['cycle_id'],
+            'cycle_index' => (int)$r['cycle_index'],
+            'due_at' => (string)$r['due_at'],
+            'grace_ends_at' => (string)$r['grace_ends_at'],
+            'amount' => (string)$r['amount'],
+            'contribution_status' => (string)$r['contribution_status'],
+        ];
+    }
+
+    jsonResponse([
+        'success' => true,
+        'upcoming' => $upcoming,
+        'overdue' => $overdue,
+        'missed' => $missed,
+    ]);
+}
+
+// ── MY CONTRIBUTION PROOFS (list)
+if ($action === 'my_proofs') {
+    requireLogin();
+    requireVerifiedEmail();
+
+    if (!dbHasTable('saving_room_contribution_proofs')) {
+        jsonResponse(['error' => 'Contribution proofs are unavailable. Apply database migrations.'], 409);
+    }
+
+    $userId = (int)getCurrentUserId();
+
+    $filterRoomId = (string)($_GET['room_id'] ?? '');
+    if ($filterRoomId !== '' && strlen($filterRoomId) !== 36) {
+        jsonResponse(['error' => 'Invalid room_id'], 400);
+    }
+
+    $beforeId = (int)($_GET['before_id'] ?? 0);
+    $limit = (int)($_GET['limit'] ?? 50);
+    $limit = max(1, min(200, $limit));
+
+    $db = getDB();
+
+    $where = 'p.user_id = ?';
+    $params = [$userId];
+
+    if ($filterRoomId !== '') {
+        $where .= ' AND p.room_id = ?';
+        $params[] = $filterRoomId;
+    }
+
+    if ($beforeId > 0) {
+        $where .= ' AND p.id < ?';
+        $params[] = $beforeId;
+    }
+
+    $sql = "SELECT
+                p.id AS proof_id,
+                p.room_id,
+                p.created_at AS proof_created_at,
+
+                r.goal_text,
+                r.saving_type,
+
+                c.id AS contribution_id,
+                c.amount,
+                c.status,
+                c.confirmed_at,
+
+                cy.id AS cycle_id,
+                cy.cycle_index,
+                cy.due_at
+            FROM saving_room_contribution_proofs p
+            JOIN saving_room_contributions c ON c.id = p.contribution_id
+            JOIN saving_room_contribution_cycles cy ON cy.id = c.cycle_id
+            JOIN saving_rooms r ON r.id = p.room_id
+            WHERE {$where}
+            ORDER BY p.id DESC
+            LIMIT {$limit}";
+
+    $st = $db->prepare($sql);
+    $st->execute($params);
+    $rows = $st->fetchAll();
+
+    $nextBeforeId = null;
+    if ($rows) {
+        $last = end($rows);
+        $nextBeforeId = (int)($last['proof_id'] ?? 0);
+        if ($nextBeforeId <= 0) $nextBeforeId = null;
+    }
+
+    jsonResponse([
+        'success' => true,
+        'proofs' => $rows,
+        'next_before_id' => $nextBeforeId,
+    ]);
+}
+
 // ── CONTRIBUTION PROOFS (list; participants can view all)
 if ($action === 'contribution_proofs') {
     requireLogin();

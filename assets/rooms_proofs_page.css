@@ -1,0 +1,10 @@
+.proofs-section{margin-top:14px;}
+
+.proofs-action{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:flex-end;}
+
+.proofs-room a{color:inherit;text-decoration:none;}
+.proofs-room a:hover{text-decoration:underline;}
+
+@media (max-width: 640px){
+  .proofs-action{justify-content:flex-start;}
+}

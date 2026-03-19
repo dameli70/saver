@@ -57,7 +57,9 @@ try {
     $roomId = (string)($row['room_id'] ?? '');
 
     $allowed = false;
-    if (isAdmin($userId)) {
+    if ((int)($row['user_id'] ?? 0) === $userId) {
+        $allowed = true;
+    } else if (isAdmin($userId)) {
         $allowed = true;
     } else {
         $makerStmt = $db->prepare('SELECT maker_user_id FROM saving_rooms WHERE id = ?');

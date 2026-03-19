@@ -119,6 +119,7 @@ return [
     'page.rooms' => 'Salles d’épargne',
     'page.room' => 'Salle',
     'page.room_proofs' => 'Preuves de la salle',
+    'page.rooms_proofs' => 'Mes preuves',
     'page.notifications' => 'Notifications',
     'page.backups' => 'Sauvegardes',
     'page.account' => 'Compte',
@@ -1062,7 +1063,7 @@ return [
     'room.feed.typeB_turn_voided' => 'Tour annulé (sans confirmation)',
 
     'room.contribution_title' => 'Contribution',
-    'room.contribution_sub' => 'Confirmez votre contribution pour le cycle actif.',
+    'room.contribution_sub' => 'Téléversez votre preuve pour le cycle actif depuis la page Mes preuves.',
     'room.contribution.cycle' => 'Cycle',
     'room.contribution.due' => 'Échéance',
     'room.contribution.amount' => 'Montant',
@@ -1070,6 +1071,8 @@ return [
     'room.contribution.reference_optional' => 'Référence (optionnel)',
     'room.contribution.reference_placeholder' => 'ex. id de transaction',
     'room.contribution.btn_confirm' => 'Confirmer la contribution',
+    'room.contribution.proofs_redirect_note' => 'La soumission des preuves a été déplacée vers la page Mes preuves pour alléger les salles et faciliter les téléversements.',
+    'room.contribution.open_proofs_btn' => 'Ouvrir Mes preuves',
 
     'room.unlock_type_a_title' => 'Déverrouillage (Type A)',
     'room.unlock_type_a_sub' => 'Exige 100 % d’approbation après la date de révélation. Une fois révélé, le code de déverrouillage est valide 72 heures.',
@@ -1412,9 +1415,49 @@ return [
 
     'rooms.my_rooms_title' => 'Mes salles',
     'rooms.my_rooms_sub' => 'Salles que vous avez créées ou rejointes — actives, en attente ou terminées.',
+    'rooms.proofs_nav' => 'Mes preuves',
     'rooms.discover_title' => 'Découvrir des salles',
     'rooms.create_title' => 'Créer une salle',
     'rooms.create_sub' => 'Définissez l’objectif, les règles et les dates. Une fois la salle démarrée, les règles sont figées.',
+
+    'rooms.proofs_title' => 'Mes preuves',
+    'rooms.proofs_sub' => 'Téléversez vos preuves de contribution et consultez tout ce que vous avez soumis dans vos salles.',
+
+    'rooms.proofs.todo_title' => 'Soumettre des preuves',
+    'rooms.proofs.todo_sub' => 'Les contributions à venir s’affichent ici. Téléversez une capture pour confirmer votre contribution et garder un solde de salle correct.',
+
+    'rooms.proofs.upcoming_title' => 'À venir',
+    'rooms.proofs.upcoming_empty' => 'Aucune preuve à venir.',
+    'rooms.proofs.overdue_title' => 'En retard (période de grâce)',
+    'rooms.proofs.overdue_empty' => 'Aucune preuve en retard.',
+
+    'rooms.proofs.uploads_title' => 'Vos téléversements',
+    'rooms.proofs.uploads_empty' => 'Aucun téléversement pour le moment.',
+
+    'rooms.proofs.missed_title' => 'Manquées',
+    'rooms.proofs.missed_sub' => 'Ces preuves n’ont pas été soumises avant la fin de la période de grâce.',
+    'rooms.proofs.missed_empty' => 'Aucune preuve manquée.',
+
+    'rooms.proofs.th_room' => 'Salle',
+    'rooms.proofs.th_turn' => 'Tour / cycle',
+    'rooms.proofs.th_due' => 'Échéance',
+    'rooms.proofs.th_amount' => 'Montant',
+    'rooms.proofs.th_status' => 'Statut',
+    'rooms.proofs.th_action' => 'Action',
+    'rooms.proofs.th_confirmed' => 'Confirmé',
+    'rooms.proofs.th_uploaded' => 'Téléversé',
+    'rooms.proofs.th_proof' => 'Preuve',
+
+    'rooms.proofs.upload_btn' => 'Téléverser',
+    'rooms.proofs.uploading' => 'Téléversement…',
+    'rooms.proofs.upload_ok' => 'Téléversé.',
+    'rooms.proofs.view' => 'Voir',
+    'rooms.proofs.open_room' => 'Ouvrir la salle',
+    'rooms.proofs.cycle_fmt' => 'Cycle n°{n}',
+    'rooms.proofs.turn_fmt' => 'Tour n°{n}',
+    'rooms.proofs.prompt_reference' => 'Référence / note optionnelle (laissez vide si aucune) :',
+    'rooms.proofs.file_required' => 'Sélectionnez une image de preuve.',
+    'rooms.proofs.file_too_large' => 'Fichier trop volumineux (max 5 Mo).',
 
     'rooms.field.purpose' => 'Catégorie',
     'rooms.field.goal' => 'Objectif',

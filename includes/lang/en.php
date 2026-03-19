@@ -119,6 +119,7 @@ return [
     'page.rooms' => 'Saving Rooms',
     'page.room' => 'Room',
     'page.room_proofs' => 'Room proofs',
+    'page.rooms_proofs' => 'My proofs',
     'page.notifications' => 'Notifications',
     'page.backups' => 'Backups',
     'page.account' => 'Account',
@@ -1269,7 +1270,7 @@ return [
     'room.feed.typeB_turn_voided' => 'Turn voided (no confirmation)',
 
     'room.contribution_title' => 'Contribution',
-    'room.contribution_sub' => 'Confirm your contribution for the active cycle.',
+    'room.contribution_sub' => 'Upload your proof for the active cycle from the My proofs page.',
     'room.contribution.cycle' => 'Cycle',
     'room.contribution.due' => 'Due',
     'room.contribution.amount' => 'Amount',
@@ -1277,6 +1278,8 @@ return [
     'room.contribution.reference_optional' => 'Reference (optional)',
     'room.contribution.reference_placeholder' => 'e.g. bank tx id',
     'room.contribution.btn_confirm' => 'Confirm contribution',
+    'room.contribution.proofs_redirect_note' => 'Proof submission has moved to the My proofs page to keep rooms lighter and make uploads easier.',
+    'room.contribution.open_proofs_btn' => 'Open My proofs',
 
     'room.unlock_type_a_title' => 'Unlock (Type A)',
     'room.unlock_type_a_sub' => 'Requires 100% approval after the reveal date. When revealed, the unlock code is valid for 72 hours.',
@@ -1441,9 +1444,49 @@ return [
 
     'rooms.my_rooms_title' => 'My rooms',
     'rooms.my_rooms_sub' => 'Rooms you created or joined — active, pending, or completed.',
+    'rooms.proofs_nav' => 'My proofs',
     'rooms.discover_title' => 'Discover rooms',
     'rooms.create_title' => 'Create a room',
     'rooms.create_sub' => 'Set the goal, the rules, and the dates. Once the room starts, the rules lock in.',
+
+    'rooms.proofs_title' => 'My proofs',
+    'rooms.proofs_sub' => 'Upload your contribution proofs and review everything you submitted across rooms.',
+
+    'rooms.proofs.todo_title' => 'Submit proofs',
+    'rooms.proofs.todo_sub' => 'Upcoming contributions show here. Upload a screenshot to confirm your contribution and keep your room balance accurate.',
+
+    'rooms.proofs.upcoming_title' => 'Upcoming',
+    'rooms.proofs.upcoming_empty' => 'No upcoming proofs.',
+    'rooms.proofs.overdue_title' => 'Overdue (grace period)',
+    'rooms.proofs.overdue_empty' => 'No overdue proofs.',
+
+    'rooms.proofs.uploads_title' => 'Your uploads',
+    'rooms.proofs.uploads_empty' => 'No uploads yet.',
+
+    'rooms.proofs.missed_title' => 'Missed',
+    'rooms.proofs.missed_sub' => 'These proofs were not submitted before the grace window ended.',
+    'rooms.proofs.missed_empty' => 'No missed proofs.',
+
+    'rooms.proofs.th_room' => 'Room',
+    'rooms.proofs.th_turn' => 'Turn / Cycle',
+    'rooms.proofs.th_due' => 'Due',
+    'rooms.proofs.th_amount' => 'Amount',
+    'rooms.proofs.th_status' => 'Status',
+    'rooms.proofs.th_action' => 'Action',
+    'rooms.proofs.th_confirmed' => 'Confirmed',
+    'rooms.proofs.th_uploaded' => 'Uploaded',
+    'rooms.proofs.th_proof' => 'Proof',
+
+    'rooms.proofs.upload_btn' => 'Upload',
+    'rooms.proofs.uploading' => 'Uploading…',
+    'rooms.proofs.upload_ok' => 'Uploaded.',
+    'rooms.proofs.view' => 'View',
+    'rooms.proofs.open_room' => 'Open room',
+    'rooms.proofs.cycle_fmt' => 'Cycle #{n}',
+    'rooms.proofs.turn_fmt' => 'Turn #{n}',
+    'rooms.proofs.prompt_reference' => 'Optional reference / note (leave blank if none):',
+    'rooms.proofs.file_required' => 'Select a proof image.',
+    'rooms.proofs.file_too_large' => 'File too large (max 5MB).',
 
     'rooms.field.purpose' => 'Purpose',
     'rooms.field.goal' => 'Goal',

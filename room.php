@@ -101,21 +101,14 @@ header("Referrer-Policy: no-referrer");
         <div style="margin-top:12px;display:grid;grid-template-columns:1fr;gap:10px;">
           <div>
             <div class="k"><?php e('room.contribution.amount'); ?></div>
-            <input id="contrib-amt" class="ls-input" style="margin-top:6px;" placeholder="<?= htmlspecialchars(t('room.contribution.amount_placeholder'), ENT_QUOTES, 'UTF-8') ?>">
-          </div>
-          <div>
-            <div class="k"><?php e('room.contribution.reference_optional'); ?></div>
-            <input id="contrib-ref" class="ls-input" style="margin-top:6px;" placeholder="<?= htmlspecialchars(t('room.contribution.reference_placeholder'), ENT_QUOTES, 'UTF-8') ?>">
-          </div>
-          <div>
-            <div class="k"><?php e('room.contribution.proof_label'); ?></div>
-            <input id="contrib-proof" type="file" accept="image/png,image/jpeg,image/webp" class="ls-input" style="margin-top:6px;">
-            <div class="small" style="margin-top:6px;"><?php e('room.contribution.proof_sub'); ?></div>
+            <div class="v" id="contrib-amount">—</div>
           </div>
         </div>
 
+        <div class="p" style="margin-top:10px;"><?php e('room.contribution.proofs_redirect_note'); ?></div>
+
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
-          <button class="btn btn-primary btn-sm" onclick="confirmContribution()"><?php e('room.contribution.btn_confirm'); ?></button>
+          <a class="btn btn-primary btn-sm" id="contrib-open-proofs" href="rooms_proofs.php?room_id=<?= htmlspecialchars($roomId, ENT_QUOTES, 'UTF-8') ?>"><?php e('room.contribution.open_proofs_btn'); ?></a>
         </div>
         <div id="contrib-msg" class="msg"></div>
       </div>
@@ -1255,9 +1248,9 @@ function renderRoom(){
     if(canContrib){
       document.getElementById('contrib-cycle').textContent = `#${r.active_cycle.cycle_index} (${r.active_cycle.status})`;
       document.getElementById('contrib-due').textContent = fmt(r.active_cycle.due_at);
-      const amt = document.getElementById('contrib-amt');
-      if(amt && !amt.value){
-        amt.value = String(r.participation_amount||'');
+      const amt = document.getElementById('contrib-amount');
+      if(amt){
+        amt.textContent = String(r.participation_amount||'—');
       }
     }
   }
@@ -2137,48 +2130,7 @@ async function revokeInvite(inviteId){
   }
 }
 
-async function confirmContribution(){
-  const r = roomCache;
-  if(!r || !r.active_cycle){
-    setMsg('contrib-msg', STR.no_active_cycle, false);
-    return;
-  }
 
-  const amount = (document.getElementById('contrib-amt')||{}).value || '';
-  const reference = (document.getElementById('contrib-ref')||{}).value || '';
-  const proofInput = document.getElementById('contrib-proof');
-  const file = proofInput && proofInput.files ? proofInput.files[0] : null;
-
-  if(!file){
-    setMsg('contrib-msg', STR.proof_required, false);
-    return;
-  }
-
-  try{
-    const fd = new FormData();
-    fd.append('csrf_token', CSRF);
-    fd.append('room_id', ROOM_ID);
-    fd.append('cycle_id', String(r.active_cycle.id));
-    fd.append('amount', String(amount||''));
-    fd.append('reference', String(reference||''));
-    fd.append('proof', file);
-
-    const resp = await fetch('/api/rooms.php?action=confirm_contribution_with_proof', {
-      method: 'POST',
-      credentials: 'same-origin',
-      body: fd,
-    });
-    const res = await resp.json().catch(()=>null);
-    if(!res || !res.success) throw new Error((res && res.error) ? res.error : STR.failed);
-
-    setMsg('contrib-msg', STR.contribution_confirmed, true);
-    if(proofInput) proofInput.value='';
-    await loadRoom();
-    await pollFeed();
-  }catch(e){
-    setMsg('contrib-msg', e.message||STR.failed, false);
-  }
-}
 
 async function unlockVote(vote){
   try{
