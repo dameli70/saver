@@ -1238,6 +1238,9 @@ return [
     'room.countdown.starts_in' => 'Démarre dans {delta}',
     'room.countdown.reveals_in' => 'Révélation dans {delta}',
     'room.countdown.next_turn_in' => 'Prochain tour dans {delta}',
+    'room.countdown.waiting_min' => 'En attente du minimum de participants',
+    'room.countdown.waiting_min_fmt' => 'En attente du minimum de participants ({n}/{min})',
+    'room.countdown.swap_closes_in' => 'Échange se termine dans {delta}',
     'room.countdown.eligible' => 'Révélation possible (serveur)',
 
     // Sauvegardes
@@ -1498,6 +1501,7 @@ return [
     'rooms.periodicity.biweekly' => 'Toutes les deux semaines',
     'rooms.periodicity.monthly' => 'Mensuelle',
     'rooms.field.start_date' => 'Date de début',
+    'rooms.field.created_at' => 'Créé le',
     'rooms.field.reveal_date' => 'Date de révélation',
     'rooms.privacy_mode' => 'Mode confidentialité (masquer les montants dans le fil d’activité)',
     'rooms.field.escrow_policy' => 'Politique d’escrow en cas de suppression d’une sanction',
@@ -1513,7 +1517,7 @@ return [
     'rooms.destination_account_hint' => 'Sélectionnez un compte de destination. Un compte de destination ne peut pas être réutilisé entre plusieurs salles.',
 
     'rooms.reveal_auto_hint' => 'Pour le Type B, la date de révélation est calculée automatiquement{date}.',
-
+    'rooms.typeb.schedule_hint' => 'Type B : lorsque la salle atteint le minimum de participants, une fenêtre d’échange de 24 heures démarre. Le premier tour s’ouvre une période après la fermeture de la fenêtre (exemple si le minimum est atteint maintenant : {example}).',
     'rooms.destination_account.summary.mobile_money' => 'Mobile money {masked}',
     'rooms.destination_account.summary.mobile_money_short' => 'Mobile money',
     'rooms.destination_account.summary.bank' => 'Banque {masked}',

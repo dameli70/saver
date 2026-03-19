@@ -736,6 +736,8 @@ function setBtnDisabled(btn, reason){
 function parseUtcDate(ts){
   if(window.LS && LS.parseUtc) return LS.parseUtc(ts);
 
+  if(ts instanceof Date) return ts;
+
   const s = String(ts||'').trim();
   if(!s) return null;
 
@@ -745,6 +747,23 @@ function parseUtcDate(ts){
   }
 
   return new Date(s);
+}
+
+function addPeriod(dt, periodicity){
+  if(!dt || isNaN(dt.getTime())) return null;
+  const d = new Date(dt.getTime());
+
+  if(periodicity === 'weekly'){
+    d.setUTCDate(d.getUTCDate() + 7);
+  } else if(periodicity === 'biweekly'){
+    d.setUTCDate(d.getUTCDate() + 14);
+  } else if(periodicity === 'monthly'){
+    d.setUTCMonth(d.getUTCMonth() + 1);
+  } else {
+    d.setUTCDate(d.getUTCDate() + 7);
+  }
+
+  return d;
 }
 
 function fmt(ts){
@@ -1083,9 +1102,18 @@ function roomCountdownText(r){
   if(!r) return '';
 
   const now = Date.now();
-  const start = parseUtcDate(r.start_at);
+
+  const swapClosesAt = (r && r.swap_window && r.swap_window.closes_at) ? parseUtcDate(r.swap_window.closes_at) : null;
+  const effStartAt = (String(r.room_state||'') === 'swap_window' && swapClosesAt && !isNaN(swapClosesAt.getTime()))
+    ? swapClosesAt
+    : parseUtcDate(r.start_at);
+
+  const start = effStartAt;
   const reveal = parseUtcDate(r.reveal_at);
-  const nextTurn = (r && r.active_cycle && r.active_cycle.due_at) ? parseUtcDate(r.active_cycle.due_at) : null;
+
+  const nextTurn = (r && r.active_cycle && r.active_cycle.due_at)
+    ? parseUtcDate(r.active_cycle.due_at)
+    : (String(r.room_state||'') === 'swap_window' ? swapClosesAt : null);
 
   function fmtDelta(ms){
     const s = Math.max(0, Math.floor(ms/1000));
@@ -1093,18 +1121,42 @@ function roomCountdownText(r){
     return String(s) + 's';
   }
 
-  if(start && !isNaN(start.getTime()) && now < start.getTime()){
-    const delta = fmtDelta(start.getTime() - now);
-    return tr('room.countdown.starts_in', {delta}, 'Starts in ' + delta);
+  if(String(r.room_state||'') === 'swap_window' && nextTurn && !isNaN(nextTurn.getTime()) && now < nextTurn.getTime()){
+    const delta = fmtDelta(nextTurn.getTime() - now);
+    return tr('room.countdown.swap_closes_in', {delta}, 'Swap closes in ' + delta);
   }
 
   if(String(r.saving_type||'') === 'B'){
+    const rs = String(r.room_state||'');
+
+    if(rs === 'lobby'){
+      const cnt = (r.approved_count != null) ? (r.approved_count|0) : 0;
+      const min = (r.min_participants != null) ? (r.min_participants|0) : 0;
+      if(min > 0){
+        return tr('room.countdown.waiting_min_fmt', {n: cnt, min}, `Waiting for minimum participants (${cnt}/${min})`);
+      }
+      return tr('room.countdown.waiting_min', null, 'Waiting for minimum participants');
+    }
+
+    if(rs === 'swap_window'){
+      return tr('room.state.swap_window', null, 'Swap window');
+    }
+
     if(nextTurn && !isNaN(nextTurn.getTime()) && now < nextTurn.getTime()){
       const delta = fmtDelta(nextTurn.getTime() - now);
       return tr('room.countdown.next_turn_in', {delta}, 'Next turn in ' + delta);
     }
 
-    return tr('room.state.active', null, 'Active');
+    if(rs === 'active'){
+      return tr('room.state.active', null, 'Active');
+    }
+
+    return '';
+  }
+
+  if(start && !isNaN(start.getTime()) && now < start.getTime()){
+    const delta = fmtDelta(start.getTime() - now);
+    return tr('room.countdown.starts_in', {delta}, 'Starts in ' + delta);
   }
 
   if(reveal && !isNaN(reveal.getTime()) && now < reveal.getTime()){
@@ -1177,8 +1229,12 @@ function renderRoom(){
   const r = roomCache;
   if(!r) return;
 
-  const startLocal = fmt(r.start_at);
-  const startUtc = fmtUtc(r.start_at);
+  const effStartAt = (String(r.room_state||'') === 'swap_window' && r.swap_window && r.swap_window.closes_at)
+    ? r.swap_window.closes_at
+    : r.start_at;
+
+  const startLocal = fmt(effStartAt);
+  const startUtc = fmtUtc(effStartAt);
   const revealLocal = fmt(r.reveal_at);
   const revealUtc = fmtUtc(r.reveal_at);
 
@@ -1231,9 +1287,17 @@ function renderRoom(){
 
   if(r.saving_type === 'B'){
     // Type B rooms do not use a user-facing "reveal date". Show next turn date + expected withdrawal instead.
-    const nextTurn = (r.room_state === 'active' && r.active_cycle && r.active_cycle.due_at)
-      ? fmt(r.active_cycle.due_at)
-      : (startLocal||'—');
+    const nextTurn = (function(){
+      if(r.room_state === 'active' && r.active_cycle && r.active_cycle.due_at) return fmt(r.active_cycle.due_at);
+
+      if(r.room_state === 'swap_window' && r.swap_window && r.swap_window.closes_at){
+        const closes = parseUtcDate(r.swap_window.closes_at);
+        const firstTurn = addPeriod(closes, String(r.periodicity||'weekly'));
+        return firstTurn ? fmt(firstTurn) : fmt(r.swap_window.closes_at);
+      }
+
+      return '—';
+    })();
 
     items.push({k: tr('room.ov.next_turn_date', null, 'Next turn date'), v: esc(nextTurn||'—')});
 
@@ -1423,9 +1487,9 @@ function renderRoom(){
         const eligibleCount = (votesMeta && typeof votesMeta.eligible === 'number') ? (votesMeta.eligible|0) : 0;
         const requiredCount = (votesMeta && typeof votesMeta.required === 'number') ? (votesMeta.required|0) : 0;
 
-        // Hide vote buttons entirely unless the room is active and this user can vote on this turn.
+        // Hide vote buttons entirely unless the room is active and the approval window is open.
         // Maker vote is required even when participant votes are not.
-        const showVoteButtons = (votingWindow && canVoteRole && (isMaker || (eligibleCount > 0 && requiredCount > 0)));
+        const showVoteButtons = (votingWindow && canVoteRole && isOpen && !isClosed && !voteCast && (isMaker || (eligibleCount > 0 && requiredCount > 0)));
 
         if(approveBtn) approveBtn.style.display = showVoteButtons ? 'inline-flex' : 'none';
         if(rejectBtn) rejectBtn.style.display = showVoteButtons ? 'inline-flex' : 'none';
@@ -1728,7 +1792,11 @@ function renderRoom(){
     }
 
     loadJoinRequests();
-    loadUnderfillDecision();
+    if(r.saving_type === 'A') loadUnderfillDecision();
+    else {
+      const underfillCard = document.getElementById('underfill-card');
+      if(underfillCard) underfillCard.style.display = 'none';
+    }
     renderEscrowSettlements(r.escrow_settlements||[]);
   } else {
     document.getElementById('maker-card').style.display='none';

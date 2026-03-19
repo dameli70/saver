@@ -142,11 +142,12 @@ header("Referrer-Policy: no-referrer");
           </select>
         </div>
 
-        <div class="field"><label><?php e('rooms.field.start_date'); ?></label>
+        <div class="field" id="cr-start-field"><label id="cr-start-label"><?php e('rooms.field.start_date'); ?></label>
           <input id="cr-start" type="datetime-local">
+          <div class="k" id="cr-typeb-schedule-hint" style="margin-top:6px;font-size:11px;display:none;"></div>
         </div>
 
-        <div class="field"><label><?php e('rooms.field.reveal_date'); ?></label>
+        <div class="field" id="cr-reveal-field"><label id="cr-reveal-label"><?php e('rooms.field.reveal_date'); ?></label>
           <input id="cr-reveal" type="datetime-local">
           <div class="k" id="cr-reveal-hint" style="margin-top:6px;font-size:11px;display:none;"></div>
         </div>

@@ -203,11 +203,29 @@ function getRoomSwapWindowInfo(array $room): array {
         $closes = (string)$room['swap_window_end_at'];
     }
 
+    $now = time();
+
+    // Legacy fallback: some installs used start_at as the swap close timestamp.
+    // Only apply this when start_at is in the future (i.e., it is acting as a scheduled start).
     if ($closes === null && !empty($room['start_at'])) {
-        $closes = (string)$room['start_at'];
+        $sTs = strtotime((string)$room['start_at']);
+        if ($sTs && $sTs > $now) {
+            $closes = (string)$room['start_at'];
+        }
     }
 
-    $now = time();
+    // Legacy clamp: some installs stored swap_window_ends_at after start_at.
+    // Only clamp when start_at is in the future (scheduled-start model).
+    if ($closes !== null && !empty($room['start_at'])) {
+        $sTs = strtotime((string)$room['start_at']);
+        if ($sTs && $sTs > $now) {
+            $cTs = strtotime($closes);
+            if ($cTs && $cTs > $sTs) {
+                $closes = (string)$room['start_at'];
+            }
+        }
+    }
+
     $openOk = true;
     $closeOk = true;
 
@@ -1891,19 +1909,22 @@ if ($action === 'create_room') {
     if (!is_numeric($amount) || (float)$amount <= 0) jsonResponse(['error' => 'Invalid participation_amount'], 400);
     if (!in_array($periodicity, ['weekly','biweekly','monthly'], true)) jsonResponse(['error' => 'Invalid periodicity'], 400);
 
-    if ($startAtRaw === '') jsonResponse(['error' => 'start_at required'], 400);
-    if ($savingType === 'A' && $revealAtRaw === '') jsonResponse(['error' => 'reveal_at required'], 400);
-
-    try {
-        $startDt = new DateTimeImmutable($startAtRaw, new DateTimeZone('UTC'));
-    } catch (Exception) {
-        jsonResponse(['error' => 'Invalid start date'], 400);
-    }
-
     $nowUtc = new DateTimeImmutable('now', new DateTimeZone('UTC'));
-    if ($startDt <= $nowUtc->modify('+5 minutes')) jsonResponse(['error' => 'Start date must be in the future'], 400);
 
+    // Type A rooms have a scheduled start date.
+    // Type B rooms (tontine) use the creation timestamp as start_at, and the real activation is driven by min participants + swap window.
     if ($savingType === 'A') {
+        if ($startAtRaw === '') jsonResponse(['error' => 'start_at required'], 400);
+        if ($revealAtRaw === '') jsonResponse(['error' => 'reveal_at required'], 400);
+
+        try {
+            $startDt = new DateTimeImmutable($startAtRaw, new DateTimeZone('UTC'));
+        } catch (Exception) {
+            jsonResponse(['error' => 'Invalid start date'], 400);
+        }
+
+        if ($startDt <= $nowUtc->modify('+5 minutes')) jsonResponse(['error' => 'Start date must be in the future'], 400);
+
         try {
             $revealDt = new DateTimeImmutable($revealAtRaw, new DateTimeZone('UTC'));
         } catch (Exception) {
@@ -1913,11 +1934,15 @@ if ($action === 'create_room') {
         if ($revealDt <= $startDt) jsonResponse(['error' => 'Reveal date must be after start date'], 400);
 
     } else {
+        // Ignore client-provided start_at for Type B; use server time.
+        $startDt = $nowUtc;
+
         $periodInterval = null;
         if ($periodicity === 'biweekly') $periodInterval = new DateInterval('P14D');
         else if ($periodicity === 'monthly') $periodInterval = new DateInterval('P1M');
         else $periodInterval = new DateInterval('P7D');
 
+        // Type B does not use reveal_at in the UI, but the column is NOT NULL.
         $revealDt = $startDt->add($periodInterval)->sub(new DateInterval('P1D'));
     }
 
@@ -2180,7 +2205,7 @@ if ($action === 'invite_user') {
     $token = bin2hex(random_bytes(16));
     $hash = hashInviteToken($token);
 
-    $expiresAt = (string)$room['start_at'];
+    $expiresAt = ((string)($room['saving_type'] ?? '') === 'B') ? null : (string)$room['start_at'];
 
     $db->beginTransaction();
 
@@ -2217,10 +2242,12 @@ if ($action === 'invite_user') {
         );
     } else {
         // Best-effort email delivery (user may not exist yet).
+        $expLine = ($expiresAt !== null && $expiresAt !== '') ? ("\nThis invite expires at: {$expiresAt}\n") : "\n";
+
         sendEmail(
             $email,
             APP_NAME . ' — Private room invite',
-            "You have been invited to a private saving room.\n\nOpen this link after you have created an account and verified your email:\n\n{$link}\n\nThis invite expires at: {$expiresAt}\n"
+            "You have been invited to a private saving room.\n\nOpen this link after you have created an account and verified your email:\n\n{$link}\n{$expLine}"
         );
     }
 
@@ -2416,7 +2443,8 @@ if ($action === 'unlisted_invite_create') {
     $token = bin2hex(random_bytes(16));
     $hash = hashInviteToken($token);
 
-    $expiresAt = (string)$room['start_at'];
+    $expiresAt = ((string)($room['saving_type'] ?? '') === 'B') ? null : (string)$room['start_at'];
+'];
 
     $db = getDB();
     $db->beginTransaction();
@@ -2659,6 +2687,9 @@ if ($action === 'underfill_decide') {
     $db = getDB();
 
     $room = roomExistsAndJoinable($roomId);
+    if ((string)($room['saving_type'] ?? '') !== 'A') {
+        jsonResponse(['error' => 'Underfilled-room decisions apply only to Type A rooms'], 400);
+    }
     if ($room['room_state'] !== 'lobby') jsonResponse(['error' => 'Room is not in lobby'], 403);
 
     $a = $db->prepare("SELECT status, decision_deadline_at FROM saving_room_underfill_alerts WHERE room_id = ?");
@@ -2814,15 +2845,16 @@ if ($action === 'underfill_decide') {
     jsonResponse(['success' => true]);
 }
 
-// ── TYPE A: UNLOCK VOTE (consensus)
+// ── TYPE A: UNLOCK VOTE (consensus) ───────────────────────
 if ($action === 'typeA_vote') {
     requireLogin();
     requireVerifiedEmail();
     requireCsrf();
+    requireStrongAuth();
 
     $userId = (int)getCurrentUserId();
     $roomId = (string)($body['room_id'] ?? '');
-    $vote = (string)($body['vote'] ?? '');
+    $vote   = (string)($body['vote'] ?? '');
 
     if ($roomId === '' || strlen($roomId) !== 36) jsonResponse(['error' => 'Invalid room_id'], 400);
     if (!in_array($vote, ['approve','reject'], true)) jsonResponse(['error' => 'Invalid vote'], 400);

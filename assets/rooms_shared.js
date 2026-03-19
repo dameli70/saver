@@ -742,7 +742,11 @@
     const max_participants = parseInt(((document.getElementById('cr-max') || {}).value)||'0',10);
     const participation_amount = String(((document.getElementById('cr-amt') || {}).value)||'').trim();
     const periodicity = (document.getElementById('cr-per') || {}).value;
-    const start_at = toServerDateTimeLocal(((document.getElementById('cr-start') || {}).value)||'');
+
+    // Type B rooms use server time as the "created at"/start marker; we still send a value for API compatibility.
+    const start_at = (saving_type === 'A')
+      ? toServerDateTimeLocal(((document.getElementById('cr-start') || {}).value)||'')
+      : (new Date()).toISOString();
 
     const reveal_at = (saving_type === 'A')
       ? toServerDateTimeLocal(((document.getElementById('cr-reveal') || {}).value)||'')
@@ -760,7 +764,7 @@
       setMsg('cr-msg', STR.err_goal_required, false);
       return;
     }
-    if(!start_at){
+    if(saving_type === 'A' && !start_at){
       setMsg('cr-msg', STR.err_start_required, false);
       return;
     }
@@ -958,28 +962,19 @@
     return d.getFullYear() + '-' + pad2(d.getMonth()+1) + '-' + pad2(d.getDate()) + 'T' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
   }
 
-  function computeTypeBRevealDate(startLocalValue, periodicity){
-    const s = String(startLocalValue||'').trim();
-    const m = s.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/);
-    if(!m) return null;
+  function computeTypeBExampleFirstTurnDate(now, periodicity){
+    const d = new Date(now.getTime());
 
-    const y = parseInt(m[1], 10);
-    const mo = parseInt(m[2], 10) - 1;
-    const d0 = parseInt(m[3], 10);
-    const h = parseInt(m[4], 10);
-    const mi = parseInt(m[5], 10);
-    const sec = parseInt(m[6] || '0', 10);
+    // Swap window is mandatory and lasts at least 24 hours.
+    d.setHours(d.getHours() + 24);
 
-    const d = new Date(y, mo, d0, h, mi, sec, 0);
-    if(isNaN(d.getTime())) return null;
-
+    // First turn opens one full period after swap closes.
     if(periodicity === 'biweekly'){
-      d.setDate(d.getDate() + 13);
+      d.setDate(d.getDate() + 14);
     }else if(periodicity === 'monthly'){
       d.setMonth(d.getMonth() + 1);
-      d.setDate(d.getDate() - 1);
     }else{
-      d.setDate(d.getDate() + 6);
+      d.setDate(d.getDate() + 7);
     }
 
     return d;
@@ -989,33 +984,66 @@
     const typeSel = document.getElementById('cr-type');
     const perSel = document.getElementById('cr-per');
     const startEl = document.getElementById('cr-start');
+    const startLabelEl = document.getElementById('cr-start-label');
+    const startFieldEl = document.getElementById('cr-start-field');
     const revealEl = document.getElementById('cr-reveal');
+    const revealFieldEl = document.getElementById('cr-reveal-field');
     const hintEl = document.getElementById('cr-reveal-hint');
-    if(!typeSel || !perSel || !startEl || !revealEl) return;
+    const scheduleHintEl = document.getElementById('cr-typeb-schedule-hint');
+    if(!typeSel || !perSel || !startEl) return;
 
     const t = String(typeSel.value||'');
 
-    if(t === 'B'){
-      revealEl.readOnly = true;
-      revealEl.disabled = true;
+    if(startLabelEl && !startLabelEl.dataset.origText){
+      startLabelEl.dataset.origText = String(startLabelEl.textContent||'');
+    }
 
-      const dt = computeTypeBRevealDate(String(startEl.value||''), String(perSel.value||''));
-      if(dt){
-        revealEl.value = toDatetimeLocalValue(dt);
+    if(t === 'B'){
+      // Type B starts "now" conceptually; the real activation happens after min participants is reached
+      // and after the mandatory 24h swap window.
+      if(startLabelEl){
+        startLabelEl.textContent = tr('rooms.field.created_at', 'Created at');
       }
 
-      if(hintEl){
-        hintEl.style.display = 'block';
-        const dateTxt = dt ? dt.toLocaleString() : '';
-        const dateSuffix = dateTxt ? (' (' + dateTxt + ')') : '';
-        hintEl.textContent = tf('rooms.reveal_auto_hint', {date: dateSuffix}, dateTxt ? ('Type B reveal date is calculated automatically (' + dateTxt + ').') : 'Type B reveal date is calculated automatically.' );
+      const now = new Date();
+      startEl.value = toDatetimeLocalValue(now);
+      startEl.readOnly = true;
+      startEl.disabled = true;
+
+      if(revealFieldEl) revealFieldEl.style.display = 'none';
+      if(hintEl) hintEl.style.display = 'none';
+
+      if(scheduleHintEl){
+        const ex = computeTypeBExampleFirstTurnDate(now, String(perSel.value||''));
+        const exTxt = ex ? ex.toLocaleString() : '';
+        scheduleHintEl.style.display = 'block';
+        scheduleHintEl.textContent = tf(
+          'rooms.typeb.schedule_hint',
+          {example: exTxt},
+          exTxt
+            ? ('Type B flow: when the room reaches the minimum participants, a 24-hour swap window starts. The first turn opens one period after the swap closes (example if minimum is reached now: ' + exTxt + ').')
+            : 'Type B flow: when the room reaches the minimum participants, a 24-hour swap window starts. The first turn opens one period after the swap closes.'
+        );
       }
 
     }else{
-      const wasAuto = !!revealEl.disabled;
-      revealEl.readOnly = false;
-      revealEl.disabled = false;
-      if(wasAuto) revealEl.value = '';
+      if(startLabelEl && startLabelEl.dataset.origText){
+        startLabelEl.textContent = startLabelEl.dataset.origText;
+      }
+
+      startEl.readOnly = false;
+      startEl.disabled = false;
+
+      if(revealFieldEl) revealFieldEl.style.display = '';
+
+      if(scheduleHintEl) scheduleHintEl.style.display = 'none';
+
+      if(revealEl){
+        const wasAuto = !!revealEl.disabled;
+        revealEl.readOnly = false;
+        revealEl.disabled = false;
+        if(wasAuto) revealEl.value = '';
+      }
       if(hintEl) hintEl.style.display = 'none';
     }
   }
