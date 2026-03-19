@@ -72,6 +72,12 @@ header("Referrer-Policy: no-referrer");
       <div class="card-title"><?php e('room.overview_title'); ?></div>
       <div id="room-overview" class="room-ov"><?php e('common.loading'); ?></div>
 
+      <div id="timeline-wrap" style="margin-top:12px;display:none;">
+        <div class="hr"></div>
+        <div class="card-title" style="margin-bottom:10px;"><?php e('room.timeline_title'); ?></div>
+        <div id="room-timeline" class="room-timeline"></div>
+      </div>
+
       <div id="next-wrap" style="margin-top:12px;display:none;">
         <div class="hr"></div>
         <div class="card-title" style="margin-bottom:10px;"><?php e('room.next_title'); ?></div>
@@ -1104,6 +1110,7 @@ let roomCache = null;
 let lastEventId = 0;
 let unlockClearTimer = null;
 let roomTicker = null;
+let timelineStage = '';
 
 function roomCountdownText(r){
   if(!r) return '';
@@ -1174,11 +1181,219 @@ function roomCountdownText(r){
   return tr('room.countdown.eligible', null, 'Reveal eligible (server-enforced)');
 }
 
+function currentTimelineStage(r){
+  if(!r) return '';
+
+  const t = String(r.saving_type||'');
+  const rs = String(r.room_state||'');
+
+  if(rs === 'closed' || rs === 'cancelled') return 'done';
+  if(rs === 'swap_window') return 'swap';
+  if(rs === 'lobby') return 'lobby';
+
+  if(t === 'A'){
+    const ev = (r.unlock && r.unlock.event) ? r.unlock.event : null;
+    if(ev && String(ev.status||'') === 'revealed') return 'unlock';
+
+    const reveal = parseUtcDate(r.reveal_at);
+    if(reveal && !isNaN(reveal.getTime()) && Date.now() >= reveal.getTime()) return 'unlock_vote';
+
+    if(rs === 'active') return 'saving';
+    return 'lobby';
+  }
+
+  if(t === 'B'){
+    if(rs === 'active'){
+      const cur = (r.rotation && r.rotation.current) ? r.rotation.current : null;
+      const st = cur ? String(cur.status||'') : '';
+      if(st === 'pending_votes') return 'turn_vote';
+      if(st === 'revealed') return 'turn_withdraw';
+      if(st === 'blocked_dispute' || st === 'blocked_debt') return 'blocked';
+      return 'saving';
+    }
+    return rs;
+  }
+
+  return rs;
+}
+
+function timelineActiveStepId(r){
+  const st = currentTimelineStage(r);
+  if(st === 'swap') return 'swap';
+  if(st === 'saving') return 'saving';
+  if(st === 'unlock_vote' || st === 'unlock') return 'unlock';
+  if(st === 'turn_vote' || st === 'turn_withdraw' || st === 'blocked') return 'turn';
+  if(st === 'done') return 'done';
+  return 'lobby';
+}
+
+function buildTimelineSteps(r){
+  const steps = [];
+
+  const t = String(r.saving_type||'');
+  const rs = String(r.room_state||'');
+
+  const hasSwap = !!(r.swap_window && r.swap_window.closes_at);
+  const swapCloses = hasSwap ? String(r.swap_window.closes_at) : '';
+
+  const effStartAt = (t === 'B' && swapCloses) ? swapCloses
+    : ((rs === 'swap_window' && swapCloses) ? swapCloses : String(r.start_at||''));
+
+  const activeDue = (r.active_cycle && r.active_cycle.due_at) ? String(r.active_cycle.due_at) : '';
+
+  const lobbyMetaKey = (t === 'B' && rs === 'lobby' && !swapCloses)
+    ? 'room.timeline.created_fmt'
+    : 'room.timeline.starts_fmt';
+
+  const lobbyMetaFallback = (t === 'B' && rs === 'lobby' && !swapCloses)
+    ? `Created ${fmt(effStartAt)}`
+    : `Starts ${fmt(effStartAt)}`;
+
+  steps.push({
+    id:'lobby',
+    label: tr('room.timeline.lobby', null, 'Lobby'),
+    meta: effStartAt ? tr(lobbyMetaKey, {ts: fmt(effStartAt)}, lobbyMetaFallback) : '',
+    scroll: 'room-overview',
+  });
+
+  if(hasSwap){
+    steps.push({
+      id:'swap',
+      label: tr('room.timeline.swap', null, 'Swap'),
+      meta: tr('room.timeline.closes_fmt', {ts: fmt(swapCloses)}, `Closes ${fmt(swapCloses)}`),
+      scroll: 'swap-block',
+    });
+  }
+
+  steps.push({
+    id:'saving',
+    label: tr('room.timeline.saving', null, 'Saving'),
+    meta: activeDue ? tr('room.timeline.due_fmt', {ts: fmt(activeDue)}, `Due ${fmt(activeDue)}`) : (effStartAt ? fmt(effStartAt) : ''),
+    scroll: 'contrib-block',
+  });
+
+  if(t === 'A'){
+    const revealAt = String(r.reveal_at||'');
+
+    let unlockMeta = '';
+    const ev = (r.unlock && r.unlock.event) ? r.unlock.event : null;
+    if(ev && String(ev.status||'') === 'revealed' && ev.expires_at){
+      unlockMeta = tr('room.timeline.expires_fmt', {ts: fmt(ev.expires_at)}, `Expires ${fmt(ev.expires_at)}`);
+    } else if(revealAt){
+      unlockMeta = tr('room.timeline.reveals_fmt', {ts: fmt(revealAt)}, `Reveals ${fmt(revealAt)}`);
+    }
+
+    steps.push({
+      id:'unlock',
+      label: tr('room.timeline.unlock', null, 'Unlock'),
+      meta: unlockMeta,
+      scroll: 'unlock-block',
+    });
+
+  } else if(t === 'B'){
+    const cur = (r.rotation && r.rotation.current) ? r.rotation.current : null;
+    const n = cur && cur.rotation_index ? String(cur.rotation_index) : '';
+
+    let meta = '';
+    if(cur){
+      const st = String(cur.status||'');
+      if(st === 'pending_votes' && cur.approve_due_at){
+        meta = tr('room.timeline.vote_due_fmt', {ts: fmt(cur.approve_due_at)}, `Vote due ${fmt(cur.approve_due_at)}`);
+      } else if(st === 'revealed' && cur.expires_at){
+        meta = tr('room.timeline.expires_fmt', {ts: fmt(cur.expires_at)}, `Expires ${fmt(cur.expires_at)}`);
+      } else if((st === 'blocked_dispute' || st === 'blocked_debt') && cur.dispute_window_ends_at){
+        meta = tr('room.timeline.ends_fmt', {ts: fmt(cur.dispute_window_ends_at)}, `Ends ${fmt(cur.dispute_window_ends_at)}`);
+      }
+    }
+
+    steps.push({
+      id:'turn',
+      label: n ? tr('room.timeline.turn_fmt', {n}, `Turn #${n}`) : tr('room.timeline.turn', null, 'Turn'),
+      meta,
+      scroll: 'typeb-block',
+    });
+  }
+
+  steps.push({
+    id:'done',
+    label: tr('room.timeline.done', null, 'Done'),
+    meta: (rs === 'cancelled') ? tr('room.state.cancelled', null, 'Cancelled') : ((rs === 'closed') ? tr('room.state.closed', null, 'Closed') : ''),
+    scroll: '',
+  });
+
+  return steps;
+}
+
+function renderRoomTimeline(r){
+  const wrap = document.getElementById('timeline-wrap');
+  const el = document.getElementById('room-timeline');
+  if(!wrap || !el || !r) return;
+
+  wrap.style.display = 'block';
+
+  const steps = buildTimelineSteps(r);
+  const activeId = timelineActiveStepId(r);
+  const activeIdx = Math.max(0, steps.findIndex(s => s.id === activeId));
+
+  el.innerHTML = '';
+
+  const head = document.createElement('div');
+  head.className = 'room-tl-head';
+
+  const cd = document.createElement('div');
+  cd.id = 'room-tl-countdown';
+  cd.className = 'room-tl-countdown';
+  cd.textContent = roomCountdownText(r);
+
+  const left = document.createElement('div');
+  left.className = 'k';
+  left.textContent = tr('room.timeline.next_deadline', null, 'Next deadline');
+
+  head.appendChild(left);
+  head.appendChild(cd);
+  el.appendChild(head);
+
+  const stepsWrap = document.createElement('div');
+  stepsWrap.className = 'room-tl-steps';
+
+  steps.forEach((s, idx) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'room-tl-step ' + (idx < activeIdx ? 'is-done' : (idx === activeIdx ? 'is-current' : 'is-upcoming'));
+    b.dataset.scroll = s.scroll ? String(s.scroll) : '';
+
+    b.innerHTML = '<span class="tl-dot"></span>'
+      + '<div class="tl-title">' + esc(s.label) + '</div>'
+      + (s.meta ? ('<div class="tl-meta">' + esc(s.meta) + '</div>') : '');
+
+    b.addEventListener('click', () => {
+      const target = String(b.dataset.scroll||'').trim();
+      if(target) scrollToBlock(target);
+    });
+
+    stepsWrap.appendChild(b);
+  });
+
+  el.appendChild(stepsWrap);
+}
+
 function updateRoomCountdown(){
   const r = roomCache;
+  if(!r) return;
+
+  const txt = roomCountdownText(r);
+
   const el = document.getElementById('room-countdown');
-  if(!el || !r) return;
-  el.textContent = roomCountdownText(r);
+  if(el) el.textContent = txt;
+
+  const tl = document.getElementById('room-tl-countdown');
+  if(tl) tl.textContent = txt;
+
+  const st = currentTimelineStage(r);
+  if(st && st !== timelineStage){
+    timelineStage = st;
+    renderRoomTimeline(r);
+  }
 }
 
 function startRoomCountdown(){
@@ -1529,9 +1744,11 @@ function renderRoom(){
   const r = roomCache;
   if(!r) return;
 
-  const effStartAt = (String(r.room_state||'') === 'swap_window' && r.swap_window && r.swap_window.closes_at)
-    ? r.swap_window.closes_at
-    : r.start_at;
+  const swapClosesAt = (r.swap_window && r.swap_window.closes_at) ? String(r.swap_window.closes_at) : '';
+
+  const effStartAt = (String(r.saving_type||'') === 'B' && swapClosesAt)
+    ? swapClosesAt
+    : ((String(r.room_state||'') === 'swap_window' && swapClosesAt) ? swapClosesAt : r.start_at);
 
   const startLocal = fmt(effStartAt);
   const startUtc = fmtUtc(effStartAt);
@@ -1543,7 +1760,11 @@ function renderRoom(){
   document.getElementById('room-title').textContent = r.goal_text || tr('page.room', null, 'Room');
 
   const periodicityLabel = prettyPeriodicity(r.periodicity) || String(r.periodicity||'');
-  document.getElementById('room-sub').innerHTML = tr('room.ov.subtitle_html', {
+  const subtitleKey = (String(r.saving_type||'') === 'B' && String(r.room_state||'') === 'lobby' && !swapClosesAt)
+    ? 'room.ov.subtitle_created_html'
+    : 'room.ov.subtitle_html';
+
+  document.getElementById('room-sub').innerHTML = tr(subtitleKey, {
     type: esc(r.saving_type),
     level: esc(r.required_trust_level),
     periodicity: esc(periodicityLabel),
@@ -1638,6 +1859,9 @@ function renderRoom(){
       <div class="v" id="room-countdown"></div>
     </div>
   `;
+
+  timelineStage = currentTimelineStage(r);
+  renderRoomTimeline(r);
 
   renderNextPanel(r);
   renderAdminPanel(r);
