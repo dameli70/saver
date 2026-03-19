@@ -736,6 +736,8 @@ function setBtnDisabled(btn, reason){
 function parseUtcDate(ts){
   if(window.LS && LS.parseUtc) return LS.parseUtc(ts);
 
+  if(ts instanceof Date) return ts;
+
   const s = String(ts||'').trim();
   if(!s) return null;
 
@@ -745,6 +747,23 @@ function parseUtcDate(ts){
   }
 
   return new Date(s);
+}
+
+function addPeriod(dt, periodicity){
+  if(!dt || isNaN(dt.getTime())) return null;
+  const d = new Date(dt.getTime());
+
+  if(periodicity === 'weekly'){
+    d.setUTCDate(d.getUTCDate() + 7);
+  } else if(periodicity === 'biweekly'){
+    d.setUTCDate(d.getUTCDate() + 14);
+  } else if(periodicity === 'monthly'){
+    d.setUTCMonth(d.getUTCMonth() + 1);
+  } else {
+    d.setUTCDate(d.getUTCDate() + 7);
+  }
+
+  return d;
 }
 
 function fmt(ts){
@@ -1107,11 +1126,6 @@ function roomCountdownText(r){
     return tr('room.countdown.swap_closes_in', {delta}, 'Swap closes in ' + delta);
   }
 
-  if(start && !isNaN(start.getTime()) && now < start.getTime()){
-    const delta = fmtDelta(start.getTime() - now);
-    return tr('room.countdown.starts_in', {delta}, 'Starts in ' + delta);
-  }
-
   if(String(r.saving_type||'') === 'B'){
     const rs = String(r.room_state||'');
 
@@ -1138,6 +1152,11 @@ function roomCountdownText(r){
     }
 
     return '';
+  }
+
+  if(start && !isNaN(start.getTime()) && now < start.getTime()){
+    const delta = fmtDelta(start.getTime() - now);
+    return tr('room.countdown.starts_in', {delta}, 'Starts in ' + delta);
   }
 
   if(reveal && !isNaN(reveal.getTime()) && now < reveal.getTime()){
@@ -1215,6 +1234,7 @@ function renderRoom(){
     : r.start_at;
 
   const startLocal = fmt(effStartAt);
+  const startUtc = fmtUtc(effStartAt);
   const revealLocal = fmt(r.reveal_at);
   const revealUtc = fmtUtc(r.reveal_at);
 
@@ -1267,9 +1287,17 @@ function renderRoom(){
 
   if(r.saving_type === 'B'){
     // Type B rooms do not use a user-facing "reveal date". Show next turn date + expected withdrawal instead.
-    const nextTurn = (r.room_state === 'active' && r.active_cycle && r.active_cycle.due_at)
-      ? fmt(r.active_cycle.due_at)
-      : ((r.room_state === 'swap_window' && r.swap_window && r.swap_window.closes_at) ? fmt(r.swap_window.closes_at) : '—');
+    const nextTurn = (function(){
+      if(r.room_state === 'active' && r.active_cycle && r.active_cycle.due_at) return fmt(r.active_cycle.due_at);
+
+      if(r.room_state === 'swap_window' && r.swap_window && r.swap_window.closes_at){
+        const closes = parseUtcDate(r.swap_window.closes_at);
+        const firstTurn = addPeriod(closes, String(r.periodicity||'weekly'));
+        return firstTurn ? fmt(firstTurn) : fmt(r.swap_window.closes_at);
+      }
+
+      return '—';
+    })();
 
     items.push({k: tr('room.ov.next_turn_date', null, 'Next turn date'), v: esc(nextTurn||'—')});
 

@@ -50,6 +50,13 @@ function fmtDt(?DateTimeImmutable $d): string {
     return $d->format('Y-m-d H:i:s') . 'Z';
 }
 
+function periodInterval(string $periodicity): DateInterval {
+    if ($periodicity === 'weekly') return new DateInterval('P7D');
+    if ($periodicity === 'biweekly') return new DateInterval('P14D');
+    if ($periodicity === 'monthly') return new DateInterval('P1M');
+    return new DateInterval('P7D');
+}
+
 function roomSwapClose(array $room): ?DateTimeImmutable {
     foreach (['swap_window_closes_at','swap_window_ends_at','swap_window_end_at'] as $c) {
         if (!empty($room[$c])) {
@@ -122,6 +129,7 @@ foreach ($rooms as $r) {
         }
 
         // Also flag if the first due is before the configured start.
+        $due1 = null;
         foreach ($rows as $cy) {
             if ((int)$cy['cycle_index'] !== 1) continue;
             $due1 = dt((string)($cy['due_at'] ?? ''));
@@ -130,6 +138,21 @@ foreach ($rooms as $r) {
                 fwrite(STDOUT, "[cycle1_due_before_start] room={$roomId} start=" . fmtDt($startAt) . " cycle1_due=" . fmtDt($due1) . "\n");
             }
             break;
+        }
+
+        // Type B: when a swap window exists, the first due should be swap_close + periodicity.
+        if ($type === 'B' && $swapClose && $due1) {
+            if ($due1 < $swapClose) {
+                $issues++;
+                fwrite(STDOUT, "[cycle1_due_before_swap_close] room={$roomId} swap_closes=" . fmtDt($swapClose) . " cycle1_due=" . fmtDt($due1) . "\n");
+            } else {
+                $period = (string)($r['periodicity'] ?? 'weekly');
+                $expected = $swapClose->add(periodInterval($period));
+                if ($due1 < $expected) {
+                    $issues++;
+                    fwrite(STDOUT, "[cycle1_due_before_swap_plus_period] room={$roomId} periodicity={$period} swap_closes=" . fmtDt($swapClose) . " expected_due=" . fmtDt($expected) . " cycle1_due=" . fmtDt($due1) . "\n");
+                }
+            }
         }
     }
 
