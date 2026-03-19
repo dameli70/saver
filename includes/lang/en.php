@@ -1529,6 +1529,21 @@ return [
     'rooms.my_rooms_sub' => 'Rooms you created or joined — active, pending, or completed.',
     'rooms.proofs_nav' => 'My proofs',
     'rooms.discover_title' => 'Discover rooms',
+
+    'rooms.filters.title' => 'Filters',
+    'rooms.filters.search' => 'Search',
+    'rooms.filters.search_placeholder' => 'Search goals…',
+    'rooms.filters.saving_type' => 'Type',
+    'rooms.filters.periodicity' => 'Period',
+    'rooms.filters.any' => 'Any',
+    'rooms.filters.min_amount' => 'Min amount',
+    'rooms.filters.max_amount' => 'Max amount',
+    'rooms.filters.start_after' => 'Starts after',
+    'rooms.filters.start_before' => 'Starts before',
+    'rooms.filters.only_open' => 'Joinable only',
+    'rooms.filters.only_spots' => 'Spots available',
+    'rooms.filters.clear' => 'Clear',
+
     'rooms.create_title' => 'Create a room',
     'rooms.create_sub' => 'Set the goal, the rules, and the dates. Once the room starts, the rules lock in.',
 

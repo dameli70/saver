@@ -272,6 +272,126 @@
   let myTrustLevel = null;
   let myRestrictedUntil = '';
 
+  const filters = {
+    q: '',
+    saving_type: '',
+    periodicity: '',
+    min_amount: '',
+    max_amount: '',
+    start_after: '',
+    start_before: '',
+    only_open: false,
+    only_spots: false,
+  };
+
+  function readFiltersFromControls(){
+    const q = document.getElementById('rooms-q');
+    const type = document.getElementById('rooms-type');
+    const per = document.getElementById('rooms-per');
+    const min = document.getElementById('rooms-min');
+    const max = document.getElementById('rooms-max');
+    const sa = document.getElementById('rooms-start-after');
+    const sb = document.getElementById('rooms-start-before');
+    const onlyOpen = document.getElementById('rooms-only-open');
+    const onlySpots = document.getElementById('rooms-only-spots');
+
+    filters.q = q ? String(q.value||'').trim().slice(0, 120) : '';
+    filters.saving_type = type ? String(type.value||'').trim() : '';
+    filters.periodicity = per ? String(per.value||'').trim() : '';
+    filters.min_amount = min ? String(min.value||'').trim() : '';
+    filters.max_amount = max ? String(max.value||'').trim() : '';
+
+    if(filters.min_amount && filters.max_amount){
+      const a = parseFloat(filters.min_amount);
+      const b = parseFloat(filters.max_amount);
+      if(!isNaN(a) && !isNaN(b) && a > b){
+        const t = filters.min_amount;
+        filters.min_amount = filters.max_amount;
+        filters.max_amount = t;
+        if(min) min.value = filters.min_amount;
+        if(max) max.value = filters.max_amount;
+      }
+    }
+
+    filters.start_after = sa ? String(sa.value||'').trim() : '';
+    filters.start_before = sb ? String(sb.value||'').trim() : '';
+    filters.only_open = !!(onlyOpen && onlyOpen.checked);
+    filters.only_spots = !!(onlySpots && onlySpots.checked);
+  }
+
+  function applyFiltersToControls(){
+    const q = document.getElementById('rooms-q');
+    const type = document.getElementById('rooms-type');
+    const per = document.getElementById('rooms-per');
+    const min = document.getElementById('rooms-min');
+    const max = document.getElementById('rooms-max');
+    const sa = document.getElementById('rooms-start-after');
+    const sb = document.getElementById('rooms-start-before');
+    const onlyOpen = document.getElementById('rooms-only-open');
+    const onlySpots = document.getElementById('rooms-only-spots');
+
+    if(q) q.value = filters.q || '';
+    if(type) type.value = filters.saving_type || '';
+    if(per) per.value = filters.periodicity || '';
+    if(min) min.value = filters.min_amount || '';
+    if(max) max.value = filters.max_amount || '';
+    if(sa) sa.value = filters.start_after || '';
+    if(sb) sb.value = filters.start_before || '';
+    if(onlyOpen) onlyOpen.checked = !!filters.only_open;
+    if(onlySpots) onlySpots.checked = !!filters.only_spots;
+  }
+
+  function readFiltersFromUrl(){
+    try{
+      const qs = new URLSearchParams(window.location.search || '');
+      const cat = String(qs.get('cat')||qs.get('category')||'').trim();
+      const allowedCats = ['education','travel','business','emergency','community','other'];
+      if(cat === '' || allowedCats.includes(cat)) currentCategory = cat;
+
+      filters.q = String(qs.get('q')||qs.get('search')||'').trim().slice(0, 120);
+      filters.saving_type = String(qs.get('type')||qs.get('saving_type')||'').trim();
+      filters.periodicity = String(qs.get('per')||qs.get('periodicity')||'').trim();
+      filters.min_amount = String(qs.get('min')||qs.get('min_amount')||'').trim();
+      filters.max_amount = String(qs.get('max')||qs.get('max_amount')||'').trim();
+      filters.start_after = String(qs.get('after')||qs.get('start_after')||'').trim();
+      filters.start_before = String(qs.get('before')||qs.get('start_before')||'').trim();
+      filters.only_open = ((qs.get('open') === '1') || (qs.get('only_open') === '1'));
+      filters.only_spots = ((qs.get('spots') === '1') || (qs.get('only_spots') === '1'));
+    }catch(e){
+      // ignore
+    }
+  }
+
+  function writeFiltersToUrl(){
+    try{
+      const qs = new URLSearchParams(window.location.search || '');
+
+      function setOrDel(k, v){
+        const s = String(v||'');
+        if(s) qs.set(k, s); else qs.delete(k);
+      }
+
+      setOrDel('cat', currentCategory);
+      setOrDel('q', filters.q);
+      setOrDel('type', filters.saving_type);
+      setOrDel('per', filters.periodicity);
+      setOrDel('min', filters.min_amount);
+      setOrDel('max', filters.max_amount);
+      setOrDel('after', filters.start_after);
+      setOrDel('before', filters.start_before);
+
+      if(filters.only_open) qs.set('open','1'); else qs.delete('open');
+      if(filters.only_spots) qs.set('spots','1'); else qs.delete('spots');
+
+      const base = window.location.pathname || '';
+      const next = qs.toString();
+      const url = base + (next ? ('?' + next) : '');
+      window.history.replaceState({}, '', url);
+    }catch(e){
+      // ignore
+    }
+  }
+
   function renderCategories(){
     const row = document.getElementById('cat-row');
     if(!row) return;
@@ -719,9 +839,23 @@
     const msgEl = document.getElementById('rooms-msg');
     if(msgEl) msgEl.className = 'msg';
 
+    readFiltersFromControls();
+    writeFiltersToUrl();
+
     try{
       const qs = new URLSearchParams({action:'discover'});
       if(currentCategory) qs.set('category', currentCategory);
+
+      if(filters.q) qs.set('q', filters.q);
+      if(filters.saving_type) qs.set('saving_type', filters.saving_type);
+      if(filters.periodicity) qs.set('periodicity', filters.periodicity);
+      if(filters.min_amount) qs.set('min_amount', filters.min_amount);
+      if(filters.max_amount) qs.set('max_amount', filters.max_amount);
+      if(filters.start_after) qs.set('start_after', filters.start_after);
+      if(filters.start_before) qs.set('start_before', filters.start_before);
+      if(filters.only_open) qs.set('only_open', '1');
+      if(filters.only_spots) qs.set('only_spots', '1');
+
       const r = await get('/api/rooms.php?' + qs.toString());
       if(!r || !r.success) throw new Error((r && r.error) ? r.error : STR.failed);
 
@@ -876,7 +1010,61 @@
     }
   }
 
+  function debounce(fn, ms){
+    let t = null;
+    return function(){
+      const args = arguments;
+      if(t) clearTimeout(t);
+      t = setTimeout(() => fn.apply(null, args), ms || 0);
+    };
+  }
+
+  function initDiscoverFilters(){
+    readFiltersFromUrl();
+    applyFiltersToControls();
+
+    const q = document.getElementById('rooms-q');
+    const type = document.getElementById('rooms-type');
+    const per = document.getElementById('rooms-per');
+    const min = document.getElementById('rooms-min');
+    const max = document.getElementById('rooms-max');
+    const sa = document.getElementById('rooms-start-after');
+    const sb = document.getElementById('rooms-start-before');
+    const onlyOpen = document.getElementById('rooms-only-open');
+    const onlySpots = document.getElementById('rooms-only-spots');
+    const clear = document.getElementById('rooms-clear');
+
+    const refresh = debounce(() => loadRooms(), 250);
+
+    if(q) q.addEventListener('input', refresh);
+    if(type) type.addEventListener('change', () => loadRooms());
+    if(per) per.addEventListener('change', () => loadRooms());
+    if(min) min.addEventListener('input', refresh);
+    if(max) max.addEventListener('input', refresh);
+    if(sa) sa.addEventListener('change', () => loadRooms());
+    if(sb) sb.addEventListener('change', () => loadRooms());
+    if(onlyOpen) onlyOpen.addEventListener('change', () => loadRooms());
+    if(onlySpots) onlySpots.addEventListener('change', () => loadRooms());
+
+    if(clear){
+      clear.addEventListener('click', () => {
+        filters.q = '';
+        filters.saving_type = '';
+        filters.periodicity = '';
+        filters.min_amount = '';
+        filters.max_amount = '';
+        filters.start_after = '';
+        filters.start_before = '';
+        filters.only_open = false;
+        filters.only_spots = false;
+        applyFiltersToControls();
+        loadRooms();
+      });
+    }
+  }
+
   async function initDiscover(){
+    initDiscoverFilters();
     renderCategories();
     await loadMyRooms();
     await loadRooms();
@@ -885,6 +1073,8 @@
   async function initMyRooms(){
     await loadMyRooms();
   }
+
+  
 
   let createDestAccounts = [];
   let createDestInitDone = false;

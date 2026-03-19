@@ -513,6 +513,17 @@ if ($action === 'discover') {
         jsonResponse(['error' => 'Invalid category'], 400);
     }
 
+    $q = trim((string)($_GET['q'] ?? ''));
+    if (strlen($q) > 120) $q = substr($q, 0, 120);
+    $savingType = trim((string)($_GET['saving_type'] ?? ''));
+    $periodicity = trim((string)($_GET['periodicity'] ?? ''));
+    $minAmountRaw = trim((string)($_GET['min_amount'] ?? ''));
+    $maxAmountRaw = trim((string)($_GET['max_amount'] ?? ''));
+    $startAfterRaw = trim((string)($_GET['start_after'] ?? ''));
+    $startBeforeRaw = trim((string)($_GET['start_before'] ?? ''));
+    $onlyOpen = ((string)($_GET['only_open'] ?? '') === '1');
+    $onlySpots = ((string)($_GET['only_spots'] ?? '') === '1');
+
     $db = getDB();
 
     $sql = "SELECT r.id, r.purpose_category, r.goal_text, r.saving_type, r.required_trust_level,
@@ -530,6 +541,74 @@ if ($action === 'discover') {
     if ($category !== '') {
         $sql .= " AND r.purpose_category = ?";
         $params[] = $category;
+    }
+
+    if ($q !== '') {
+        $like = '%' . addcslashes($q, "\\%_") . '%';
+        $sql .= " AND r.goal_text LIKE ?";
+        $params[] = $like;
+    }
+
+    if ($savingType !== '' && in_array($savingType, ['A','B'], true)) {
+        $sql .= " AND r.saving_type = ?";
+        $params[] = $savingType;
+    }
+
+    if ($periodicity !== '' && in_array($periodicity, ['weekly','biweekly','monthly'], true)) {
+        $sql .= " AND r.periodicity = ?";
+        $params[] = $periodicity;
+    }
+
+    if ($minAmountRaw !== '' && is_numeric($minAmountRaw)) {
+        $minAmt = (float)$minAmountRaw;
+        if ($minAmt >= 0) {
+            $sql .= " AND r.participation_amount >= ?";
+            $params[] = $minAmt;
+        }
+    }
+
+    if ($maxAmountRaw !== '' && is_numeric($maxAmountRaw)) {
+        $maxAmt = (float)$maxAmountRaw;
+        if ($maxAmt >= 0) {
+            $sql .= " AND r.participation_amount <= ?";
+            $params[] = $maxAmt;
+        }
+    }
+
+    $parseDate = function(string $s, bool $endOfDay): ?string {
+        $v = trim($s);
+        if ($v === '') return null;
+
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $v)) {
+            return $v . ($endOfDay ? ' 23:59:59' : ' 00:00:00');
+        }
+
+        if (preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/', $v)) {
+            // Normalize to full seconds for SQL.
+            return preg_match('/:\d{2}$/', $v) ? $v : ($v . ':00');
+        }
+
+        return null;
+    };
+
+    $startAfter = $parseDate($startAfterRaw, false);
+    if ($startAfter) {
+        $sql .= " AND r.start_at >= ?";
+        $params[] = $startAfter;
+    }
+
+    $startBefore = $parseDate($startBeforeRaw, true);
+    if ($startBefore) {
+        $sql .= " AND r.start_at <= ?";
+        $params[] = $startBefore;
+    }
+
+    if ($onlyOpen) {
+        $sql .= " AND r.lobby_state = 'open'";
+    }
+
+    if ($onlySpots) {
+        $sql .= " HAVING approved_count < r.max_participants";
     }
 
     $sql .= " ORDER BY r.start_at ASC LIMIT 200";

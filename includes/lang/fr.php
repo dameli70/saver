@@ -1500,6 +1500,21 @@ return [
     'rooms.my_rooms_sub' => 'Salles que vous avez créées ou rejointes — actives, en attente ou terminées.',
     'rooms.proofs_nav' => 'Mes preuves',
     'rooms.discover_title' => 'Découvrir des salles',
+
+    'rooms.filters.title' => 'Filtres',
+    'rooms.filters.search' => 'Recherche',
+    'rooms.filters.search_placeholder' => 'Rechercher un objectif…',
+    'rooms.filters.saving_type' => 'Type',
+    'rooms.filters.periodicity' => 'Période',
+    'rooms.filters.any' => 'Tous',
+    'rooms.filters.min_amount' => 'Montant min',
+    'rooms.filters.max_amount' => 'Montant max',
+    'rooms.filters.start_after' => 'Débute après',
+    'rooms.filters.start_before' => 'Débute avant',
+    'rooms.filters.only_open' => 'Rejoignables uniquement',
+    'rooms.filters.only_spots' => 'Places disponibles',
+    'rooms.filters.clear' => 'Réinitialiser',
+
     'rooms.create_title' => 'Créer une salle',
     'rooms.create_sub' => 'Définissez l’objectif, les règles et les dates. Une fois la salle démarrée, les règles sont figées.',
 
