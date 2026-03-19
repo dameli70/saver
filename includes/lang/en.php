@@ -1445,6 +1445,8 @@ return [
     'room.countdown.starts_in' => 'Starts in {delta}',
     'room.countdown.reveals_in' => 'Reveals in {delta}',
     'room.countdown.next_turn_in' => 'Next turn in {delta}',
+    'room.countdown.waiting_min' => 'Waiting for minimum participants',
+    'room.countdown.waiting_min_fmt' => 'Waiting for minimum participants ({n}/{min})',
     'room.countdown.swap_closes_in' => 'Swap closes in {delta}',
     'room.countdown.eligible' => 'Reveal eligible (server-enforced)',
 
@@ -1528,6 +1530,7 @@ return [
     'rooms.periodicity.biweekly' => 'Bi-weekly',
     'rooms.periodicity.monthly' => 'Monthly',
     'rooms.field.start_date' => 'Start date',
+    'rooms.field.created_at' => 'Created at',
     'rooms.field.reveal_date' => 'Reveal date',
     'rooms.privacy_mode' => 'Privacy mode (hide amounts in activity feed)',
     'rooms.field.escrow_policy' => 'Escrow policy on strike removal',
@@ -1543,7 +1546,7 @@ return [
     'rooms.destination_account_hint' => 'Select a destination account. Destination accounts cannot be reused across rooms.',
 
     'rooms.reveal_auto_hint' => 'Type B reveal date is calculated automatically{date}.',
-
+    'rooms.typeb.schedule_hint' => 'Type B flow: when the room reaches the minimum participants, a 24-hour swap window starts. The first turn opens one period after the swap closes (example if minimum
     'rooms.destination_account.summary.mobile_money' => 'Mobile money {masked}',
     'rooms.destination_account.summary.mobile_money_short' => 'Mobile money',
     'rooms.destination_account.summary.bank' => 'Bank {masked}',

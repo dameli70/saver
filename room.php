@@ -1113,12 +1113,31 @@ function roomCountdownText(r){
   }
 
   if(String(r.saving_type||'') === 'B'){
+    const rs = String(r.room_state||'');
+
+    if(rs === 'lobby'){
+      const cnt = (r.approved_count != null) ? (r.approved_count|0) : 0;
+      const min = (r.min_participants != null) ? (r.min_participants|0) : 0;
+      if(min > 0){
+        return tr('room.countdown.waiting_min_fmt', {n: cnt, min}, `Waiting for minimum participants (${cnt}/${min})`);
+      }
+      return tr('room.countdown.waiting_min', null, 'Waiting for minimum participants');
+    }
+
+    if(rs === 'swap_window'){
+      return tr('room.state.swap_window', null, 'Swap window');
+    }
+
     if(nextTurn && !isNaN(nextTurn.getTime()) && now < nextTurn.getTime()){
       const delta = fmtDelta(nextTurn.getTime() - now);
       return tr('room.countdown.next_turn_in', {delta}, 'Next turn in ' + delta);
     }
 
-    return tr('room.state.active', null, 'Active');
+    if(rs === 'active'){
+      return tr('room.state.active', null, 'Active');
+    }
+
+    return '';
   }
 
   if(reveal && !isNaN(reveal.getTime()) && now < reveal.getTime()){
@@ -1250,7 +1269,7 @@ function renderRoom(){
     // Type B rooms do not use a user-facing "reveal date". Show next turn date + expected withdrawal instead.
     const nextTurn = (r.room_state === 'active' && r.active_cycle && r.active_cycle.due_at)
       ? fmt(r.active_cycle.due_at)
-      : (startLocal||'—');
+      : ((r.room_state === 'swap_window' && r.swap_window && r.swap_window.closes_at) ? fmt(r.swap_window.closes_at) : '—');
 
     items.push({k: tr('room.ov.next_turn_date', null, 'Next turn date'), v: esc(nextTurn||'—')});
 
@@ -1440,9 +1459,9 @@ function renderRoom(){
         const eligibleCount = (votesMeta && typeof votesMeta.eligible === 'number') ? (votesMeta.eligible|0) : 0;
         const requiredCount = (votesMeta && typeof votesMeta.required === 'number') ? (votesMeta.required|0) : 0;
 
-        // Hide vote buttons entirely unless the room is active and this user can vote on this turn.
+        // Hide vote buttons entirely unless the room is active and the approval window is open.
         // Maker vote is required even when participant votes are not.
-        const showVoteButtons = (votingWindow && canVoteRole && (isMaker || (eligibleCount > 0 && requiredCount > 0)));
+        const showVoteButtons = (votingWindow && canVoteRole && isOpen && !isClosed && !voteCast && (isMaker || (eligibleCount > 0 && requiredCount > 0)));
 
         if(approveBtn) approveBtn.style.display = showVoteButtons ? 'inline-flex' : 'none';
         if(rejectBtn) rejectBtn.style.display = showVoteButtons ? 'inline-flex' : 'none';
@@ -1745,7 +1764,11 @@ function renderRoom(){
     }
 
     loadJoinRequests();
-    loadUnderfillDecision();
+    if(r.saving_type === 'A') loadUnderfillDecision();
+    else {
+      const underfillCard = document.getElementById('underfill-card');
+      if(underfillCard) underfillCard.style.display = 'none';
+    }
     renderEscrowSettlements(r.escrow_settlements||[]);
   } else {
     document.getElementById('maker-card').style.display='none';
