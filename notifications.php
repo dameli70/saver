@@ -188,7 +188,11 @@ function actionLinkFromData(data){
   }
 
   const rid = data && data.room_id ? String(data.room_id) : '';
-  if(rid && rid.length === 36) return {href:'room.php?id=' + encodeURIComponent(rid), label: STR.openRoom};
+  if(rid && rid.length === 36){
+    const hasCycle = (data && (data.cycle_id || data.contribution_cycle_id)) ? true : false;
+    const hash = hasCycle ? '#contrib-block' : '';
+    return {href:'room.php?id=' + encodeURIComponent(rid) + hash, label: STR.openRoom};
+  }
 
   return null;
 }

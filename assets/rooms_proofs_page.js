@@ -36,6 +36,47 @@
     return d.toLocaleString();
   }
 
+  function fmtDeltaMs(ms){
+    const s = Math.max(0, Math.floor(ms/1000));
+    if(window.LS && typeof window.LS.fmtCountdown === 'function') return window.LS.fmtCountdown(s);
+    return String(s) + 's';
+  }
+
+  let tasksCountdownTimer = null;
+
+  function updateTaskCountdowns(){
+    const els = document.querySelectorAll('.js-task-countdown');
+    if(!els || !els.length) return;
+
+    const now = Date.now();
+
+    els.forEach(el => {
+      const ts = String(el.dataset.deadline||'');
+      const mode = String(el.dataset.mode||'due');
+      const d = parseUtcDate(ts);
+
+      if(!d || isNaN(d.getTime())){
+        el.textContent = '';
+        return;
+      }
+
+      const ms = d.getTime() - now;
+      if(ms <= 0){
+        el.textContent = '';
+        return;
+      }
+
+      const delta = fmtDeltaMs(ms);
+      const tpl = (mode === 'grace') ? STR.grace_ends_in_fmt : STR.due_in_fmt;
+      el.textContent = String(tpl||'').replace('{delta}', delta);
+    });
+  }
+
+  function ensureTaskCountdownTimer(){
+    if(tasksCountdownTimer) return;
+    tasksCountdownTimer = setInterval(updateTaskCountdowns, 1000);
+  }
+
   function setMsg(id, text, ok){
     const el = document.getElementById(id);
     if(!el) return;
@@ -70,6 +111,8 @@
     prompt_reference: tr('rooms.proofs.prompt_reference', 'Optional reference / note (leave blank if none):'),
     file_required: tr('rooms.proofs.file_required', 'Select a proof image.'),
     file_too_large: tr('rooms.proofs.file_too_large', 'File too large (max 5MB).'),
+    due_in_fmt: tr('rooms.proofs.due_in_fmt', 'Due in {delta}'),
+    grace_ends_in_fmt: tr('rooms.proofs.grace_ends_in_fmt', 'Grace ends in {delta}'),
   };
 
   function cycleOrTurnLabel(row){
@@ -109,12 +152,15 @@
         const amount = (r.amount != null && String(r.amount) !== '') ? String(r.amount) : '—';
         const turn = cycleOrTurnLabel(r);
 
+        const deadline = (kind === 'overdue' && r.grace_ends_at) ? String(r.grace_ends_at) : String(r.due_at||'');
+        const cdMode = (kind === 'overdue') ? 'grace' : 'due';
+
         const fileId = kind + '-file-' + i;
 
         trEl.innerHTML =
           '<td>' + roomLinkHtml(r) + '</td>' +
           '<td>' + esc(turn) + '</td>' +
-          '<td>' + esc(dueTxt) + '</td>' +
+          '<td>' + esc(dueTxt) + '<div class="small k"><span class="js-task-countdown" data-mode="' + esc(cdMode) + '" data-deadline="' + esc(deadline) + '"></span></div></td>' +
           '<td>' + esc(amount) + '</td>' +
           '<td>' +
             '<div class="proofs-action">' +
@@ -285,6 +331,9 @@
     renderTaskRows('upcoming', res.upcoming || []);
     renderTaskRows('overdue', res.overdue || []);
     renderMissedRows(res.missed || []);
+
+    updateTaskCountdowns();
+    ensureTaskCountdownTimer();
   }
 
   async function loadMoreUploads(reset){

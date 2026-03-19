@@ -1284,15 +1284,27 @@ return [
     'room.feed.typeB_turn_voided' => 'Turn voided (no confirmation)',
 
     'room.contribution_title' => 'Contribution',
-    'room.contribution_sub' => 'Upload your proof for the active cycle from the My proofs page.',
+    'room.contribution_sub' => 'Upload a screenshot proof to confirm your contribution.',
     'room.contribution.cycle' => 'Cycle',
     'room.contribution.due' => 'Due',
     'room.contribution.amount' => 'Amount',
+    'room.contribution.status' => 'Status',
+    'room.contribution.confirmed_at' => 'Confirmed',
+    'room.contribution.reminders_note' => 'Reminders: 24h before due, plus a reminder when the grace window opens.',
     'room.contribution.amount_placeholder' => 'e.g. 50.00',
     'room.contribution.reference_optional' => 'Reference (optional)',
     'room.contribution.reference_placeholder' => 'e.g. bank tx id',
+    'room.contribution.upload_btn' => 'Upload proof',
+    'room.contribution.uploading' => 'Uploading…',
+    'room.contribution.unavailable' => 'Contribution upload is unavailable right now.',
+    'room.contribution.up_to_date' => 'Up to date for this cycle.',
+    'room.contribution.overdue' => 'Overdue.',
+    'room.contribution.status_unpaid' => 'Unpaid',
+    'room.contribution.status_paid' => 'Paid',
+    'room.contribution.status_paid_in_grace' => 'Paid (grace)',
+    'room.contribution.status_missed' => 'Missed',
     'room.contribution.btn_confirm' => 'Confirm contribution',
-    'room.contribution.proofs_redirect_note' => 'Proof submission has moved to the My proofs page to keep rooms lighter and make uploads easier.',
+    'room.contribution.proofs_redirect_note' => 'You can also manage proofs across rooms from the My proofs page.',
     'room.contribution.open_proofs_btn' => 'Open My proofs',
 
     'room.unlock_type_a_title' => 'Unlock (Type A)',
@@ -1530,6 +1542,8 @@ return [
     'room.countdown.waiting_min' => 'Waiting for minimum participants',
     'room.countdown.waiting_min_fmt' => 'Waiting for minimum participants ({n}/{min})',
     'room.countdown.swap_closes_in' => 'Swap closes in {delta}',
+    'room.countdown.contribution_due_in' => 'Contribution due in {delta}',
+    'room.countdown.contribution_grace_ends_in' => 'Grace ends in {delta}',
     'room.countdown.eligible' => 'Reveal eligible (server-enforced)',
 
     // Rooms
@@ -1576,7 +1590,8 @@ return [
     'rooms.proofs.upcoming_empty' => 'No upcoming proofs.',
     'rooms.proofs.overdue_title' => 'Overdue (grace period)',
     'rooms.proofs.overdue_empty' => 'No overdue proofs.',
-
+    'rooms.proofs.due_in_fmt' => 'Due in {delta}',
+    'rooms.proofs.grace_ends_in_fmt
     'rooms.proofs.uploads_title' => 'Your uploads',
     'rooms.proofs.uploads_empty' => 'No uploads yet.',
 

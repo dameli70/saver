@@ -118,11 +118,32 @@ header("Referrer-Policy: no-referrer");
           </div>
         </div>
 
+        <div style="margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div>
+            <div class="k"><?php e('room.contribution.status'); ?></div>
+            <div class="v" id="contrib-status">—</div>
+          </div>
+          <div>
+            <div class="k"><?php e('room.contribution.confirmed_at'); ?></div>
+            <div class="v" id="contrib-confirmed-at">—</div>
+          </div>
+        </div>
+
+        <div class="small" id="contrib-countdown" style="margin-top:10px;"></div>
+
         <div class="p" style="margin-top:10px;"><?php e('room.contribution.proofs_redirect_note'); ?></div>
 
+        <input type="file" id="contrib-proof-file" style="display:none;" accept="image/png,image/jpeg,image/webp">
+
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
-          <a class="btn btn-primary btn-sm" id="contrib-open-proofs" href="rooms_proofs.php?room_id=<?= htmlspecialchars($roomId, ENT_QUOTES, 'UTF-8') ?>"><?php e('room.contribution.open_proofs_btn'); ?></a>
+          <button class="btn btn-blue btn-sm" id="contrib-upload-btn" type="button" onclick="contribUploadStart()"><?php e('room.contribution.upload_btn'); ?></button>
+          <a class="btn btn-ghost btn-sm" id="contrib-open-proofs" href="rooms_proofs.php?room_id=<?= htmlspecialchars($roomId, ENT_QUOTES, 'UTF-8') ?>"><?php e('room.contribution.open_proofs_btn'); ?></a>
         </div>
+
+        <div class="small" style="margin-top:10px;">
+          <?php e('room.contribution.reminders_note'); ?>
+        </div>
+
         <div id="contrib-msg" class="msg"></div>
       </div>
 
@@ -854,6 +875,14 @@ function prettyMyStatus(st){
   if(s === 'exited_poststart') return tr('room.status.exited_poststart', null, 'Exited');
   return s;
 }
+function prettyContributionStatus(st){
+  const s = String(st||'');
+  if(!s || s === 'unpaid') return tr('room.contribution.status_unpaid', null, 'Unpaid');
+  if(s === 'paid') return tr('room.contribution.status_paid', null, 'Paid');
+  if(s === 'paid_in_grace') return tr('room.contribution.status_paid_in_grace', null, 'Paid (grace)');
+  if(s === 'missed') return tr('room.contribution.status_missed', null, 'Missed');
+  return s;
+}
 function myStatusBadgeClass(st){
   const s = String(st||'');
   if(s === 'active' || s === 'approved') return 'ok';
@@ -1112,6 +1141,12 @@ let unlockClearTimer = null;
 let roomTicker = null;
 let timelineStage = '';
 
+function fmtDeltaMs(ms){
+  const s = Math.max(0, Math.floor(ms/1000));
+  if(window.LS && LS.fmtCountdown) return LS.fmtCountdown(s);
+  return String(s) + 's';
+}
+
 function roomCountdownText(r){
   if(!r) return '';
 
@@ -1125,19 +1160,31 @@ function roomCountdownText(r){
   const start = effStartAt;
   const reveal = parseUtcDate(r.reveal_at);
 
-  const nextTurn = (r && r.active_cycle && r.active_cycle.due_at)
-    ? parseUtcDate(r.active_cycle.due_at)
-    : (String(r.room_state||'') === 'swap_window' ? swapClosesAt : null);
+  const cyc = (r && r.active_cycle) ? r.active_cycle : null;
+  const contrib = (r && r.my_active_cycle_contribution) ? r.my_active_cycle_contribution : null;
+  const contribStatus = contrib && contrib.status ? String(contrib.status) : 'unpaid';
 
-  function fmtDelta(ms){
-    const s = Math.max(0, Math.floor(ms/1000));
-    if(window.LS && LS.fmtCountdown) return LS.fmtCountdown(s);
-    return String(s) + 's';
-  }
+  const dueAt = (cyc && cyc.due_at) ? parseUtcDate(cyc.due_at) : null;
+  const graceEndsAt = (cyc && cyc.grace_ends_at) ? parseUtcDate(cyc.grace_ends_at) : null;
+  const inGrace = cyc && String(cyc.status||'') === 'grace';
+  const deadline = (inGrace && graceEndsAt && !isNaN(graceEndsAt.getTime())) ? graceEndsAt : dueAt;
+
+  const nextTurn = dueAt ? dueAt : (String(r.room_state||'') === 'swap_window' ? swapClosesAt : null);
 
   if(String(r.room_state||'') === 'swap_window' && nextTurn && !isNaN(nextTurn.getTime()) && now < nextTurn.getTime()){
-    const delta = fmtDelta(nextTurn.getTime() - now);
+    const delta = fmtDeltaMs(nextTurn.getTime() - now);
     return tr('room.countdown.swap_closes_in', {delta}, 'Swap closes in ' + delta);
+  }
+
+  // If you have an unpaid contribution, show that as the countdown.
+  if(String(r.room_state||'') === 'active' && String(r.my_status||'') === 'active' && cyc && deadline && !isNaN(deadline.getTime()) && now < deadline.getTime()){
+    if(contribStatus !== 'paid' && contribStatus !== 'paid_in_grace'){
+      const delta = fmtDeltaMs(deadline.getTime() - now);
+      if(inGrace){
+        return tr('room.countdown.contribution_grace_ends_in', {delta}, 'Grace ends in ' + delta);
+      }
+      return tr('room.countdown.contribution_due_in', {delta}, 'Contribution due in ' + delta);
+    }
   }
 
   if(String(r.saving_type||'') === 'B'){
@@ -1157,7 +1204,7 @@ function roomCountdownText(r){
     }
 
     if(nextTurn && !isNaN(nextTurn.getTime()) && now < nextTurn.getTime()){
-      const delta = fmtDelta(nextTurn.getTime() - now);
+      const delta = fmtDeltaMs(nextTurn.getTime() - now);
       return tr('room.countdown.next_turn_in', {delta}, 'Next turn in ' + delta);
     }
 
@@ -1169,12 +1216,12 @@ function roomCountdownText(r){
   }
 
   if(start && !isNaN(start.getTime()) && now < start.getTime()){
-    const delta = fmtDelta(start.getTime() - now);
+    const delta = fmtDeltaMs(start.getTime() - now);
     return tr('room.countdown.starts_in', {delta}, 'Starts in ' + delta);
   }
 
   if(reveal && !isNaN(reveal.getTime()) && now < reveal.getTime()){
-    const delta = fmtDelta(reveal.getTime() - now);
+    const delta = fmtDeltaMs(reveal.getTime() - now);
     return tr('room.countdown.reveals_in', {delta}, 'Reveals in ' + delta);
   }
 
@@ -1389,6 +1436,8 @@ function updateRoomCountdown(){
   const tl = document.getElementById('room-tl-countdown');
   if(tl) tl.textContent = txt;
 
+  updateContribCountdown();
+
   const st = currentTimelineStage(r);
   if(st && st !== timelineStage){
     timelineStage = st;
@@ -1455,6 +1504,159 @@ function scrollToBlock(id){
   }catch(e){
     el.scrollIntoView(true);
   }
+}
+
+let contribUploading = false;
+
+function updateContribCountdown(){
+  const el = document.getElementById('contrib-countdown');
+  if(!el) return;
+
+  const r = roomCache;
+  if(!r || String(r.room_state||'') !== 'active' || String(r.my_status||'') !== 'active' || !r.active_cycle){
+    el.textContent = '';
+    return;
+  }
+
+  const cyc = r.active_cycle;
+  const mc = r.my_active_cycle_contribution || null;
+  const st = (mc && mc.status) ? String(mc.status) : 'unpaid';
+
+  if(st === 'paid' || st === 'paid_in_grace'){
+    el.textContent = tr('room.contribution.up_to_date', null, 'Up to date for this cycle.');
+    return;
+  }
+
+  const inGrace = (String(cyc.status||'') === 'grace');
+  const dueAt = cyc.due_at ? parseUtcDate(cyc.due_at) : null;
+  const graceEndsAt = cyc.grace_ends_at ? parseUtcDate(cyc.grace_ends_at) : null;
+  const deadline = (inGrace && graceEndsAt && !isNaN(graceEndsAt.getTime())) ? graceEndsAt : dueAt;
+
+  if(!deadline || isNaN(deadline.getTime())){
+    el.textContent = '';
+    return;
+  }
+
+  const now = Date.now();
+  if(now >= deadline.getTime()){
+    el.textContent = tr('room.contribution.overdue', null, 'Overdue.');
+    return;
+  }
+
+  const delta = fmtDeltaMs(deadline.getTime() - now);
+  if(inGrace){
+    el.textContent = tr('room.countdown.contribution_grace_ends_in', {delta}, 'Grace ends in ' + delta);
+  } else {
+    el.textContent = tr('room.countdown.contribution_due_in', {delta}, 'Contribution due in ' + delta);
+  }
+}
+
+function contribUploadNow(){
+  scrollToBlock('contrib-block');
+  setTimeout(() => {
+    contribUploadStart();
+  }, 250);
+}
+
+function contribUploadStart(){
+  const msg = document.getElementById('contrib-msg');
+  if(msg) msg.className = 'msg';
+
+  const r = roomCache;
+  if(!r || String(r.room_state||'') !== 'active' || String(r.my_status||'') !== 'active' || !r.active_cycle){
+    setMsg('contrib-msg', tr('room.contribution.unavailable', null, 'Contribution upload is unavailable right now.'), false);
+    return;
+  }
+
+  const input = document.getElementById('contrib-proof-file');
+  if(!input){
+    setMsg('contrib-msg', STR.failed, false);
+    return;
+  }
+
+  input.click();
+}
+
+async function contribUploadFile(file){
+  const r = roomCache;
+  if(!r || !r.active_cycle) throw new Error(STR.failed);
+
+  const btn = document.getElementById('contrib-upload-btn');
+  if(contribUploading) return;
+  contribUploading = true;
+
+  const oldTxt = btn ? btn.textContent : '';
+
+  try{
+    if(btn){
+      btn.disabled = true;
+      btn.textContent = tr('room.contribution.uploading', null, 'Uploading…');
+    }
+
+    const ref = (window.LS && typeof window.LS.prompt === 'function')
+      ? await window.LS.prompt({
+          title: tr('room.contribution.reference_optional', null, 'Reference (optional)'),
+          message: tr('rooms.proofs.prompt_reference', null, 'Optional reference / note (leave blank if none):'),
+          placeholder: tr('room.contribution.reference_placeholder', null, 'e.g. bank tx id'),
+        })
+      : '';
+
+    const reference = (ref === null || typeof ref === 'undefined') ? '' : String(ref||'');
+
+    const fd = new FormData();
+    fd.append('csrf_token', (typeof CSRF === 'string' ? CSRF : ''));
+    fd.append('room_id', ROOM_ID);
+    fd.append('cycle_id', String(r.active_cycle.id||''));
+    fd.append('amount', String(r.participation_amount||''));
+    fd.append('reference', reference);
+    fd.append('proof', file);
+
+    const resp = await fetch('/api/rooms.php?action=confirm_contribution_with_proof', {
+      method: 'POST',
+      credentials: 'same-origin',
+      body: fd,
+    });
+
+    const res = await resp.json().catch(()=>null);
+    if(!res || !res.success) throw new Error((res && res.error) ? res.error : STR.failed);
+
+    setMsg('contrib-msg', tr('rooms.proofs.upload_ok', null, 'Uploaded.'), true);
+    await loadRoom();
+    await pollFeed();
+
+  }catch(e){
+    setMsg('contrib-msg', (e && e.message) ? e.message : STR.failed, false);
+
+  } finally {
+    contribUploading = false;
+
+    if(btn){
+      btn.disabled = false;
+      btn.textContent = oldTxt || tr('room.contribution.upload_btn', null, 'Upload proof');
+    }
+
+    const input = document.getElementById('contrib-proof-file');
+    if(input) input.value = '';
+  }
+}
+
+function initContribUpload(){
+  const input = document.getElementById('contrib-proof-file');
+  if(!input || input.dataset.bound === '1') return;
+  input.dataset.bound = '1';
+
+  input.addEventListener('change', async () => {
+    const file = input.files && input.files[0] ? input.files[0] : null;
+    if(!file) return;
+
+    if(file.size > 5000000){
+      setMsg('contrib-msg', tr('rooms.proofs.file_too_large', null, 'File too large (max 5MB).'), false);
+      input.value = '';
+      return;
+    }
+
+    await contribUploadFile(file);
+  });
 }
 
 function computeNextStep(r){
@@ -1579,8 +1781,8 @@ function computeNextStep(r){
           tr('room.next.contribution_due_title', null, 'Contribution due'),
           tr('room.next.contribution_due_body_fmt', {cycle: cycLabel, ts: deadline}, '{cycle} is due by {ts}. Upload your proof to confirm your contribution.')
         );
-        addAction({text: tr('room.contribution.open_proofs_btn', null, 'Open My proofs'), type:'primary', href:'rooms_proofs.php?room_id=' + encodeURIComponent(ROOM_ID)});
-        return step;
+        addAction({text: tr('room.contribution.upload_btn', null, 'Upload proof'), type:'primary', onClick:'contribUploadNow'});
+        addAction({text: tr('room.contribution.open_proofs_btn', null, 'Open My proofs'), type:'ghost', href:'rooms_proofs.php?room_id=' + encodeURIComponent(ROOM_ID;
       }
 
       if(String(contrib.status||'') === 'paid' || String(contrib.status||'') === 'paid_in_grace'){
@@ -1887,10 +2089,25 @@ function renderRoom(){
     if(canContrib){
       document.getElementById('contrib-cycle').textContent = `#${r.active_cycle.cycle_index} (${r.active_cycle.status})`;
       document.getElementById('contrib-due').textContent = fmt(r.active_cycle.due_at);
+
       const amt = document.getElementById('contrib-amount');
       if(amt){
         amt.textContent = String(r.participation_amount||'—');
       }
+
+      const mc = r.my_active_cycle_contribution || null;
+      const st = (mc && mc.status) ? String(mc.status) : 'unpaid';
+
+      const stEl = document.getElementById('contrib-status');
+      if(stEl) stEl.textContent = prettyContributionStatus(st);
+
+      const confEl = document.getElementById('contrib-confirmed-at');
+      if(confEl) confEl.textContent = (mc && mc.confirmed_at) ? fmt(mc.confirmed_at) : '—';
+
+      const msg = document.getElementById('contrib-msg');
+      if(msg) msg.className = 'msg';
+
+      updateContribCountdown();
     }
   }
 
@@ -3473,9 +3690,22 @@ function startSseFeed(){
   };
 }
 
+function handleInitialHash(){
+  const id = String((window.location && window.location.hash) ? window.location.hash : '').replace(/^#/, '').trim();
+  if(!id) return;
+
+  // Wait for the first render (blocks may be hidden until room data loads).
+  setTimeout(() => {
+    scrollToBlock(id);
+  }, 350);
+}
+
+initContribUpload();
+
 loadRoom().then(async ()=>{
   await pollFeed();
   startSseFeed();
+  handleInitialHash();
 });
 </script>
 </div>
