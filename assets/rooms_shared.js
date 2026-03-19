@@ -87,9 +87,21 @@
     return u.startsWith('/') ? u.slice(1) : u;
   }
 
+  async function readJson(r){
+    const txt = await r.text();
+    if(!txt) return null;
+    try{
+      return JSON.parse(txt);
+    }catch(e){
+      // Surface the actual HTML/PHP error in console for debugging.
+      try{ console.error('Non-JSON response from API:', txt); }catch(_){}
+      throw new Error('Server returned an invalid response.');
+    }
+  }
+
   async function get(url){
     const r = await fetch(apiUrl(url), { credentials: 'same-origin' });
-    return r.json();
+    return readJson(r);
   }
 
   async function postCsrf(url, body){
@@ -100,7 +112,7 @@
       body: JSON.stringify(body || {}),
     });
 
-    const j = await r.json().catch(() => null);
+    const j = await readJson(r).catch(() => null);
     if(j && j.error_code==='package_limit' && j.redirect_url){
       window.location.href = apiUrl(String(j.redirect_url));
       return j;

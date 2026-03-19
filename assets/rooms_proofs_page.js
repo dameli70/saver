@@ -45,7 +45,14 @@
 
   async function getJson(url){
     const r = await fetch(apiUrl(url), { credentials: 'same-origin' });
-    return r.json();
+    const txt = await r.text();
+    if(!txt) return null;
+    try{
+      return JSON.parse(txt);
+    }catch(e){
+      try{ console.error('Non-JSON response from API:', txt); }catch(_){}
+      throw new Error('Server returned an invalid response.');
+    }
   }
 
   function proofUrl(proofId){
