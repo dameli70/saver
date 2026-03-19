@@ -703,7 +703,10 @@ async function postStrong(url, body){
 
 function esc(s){
   if(window.LS && LS.esc) return LS.esc(s);
-  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').repla</old_code><new_code>function setMsg(id, text, ok){
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function setMsg(id, text, ok){
   const el=document.getElementById(id);
   if(!el) return;
   el.className = 'msg ' + (ok ? 'msg-ok' : 'msg-err') + ' show';
