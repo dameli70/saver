@@ -155,6 +155,16 @@ return [
     'account_user.room_nickname_sub' => 'This name is shown to other participants instead of your email.',
     'account_user.room_display_name_label' => 'Nickname',
     'account_user.room_display_name_placeholder' => 'e.g. Alex',
+
+    'account_user.contact_title' => 'Contact details',
+    'account_user.contact_sub' => 'Optional. Neighborhood and phone numbers are shown to other participants in your rooms.',
+    'account_user.neighborhood_label' => 'Neighborhood',
+    'account_user.neighborhood_placeholder' => 'e.g. Cocody',
+    'account_user.phone_primary_label' => 'Phone (primary)',
+    'account_user.phone_primary_placeholder' => 'e.g. +225 07 00 00 00',
+    'account_user.phone_secondary_label' => 'Phone (secondary)',
+    'account_user.phone_secondary_placeholder' => 'optional',
+
     'account_user.unavailable_migrations' => 'This feature is unavailable on this server. Apply database migrations.',
     'account_user.nickname_locked_badge' => 'Locked',
     'account_user.nickname_editable_badge' => 'Editable',
@@ -1438,6 +1448,13 @@ return [
 
     'room.timeline_title' => 'Timeline',
     'room.timeline.next_deadline' => 'Next deadline',
+
+    'room.participants_title' => 'Participants',
+    'room.participants_sub' => 'Avatars and contact details shared by participants.',
+    'room.participants.th_participant' => 'Participant',
+    'room.participants.th_neighborhood' => 'Neighborhood',
+    'room.participants.th_status' => 'Status',
+    'room.participants_empty' => 'No participants yet.',
     'room.timeline.lobby' => 'Lobby',
     'room.timeline.swap' => 'Swap',
     'room.timeline.saving' => 'Saving',
@@ -1591,7 +1608,7 @@ return [
     'rooms.proofs.overdue_title' => 'Overdue (grace period)',
     'rooms.proofs.overdue_empty' => 'No overdue proofs.',
     'rooms.proofs.due_in_fmt' => 'Due in {delta}',
-    'rooms.proofs.grace_ends_in_fmt
+    'rooms.proofs.grace_ends_in_fmt' => 'Grace ends in {delta}',
     'rooms.proofs.uploads_title' => 'Your uploads',
     'rooms.proofs.uploads_empty' => 'No uploads yet.',
 

@@ -20,6 +20,9 @@ CREATE TABLE IF NOT EXISTS users (
     -- Profile fields (privacy): used for displaying participants in Saving Rooms
     room_display_name            VARCHAR(60) NULL,
     profile_image_url            VARCHAR(500) NULL,
+    neighborhood                 VARCHAR(120) NULL,
+    phone_primary                VARCHAR(30) NULL,
+    phone_secondary              VARCHAR(30) NULL,
 
     login_hash                   VARCHAR(255) NOT NULL,       -- Argon2id of LOGIN password (for auth only)
     vault_verifier               VARCHAR(255) NOT NULL,       -- legacy verifier (no longer required for reveals)

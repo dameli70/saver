@@ -1,7 +1,7 @@
 <?php
 // ============================================================
-//  API: /api/profile_image.php
-//  Fetch the logged-in user's profile image (decrypt server-side)
+//  API: /api/user_avatar.php
+//  Fetch a user's profile image (decrypt server-side), gated by room membership
 // ============================================================
 
 require_once __DIR__ . '/../includes/install_guard.php';
@@ -11,7 +11,6 @@ require_once __DIR__ . '/../includes/helpers.php';
 require_once __DIR__ . '/../includes/media_crypto.php';
 
 startSecureSession();
-
 requireLogin();
 
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
@@ -21,13 +20,26 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     exit;
 }
 
-$userId = (int)(getCurrentUserId() ?? 0);
-if ($userId < 1) {
+$viewerId = (int)(getCurrentUserId() ?? 0);
+if ($viewerId < 1) {
     http_response_code(401);
     exit;
 }
 
-function outputDefaultAvatarSvg(int $userId): void {
+$roomId = trim((string)($_GET['room_id'] ?? ''));
+$targetUserId = (int)($_GET['user_id'] ?? 0);
+
+if ($roomId === '' || !preg_match('/^[a-f0-9-]{36}$/i', $roomId)) {
+    http_response_code(400);
+    exit;
+}
+
+if ($targetUserId < 1) {
+    http_response_code(400);
+    exit;
+}
+
+function outputDefaultAvatarSvgForUser(int $userId): void {
     $initial = '?';
 
     try {
@@ -75,17 +87,58 @@ function outputDefaultAvatarSvg(int $userId): void {
 }
 
 try {
-    if (!dbHasTable('user_profile_images')) {
-        outputDefaultAvatarSvg($userId);
+    $db = getDB();
+
+    $roomStmt = $db->prepare('SELECT maker_user_id FROM saving_rooms WHERE id = ?');
+    $roomStmt->execute([$roomId]);
+    $makerId = (int)$roomStmt->fetchColumn();
+    if ($makerId < 1) {
+        http_response_code(404);
+        exit;
     }
 
-    $db = getDB();
+    $isViewerPrivileged = ($viewerId === $makerId) || isAdmin($viewerId) || ($viewerId === $targetUserId);
+
+    $viewerStatus = null;
+    if (!$isViewerPrivileged) {
+        $vs = $db->prepare('SELECT status FROM saving_room_participants WHERE room_id = ? AND user_id = ?');
+        $vs->execute([$roomId, $viewerId]);
+        $viewerStatus = $vs->fetchColumn();
+        if ($viewerStatus) {
+            $viewerStatus = (string)$viewerStatus;
+        }
+    }
+
+    $viewerCanSee = $isViewerPrivileged;
+    if (!$viewerCanSee && $viewerStatus) {
+        // Any non-declined participant can see participant avatars.
+        $viewerCanSee = ($viewerStatus !== 'declined');
+    }
+
+    $targetIsInRoom = false;
+    if ($targetUserId === $makerId) {
+        $targetIsInRoom = true;
+    } else {
+        $ts = $db->prepare('SELECT 1 FROM saving_room_participants WHERE room_id = ? AND user_id = ? LIMIT 1');
+        $ts->execute([$roomId, $targetUserId]);
+        $targetIsInRoom = (bool)$ts->fetchColumn();
+    }
+
+    if (!$targetIsInRoom || !dbHasTable('user_profile_images')) {
+        outputDefaultAvatarSvgForUser($targetUserId);
+    }
+
+    if (!$viewerCanSee) {
+        // Do not leak the real photo outside the room.
+        outputDefaultAvatarSvgForUser($targetUserId);
+    }
+
     $stmt = $db->prepare('SELECT content_type, enc_cipher, iv, tag FROM user_profile_images WHERE user_id = ?');
-    $stmt->execute([$userId]);
+    $stmt->execute([$targetUserId]);
     $row = $stmt->fetch();
 
     if (!$row) {
-        outputDefaultAvatarSvg($userId);
+        outputDefaultAvatarSvgForUser($targetUserId);
     }
 
     $contentType = (string)($row['content_type'] ?? '');
@@ -103,5 +156,5 @@ try {
     exit;
 
 } catch (Throwable) {
-    outputDefaultAvatarSvg($userId);
+    outputDefaultAvatarSvgForUser($targetUserId);
 }

@@ -23,6 +23,7 @@ if (PHP_SAPI !== 'cli') {
 }
 
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../includes/media_crypto.php';
 
 const TYPEB_DEMO_PREFIX = 'DEMO Type B - ';
 
@@ -153,6 +154,66 @@ function typebDemoEnsureUser(PDO $db, string $email, string $displayName, string
     $db->prepare($sql)->execute($vals);
 
     return (int)$db->lastInsertId();
+}
+
+function typebDemoGetUserEmail(PDO $db, int $userId): string {
+    if (!typebDemoHasTable($db, 'users')) return '';
+    if ($userId < 1) return '';
+
+    $st = $db->prepare('SELECT email FROM users WHERE id = ? LIMIT 1');
+    $st->execute([$userId]);
+    $email = (string)($st->fetchColumn() ?: '');
+    $st->closeCursor();
+    return strtolower(trim($email));
+}
+
+function typebDemoInsertInvite(PDO $db, string $roomId, string $mode, string $status, ?int $invitedUserId, ?string $invitedEmail, ?string $tokenPlain, ?string $expiresAt, ?string $createdAt, ?string $respondedAt): array {
+    if (!typebDemoHasTable($db, 'saving_room_invites')) return ['id' => 0, 'token' => null];
+
+    $token = null;
+    $hash = null;
+    if ($tokenPlain !== null && $tokenPlain !== '') {
+        $token = (string)$tokenPlain;
+        $hash = hash('sha256', $token);
+    }
+
+    $cols = ['room_id', 'invite_mode', 'status'];
+    $vals = [$roomId, $mode, $status];
+
+    if ($hash !== null && typebDemoHasColumn($db, 'saving_room_invites', 'invite_token_hash')) {
+        $cols[] = 'invite_token_hash';
+        $vals[] = $hash;
+    }
+
+    if (typebDemoHasColumn($db, 'saving_room_invites', 'invited_user_id')) {
+        $cols[] = 'invited_user_id';
+        $vals[] = ($invitedUserId !== null && $invitedUserId > 0) ? (int)$invitedUserId : null;
+    }
+
+    if (typebDemoHasColumn($db, 'saving_room_invites', 'invited_email')) {
+        $cols[] = 'invited_email';
+        $vals[] = ($invitedEmail !== null && trim($invitedEmail) !== '') ? strtolower(trim($invitedEmail)) : null;
+    }
+
+    if (typebDemoHasColumn($db, 'saving_room_invites', 'expires_at')) {
+        $cols[] = 'expires_at';
+        $vals[] = $expiresAt;
+    }
+
+    if ($createdAt !== null && typebDemoHasColumn($db, 'saving_room_invites', 'created_at')) {
+        $cols[] = 'created_at';
+        $vals[] = $createdAt;
+    }
+
+    if ($respondedAt !== null && typebDemoHasColumn($db, 'saving_room_invites', 'responded_at')) {
+        $cols[] = 'responded_at';
+        $vals[] = $respondedAt;
+    }
+
+    $sql = 'INSERT INTO saving_room_invites (' . implode(',', $cols) . ') VALUES (' . implode(',', array_fill(0, count($cols), '?')) . ')';
+    $db->prepare($sql)->execute($vals);
+
+    return ['id' => (int)$db->lastInsertId(), 'token' => $token];
 }
 
 function typebDemoEnsureTrust(PDO $db, int $userId, int $level = 3): void {
@@ -353,6 +414,7 @@ function typebDemoResetRoomData(PDO $db, string $roomId): void {
         'saving_room_rotation_queue',
         'saving_room_account_ledger',
         // contributions are via cycles; deleting cycles will cascade.
+        'saving_room_contribution_proofs',
         'saving_room_contributions',
         'saving_room_contribution_cycles',
         'saving_room_accounts',
@@ -537,6 +599,55 @@ function typebDemoUpsertContribution(PDO $db, string $roomId, int $cycleId, int 
        ->execute([$roomId, $userId, $cycleId, $amount, $status, $reference, $confirmedAt]);
 }
 
+function typebDemoFindContributionId(PDO $db, string $roomId, int $cycleId, int $userId): int {
+    if (!typebDemoHasTable($db, 'saving_room_contributions')) return 0;
+
+    $st = $db->prepare('SELECT id FROM saving_room_contributions WHERE room_id = ? AND cycle_id = ? AND user_id = ? LIMIT 1');
+    $st->execute([$roomId, $cycleId, $userId]);
+    $id = (int)($st->fetchColumn() ?: 0);
+    $st->closeCursor();
+    return $id;
+}
+
+function typebDemoPngBytes(): string {
+    // 1x1 transparent PNG.
+    $b64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMB/6X4nfoAAAAASUVORK5CYII=';
+    $raw = base64_decode($b64, true);
+    return $raw !== false ? $raw : "";
+}
+
+function typebDemoInsertProof(PDO $db, string $roomId, int $contributionId, int $userId, ?string $referenceSnapshot, ?string $originalFilename, string $contentType, string $bytes, ?string $createdAt = null): int {
+    if (!typebDemoHasTable($db, 'saving_room_contribution_proofs')) return 0;
+    if ($contributionId < 1) return 0;
+
+    $contentType = strtolower(trim($contentType));
+    if ($contentType === '') $contentType = 'image/png';
+
+    $size = strlen($bytes);
+    if ($size < 1) return 0;
+
+    $shaBin = hash('sha256', $bytes, true);
+    $enc = mediaEncryptBytes($bytes);
+
+    $ref = $referenceSnapshot;
+    if ($ref === null || trim($ref) === '') {
+        $ref = bin2hex(random_bytes(12));
+    }
+
+    $cols = ['room_id','contribution_id','user_id','reference_snapshot','original_filename','content_type','size_bytes','sha256','enc_cipher','iv','tag'];
+    $vals = [$roomId, $contributionId, $userId, $ref, ($originalFilename !== null && $originalFilename !== '') ? substr($originalFilename, 0, 255) : null, $contentType, $size, $shaBin, $enc['cipher'], $enc['iv'], $enc['tag']];
+
+    if ($createdAt !== null && typebDemoHasColumn($db, 'saving_room_contribution_proofs', 'created_at')) {
+        $cols[] = 'created_at';
+        $vals[] = $createdAt;
+    }
+
+    $sql = 'INSERT INTO saving_room_contribution_proofs (' . implode(',', $cols) . ') VALUES (' . implode(',', array_fill(0, count($cols), '?')) . ')';
+    $db->prepare($sql)->execute($vals);
+
+    return (int)$db->lastInsertId();
+}
+
 function typebDemoInsertLedgerFromEntries(PDO $db, string $roomId, array $entries): void {
     if (!typebDemoHasTable($db, 'saving_room_account_ledger')) return;
 
@@ -666,6 +777,7 @@ foreach ([$u1, $u2, $u3, $u4, $u5, $u6] as $uid) {
 $destAccountId = typebDemoEnsureDestinationAccount($db);
 
 $outRooms = [];
+$outLinks = [];
 
 $db->beginTransaction();
 try {
@@ -850,8 +962,11 @@ try {
 
             $c1 = typebDemoInsertCycle($db, $roomId, 1, typebDemoNow('+4 days'), typebDemoNow('+6 days'), 'open');
             if ($c1 > 0) {
+                $png = typebDemoPngBytes();
                 foreach ([$u2,$u1,$u3,$u4] as $uid) {
                     typebDemoUpsertContribution($db, $roomId, $c1, (int)$uid, '25.00', 'paid', 'DEMO-CYCLE1-' . $uid, typebDemoNow('-10 hours'));
+                    $cid = typebDemoFindContributionId($db, $roomId, $c1, (int)$uid);
+                    typebDemoInsertProof($db, $roomId, $cid, (int)$uid, null, 'demo-proof-' . $uid . '.png', 'image/png', $png, typebDemoNow('-9 hours'));
                 }
             }
 
@@ -1244,6 +1359,182 @@ try {
         }
     );
 
+    // 14) Proof tasks + proof gallery (rooms_proofs.php + room_proofs.php)
+    $outRooms[] = typebDemoEnsureRoom(
+        $db,
+        $destAccountId,
+        TYPEB_DEMO_PREFIX . 'Proof tasks + gallery (upcoming/overdue/missed + proofs)',
+        $u2,
+        [
+            'room_state' => 'active',
+            'lobby_state' => 'locked',
+            'min_participants' => 3,
+            'max_participants' => 6,
+            'participation_amount' => '33.00',
+            'periodicity' => 'weekly',
+            'start_at' => typebDemoNow('-7 days'),
+            'reveal_at' => typebDemoNow('-7 days'),
+        ],
+        function (string $roomId) use ($db, $u1, $u2, $u4, $u5): void {
+            foreach ([[$u2,1],[$u1,2],[$u4,3],[$u5,4]] as $row) {
+                typebDemoSetParticipant($db, $roomId, (int)$row[0], 'active', (int)$row[1]);
+            }
+
+            typebDemoSetQueue($db, $roomId, [$u4, $u1, $u2, $u5], $u4);
+
+            typebDemoUpsertRotationWindow($db, $roomId, 1, $u4, [
+                'status' => 'pending_votes',
+                'approve_opens_at' => typebDemoNow('-2 hours'),
+                'approve_due_at' => typebDemoNow('+1 day'),
+            ]);
+
+            $png = typebDemoPngBytes();
+
+            // Cycle #1: upcoming (primary user has NOT contributed yet)
+            $c1 = typebDemoInsertCycle($db, $roomId, 1, typebDemoNow('+5 days'), typebDemoNow('+7 days'), 'open');
+            if ($c1 > 0) {
+                typebDemoUpsertContribution($db, $roomId, $c1, $u1, '33.00', 'unpaid', null, null);
+
+                foreach ([$u2,$u4,$u5] as $uid) {
+                    typebDemoUpsertContribution($db, $roomId, $c1, (int)$uid, '33.00', 'paid', 'DEMO-PROOF-UPCOMING-' . $uid, typebDemoNow('-6 hours'));
+                    $cid = typebDemoFindContributionId($db, $roomId, $c1, (int)$uid);
+                    typebDemoInsertProof($db, $roomId, $cid, (int)$uid, null, 'proof-cycle1-' . $uid . '.png', 'image/png', $png, typebDemoNow('-6 hours'));
+                }
+            }
+
+            // Cycle #2: overdue in grace (primary still unpaid)
+            $c2 = typebDemoInsertCycle($db, $roomId, 2, typebDemoNow('-1 day'), typebDemoNow('+1 day'), 'grace');
+            if ($c2 > 0) {
+                typebDemoUpsertContribution($db, $roomId, $c2, $u1, '33.00', 'unpaid', null, null);
+
+                typebDemoUpsertContribution($db, $roomId, $c2, $u2, '33.00', 'paid', 'DEMO-PROOF-GRACE-MAKER', typebDemoNow('-3 hours'));
+                $cid2m = typebDemoFindContributionId($db, $roomId, $c2, $u2);
+                typebDemoInsertProof($db, $roomId, $cid2m, $u2, null, 'proof-cycle2-maker.png', 'image/png', $png, typebDemoNow('-3 hours'));
+
+                typebDemoUpsertContribution($db, $roomId, $c2, $u4, '33.00', 'paid_in_grace', 'DEMO-PROOF-GRACE-1', typebDemoNow('-2 hours'));
+                $cid2 = typebDemoFindContributionId($db, $roomId, $c2, $u4);
+                typebDemoInsertProof($db, $roomId, $cid2, $u4, null, 'proof-cycle2-1.png', 'image/png', $png, typebDemoNow('-2 hours'));
+
+                typebDemoUpsertContribution($db, $roomId, $c2, $u5, '33.00', 'paid_in_grace', 'DEMO-PROOF-GRACE-2', typebDemoNow('-90 minutes'));
+                $cid2b = typebDemoFindContributionId($db, $roomId, $c2, $u5);
+                typebDemoInsertProof($db, $roomId, $cid2b, $u5, null, 'proof-cycle2-2.png', 'image/png', $png, typebDemoNow('-90 minutes'));
+            }
+
+            // Cycle #3: missed contribution (shows in rooms_proofs task list)
+            $c3 = typebDemoInsertCycle($db, $roomId, 3, typebDemoNow('-12 days'), typebDemoNow('-10 days'), 'closed');
+            if ($c3 > 0) {
+                typebDemoUpsertContribution($db, $roomId, $c3, $u1, '33.00', 'missed', null, null);
+            }
+
+            // Cycle #4: paid + proof for primary (shows in "My proofs")
+            $c4 = typebDemoInsertCycle($db, $roomId, 4, typebDemoNow('-20 days'), typebDemoNow('-18 days'), 'closed');
+            if ($c4 > 0) {
+                typebDemoUpsertContribution($db, $roomId, $c4, $u1, '33.00', 'paid', 'DEMO-PROOF-PAID', typebDemoNow('-19 days'));
+                $cid4 = typebDemoFindContributionId($db, $roomId, $c4, $u1);
+                typebDemoInsertProof($db, $roomId, $cid4, $u1, null, 'proof-primary.png', 'image/png', $png, typebDemoNow('-19 days'));
+            }
+
+            typebDemoInsertActivity($db, $roomId, 'room_created', ['demo' => 1], typebDemoNow('-7 days'));
+        }
+    );
+
+    // 15) Private-room invites (pending invite UI + maker invite list)
+    $outRooms[] = typebDemoEnsureRoom(
+        $db,
+        $destAccountId,
+        TYPEB_DEMO_PREFIX . 'Private invites (pending/accepted/declined/revoked)',
+        $u2,
+        [
+            'visibility' => 'private',
+            'room_state' => 'lobby',
+            'lobby_state' => 'open',
+            'min_participants' => 2,
+            'max_participants' => 6,
+            'participation_amount' => '27.00',
+            'periodicity' => 'weekly',
+            'start_at' => typebDemoNow('now'),
+            'reveal_at' => typebDemoNow('now'),
+        ],
+        function (string $roomId) use ($db, $u1, $u2, $u4, $u5, $u6, &$outLinks): void {
+            // Maker is already "approved" in normal create flow; ensure here for seed.
+            typebDemoSetParticipant($db, $roomId, $u2, 'approved', 1);
+
+            // Accepted invite -> participant becomes approved.
+            $u4Email = typebDemoGetUserEmail($db, $u4);
+            $tokAccepted = bin2hex(random_bytes(16));
+            typebDemoInsertInvite($db, $roomId, 'private_user', 'accepted', $u4, $u4Email, $tokAccepted, null, typebDemoNow('-2 days'), typebDemoNow('-2 days'));
+            typebDemoSetParticipant($db, $roomId, $u4, 'approved', 2);
+
+            // Active invite for primary user (shows invite-block + accept/decline)
+            $u1Email = typebDemoGetUserEmail($db, $u1);
+            $tokActive = bin2hex(random_bytes(16));
+            $invActive = typebDemoInsertInvite($db, $roomId, 'private_user', 'active', $u1, $u1Email, $tokActive, null, typebDemoNow('-20 minutes'), null);
+
+            if (!empty($invActive['token'])) {
+                $outLinks[] = [
+                    'label' => 'Private invite (primary user)',
+                    'url' => '/room.php?id=' . $roomId . '&invite=' . $invActive['token'],
+                ];
+            }
+
+            // Declined invite
+            $u5Email = typebDemoGetUserEmail($db, $u5);
+            $tokDeclined = bin2hex(random_bytes(16));
+            typebDemoInsertInvite($db, $roomId, 'private_user', 'declined', $u5, $u5Email, $tokDeclined, null, typebDemoNow('-6 hours'), typebDemoNow('-5 hours'));
+
+            // Revoked invite (email-only variant, even if user exists)
+            $u6Email = typebDemoGetUserEmail($db, $u6);
+            $tokRevoked = bin2hex(random_bytes(16));
+            typebDemoInsertInvite($db, $roomId, 'private_user', 'revoked', null, $u6Email, $tokRevoked, null, typebDemoNow('-10 hours'), typebDemoNow('-9 hours'));
+
+            typebDemoInsertActivity($db, $roomId, 'invite_created', ['mode' => 'private_user', 'demo' => 1], typebDemoNow('-20 minutes'));
+        }
+    );
+
+    // 16) Unlisted invite link (token-gated room access)
+    $outRooms[] = typebDemoEnsureRoom(
+        $db,
+        $destAccountId,
+        TYPEB_DEMO_PREFIX . 'Unlisted link invite (active/revoked/expired)',
+        $u2,
+        [
+            'visibility' => 'unlisted',
+            'room_state' => 'lobby',
+            'lobby_state' => 'open',
+            'min_participants' => 2,
+            'max_participants' => 8,
+            'participation_amount' => '19.00',
+            'periodicity' => 'weekly',
+            'start_at' => typebDemoNow('now'),
+            'reveal_at' => typebDemoNow('now'),
+        ],
+        function (string $roomId) use ($db, $u2, $u4, &$outLinks): void {
+            typebDemoSetParticipant($db, $roomId, $u2, 'approved', 1);
+            typebDemoSetParticipant($db, $roomId, $u4, 'approved', 2);
+
+            // Revoked older token
+            $tokOld = bin2hex(random_bytes(16));
+            typebDemoInsertInvite($db, $roomId, 'unlisted_link', 'revoked', null, null, $tokOld, null, typebDemoNow('-3 days'), typebDemoNow('-3 days'));
+
+            // "Expired" token (active status but expires_at in the past)
+            $tokExpired = bin2hex(random_bytes(16));
+            typebDemoInsertInvite($db, $roomId, 'unlisted_link', 'active', null, null, $tokExpired, typebDemoNow('-1 day'), typebDemoNow('-2 days'), null);
+
+            // Current active token
+            $tokActive = bin2hex(random_bytes(16));
+            $inv = typebDemoInsertInvite($db, $roomId, 'unlisted_link', 'active', null, null, $tokActive, null, typebDemoNow('-30 minutes'), null);
+
+            if (!empty($inv['token'])) {
+                $outLinks[] = [
+                    'label' => 'Unlisted invite link (active)',
+                    'url' => '/room.php?id=' . $roomId . '&invite=' . $inv['token'],
+                ];
+            }
+
+            typebDemoInsertActivity($db, $roomId, 'invite_created', ['mode' => 'unlisted_link', 'demo' => 1], typebDemoNow('-30 minutes'));
+        }
+    );
+
     $db->commit();
 
 } catch (Throwable $e) {
@@ -1260,6 +1551,16 @@ echo "Demo password (for newly created demo accounts): {$demoPassword}\n\n";
 echo "Rooms:\n";
 foreach ($outRooms as $r) {
     echo "- {$r['goal']}: {$r['id']}\n";
+}
+
+if ($outLinks) {
+    echo "\nInvite links:\n";
+    foreach ($outLinks as $l) {
+        $label = (string)($l['label'] ?? 'link');
+        $url = (string)($l['url'] ?? '');
+        if ($url === '') continue;
+        echo "- {$label}: {$url}\n";
+    }
 }
 
 echo "\nUseful logins (if created):\n";

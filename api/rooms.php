@@ -925,17 +925,54 @@ if ($action === 'room_detail') {
         $escrowSettlements = $es->fetchAll();
     }
 
-    $participantsStmt = $db->prepare("SELECT p.user_id, p.status, {$uNameExpr} AS display_name,
-                                             (SELECT trust_level FROM user_trust WHERE user_id = p.user_id) AS trust_level,
-                                             (SELECT COUNT(*) FROM user_strikes WHERE user_id = p.user_id AND created_at >= (NOW() - INTERVAL 6 MONTH)) AS strikes_6m,
-                                             (SELECT restricted_until FROM user_restrictions WHERE user_id = p.user_id AND restricted_until > NOW()) AS restricted_until
-                                      FROM saving_room_participants p
-                                      JOIN users u ON u.id = p.user_id
-                                      WHERE p.room_id = ?
-                                        AND p.status IN ('approved','active','removed','completed','exited_prestart','exited_poststart')
-                                      ORDER BY p.joined_at ASC");
-    $participantsStmt->execute([$roomId]);
-    $participants = $participantsStmt->fetchAll();
+    $canSeeParticipants = (((int)$room['maker_user_id'] === $userId) || isAdmin($userId) || in_array((string)$myStatus, ['approved','active'], true));
+
+    $participants = [];
+    if ($canSeeParticipants) {
+        $trustSel = dbHasTable('user_trust')
+            ? "(SELECT trust_level FROM user_trust WHERE user_id = p.user_id)"
+            : 'NULL';
+
+        $strikesSel = dbHasTable('user_strikes')
+            ? "(SELECT COUNT(*) FROM user_strikes WHERE user_id = p.user_id AND created_at >= (NOW() - INTERVAL 6 MONTH))"
+            : '0';
+
+        $restrictedSel = dbHasTable('user_restrictions')
+            ? "(SELECT restricted_until FROM user_restrictions WHERE user_id = p.user_id AND restricted_until > NOW())"
+            : 'NULL';
+
+        $neighborhoodSel = hasNeighborhoodColumn()
+            ? ', u.neighborhood AS neighborhood'
+            : ', NULL AS neighborhood';
+
+        $phonePrimarySel = hasPhonePrimaryColumn()
+            ? ', u.phone_primary AS phone_primary'
+            : ', NULL AS phone_primary';
+
+        $phoneSecondarySel = hasPhoneSecondaryColumn()
+            ? ', u.phone_secondary AS phone_secondary'
+            : ', NULL AS phone_secondary';
+
+        $avatarJoin = dbHasTable('user_profile_images')
+            ? ' LEFT JOIN user_profile_images upi ON upi.user_id = p.user_id'
+            : '';
+
+        $avatarSel = dbHasTable('user_profile_images')
+            ? ', upi.updated_at AS avatar_updated_at'
+            : ', NULL AS avatar_updated_at';
+
+        $participantsStmt = $db->prepare("SELECT p.user_id, p.status, {$uNameExpr} AS display_name{$neighborhoodSel}{$phonePrimarySel}{$phoneSecondarySel}{$avatarSel},
+                                                 {$trustSel} AS trust_level,
+                                                 {$strikesSel} AS strikes_6m,
+                                                 {$restrictedSel} AS restricted_until
+                                          FROM saving_room_participants p
+                                          JOIN users u ON u.id = p.user_id{$avatarJoin}
+                                          WHERE p.room_id = ?
+                                            AND p.status IN ('approved','active','removed','completed','exited_prestart','exited_poststart')
+                                          ORDER BY p.joined_at ASC");
+        $participantsStmt->execute([$roomId]);
+        $participants = $participantsStmt->fetchAll();
+    }
 
     $underfillStmt = $db->prepare("SELECT status, decision_deadline_at FROM saving_room_underfill_alerts WHERE room_id = ?");
     $underfillStmt->execute([$roomId]);
@@ -1653,6 +1690,7 @@ if ($action === 'room_detail') {
             'rotation' => $rotation,
             'rotation_history' => $rotationHistory,
             'exit_request' => $exitRequest,
+            'participants_visible' => $canSeeParticipants ? 1 : 0,
         ],
         'participants' => $participants,
         'escrow_settlements' => $settlements,

@@ -85,6 +85,26 @@ header("Referrer-Policy: no-referrer");
         <div id="next-actions" class="next-actions"></div>
       </div>
 
+      <div id="participants-block" style="margin-top:12px;display:none;">
+        <div class="hr"></div>
+        <div class="card-title" style="margin-bottom:10px;"><?php e('room.participants_title'); ?></div>
+        <div class="p" style="margin-bottom:10px;"><?php e('room.participants_sub'); ?></div>
+
+        <div class="table-wrap" id="participants-table-wrap" style="margin-top:10px;display:none;">
+          <table class="table" id="participants-table">
+            <thead>
+              <tr>
+                <th><?php e('room.participants.th_participant'); ?></th>
+                <th><?php e('room.participants.th_neighborhood'); ?></th>
+                <th><?php e('room.participants.th_status'); ?></th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div id="participants-empty" class="k" style="display:none;margin-top:10px;"><?php e('room.participants_empty'); ?></div>
+      </div>
+
       <?php if ($isAdmin): ?>
       <details id="admin-panel" style="margin-top:12px;">
         <summary style="cursor:pointer;user-select:none;"><?php e('nav.admin'); ?></summary>
@@ -1943,6 +1963,106 @@ function renderNextPanel(r){
   });
 }
 
+function initialsFromName(name){
+  const s = String(name||'').trim();
+  if(!s) return '?';
+
+  const parts = s.split(/[^A-Za-z0-9]+/).filter(Boolean);
+  let out = '';
+  for(const p of parts){
+    if(!p) continue;
+    out += p[0];
+    if(out.length >= 2) break;
+  }
+
+  if(out.length < 2){
+    const compact = s.replace(/[^A-Za-z0-9]/g, '');
+    out = compact.slice(0, 2);
+  }
+
+  out = out.toUpperCase();
+  return out ? out : '?';
+}
+
+function participantAvatarUrl(userId, avatarUpdatedAt){
+  let v = '0';
+  if(avatarUpdatedAt){
+    const d = parseUtcDate(avatarUpdatedAt);
+    if(d && !isNaN(d.getTime())) v = String(d.getTime());
+  }
+
+  return apiUrl('api/user_avatar.php?room_id=' + encodeURIComponent(ROOM_ID)
+    + '&user_id=' + encodeURIComponent(String(userId||0))
+    + '&v=' + encodeURIComponent(v));
+}
+
+function renderParticipants(r){
+  const block = document.getElementById('participants-block');
+  if(!block) return;
+
+  const visible = !!(r && r.participants_visible === 1);
+  block.style.display = visible ? 'block' : 'none';
+  if(!visible) return;
+
+  const rows = (roomCache && roomCache.participants) ? roomCache.participants : [];
+
+  const wrap = document.getElementById('participants-table-wrap');
+  const empty = document.getElementById('participants-empty');
+  const tbody = document.querySelector('#participants-table tbody');
+  if(!wrap || !empty || !tbody) return;
+
+  tbody.innerHTML = '';
+
+  if(!rows.length){
+    empty.style.display = 'block';
+    wrap.style.display = 'none';
+    return;
+  }
+
+  empty.style.display = 'none';
+  wrap.style.display = 'block';
+
+  rows.forEach(p => {
+    const trEl = document.createElement('tr');
+
+    const status = String(p.status||'');
+    if(status && status !== 'active' && status !== 'approved'){
+      trEl.className = 'room-participant-muted';
+    }
+
+    const userId = (p.user_id|0);
+    const name = String(p.display_name||('User #' + String(userId||'')));
+    const initials = initialsFromName(name);
+
+    const phoneA = String(p.phone_primary||'').trim();
+    const phoneB = String(p.phone_secondary||'').trim();
+    const phones = [phoneA, phoneB].filter(Boolean).join(' · ');
+
+    const avatarSrc = participantAvatarUrl(userId, p.avatar_updated_at);
+
+    const who = `
+      <div class="room-participant">
+        <span class="ls-avatar" aria-hidden="true">
+          <img class="ls-avatar-img" src="${esc(avatarSrc)}" alt="" onload="if(this.nextElementSibling){this.nextElementSibling.style.display='none';}" onerror="this.style.display='none';if(this.nextElementSibling){this.nextElementSibling.style.display='flex';}">
+          <span class="ls-avatar-initials">${esc(initials)}</span>
+        </span>
+        <div class="room-participant-meta">
+          <div class="room-participant-name">${esc(name)}</div>
+          ${phones ? ('<div class="room-participant-phones">' + esc(phones) + '</div>') : ''}
+        </div>
+      </div>
+    `;
+
+    trEl.innerHTML = `
+      <td>${who}</td>
+      <td>${esc(String(p.neighborhood||'—'))}</td>
+      <td>${esc(prettyMyStatus(status))}</td>
+    `;
+
+    tbody.appendChild(trEl);
+  });
+}
+
 function renderRoom(){
   const r = roomCache;
   if(!r) return;
@@ -2067,6 +2187,7 @@ function renderRoom(){
   renderRoomTimeline(r);
 
   renderNextPanel(r);
+  renderParticipants(r);
   renderAdminPanel(r);
 
   updateRoomCountdown();

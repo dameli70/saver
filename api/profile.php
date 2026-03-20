@@ -1,7 +1,7 @@
 <?php
 // ============================================================
 //  API: /api/profile.php
-//  User profile settings (room display nickname + profile image URL)
+//  User profile settings (room display nickname, avatar URL, neighborhood, phone numbers)
 // ============================================================
 
 require_once __DIR__ . '/../includes/install_guard.php';
@@ -50,23 +50,54 @@ function loadProfileRow(int $userId): array {
     $db = getDB();
 
     $sel = [];
+
     if (hasRoomDisplayNameColumn()) $sel[] = 'room_display_name';
     else $sel[] = 'NULL AS room_display_name';
 
     if (hasProfileImageUrlColumn()) $sel[] = 'profile_image_url';
     else $sel[] = 'NULL AS profile_image_url';
 
+    if (hasNeighborhoodColumn()) $sel[] = 'neighborhood';
+    else $sel[] = 'NULL AS neighborhood';
+
+    if (hasPhonePrimaryColumn()) $sel[] = 'phone_primary';
+    else $sel[] = 'NULL AS phone_primary';
+
+    if (hasPhoneSecondaryColumn()) $sel[] = 'phone_secondary';
+    else $sel[] = 'NULL AS phone_secondary';
+
     $sql = 'SELECT ' . implode(', ', $sel) . ' FROM users WHERE id = ?';
     $stmt = $db->prepare($sql);
     $stmt->execute([(int)$userId]);
     $row = $stmt->fetch();
-    return $row ?: ['room_display_name' => null, 'profile_image_url' => null];
+
+    return $row ?: [
+        'room_display_name' => null,
+        'profile_image_url' => null,
+        'neighborhood' => null,
+        'phone_primary' => null,
+        'phone_secondary' => null,
+    ];
 }
 
 function normalizeNullableText($v): ?string {
     if ($v === null) return null;
     $s = trim((string)$v);
     return ($s === '') ? null : $s;
+}
+
+function validatePhoneNullable($v): ?string {
+    $s = normalizeNullableText($v);
+    if ($s === null) return null;
+
+    if (strLenU($s) > 30) jsonResponse(['error' => 'Phone number must be 30 characters or less'], 400);
+
+    // Allow typical phone formats: digits, spaces, +, -, (), .
+    if (!preg_match('/^[0-9+\-().\s]+$/', $s)) {
+        jsonResponse(['error' => 'Invalid phone number format'], 400);
+    }
+
+    return $s;
 }
 
 $trustLevel = getUserTrustLevelProfile($userId);
@@ -76,15 +107,23 @@ if ($action === 'get_profile') {
 
     $nickname = normalizeNullableText($row['room_display_name'] ?? null);
     $imgUrl = normalizeNullableText($row['profile_image_url'] ?? null);
+    $neighborhood = normalizeNullableText($row['neighborhood'] ?? null);
+    $phonePrimary = normalizeNullableText($row['phone_primary'] ?? null);
+    $phoneSecondary = normalizeNullableText($row['phone_secondary'] ?? null);
 
     $nicknameLocked = ($trustLevel === 1 && $nickname !== null);
+
+    $profileAvailable = (hasRoomDisplayNameColumn() || hasProfileImageUrlColumn() || hasNeighborhoodColumn() || hasPhonePrimaryColumn() || hasPhoneSecondaryColumn()) ? 1 : 0;
 
     jsonResponse([
         'success' => true,
         'trust_level' => $trustLevel,
         'room_display_name' => $nickname,
         'profile_image_url' => $imgUrl,
-        'profile_fields_available' => (hasRoomDisplayNameColumn() || hasProfileImageUrlColumn()) ? 1 : 0,
+        'neighborhood' => $neighborhood,
+        'phone_primary' => $phonePrimary,
+        'phone_secondary' => $phoneSecondary,
+        'profile_fields_available' => $profileAvailable,
         'nickname_locked' => $nicknameLocked ? 1 : 0,
     ]);
 }
@@ -92,8 +131,11 @@ if ($action === 'get_profile') {
 if ($action === 'set_profile') {
     $canSetName = hasRoomDisplayNameColumn();
     $canSetImg  = hasProfileImageUrlColumn();
+    $canSetNeighborhood = hasNeighborhoodColumn();
+    $canSetPhonePrimary = hasPhonePrimaryColumn();
+    $canSetPhoneSecondary = hasPhoneSecondaryColumn();
 
-    if (!$canSetName && !$canSetImg) {
+    if (!$canSetName && !$canSetImg && !$canSetNeighborhood && !$canSetPhonePrimary && !$canSetPhoneSecondary) {
         jsonResponse(['error' => 'Profile fields are unavailable on this server. Apply database migrations.'], 409);
     }
 
@@ -102,6 +144,9 @@ if ($action === 'set_profile') {
 
     $wantName = array_key_exists('room_display_name', $body);
     $wantImg  = array_key_exists('profile_image_url', $body);
+    $wantNeighborhood = array_key_exists('neighborhood', $body);
+    $wantPhonePrimary = array_key_exists('phone_primary', $body);
+    $wantPhoneSecondary = array_key_exists('phone_secondary', $body);
 
     $newName = null;
     if ($wantName) {
@@ -153,6 +198,43 @@ if ($action === 'set_profile') {
         $params[] = $newUrl;
     }
 
+    $newNeighborhood = null;
+    if ($wantNeighborhood) {
+        if (!$canSetNeighborhood) {
+            jsonResponse(['error' => 'Neighborhood is unavailable on this server. Apply database migrations.'], 409);
+        }
+
+        $newNeighborhood = normalizeNullableText($body['neighborhood']);
+        if ($newNeighborhood !== null && strLenU($newNeighborhood) > 120) {
+            jsonResponse(['error' => 'Neighborhood must be 120 characters or less'], 400);
+        }
+
+        $updates[] = 'neighborhood = ?';
+        $params[] = $newNeighborhood;
+    }
+
+    $newPhonePrimary = null;
+    if ($wantPhonePrimary) {
+        if (!$canSetPhonePrimary) {
+            jsonResponse(['error' => 'Phone number is unavailable on this server. Apply database migrations.'], 409);
+        }
+
+        $newPhonePrimary = validatePhoneNullable($body['phone_primary']);
+        $updates[] = 'phone_primary = ?';
+        $params[] = $newPhonePrimary;
+    }
+
+    $newPhoneSecondary = null;
+    if ($wantPhoneSecondary) {
+        if (!$canSetPhoneSecondary) {
+            jsonResponse(['error' => 'Secondary phone number is unavailable on this server. Apply database migrations.'], 409);
+        }
+
+        $newPhoneSecondary = validatePhoneNullable($body['phone_secondary']);
+        $updates[] = 'phone_secondary = ?';
+        $params[] = $newPhoneSecondary;
+    }
+
     if (!$updates) {
         jsonResponse(['error' => 'No fields to update'], 400);
     }
@@ -166,15 +248,25 @@ if ($action === 'set_profile') {
     auditLog('profile_updated', null, (int)$userId);
 
     $row = loadProfileRow($userId);
+
     $nickname = normalizeNullableText($row['room_display_name'] ?? null);
     $imgUrl = normalizeNullableText($row['profile_image_url'] ?? null);
+    $neighborhood = normalizeNullableText($row['neighborhood'] ?? null);
+    $phonePrimary = normalizeNullableText($row['phone_primary'] ?? null);
+    $phoneSecondary = normalizeNullableText($row['phone_secondary'] ?? null);
+
     $nicknameLocked = ($trustLevel === 1 && $nickname !== null);
+    $profileAvailable = (hasRoomDisplayNameColumn() || hasProfileImageUrlColumn() || hasNeighborhoodColumn() || hasPhonePrimaryColumn() || hasPhoneSecondaryColumn()) ? 1 : 0;
 
     jsonResponse([
         'success' => true,
         'trust_level' => $trustLevel,
         'room_display_name' => $nickname,
         'profile_image_url' => $imgUrl,
+        'neighborhood' => $neighborhood,
+        'phone_primary' => $phonePrimary,
+        'phone_secondary' => $phoneSecondary,
+        'profile_fields_available' => $profileAvailable,
         'nickname_locked' => $nicknameLocked ? 1 : 0,
     ]);
 }

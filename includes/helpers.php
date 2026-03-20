@@ -307,6 +307,51 @@ function hasProfileImageUrlColumn(): bool {
     }
 }
 
+function hasNeighborhoodColumn(): bool {
+    static $cached = null;
+    if ($cached !== null) return $cached;
+
+    try {
+        $db = getDB();
+        $stmt = $db->query("SELECT 1 FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'users' AND column_name = 'neighborhood' LIMIT 1");
+        $cached = (bool)$stmt->fetchColumn();
+        return $cached;
+    } catch (Throwable) {
+        $cached = false;
+        return false;
+    }
+}
+
+function hasPhonePrimaryColumn(): bool {
+    static $cached = null;
+    if ($cached !== null) return $cached;
+
+    try {
+        $db = getDB();
+        $stmt = $db->query("SELECT 1 FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'users' AND column_name = 'phone_primary' LIMIT 1");
+        $cached = (bool)$stmt->fetchColumn();
+        return $cached;
+    } catch (Throwable) {
+        $cached = false;
+        return false;
+    }
+}
+
+function hasPhoneSecondaryColumn(): bool {
+    static $cached = null;
+    if ($cached !== null) return $cached;
+
+    try {
+        $db = getDB();
+        $stmt = $db->query("SELECT 1 FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'users' AND column_name = 'phone_secondary' LIMIT 1");
+        $cached = (bool)$stmt->fetchColumn();
+        return $cached;
+    } catch (Throwable) {
+        $cached = false;
+        return false;
+    }
+}
+
 function dbHasTable(string $table): bool {
     static $cache = [];
     if (array_key_exists($table, $cache)) return (bool)$cache[$table];
