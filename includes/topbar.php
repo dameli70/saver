@@ -106,7 +106,7 @@ $topbarActive = function(string $href) use ($topbarCurPage): bool {
         <?php endif; ?>
         <span class="user-pill">
             <span class="ls-avatar" aria-hidden="true">
-              <img class="ls-avatar-img" data-user-avatar="1" src="api/profile_image.php?v=0" alt="" onload="if(this.nextElementSibling){this.nextElementSibling.style.display='none';}" onerror="this.style.display='none';if(this.nextElementSibling){this.nextElementSibling.style.display='flex';}">
+              <img class="ls-avatar-img" data-user-avatar="1" src="api/profile_image.php?v=<?= (int)time() ?>" alt="" onload="if(this.nextElementSibling){this.nextElementSibling.style.display='none';}" onerror="this.style.display='none';if(this.nextElementSibling){this.nextElementSibling.style.display='flex';}">
               <span class="ls-avatar-initials"><?= htmlspecialchars($topbarUserInitials, ENT_QUOTES, 'UTF-8') ?></span>
             </span>
             <span class="user-email"><?= htmlspecialchars($topbarUserEmail) ?></span>
@@ -162,7 +162,7 @@ $topbarActive = function(string $href) use ($topbarCurPage): bool {
     <?php endif; ?>
     <span class="user-pill">
       <span class="ls-avatar" aria-hidden="true">
-        <img class="ls-avatar-img" data-user-avatar="1" src="api/profile_image.php?v=0" alt="" onload="if(this.nextElementSibling){this.nextElementSibling.style.display='none';}" onerror="this.style.display='none';if(this.nextElementSibling){this.nextElementSibling.style.display='flex';}">
+        <img class="ls-avatar-img" data-user-avatar="1" src="api/profile_image.php?v=<?= (int)time() ?>" alt="" onload="if(this.nextElementSibling){this.nextElementSibling.style.display='none';}" onerror="this.style.display='none';if(this.nextElementSibling){this.nextElementSibling.style.display='flex';}">
         <span class="ls-avatar-initials"><?= htmlspecialchars($topbarUserInitials, ENT_QUOTES, 'UTF-8') ?></span>
       </span>
       <span class="user-email"><?= htmlspecialchars($topbarUserEmail) ?></span>

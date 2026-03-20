@@ -90,7 +90,7 @@ header("Referrer-Policy: no-referrer");
 
             <div style="display:flex;align-items:center;gap:14px;margin-top:12px;flex-wrap:wrap;">
               <div class="ls-avatar ls-avatar-lg" id="profile-image-preview-wrap">
-                <img class="ls-avatar-img" id="profile-image-preview" src="api/profile_image.php?v=0" alt="<?= htmlspecialchars(t('account_user.profile_picture_title'), ENT_QUOTES, 'UTF-8') ?>" onload="if(this.nextElementSibling){this.nextElementSibling.style.display='none';}" onerror="this.style.display='none';if(this.nextElementSibling){this.nextElementSibling.style.display='flex';}">
+                <img class="ls-avatar-img" id="profile-image-preview" src="api/profile_image.php?v=<?= (int)time() ?>" alt="<?= htmlspecialchars(t('account_user.profile_picture_title'), ENT_QUOTES, 'UTF-8') ?>" onload="if(this.nextElementSibling){this.nextElementSibling.style.display='none';}" onerror="this.style.display='none';if(this.nextElementSibling){this.nextElementSibling.style.display='flex';}">
                 <span class="ls-avatar-initials" id="profile-image-initials"></span>
               </div>
 
@@ -124,6 +124,35 @@ header("Referrer-Policy: no-referrer");
           </div>
           <div class="item-actions">
             <button class="btn btn-blue btn-sm" type="button" id="name-save"><?php e('common.save'); ?></button>
+          </div>
+        </div>
+
+        <div class="item" id="contact">
+          <div style="flex:1;min-width:240px;">
+            <div class="k"><?php e('account_user.contact_title'); ?></div>
+            <div class="small"><?php e('account_user.contact_sub'); ?></div>
+
+            <div class="field" style="margin-top:10px;">
+              <label><?php e('account_user.neighborhood_label'); ?></label>
+              <input type="text" id="user-neighborhood" maxlength="120" placeholder="<?= htmlspecialchars(t('account_user.neighborhood_placeholder'), ENT_QUOTES, 'UTF-8') ?>">
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;">
+              <div class="field" style="margin:0;">
+                <label><?php e('account_user.phone_primary_label'); ?></label>
+                <input type="text" id="user-phone-primary" maxlength="30" placeholder="<?= htmlspecialchars(t('account_user.phone_primary_placeholder'), ENT_QUOTES, 'UTF-8') ?>">
+              </div>
+              <div class="field" style="margin:0;">
+                <label><?php e('account_user.phone_secondary_label'); ?></label>
+                <input type="text" id="user-phone-secondary" maxlength="30" placeholder="<?= htmlspecialchars(t('account_user.phone_secondary_placeholder'), ENT_QUOTES, 'UTF-8') ?>">
+              </div>
+            </div>
+
+            <div class="msg msg-ok" id="contact-ok"></div>
+            <div class="msg msg-err" id="contact-err"></div>
+          </div>
+          <div class="item-actions">
+            <button class="btn btn-blue btn-sm" type="button" id="contact-save"><?php e('common.save'); ?></button>
           </div>
         </div>
       </div>
@@ -183,6 +212,13 @@ header("Referrer-Policy: no-referrer");
   const nameSave = document.getElementById('name-save');
   const nameOk = document.getElementById('name-ok');
   const nameErr = document.getElementById('name-err');
+
+  const neighborhoodInput = document.getElementById('user-neighborhood');
+  const phonePrimaryInput = document.getElementById('user-phone-primary');
+  const phoneSecondaryInput = document.getElementById('user-phone-secondary');
+  const contactSave = document.getElementById('contact-save');
+  const contactOk = document.getElementById('contact-ok');
+  const contactErr = document.getElementById('contact-err');
 
   let state = {trust_level: 1, nickname_locked: 0, profile_fields_available: 1};
 
@@ -303,6 +339,11 @@ header("Referrer-Policy: no-referrer");
     if(nameInput) nameInput.disabled = !ok || locked;
     if(nameSave) nameSave.disabled = !ok || locked;
 
+    if(neighborhoodInput) neighborhoodInput.disabled = !ok;
+    if(phonePrimaryInput) phonePrimaryInput.disabled = !ok;
+    if(phoneSecondaryInput) phoneSecondaryInput.disabled = !ok;
+    if(contactSave) contactSave.disabled = !ok;
+
     if(badge){
       if(!ok){
         badge.textContent = tr('common.unavailable', 'Unavailable');
@@ -320,6 +361,7 @@ header("Referrer-Policy: no-referrer");
   async function loadProfile(){
     clearMsg(imgOk); clearMsg(imgErr);
     clearMsg(nameOk); clearMsg(nameErr);
+    clearMsg(contactOk); clearMsg(contactErr);
 
     try{
       const j = await postCsrf('api/profile.php', {action: 'get_profile'});
@@ -332,6 +374,9 @@ header("Referrer-Policy: no-referrer");
       if(trustEl) trustEl.textContent = 'Level ' + String(state.trust_level);
 
       if(nameInput) nameInput.value = j.room_display_name || '';
+      if(neighborhoodInput) neighborhoodInput.value = j.neighborhood || '';
+      if(phonePrimaryInput) phonePrimaryInput.value = j.phone_primary || '';
+      if(phoneSecondaryInput) phoneSecondaryInput.value = j.phone_secondary || '';
 
       setAvailability();
       refreshAvatarFromServer();
@@ -442,6 +487,35 @@ header("Referrer-Policy: no-referrer");
         showMsg(nameErr, (e && e.message) ? e.message : tr('common.failed', 'Failed'));
       }finally{
         nameSave.disabled = !!state.nickname_locked ? true : false;
+      }
+    });
+  }
+
+  if(contactSave){
+    contactSave.addEventListener('click', async () => {
+      clearMsg(contactOk); clearMsg(contactErr);
+      contactSave.disabled = true;
+
+      try{
+        const neighborhood = (neighborhoodInput ? neighborhoodInput.value : '').trim();
+        const phone_primary = (phonePrimaryInput ? phonePrimaryInput.value : '').trim();
+        const phone_secondary = (phoneSecondaryInput ? phoneSecondaryInput.value : '').trim();
+
+        const j = await postCsrf('api/profile.php', {action:'set_profile', neighborhood, phone_primary, phone_secondary});
+        if(!j.success) throw new Error(j.error || tr('common.failed', 'Failed'));
+
+        if(neighborhoodInput) neighborhoodInput.value = j.neighborhood || '';
+        if(phonePrimaryInput) phonePrimaryInput.value = j.phone_primary || '';
+        if(phoneSecondaryInput) phoneSecondaryInput.value = j.phone_secondary || '';
+
+        state.profile_fields_available = !!j.profile_fields_available;
+        setAvailability();
+
+        showMsg(contactOk, tr('common.saved', 'Saved.'));
+      }catch(e){
+        showMsg(contactErr, (e && e.message) ? e.message : tr('common.failed', 'Failed'));
+      }finally{
+        contactSave.disabled = !state.profile_fields_available;
       }
     });
   }

@@ -155,6 +155,16 @@ return [
     'account_user.room_nickname_sub' => 'Ce nom est affiché aux autres participants à la place de votre e-mail.',
     'account_user.room_display_name_label' => 'Pseudo',
     'account_user.room_display_name_placeholder' => 'ex. Alex',
+
+    'account_user.contact_title' => 'Coordonnées',
+    'account_user.contact_sub' => 'Optionnel. Le quartier et les numéros de téléphone sont visibles par les autres participants dans vos salles.',
+    'account_user.neighborhood_label' => 'Quartier',
+    'account_user.neighborhood_placeholder' => 'ex. Cocody',
+    'account_user.phone_primary_label' => 'Téléphone (principal)',
+    'account_user.phone_primary_placeholder' => 'ex. +225 07 00 00 00',
+    'account_user.phone_secondary_label' => 'Téléphone (secondaire)',
+    'account_user.phone_secondary_placeholder' => 'optionnel',
+
     'account_user.unavailable_migrations' => 'Cette fonctionnalité est indisponible sur ce serveur. Appliquez les migrations de base de données.',
     'account_user.nickname_locked_badge' => 'Verrouillé',
     'account_user.nickname_editable_badge' => 'Modifiable',
@@ -1231,6 +1241,13 @@ return [
 
     'room.timeline_title' => 'Chronologie',
     'room.timeline.next_deadline' => 'Prochaine échéance',
+
+    'room.participants_title' => 'Participants',
+    'room.participants_sub' => 'Avatars et coordonnées partagés par les participants.',
+    'room.participants.th_participant' => 'Participant',
+    'room.participants.th_neighborhood' => 'Quartier',
+    'room.participants.th_status' => 'Statut',
+    'room.participants_empty' => 'Aucun participant pour le moment.',
     'room.timeline.lobby' => 'Lobby',
     'room.timeline.swap' => 'Échange',
     'room.timeline.saving' => 'Épargne',
