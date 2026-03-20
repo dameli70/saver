@@ -1675,7 +1675,7 @@ return [
     'rooms.destination_account_hint' => 'Select a destination account. Destination accounts cannot be reused across rooms.',
 
     'rooms.reveal_auto_hint' => 'Type B reveal date is calculated automatically{date}.',
-    'rooms.typeb.schedule_hint' => 'Type B flow: when the room reaches the minimum participants, a 24-hour swap window starts. The first turn opens one period after the swap closes (example if minimum
+    'rooms.typeb.schedule_hint' => 'Type B flow: when the room reaches the minimum participants, a 24-hour swap window starts. The first turn opens one period after the swap closes (example if minimum is reached now: {example}).',
     'rooms.destination_account.summary.mobile_money' => 'Mobile money {masked}',
     'rooms.destination_account.summary.mobile_money_short' => 'Mobile money',
     'rooms.destination_account.summary.bank' => 'Bank {masked}',
