@@ -378,6 +378,16 @@
     let autoShownAt = 0;
     let showTimer = null;
 
+    function resetAutoState(){
+      inFlight = 0;
+      autoShown = false;
+      autoShownAt = 0;
+      if(showTimer){
+        clearTimeout(showTimer);
+        showTimer = null;
+      }
+    }
+
     function scheduleShow(delayMs){
       if(showTimer || autoShown) return;
       if(hasOtherModalOpen()) return;
@@ -501,6 +511,23 @@
     function isModifiedClick(e){
       return !!(e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0);
     }
+
+    // Ensure the overlay never gets "stuck" when the page is restored from
+    // the back-forward cache (bfcache). This can happen if a navigation starts
+    // while the overlay is visible or a tracked request is in-flight.
+    window.addEventListener('pagehide', ()=>{
+      resetAutoState();
+      try{
+        if(LS.loading && typeof LS.loading.hide === 'function') LS.loading.hide();
+      }catch{}
+    }, true);
+
+    window.addEventListener('pageshow', ()=>{
+      resetAutoState();
+      try{
+        if(LS.loading && typeof LS.loading.hide === 'function') LS.loading.hide();
+      }catch{}
+    }, true);
 
     // Same-origin navigation links: show overlay.
     document.addEventListener('click', (e)=>{
