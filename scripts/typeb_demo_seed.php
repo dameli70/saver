@@ -23,6 +23,7 @@ if (PHP_SAPI !== 'cli') {
 }
 
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../includes/media_crypto.php';
 
 const TYPEB_DEMO_PREFIX = 'DEMO Type B - ';
 
@@ -353,6 +354,7 @@ function typebDemoResetRoomData(PDO $db, string $roomId): void {
         'saving_room_rotation_queue',
         'saving_room_account_ledger',
         // contributions are via cycles; deleting cycles will cascade.
+        'saving_room_contribution_proofs',
         'saving_room_contributions',
         'saving_room_contribution_cycles',
         'saving_room_accounts',
@@ -535,6 +537,55 @@ function typebDemoUpsertContribution(PDO $db, string $roomId, int $cycleId, int 
                   VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
                   ON DUPLICATE KEY UPDATE amount=VALUES(amount), status=VALUES(status), reference=VALUES(reference), confirmed_at=VALUES(confirmed_at)')
        ->execute([$roomId, $userId, $cycleId, $amount, $status, $reference, $confirmedAt]);
+}
+
+function typebDemoFindContributionId(PDO $db, string $roomId, int $cycleId, int $userId): int {
+    if (!typebDemoHasTable($db, 'saving_room_contributions')) return 0;
+
+    $st = $db->prepare('SELECT id FROM saving_room_contributions WHERE room_id = ? AND cycle_id = ? AND user_id = ? LIMIT 1');
+    $st->execute([$roomId, $cycleId, $userId]);
+    $id = (int)($st->fetchColumn() ?: 0);
+    $st->closeCursor();
+    return $id;
+}
+
+function typebDemoPngBytes(): string {
+    // 1x1 transparent PNG.
+    $b64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMB/6X4nfoAAAAASUVORK5CYII=';
+    $raw = base64_decode($b64, true);
+    return $raw !== false ? $raw : "";
+}
+
+function typebDemoInsertProof(PDO $db, string $roomId, int $contributionId, int $userId, ?string $referenceSnapshot, ?string $originalFilename, string $contentType, string $bytes, ?string $createdAt = null): int {
+    if (!typebDemoHasTable($db, 'saving_room_contribution_proofs')) return 0;
+    if ($contributionId < 1) return 0;
+
+    $contentType = strtolower(trim($contentType));
+    if ($contentType === '') $contentType = 'image/png';
+
+    $size = strlen($bytes);
+    if ($size < 1) return 0;
+
+    $shaBin = hash('sha256', $bytes, true);
+    $enc = mediaEncryptBytes($bytes);
+
+    $ref = $referenceSnapshot;
+    if ($ref === null || trim($ref) === '') {
+        $ref = bin2hex(random_bytes(12));
+    }
+
+    $cols = ['room_id','contribution_id','user_id','reference_snapshot','original_filename','content_type','size_bytes','sha256','enc_cipher','iv','tag'];
+    $vals = [$roomId, $contributionId, $userId, $ref, ($originalFilename !== null && $originalFilename !== '') ? substr($originalFilename, 0, 255) : null, $contentType, $size, $shaBin, $enc['cipher'], $enc['iv'], $enc['tag']];
+
+    if ($createdAt !== null && typebDemoHasColumn($db, 'saving_room_contribution_proofs', 'created_at')) {
+        $cols[] = 'created_at';
+        $vals[] = $createdAt;
+    }
+
+    $sql = 'INSERT INTO saving_room_contribution_proofs (' . implode(',', $cols) . ') VALUES (' . implode(',', array_fill(0, count($cols), '?')) . ')';
+    $db->prepare($sql)->execute($vals);
+
+    return (int)$db->lastInsertId();
 }
 
 function typebDemoInsertLedgerFromEntries(PDO $db, string $roomId, array $entries): void {
@@ -850,8 +901,11 @@ try {
 
             $c1 = typebDemoInsertCycle($db, $roomId, 1, typebDemoNow('+4 days'), typebDemoNow('+6 days'), 'open');
             if ($c1 > 0) {
+                $png = typebDemoPngBytes();
                 foreach ([$u2,$u1,$u3,$u4] as $uid) {
                     typebDemoUpsertContribution($db, $roomId, $c1, (int)$uid, '25.00', 'paid', 'DEMO-CYCLE1-' . $uid, typebDemoNow('-10 hours'));
+                    $cid = typebDemoFindContributionId($db, $roomId, $c1, (int)$uid);
+                    typebDemoInsertProof($db, $roomId, $cid, (int)$uid, null, 'demo-proof-' . $uid . '.png', 'image/png', $png, typebDemoNow('-9 hours'));
                 }
             }
 
@@ -1241,6 +1295,85 @@ try {
 
             typebDemoInsertActivity($db, $roomId, 'typeB_withdrawal_confirmed', ['rotation_index' => 1, 'amount' => '30.00', 'turn_user_name' => 'Demo', 'demo' => 1], typebDemoNow('-24 days'));
             typebDemoInsertActivity($db, $roomId, 'typeB_turn_revealed', ['rotation_index' => 2, 'window_id' => $w2, 'demo' => 1], typebDemoNow('-2 hours'));
+        }
+    );
+
+    // 14) Proof tasks + proof gallery (rooms_proofs.php + room_proofs.php)
+    $outRooms[] = typebDemoEnsureRoom(
+        $db,
+        $destAccountId,
+        TYPEB_DEMO_PREFIX . 'Proof tasks + gallery (upcoming/overdue/missed + proofs)',
+        $u2,
+        [
+            'room_state' => 'active',
+            'lobby_state' => 'locked',
+            'min_participants' => 3,
+            'max_participants' => 6,
+            'participation_amount' => '33.00',
+            'periodicity' => 'weekly',
+            'start_at' => typebDemoNow('-7 days'),
+            'reveal_at' => typebDemoNow('-7 days'),
+        ],
+        function (string $roomId) use ($db, $u1, $u2, $u4, $u5): void {
+            foreach ([[$u2,1],[$u1,2],[$u4,3],[$u5,4]] as $row) {
+                typebDemoSetParticipant($db, $roomId, (int)$row[0], 'active', (int)$row[1]);
+            }
+
+            typebDemoSetQueue($db, $roomId, [$u4, $u1, $u2, $u5], $u4);
+
+            typebDemoUpsertRotationWindow($db, $roomId, 1, $u4, [
+                'status' => 'pending_votes',
+                'approve_opens_at' => typebDemoNow('-2 hours'),
+                'approve_due_at' => typebDemoNow('+1 day'),
+            ]);
+
+            $png = typebDemoPngBytes();
+
+            // Cycle #1: upcoming (primary user has NOT contributed yet)
+            $c1 = typebDemoInsertCycle($db, $roomId, 1, typebDemoNow('+5 days'), typebDemoNow('+7 days'), 'open');
+            if ($c1 > 0) {
+                typebDemoUpsertContribution($db, $roomId, $c1, $u1, '33.00', 'unpaid', null, null);
+
+                foreach ([$u2,$u4,$u5] as $uid) {
+                    typebDemoUpsertContribution($db, $roomId, $c1, (int)$uid, '33.00', 'paid', 'DEMO-PROOF-UPCOMING-' . $uid, typebDemoNow('-6 hours'));
+                    $cid = typebDemoFindContributionId($db, $roomId, $c1, (int)$uid);
+                    typebDemoInsertProof($db, $roomId, $cid, (int)$uid, null, 'proof-cycle1-' . $uid . '.png', 'image/png', $png, typebDemoNow('-6 hours'));
+                }
+            }
+
+            // Cycle #2: overdue in grace (primary still unpaid)
+            $c2 = typebDemoInsertCycle($db, $roomId, 2, typebDemoNow('-1 day'), typebDemoNow('+1 day'), 'grace');
+            if ($c2 > 0) {
+                typebDemoUpsertContribution($db, $roomId, $c2, $u1, '33.00', 'unpaid', null, null);
+
+                typebDemoUpsertContribution($db, $roomId, $c2, $u2, '33.00', 'paid', 'DEMO-PROOF-GRACE-MAKER', typebDemoNow('-3 hours'));
+                $cid2m = typebDemoFindContributionId($db, $roomId, $c2, $u2);
+                typebDemoInsertProof($db, $roomId, $cid2m, $u2, null, 'proof-cycle2-maker.png', 'image/png', $png, typebDemoNow('-3 hours'));
+
+                typebDemoUpsertContribution($db, $roomId, $c2, $u4, '33.00', 'paid_in_grace', 'DEMO-PROOF-GRACE-1', typebDemoNow('-2 hours'));
+                $cid2 = typebDemoFindContributionId($db, $roomId, $c2, $u4);
+                typebDemoInsertProof($db, $roomId, $cid2, $u4, null, 'proof-cycle2-1.png', 'image/png', $png, typebDemoNow('-2 hours'));
+
+                typebDemoUpsertContribution($db, $roomId, $c2, $u5, '33.00', 'paid_in_grace', 'DEMO-PROOF-GRACE-2', typebDemoNow('-90 minutes'));
+                $cid2b = typebDemoFindContributionId($db, $roomId, $c2, $u5);
+                typebDemoInsertProof($db, $roomId, $cid2b, $u5, null, 'proof-cycle2-2.png', 'image/png', $png, typebDemoNow('-90 minutes'));
+            }
+
+            // Cycle #3: missed contribution (shows in rooms_proofs task list)
+            $c3 = typebDemoInsertCycle($db, $roomId, 3, typebDemoNow('-12 days'), typebDemoNow('-10 days'), 'closed');
+            if ($c3 > 0) {
+                typebDemoUpsertContribution($db, $roomId, $c3, $u1, '33.00', 'missed', null, null);
+            }
+
+            // Cycle #4: paid + proof for primary (shows in "My proofs")
+            $c4 = typebDemoInsertCycle($db, $roomId, 4, typebDemoNow('-20 days'), typebDemoNow('-18 days'), 'closed');
+            if ($c4 > 0) {
+                typebDemoUpsertContribution($db, $roomId, $c4, $u1, '33.00', 'paid', 'DEMO-PROOF-PAID', typebDemoNow('-19 days'));
+                $cid4 = typebDemoFindContributionId($db, $roomId, $c4, $u1);
+                typebDemoInsertProof($db, $roomId, $cid4, $u1, null, 'proof-primary.png', 'image/png', $png, typebDemoNow('-19 days'));
+            }
+
+            typebDemoInsertActivity($db, $roomId, 'room_created', ['demo' => 1], typebDemoNow('-7 days'));
         }
     );
 
