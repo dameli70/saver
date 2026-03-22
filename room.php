@@ -2700,22 +2700,33 @@ function renderSwapWindow(r){
 
   if(titleEl) titleEl.textContent = (isTypeB && inSwap)
     ? tr('room.swap.title', null, 'Swap window (Type B)')
-    : ((isTypeB && isActive) ? tr('room.swap.final_positions_title', null, 'Final positions') : tr('room.swap.positions_title', null, 'Current positions'));
+    : (isTypeB
+      ? (isActive ? tr('room.swap.final_positions_title', null, 'Final positions') : tr('room.swap.positions_title', null, 'Current positions'))
+      : tr('room.participants_title', null, 'Participants'));
 
   if(subEl) subEl.textContent = (isTypeB && inSwap)
     ? tr('room.swap.sub', null, 'Request to swap your payout slot with another participant during this window.')
-    : ((isTypeB && isActive) ? tr('room.swap.final_positions_sub', null, 'The payout order for this room.') : tr('room.swap.positions_sub', null, 'The current order for this room.'));
+    : (isTypeB
+      ? (isActive ? tr('room.swap.final_positions_sub', null, 'The payout order for this room.') : tr('room.swap.positions_sub', null, 'The current order for this room.'))
+      : tr('room.participants_sub', null, 'Avatars and contact details shared by participants.'));
 
   const statusEl = document.getElementById('swap-status');
   const closesEl = document.getElementById('swap-closes');
   if(statusEl) statusEl.textContent = isOpen ? tr('room.swap.open', null, 'Open') : tr('room.swap.closed', null, 'Closed');
   if(closesEl) closesEl.textContent = swapWindow.closes_at ? fmt(swapWindow.closes_at) : '—';
 
+  const slotsTitleEl = document.querySelector('#swap-slots .k');
+  if(slotsTitleEl) slotsTitleEl.style.display = isTypeB ? 'block' : 'none';
+
   // Slots table
   const slots = Array.isArray(r.slots) ? r.slots : [];
   const slotsWrap = document.getElementById('swap-slots-table-wrap');
   const slotsEmpty = document.getElementById('swap-slots-empty');
   const slotsBody = document.querySelector('#swap-slots-table tbody');
+
+  if(slotsEmpty) slotsEmpty.textContent = isTypeB
+    ? tr('room.swap.slots_empty', null, 'Slot order unavailable.')
+    : tr('room.participants_empty', null, 'No participants yet.');
 
   if(slotsBody) slotsBody.innerHTML = '';
 
@@ -2731,14 +2742,43 @@ function renderSwapWindow(r){
 
     slots.forEach(s => {
       const trEl = document.createElement('tr');
-      if((s.user_id|0) === (CURRENT_USER_ID|0)){
+
+      const uid = (s.user_id|0);
+      if(uid === (CURRENT_USER_ID|0)){
         trEl.style.background = 'var(--ls-surface-1)';
       }
 
-      const p = partById.get((s.user_id|0)) || null;
+      const p = partById.get(uid) || null;
+      const name = String((p && p.display_name) ? p.display_name : (s.display_name||('User #' + String(uid))));
+      const initials = initialsFromName(name);
+
+      const phoneA = String(p && p.phone_primary ? p.phone_primary : '').trim();
+      const phoneB = String(p && p.phone_secondary ? p.phone_secondary : '').trim();
+      const phones = [phoneA, phoneB].filter(Boolean).join(' · ');
+
+      const avatarSrc = participantAvatarUrl(uid, p ? p.avatar_updated_at : null);
+
+      const who = `
+        <div class="room-participant">
+          <span class="ls-avatar" aria-hidden="true">
+            <img class="ls-avatar-img" src="${esc(avatarSrc)}" alt="" onload="if(this.nextElementSibling){this.nextElementSibling.style.display='none';}" onerror="this.style.display='none';if(this.nextElementSibling){this.nextElementSibling.style.display='flex';}">
+            <span class="ls-avatar-initials">${esc(initials)}</span>
+          </span>
+          <div class="room-participant-meta">
+            <div class="room-participant-name">${esc(name)}</div>
+            ${phones ? ('<div class="room-participant-phones">' + esc(phones) + '</div>') : ''}
+          </div>
+        </div>
+      `;
+
       const neighborhood = (p && p.neighborhood) ? String(p.neighborhood) : '—';
 
-      trEl.innerHTML = `<td>#${esc(String(s.position||''))}</td><td>${esc(String(s.display_name||('User #' + s.user_id)))}</td><td>${esc(neighborhood)}</td>`;
+      const status = String((s.participant_status||''));
+      if(status && status !== 'active' && status !== 'approved'){
+        trEl.className = 'room-participant-muted';
+      }
+
+      trEl.innerHTML = `<td>#${esc(String(s.position||''))}</td><td>${who}</td><td>${esc(neighborhood)}</td>`;
       slotsBody.appendChild(trEl);
     });
   } else {
