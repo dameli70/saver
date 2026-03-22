@@ -979,6 +979,8 @@ return [
     // Fenêtre d’échange (Type B)
     'room.swap.title' => 'Fenêtre d’échange (Type B)',
     'room.swap.sub' => 'Pendant cette fenêtre, vous pouvez demander à échanger votre position de paiement avec un autre participant.',
+    'room.swap.positions_title' => 'Positions actuelles',
+    'room.swap.positions_sub' => 'L’ordre actuel pour cette chambre.',
     'room.swap.final_positions_title' => 'Positions finales',
     'room.swap.final_positions_sub' => 'L’ordre de paiement pour cette chambre.',
     'room.swap.status' => 'Statut',
@@ -989,6 +991,7 @@ return [
     'room.swap.slots_title' => 'Ordre actuel des positions',
     'room.swap.slots_th_pos' => 'Position',
     'room.swap.slots_th_participant' => 'Participant',
+    'room.swap.slots_th_neighborhood' => 'Quartier',
     'room.swap.slots_empty' => 'Ordre des positions indisponible.',
 
     'room.swap.request_to' => 'Demander un échange avec',

@@ -85,26 +85,6 @@ header("Referrer-Policy: no-referrer");
         <div id="next-actions" class="next-actions"></div>
       </div>
 
-      <div id="participants-block" style="margin-top:12px;display:none;">
-        <div class="hr"></div>
-        <div class="card-title" style="margin-bottom:10px;"><?php e('room.participants_title'); ?></div>
-        <div class="p" style="margin-bottom:10px;"><?php e('room.participants_sub'); ?></div>
-
-        <div class="table-wrap" id="participants-table-wrap" style="margin-top:10px;display:none;">
-          <table class="table" id="participants-table">
-            <thead>
-              <tr>
-                <th><?php e('room.participants.th_participant'); ?></th>
-                <th><?php e('room.participants.th_neighborhood'); ?></th>
-                <th><?php e('room.participants.th_status'); ?></th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </div>
-        <div id="participants-empty" class="k" style="display:none;margin-top:10px;"><?php e('room.participants_empty'); ?></div>
-      </div>
-
       <?php if ($isAdmin): ?>
       <details id="admin-panel" style="margin-top:12px;">
         <summary style="cursor:pointer;user-select:none;"><?php e('nav.admin'); ?></summary>
@@ -329,7 +309,7 @@ header("Referrer-Policy: no-referrer");
           <?php e('nav.admin'); ?>: you can review slots and swap requests, but swap actions are disabled unless you are a participant.
         </div>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div id="swap-meta-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
           <div>
             <div class="k"><?php e('room.swap.status'); ?></div>
             <div class="v" id="swap-status">—</div>
@@ -348,6 +328,7 @@ header("Referrer-Policy: no-referrer");
                 <tr>
                   <th><?php e('room.swap.slots_th_pos'); ?></th>
                   <th><?php e('room.swap.slots_th_participant'); ?></th>
+                  <th><?php e('room.swap.slots_th_neighborhood'); ?></th>
                 </tr>
               </thead>
               <tbody></tbody>
@@ -2187,7 +2168,6 @@ function renderRoom(){
   renderRoomTimeline(r);
 
   renderNextPanel(r);
-  renderParticipants(r);
   renderAdminPanel(r);
 
   updateRoomCountdown();
@@ -2692,27 +2672,39 @@ function renderSwapWindow(r){
 
   const inSwap = (r.room_state === 'swap_window');
   const participant = isSwapParticipant(r);
+  const isTypeB = (String(r.saving_type||'') === 'B');
 
-  // Admins can always review swap state + requests for Type B rooms during swap_window/active.
-  const show = (r.saving_type === 'B' && (inSwap || r.room_state === 'active') && (participant || IS_ADMIN));
+  // "Positions" is also used as the consolidated participants+neighborhood table.
+  const show = isTypeB
+    ? ((inSwap || r.room_state === 'active' || r.room_state === 'lobby') && (participant || r.is_maker || IS_ADMIN))
+    : (r.participants_visible === 1);
+
   block.style.display = show ? 'block' : 'none';
   if(!show) return;
 
   const adminHint = document.getElementById('swap-admin-hint');
-  if(adminHint) adminHint.style.display = (IS_ADMIN && !participant) ? 'block' : 'none';
+  if(adminHint) adminHint.style.display = (isTypeB && IS_ADMIN && !participant) ? 'block' : 'none';
 
   const swapWindow = r.swap_window || {};
-  const isOpen = inSwap && !!swapWindow.is_open;
+  const isOpen = isTypeB && inSwap && !!swapWindow.is_open;
 
-  // Title/subtitle can change depending on whether swap window is active.
+  const metaGrid = document.getElementById('swap-meta-grid');
+  if(metaGrid) metaGrid.style.display = isTypeB ? 'grid' : 'none';
+
+  // Title/subtitle can change depending on room state.
   const titleEl = block.querySelector('.card-title');
   const subEl = block.querySelector('.p');
-  if(titleEl) titleEl.textContent = inSwap
+
+  const rs = String(r.room_state||'');
+  const isActive = (rs === 'active');
+
+  if(titleEl) titleEl.textContent = (isTypeB && inSwap)
     ? tr('room.swap.title', null, 'Swap window (Type B)')
-    : tr('room.swap.final_positions_title', null, 'Final positions');
-  if(subEl) subEl.textContent = inSwap
+    : ((isTypeB && isActive) ? tr('room.swap.final_positions_title', null, 'Final positions') : tr('room.swap.positions_title', null, 'Current positions'));
+
+  if(subEl) subEl.textContent = (isTypeB && inSwap)
     ? tr('room.swap.sub', null, 'Request to swap your payout slot with another participant during this window.')
-    : tr('room.swap.final_positions_sub', null, 'The payout order for this room.');
+    : ((isTypeB && isActive) ? tr('room.swap.final_positions_sub', null, 'The payout order for this room.') : tr('room.swap.positions_sub', null, 'The current order for this room.'));
 
   const statusEl = document.getElementById('swap-status');
   const closesEl = document.getElementById('swap-closes');
@@ -2731,17 +2723,37 @@ function renderSwapWindow(r){
     slotsWrap.style.display = 'block';
     slotsEmpty.style.display = 'none';
 
+    const partRows = (roomCache && Array.isArray(roomCache.participants)) ? roomCache.participants : [];
+    const partById = new Map();
+    partRows.forEach(p => {
+      if(p && typeof p.user_id !== 'undefined') partById.set((p.user_id|0), p);
+    });
+
     slots.forEach(s => {
       const trEl = document.createElement('tr');
       if((s.user_id|0) === (CURRENT_USER_ID|0)){
         trEl.style.background = 'var(--ls-surface-1)';
       }
-      trEl.innerHTML = `<td>#${esc(String(s.position||''))}</td><td>${esc(String(s.display_name||('User #' + s.user_id)))}</td>`;
+
+      const p = partById.get((s.user_id|0)) || null;
+      const neighborhood = (p && p.neighborhood) ? String(p.neighborhood) : '—';
+
+      trEl.innerHTML = `<td>#${esc(String(s.position||''))}</td><td>${esc(String(s.display_name||('User #' + s.user_id)))}</td><td>${esc(neighborhood)}</td>`;
       slotsBody.appendChild(trEl);
     });
   } else {
     if(slotsWrap) slotsWrap.style.display = 'none';
     if(slotsEmpty) slotsEmpty.style.display = 'block';
+  }
+
+  if(!isTypeB){
+    const form = document.getElementById('swap-request-form');
+    const requests = document.getElementById('swap-requests');
+    const msg = document.getElementById('swap-msg');
+    if(form) form.style.display = 'none';
+    if(requests) requests.style.display = 'none';
+    if(msg) msg.style.display = 'none';
+    return;
   }
 
   // Request form (only if window is open + viewer is a participant)

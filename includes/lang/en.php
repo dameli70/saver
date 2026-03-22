@@ -1186,6 +1186,8 @@ return [
     // Swap window (Type B)
     'room.swap.title' => 'Swap window (Type B)',
     'room.swap.sub' => 'Request to swap your payout slot with another participant during this window.',
+    'room.swap.positions_title' => 'Current positions',
+    'room.swap.positions_sub' => 'The current order for this room.',
     'room.swap.final_positions_title' => 'Final positions',
     'room.swap.final_positions_sub' => 'The payout order for this room.',
     'room.swap.status' => 'Status',
@@ -1196,6 +1198,7 @@ return [
     'room.swap.slots_title' => 'Current slot order',
     'room.swap.slots_th_pos' => 'Position',
     'room.swap.slots_th_participant' => 'Participant',
+    'room.swap.slots_th_neighborhood' => 'Neighborhood',
     'room.swap.slots_empty' => 'Slot order unavailable.',
 
     'room.swap.request_to' => 'Request swap with',
